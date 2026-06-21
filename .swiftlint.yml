@@ -1,0 +1,30 @@
+# SwiftLint configuration for `HTTP`.
+#
+# The bundled `swift format lint` is the PRIMARY style/lint gate. SwiftLint is layered on top to
+# hard-enforce the non-negotiable safety rules from CLAUDE.md: no force-unwrap, no force-cast,
+# no force-try, no implicitly-unwrapped optionals. `only_rules` keeps it fast and focused.
+
+only_rules:
+  - force_unwrapping          # CLAUDE.md: "no force unwrap"
+  - force_cast                # CLAUDE.md: "no force casting"
+  - force_try
+  - implicitly_unwrapped_optional
+
+strict: true                  # any violation fails CI
+
+force_unwrapping:
+  severity: error
+force_cast:
+  severity: error
+force_try:
+  severity: error
+implicitly_unwrapped_optional:
+  severity: error
+
+included:
+  - Sources
+  - Tests
+  - Package.swift
+
+excluded:
+  - .build

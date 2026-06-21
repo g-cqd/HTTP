@@ -1,0 +1,22 @@
+## Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved.tmp
+
+## Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+
+## macOS
+.DS_Store
+
+## Build / scratch (we direct artifacts to /tmp/swiftpm-build/HTTP)
+/tmp/swiftpm-build/HTTP/
+
+## Fuzzing corpora artifacts
+*.profraw
+crash-*
+timeout-*
+oom-*
