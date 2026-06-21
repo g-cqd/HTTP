@@ -50,4 +50,16 @@ public enum HTTP1ParseError: Error, Sendable, Equatable {
 
     /// The message carried more than ``HTTPLimits/maxFieldCount`` fields (→ `431`).
     case tooManyFields
+
+    /// A chunk-size was empty, contained a non-hex digit, or overflowed `Int` (RFC 9112 §7.1).
+    case invalidChunkSize
+
+    /// A chunk was framed incorrectly — missing the CRLF around its data (RFC 9112 §7.1).
+    case malformedChunk
+
+    /// The decoded body exceeded ``HTTPLimits/maxBodySize`` (→ `413`).
+    case bodyTooLarge
+
+    /// The input ended before the body was fully framed (more data is needed).
+    case incompleteBody
 }
