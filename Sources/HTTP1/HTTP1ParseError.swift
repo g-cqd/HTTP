@@ -22,4 +22,32 @@ public enum HTTP1ParseError: Error, Sendable, Equatable {
 
     /// The HTTP-version token was not understood (RFC 9112 §2.3; → `505`).
     case unsupportedVersion
+
+    /// The input ended before the header section's terminating blank line (more data is needed).
+    case incompleteHeaders
+
+    /// A line was not terminated by CRLF — a bare CR or LF is a framing error (RFC 9112 §2.2).
+    case malformedHeaders
+
+    /// A header line began with whitespace: obsolete line folding, rejected (RFC 9112 §5.2).
+    case obsoleteLineFolding
+
+    /// A header line contained no `:` separator (RFC 9112 §5).
+    case missingColon
+
+    /// A field-name was empty or not a valid `token`, including whitespace before the `:`
+    /// (RFC 9110 §5.1, RFC 9112 §5.1).
+    case invalidFieldName
+
+    /// A field-value contained an illegal octet (RFC 9110 §5.5).
+    case invalidFieldValue
+
+    /// A single field exceeded ``HTTPLimits/maxFieldSize`` (→ `431`).
+    case fieldTooLarge
+
+    /// The header section exceeded ``HTTPLimits/maxHeaderListSize`` (→ `431`).
+    case headerSectionTooLarge
+
+    /// The message carried more than ``HTTPLimits/maxFieldCount`` fields (→ `431`).
+    case tooManyFields
 }
