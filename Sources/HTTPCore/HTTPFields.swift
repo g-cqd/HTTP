@@ -50,6 +50,16 @@ public struct HTTPFields: Sendable, Equatable {
         storage.compactMap { $0.name == name ? $0.value : nil }
     }
 
+    /// The number of field lines named `name`.
+    ///
+    /// Counts in place — unlike `values(for:).count` it allocates no intermediate array, which
+    /// matters on the hot path (e.g. enforcing exactly one `Host`).
+    public func count(for name: HTTPFieldName) -> Int {
+        var count = 0
+        for field in storage where field.name == name { count += 1 }
+        return count
+    }
+
     /// Whether any field line named `name` is present.
     public func contains(_ name: HTTPFieldName) -> Bool {
         storage.contains { $0.name == name }

@@ -35,7 +35,10 @@ public enum ChunkedDecoder {
                 return body
             }
 
-            guard body.count + size <= limits.maxBodySize else { throw .bodyTooLarge }
+            // Compare without computing `body.count + size`, which would TRAP on a hostile
+            // chunk-size near `Int.max`. `body.count <= maxBodySize` holds by construction, so the
+            // subtraction never underflows.
+            guard size <= limits.maxBodySize - body.count else { throw .bodyTooLarge }
             let dataStart = reader.position
             guard reader.remaining >= size else { throw .incompleteBody }
             reader.advance(by: size)

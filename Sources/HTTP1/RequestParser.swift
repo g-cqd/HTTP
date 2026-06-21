@@ -20,16 +20,13 @@ public enum RequestParser {
         _ reader: inout ByteReader,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> ParsedRequest {
-        let lineStart = reader.position
-        let requestLine = try RequestLineParser.parse(&reader)
-        guard reader.position - lineStart <= limits.maxRequestLineLength else {
-            throw .requestLineTooLong
-        }
+        let requestLine = try RequestLineParser.parse(
+            &reader, maxLength: limits.maxRequestLineLength)
 
         let headerFields = try HeaderParser.parse(&reader, limits: limits)
 
         // RFC 9110 §7.2: an HTTP/1.1 request MUST carry exactly one valid Host.
-        if requestLine.version == .http11, headerFields.values(for: .host).count != 1 {
+        if requestLine.version == .http11, headerFields.count(for: .host) != 1 {
             throw .invalidHost
         }
 

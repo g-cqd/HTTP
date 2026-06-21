@@ -16,8 +16,13 @@ public enum RequestLineParser {
     private static let lineFeed: UInt8 = 0x0A
 
     /// Parses `method SP request-target SP HTTP-version CRLF` from `reader`, advancing it past the
-    /// terminating CRLF, or throws the specific ``HTTP1ParseError``.
-    public static func parse(_ reader: inout ByteReader) throws(HTTP1ParseError) -> RequestLine {
+    /// terminating CRLF and rejecting a line longer than `maxLength`, or throws the specific
+    /// ``HTTP1ParseError``.
+    public static func parse(
+        _ reader: inout ByteReader,
+        maxLength: Int = .max
+    ) throws(HTTP1ParseError) -> RequestLine {
+        let start = reader.position
         guard let methodRange = reader.readSlice(until: space) else { throw .malformedRequestLine }
         guard let targetRange = reader.readSlice(until: space) else { throw .malformedRequestLine }
         guard let versionRange = reader.readSlice(until: carriageReturn) else {
@@ -25,6 +30,8 @@ public enum RequestLineParser {
         }
         // The request-line MUST terminate with CRLF; a bare CR is a framing error (RFC 9112 §2.2).
         guard reader.readByte() == lineFeed else { throw .malformedRequestLine }
+        // Enforce the length budget BEFORE materializing any component (RFC 9112 §3; → 414).
+        guard reader.position - start <= maxLength else { throw .requestLineTooLong }
 
         guard let method = HTTPMethod(rawValue: reader.string(in: methodRange)) else {
             throw .invalidMethod

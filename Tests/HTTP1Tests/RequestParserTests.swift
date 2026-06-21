@@ -91,4 +91,12 @@ struct RequestParserTests {
         )
         #expect(String(decoding: parsed.body, as: UTF8.self) == "hello")
     }
+
+    @Test("rejects a request-line over the configured limit before materializing it (→ 414)")
+    func rejectsLongRequestLine() {
+        let limits = HTTPLimits(maxRequestLineLength: 16)
+        #expect(throws: HTTP1ParseError.requestLineTooLong) {
+            try parse("GET /way-too-long-target HTTP/1.1\r\nHost: x\r\n\r\n", limits: limits)
+        }
+    }
 }

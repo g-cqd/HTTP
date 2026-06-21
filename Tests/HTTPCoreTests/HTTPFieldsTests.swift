@@ -90,4 +90,15 @@ struct HTTPFieldsTests {
         #expect(!appended)
         #expect(fields.isEmpty)
     }
+
+    @Test("count(for:) returns the number of matching field lines")
+    func countForName() {
+        var fields = HTTPFields()
+        fields.append(field(.accept, "text/html"))
+        fields.append(field(.accept, "application/json"))
+        fields.append(field(.host, "example.com"))
+        #expect(fields.count(for: .accept) == 2)
+        #expect(fields.count(for: .host) == 1)
+        #expect(fields.count(for: .contentType) == 0)
+    }
 }

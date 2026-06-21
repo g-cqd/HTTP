@@ -75,4 +75,13 @@ struct ChunkedDecoderTests {
             _ = try decode("5\r\nhello\r\n0\r\n\r\n", limits: limits)
         }
     }
+
+    @Test("rejects an overflowing chunk size without trapping (RFC 9112 §7.1)")
+    func rejectsOverflowingChunkSize() {
+        // After a non-empty chunk, a chunk-size of Int.max must fail closed as bodyTooLarge —
+        // never overflow `body.count + size`.
+        #expect(throws: HTTP1ParseError.bodyTooLarge) {
+            _ = try decode("1\r\nA\r\n7fffffffffffffff\r\nx\r\n0\r\n\r\n")
+        }
+    }
 }
