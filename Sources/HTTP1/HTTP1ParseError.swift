@@ -62,4 +62,20 @@ public enum HTTP1ParseError: Error, Sendable, Equatable {
 
     /// The input ended before the body was fully framed (more data is needed).
     case incompleteBody
+
+    /// The request-line exceeded ``HTTPLimits/maxRequestLineLength`` (→ `414`).
+    case requestLineTooLong
+
+    /// An HTTP/1.1 request lacked exactly one valid `Host` header (RFC 9110 §7.2; → `400`).
+    case invalidHost
+
+    /// A message carried both `Content-Length` and `Transfer-Encoding` — a request-smuggling
+    /// vector that MUST be rejected (RFC 9112 §6.1; → `400`, close connection).
+    case contentLengthWithTransferEncoding
+
+    /// The `Transfer-Encoding` did not consist solely of the final `chunked` coding (RFC 9112 §6.1).
+    case unsupportedTransferEncoding
+
+    /// A `Content-Length` was present but malformed or self-contradictory (RFC 9112 §6.3; → `400`).
+    case invalidContentLength
 }
