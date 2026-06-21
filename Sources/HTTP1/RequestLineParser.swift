@@ -36,11 +36,28 @@ public enum RequestLineParser {
         guard let method = HTTPMethod(rawValue: reader.string(in: methodRange)) else {
             throw .invalidMethod
         }
+        // Validate the borrowed target bytes BEFORE materializing them: a non-empty target free of
+        // controls / DEL / whitespace. Rejecting controls closes request-line injection (a target
+        // such as "/a\rb" or "/a\u{00}b" must never reach a String or downstream log).
+        guard isValidRequestTarget(reader.slice(in: targetRange)) else { throw .invalidTarget }
         let target = reader.string(in: targetRange)
-        guard !target.isEmpty else { throw .invalidTarget }
         guard let version = HTTPVersion(parsing: reader.slice(in: versionRange)) else {
             throw .unsupportedVersion
         }
         return RequestLine(method: method, target: target, version: version)
+    }
+
+    /// Whether `target` is a non-empty request-target free of controls, DEL, and whitespace
+    /// (RFC 9112 §3.2) — the octets that enable request-line injection / smuggling.
+    private static func isValidRequestTarget(_ target: RawSpan) -> Bool {
+        let count = target.byteCount
+        guard count > 0 else { return false }
+        var index = 0
+        while index < count {
+            let byte = target.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+            guard byte > 0x20, byte != 0x7F else { return false }  // reject CTL, SP, and DEL
+            index += 1
+        }
+        return true
     }
 }

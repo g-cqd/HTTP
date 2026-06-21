@@ -51,6 +51,23 @@ public struct HTTPFieldName: Sendable, Hashable {
         }
     }
 
+    /// Creates a field name by validating raw bytes (e.g. a parser's borrowed buffer), returning
+    /// `nil` if they are not a valid `token`.
+    ///
+    /// Validates **before** allocating, so a hostile or malformed name costs no heap. The original
+    /// spelling is materialized once; the canonical form reuses it when the bytes are already
+    /// lower-case (the h2/h3 hot path), else folds in a single allocation.
+    public init?(validating bytes: some Collection<UInt8>) {
+        guard FieldValidation.isToken(bytes) else { return nil }
+        let raw = String(decoding: bytes, as: UTF8.self)
+        self.storage = .parsed(raw)
+        if bytes.contains(where: { (0x41...0x5A).contains($0) }) {
+            self.canonicalName = Self.asciiLowercased(bytes)
+        } else {
+            self.canonicalName = raw
+        }
+    }
+
     /// Creates a name from a compile-time token already known to be valid (the registered
     /// constants), storing the original spelling as a `StaticString` with no heap allocation.
     init(unchecked name: StaticString) {

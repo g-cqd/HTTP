@@ -64,4 +64,16 @@ struct RequestLineParserTests {
             try parseLine("GET  HTTP/1.1\r\n")
         }
     }
+
+    @Test(
+        "rejects control characters in the request-target (injection, RFC 9112 §3.2)",
+        arguments: [
+            "GET /a\u{01}b HTTP/1.1\r\n",  // C0 control
+            "GET /a\rb HTTP/1.1\r\n",  // bare CR embedded in the target
+            "GET /a\u{7F}b HTTP/1.1\r\n",  // DEL
+        ]
+    )
+    func rejectsControlInTarget(_ input: String) {
+        #expect(throws: HTTP1ParseError.invalidTarget) { try parseLine(input) }
+    }
 }

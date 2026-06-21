@@ -85,9 +85,10 @@ public enum HeaderParser {
             valueEnd -= 1
         }
 
-        let name = line.extracting(0..<colonIndex)
-            .withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
-        guard let fieldName = HTTPFieldName(name) else { throw .invalidFieldName }
+        // Validate the name bytes before materializing: an invalid name never allocates a `String`.
+        let fieldName = line.extracting(0..<colonIndex)
+            .withUnsafeBytes { HTTPFieldName(validating: $0) }
+        guard let fieldName else { throw .invalidFieldName }
         let value = line.extracting(valueStart..<valueEnd)
             .withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
         guard let field = HTTPField(name: fieldName, value: value) else { throw .invalidFieldValue }

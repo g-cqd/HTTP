@@ -69,4 +69,15 @@ struct HTTPFieldNameTests {
     func rejectsNonTokens(_ name: String) {
         #expect(HTTPFieldName(name) == nil)
     }
+
+    @Test("validating(bytes:) accepts a token, canonicalizes it, and rejects non-tokens")
+    func validatingBytes() {
+        let mixed = HTTPFieldName(validating: Array("Content-Type".utf8))
+        #expect(mixed?.canonicalName == "content-type")
+        #expect(mixed?.rawName == "Content-Type")
+        let lower = HTTPFieldName(validating: Array("accept".utf8))
+        #expect(lower?.canonicalName == "accept")
+        #expect(HTTPFieldName(validating: Array("bad name".utf8)) == nil)
+        #expect(HTTPFieldName(validating: [UInt8]()) == nil)
+    }
 }
