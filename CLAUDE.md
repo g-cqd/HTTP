@@ -19,4 +19,4 @@ we can omit return statement when possible
 
 avoid double allocation, or extra allocation, avoid paying the copy-on-write tax
 
-privilege zero copy and multithreading
+privilege zero copy and multithreading, use span and rawspan and prefer native apis and non-copy-bytes-manipulating apis (with lifetime)

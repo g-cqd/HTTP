@@ -34,10 +34,12 @@ public struct HTTPFields: Sendable, Equatable {
     public subscript(name: HTTPFieldName) -> String? {
         var combined: String?
         for field in storage where field.name == name {
-            if let existing = combined {
-                combined = existing + ", " + field.value
+            if combined == nil {
+                combined = field.value  // single match (the common case): returned as-is, no copy
             } else {
-                combined = field.value
+                // Grow one buffer in place instead of building O(n²) intermediate concatenations.
+                combined?.append(", ")
+                combined?.append(field.value)
             }
         }
         return combined

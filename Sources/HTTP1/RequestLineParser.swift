@@ -31,7 +31,7 @@ public enum RequestLineParser {
         }
         let target = reader.string(in: targetRange)
         guard !target.isEmpty else { throw .invalidTarget }
-        guard let version = HTTPVersion(parsing: reader.string(in: versionRange)) else {
+        guard let version = HTTPVersion(parsing: reader.slice(in: versionRange)) else {
             throw .unsupportedVersion
         }
         return RequestLine(method: method, target: target, version: version)

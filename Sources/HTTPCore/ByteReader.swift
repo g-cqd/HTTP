@@ -8,34 +8,46 @@
 
 /// A zero-copy, bounds-checked forward cursor over a borrowed byte buffer.
 ///
-/// `ByteReader` borrows an `UnsafeRawBufferPointer` and tracks an offset; it **never copies** the
-/// underlying bytes. Tokens are returned as `Range<Int>` into the buffer (also copy-free) and are
-/// materialized into owned values (e.g. `String`) only at the boundary where data must outlive the
-/// buffer. Every accessor is bounds-checked, so adversarial input can never trigger an out-of-bounds
-/// read; the parsers built on top are iterative (no recursion), so they cannot exhaust the stack.
+/// `ByteReader` borrows a `RawSpan` and tracks an offset; it **never copies** the underlying bytes.
+/// Tokens are returned as `Range<Int>` into the buffer (also copy-free); ``slice(in:)`` hands back a
+/// borrowed `RawSpan` sub-view, and bytes become an owned value (e.g. a `String` via ``string(in:)``)
+/// only at the single boundary where data must outlive the buffer. Every accessor is bounds-checked,
+/// so adversarial input can never trigger an out-of-bounds read; the parsers built on top are
+/// iterative (no recursion), so they cannot exhaust the stack.
 ///
-/// - Important: the cursor borrows its buffer — the caller must guarantee the buffer outlives the
-///   reader (e.g. by using it inside a `withUnsafeBytes` scope or a Network.framework receive
-///   callback). Because the cursor is `Copyable`, a parser can cheaply snapshot a position (copy the
-///   reader) and restore it for bounded look-ahead without recursion.
-public struct ByteReader {
+/// Because the backing store is a `RawSpan`, the reader is `~Escapable`: the compiler **statically
+/// guarantees** it cannot outlive its buffer — the safety that a raw `UnsafeRawBufferPointer` could
+/// previously promise only in a comment. The cursor is still `Copyable`, so a parser can cheaply
+/// snapshot a position (copy the reader) and restore it for bounded look-ahead without recursion.
+public struct ByteReader: ~Escapable {
 
     @usableFromInline
-    let bytes: UnsafeRawBufferPointer
+    let bytes: RawSpan
 
     @usableFromInline
     var offset: Int
 
     /// Creates a reader over `bytes`, starting at `startingAt` (clamped to `0...count`).
     @inlinable
-    public init(_ bytes: UnsafeRawBufferPointer, startingAt: Int = 0) {
+    @_lifetime(copy bytes)
+    public init(_ bytes: RawSpan, startingAt: Int = 0) {
         self.bytes = bytes
-        self.offset = max(0, min(startingAt, bytes.count))
+        self.offset = max(0, min(startingAt, bytes.byteCount))
+    }
+
+    /// Creates a reader over a raw buffer, starting at `startingAt` (clamped to `0...count`).
+    ///
+    /// The reader borrows `buffer`; being `~Escapable`, it cannot outlive that borrow, so the
+    /// idiomatic use is inside a `withUnsafeBytes` scope or a Network.framework receive callback.
+    @inlinable
+    @_lifetime(borrow buffer)
+    public init(_ buffer: UnsafeRawBufferPointer, startingAt: Int = 0) {
+        self.init(buffer.bytes, startingAt: startingAt)
     }
 
     /// The total number of bytes in the borrowed buffer.
     @inlinable
-    public var count: Int { bytes.count }
+    public var count: Int { bytes.byteCount }
 
     /// The current read position.
     @inlinable
@@ -43,32 +55,39 @@ public struct ByteReader {
 
     /// The number of bytes between the current position and the end of the buffer.
     @inlinable
-    public var remaining: Int { bytes.count - offset }
+    public var remaining: Int { bytes.byteCount - offset }
 
     /// Whether the cursor has reached the end of the buffer.
     @inlinable
-    public var isAtEnd: Bool { offset >= bytes.count }
+    public var isAtEnd: Bool { offset >= bytes.byteCount }
+
+    /// Loads the byte at `index`; callers guarantee `0 <= index < count`.
+    @usableFromInline
+    @inline(__always)
+    func loadByte(at index: Int) -> UInt8 {
+        bytes.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+    }
 
     /// Returns the byte at the current position without advancing, or `nil` at end of buffer.
     @inlinable
     public func peek() -> UInt8? {
-        offset < bytes.count ? bytes[offset] : nil
+        offset < bytes.byteCount ? loadByte(at: offset) : nil
     }
 
     /// Returns the byte `distance` bytes ahead of the current position, or `nil` if out of bounds.
     @inlinable
     public func peek(ahead distance: Int) -> UInt8? {
         let index = offset + distance
-        guard index >= 0, index < bytes.count else { return nil }
-        return bytes[index]
+        guard index >= 0, index < bytes.byteCount else { return nil }
+        return loadByte(at: index)
     }
 
     /// Reads the byte at the current position and advances by one, or returns `nil` at end.
     @inlinable
     public mutating func readByte() -> UInt8? {
-        guard offset < bytes.count else { return nil }
+        guard offset < bytes.byteCount else { return nil }
         defer { offset += 1 }
-        return bytes[offset]
+        return loadByte(at: offset)
     }
 
     /// Advances the cursor by `distance` bytes.
@@ -79,8 +98,8 @@ public struct ByteReader {
     @discardableResult
     public mutating func advance(by distance: Int = 1) -> Bool {
         let target = offset + distance
-        guard target >= 0, target <= bytes.count else {
-            offset = bytes.count
+        guard target >= 0, target <= bytes.byteCount else {
+            offset = bytes.byteCount
             return false
         }
         offset = target
@@ -93,8 +112,8 @@ public struct ByteReader {
     @inlinable
     public func firstIndex(of byte: UInt8) -> Int? {
         var index = offset
-        while index < bytes.count {
-            if bytes[index] == byte { return index }
+        while index < bytes.byteCount {
+            if loadByte(at: index) == byte { return index }
             index += 1
         }
         return nil
@@ -112,15 +131,17 @@ public struct ByteReader {
         return slice
     }
 
-    /// Returns the bytes in `range` as a single contiguous view, clamped to the buffer.
+    /// Returns the bytes in `range` as a single borrowed `RawSpan`, clamped to the buffer.
     ///
-    /// Zero-copy: the view borrows the underlying buffer. Use it to validate or compare a parsed
-    /// token without allocating; call ``string(in:)`` only when an owned value must escape.
+    /// Zero-copy: the span borrows the underlying buffer (and, being `~Escapable`, cannot outlive
+    /// it). Use it to validate or compare a parsed token without allocating; call ``string(in:)``
+    /// only when an owned value must escape.
     @inlinable
-    public func slice(in range: Range<Int>) -> UnsafeRawBufferPointer {
-        let lower = max(0, min(range.lowerBound, bytes.count))
-        let upper = max(lower, min(range.upperBound, bytes.count))
-        return UnsafeRawBufferPointer(rebasing: bytes[lower..<upper])
+    @_lifetime(copy self)
+    public func slice(in range: Range<Int>) -> RawSpan {
+        let lower = max(0, min(range.lowerBound, bytes.byteCount))
+        let upper = max(lower, min(range.upperBound, bytes.byteCount))
+        return bytes.extracting(lower..<upper)
     }
 
     /// Decodes the bytes in `range` as UTF-8 into an owned `String`.
@@ -129,6 +150,6 @@ public struct ByteReader {
     /// exactly once when a value must outlive the borrowed buffer.
     @inlinable
     public func string(in range: Range<Int>) -> String {
-        String(decoding: slice(in: range), as: UTF8.self)
+        slice(in: range).withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
     }
 }

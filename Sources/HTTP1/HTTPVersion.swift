@@ -23,22 +23,25 @@ public struct HTTPVersion: Sendable, Hashable {
         self.minor = minor
     }
 
-    /// Parses a version token such as `"HTTP/1.1"`, returning `nil` if it is malformed.
-    public init?(parsing text: String) {
-        let utf8 = text.utf8
-        guard utf8.count == 8 else { return nil }
-        var iterator = utf8.makeIterator()
+    /// Parses a version token such as `HTTP/1.1` straight from its raw bytes, returning `nil` if it
+    /// is malformed.
+    ///
+    /// Reads the borrowed `RawSpan` in place (zero-copy): because a parsed version keeps only its two
+    /// digits, no intermediate `String` is materialized on the hot path.
+    public init?(parsing bytes: RawSpan) {
+        guard bytes.byteCount == 8 else { return nil }
         // "HTTP/"
-        guard iterator.next() == 0x48, iterator.next() == 0x54, iterator.next() == 0x54,
-            iterator.next() == 0x50, iterator.next() == 0x2F
+        guard bytes.unsafeLoad(fromByteOffset: 0, as: UInt8.self) == 0x48,  // H
+            bytes.unsafeLoad(fromByteOffset: 1, as: UInt8.self) == 0x54,  // T
+            bytes.unsafeLoad(fromByteOffset: 2, as: UInt8.self) == 0x54,  // T
+            bytes.unsafeLoad(fromByteOffset: 3, as: UInt8.self) == 0x50,  // P
+            bytes.unsafeLoad(fromByteOffset: 4, as: UInt8.self) == 0x2F  // /
         else { return nil }
-        guard let majorByte = iterator.next(), majorByte >= 0x30, majorByte <= 0x39 else {
-            return nil
-        }
-        guard iterator.next() == 0x2E else { return nil }  // "."
-        guard let minorByte = iterator.next(), minorByte >= 0x30, minorByte <= 0x39 else {
-            return nil
-        }
+        let majorByte = bytes.unsafeLoad(fromByteOffset: 5, as: UInt8.self)
+        guard majorByte >= 0x30, majorByte <= 0x39 else { return nil }
+        guard bytes.unsafeLoad(fromByteOffset: 6, as: UInt8.self) == 0x2E else { return nil }  // .
+        let minorByte = bytes.unsafeLoad(fromByteOffset: 7, as: UInt8.self)
+        guard minorByte >= 0x30, minorByte <= 0x39 else { return nil }
         self.major = Int(majorByte - 0x30)
         self.minor = Int(minorByte - 0x30)
     }

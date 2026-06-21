@@ -24,18 +24,26 @@ extension HTTPFields {
     /// when multiple values disagree (including a comma-combined list produced by HTTP/2→HTTP/1.1
     /// down-conversion). Multiple *identical* valid values collapse to that length.
     public var contentLength: ContentLength {
-        let rawValues = values(for: .contentLength)
-        guard !rawValues.isEmpty else { return .absent }
-
         var resolved: Int?
-        for rawValue in rawValues {
+        var present = false
+        // Iterate the fields directly — no intermediate `[String]` from `values(for:)`.
+        for field in self where field.name == .contentLength {
+            present = true
+            let utf8 = field.value.utf8
+            var start = utf8.startIndex
             // A value may itself be a comma list (e.g. "5, 5") after HTTP/2 → HTTP/1.1 coalescing.
-            for token in rawValue.split(separator: ",", omittingEmptySubsequences: false) {
+            // Tokenize on commas with index slicing (Substring views) — no `[Substring]` from `split`.
+            while true {
+                let comma = utf8[start...].firstIndex(of: 0x2C)  // ","
+                let token = utf8[start..<(comma ?? utf8.endIndex)]
                 guard let parsed = Self.parseContentLengthToken(token) else { return .invalid }
                 if let resolvedValue = resolved, resolvedValue != parsed { return .invalid }
                 resolved = parsed
+                guard let comma else { break }
+                start = utf8.index(after: comma)
             }
         }
+        guard present else { return .absent }
         guard let resolved else { return .invalid }
         return .length(resolved)
     }
@@ -43,8 +51,7 @@ extension HTTPFields {
     /// Parses one `Content-Length` token: optional surrounding OWS around `1*DIGIT` (RFC 9110 §8.6).
     ///
     /// Returns `nil` for an empty token, any non-digit byte, a sign, or a value that overflows `Int`.
-    private static func parseContentLengthToken(_ token: Substring) -> Int? {
-        let utf8 = token.utf8
+    private static func parseContentLengthToken(_ utf8: Substring.UTF8View) -> Int? {
         var index = utf8.startIndex
         var tail = utf8.endIndex
 

@@ -32,7 +32,10 @@ struct ByteReaderTests {
             #expect(first == UInt8(ascii: "A"))
             #expect(second == UInt8(ascii: "B"))
             #expect(past == nil)
-            #expect(reader.isAtEnd)
+            // `~Escapable` `ByteReader` can't use the `#expect(reader.prop)` property-access form
+            // (it requires `Escapable`); bind the Bool first.
+            let atEnd = reader.isAtEnd
+            #expect(atEnd)
         }
     }
 
@@ -52,7 +55,8 @@ struct ByteReaderTests {
             let overflow = reader.advance(by: 5)
             #expect(ok)
             #expect(!overflow)
-            #expect(reader.isAtEnd)
+            let atEnd = reader.isAtEnd
+            #expect(atEnd)
             #expect(reader.position == 3)
         }
     }
@@ -83,6 +87,34 @@ struct ByteReaderTests {
             let result = reader.readSlice(until: UInt8(ascii: ";"))
             #expect(result == nil)
             #expect(reader.position == 0)
+        }
+    }
+
+    @Test("string(in:) materializes an owned String once, without moving the cursor")
+    func stringMaterializesRange() {
+        withReader(over: "GET /path") { reader in
+            #expect(reader.string(in: 0..<3) == "GET")
+            #expect(reader.string(in: 4..<9) == "/path")
+            #expect(reader.position == 0)  // materialization is non-mutating
+        }
+    }
+
+    @Test("slice(in:) returns a borrowed, copy-free RawSpan over the range")
+    func sliceReturnsBorrowedSpan() {
+        withReader(over: "GET /path") { reader in
+            let span = reader.slice(in: 0..<3)  // "GET"
+            #expect(span.byteCount == 3)
+            #expect(span.unsafeLoad(fromByteOffset: 0, as: UInt8.self) == UInt8(ascii: "G"))
+            #expect(span.unsafeLoad(fromByteOffset: 2, as: UInt8.self) == UInt8(ascii: "T"))
+        }
+    }
+
+    @Test("slice(in:) clamps an out-of-range request instead of trapping")
+    func sliceClampsOutOfRange() {
+        withReader(over: "AB") { reader in
+            #expect(reader.slice(in: 0..<99).byteCount == 2)
+            #expect(reader.slice(in: -5..<1).byteCount == 1)
+            #expect(reader.slice(in: 5..<9).byteCount == 0)
         }
     }
 }

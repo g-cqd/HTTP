@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.4
 //
 //  Package.swift — `HTTP`
 //  A from-scratch, SwiftNIO-free HTTP/1.1 · HTTP/2 · HTTP/3 server library for Apple platforms.
@@ -29,6 +29,10 @@ let strictSwiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("InternalImportsByDefault"),
     // SE-0444: must import modules whose members you use
     .enableUpcomingFeature("MemberImportVisibility"),
+    // Lifetime dependencies (`@_lifetime`): let the zero-copy `ByteReader` borrow a `RawSpan`
+    // (`~Escapable`) with a *compiler-checked* lifetime instead of an unchecked unsafe pointer.
+    // This is a first-class `SwiftSetting`, not `.unsafeFlags`, so it stays reuse-safe downstream.
+    .enableExperimentalFeature("Lifetimes"),
 ]
 
 let package = Package(

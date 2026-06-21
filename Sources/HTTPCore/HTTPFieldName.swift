@@ -61,9 +61,18 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// ASCII-lower-cases a validated token's bytes (A–Z → a–z) into a `String`.
     ///
     /// Names are validated ASCII tokens, so an ASCII-only fold is exact and avoids Unicode/locale
-    /// case-folding (RFC 9110 §5.1 compares field names case-insensitively).
-    static func asciiLowercased(_ utf8: some Sequence<UInt8>) -> String {
-        String(decoding: utf8.map { $0 >= 0x41 && $0 <= 0x5A ? $0 &+ 0x20 : $0 }, as: UTF8.self)
+    /// case-folding (RFC 9110 §5.1 compares field names case-insensitively). The fold is written
+    /// straight into the `String`'s storage in a **single allocation**, instead of building an
+    /// intermediate `[UInt8]` (via `map`) and copying it again through `String(decoding:)`.
+    static func asciiLowercased(_ utf8: some Collection<UInt8>) -> String {
+        String(unsafeUninitializedCapacity: utf8.count) { destination in
+            var index = 0
+            for byte in utf8 {
+                destination[index] = byte >= 0x41 && byte <= 0x5A ? byte &+ 0x20 : byte
+                index &+= 1
+            }
+            return index
+        }
     }
 
     /// Two field names are equal iff their canonical (ASCII-lower-cased) forms match.

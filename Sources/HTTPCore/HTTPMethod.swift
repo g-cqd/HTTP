@@ -69,12 +69,9 @@ extension HTTPMethod {
     /// Every safe method is idempotent; additionally `PUT` and `DELETE` are idempotent. Unknown/
     /// custom methods are treated as non-idempotent (the conservative default).
     public var isIdempotent: Bool {
-        if isSafe {
-            return true
-        }
         switch self {
-        case .put, .delete: return true
-        default: return false
+        case .put, .delete: true
+        default: isSafe
         }
     }
 }
