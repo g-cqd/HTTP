@@ -14,7 +14,7 @@ import Testing
 @Suite("Network.framework backbone — loopback I/O")
 struct NetworkFrameworkTransportTests {
 
-    @Test("accepts a connection and round-trips bytes over loopback")
+    @Test("accepts a connection and round-trips bytes over loopback", .timeLimit(.minutes(1)))
     func loopbackRoundTrip() async throws {
         let transport = NetworkFrameworkTransport(
             configuration: TransportConfiguration(port: 0, backbone: .networkFramework))

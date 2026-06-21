@@ -12,7 +12,7 @@ import Testing
 @Suite("swift-system backbone — loopback I/O")
 struct SwiftSystemTransportTests {
 
-    @Test("accepts a connection and round-trips bytes over loopback")
+    @Test("accepts a connection and round-trips bytes over loopback", .timeLimit(.minutes(1)))
     func loopbackRoundTrip() async throws {
         let transport = SwiftSystemTransport(
             configuration: TransportConfiguration(port: 0, backbone: .swiftSystem))

@@ -6,29 +6,35 @@
 //  QUIC later. The async NetworkListener API is iOS 26+, so this uses the callback-based
 //  NWListener/NWConnection (available at our floor) and bridges the accept loop to an AsyncStream.
 //
+//  Standards: NWListener/NWConnection implement TCP (RFC 9293) over IP (RFC 791/8200); the later
+//  secure path is TLS 1.3 (RFC 8446) and QUIC (RFC 9000).
+//
 
 internal import Foundation
 internal import Network
+internal import Synchronization
 
 /// The Network.framework transport backbone.
 ///
-/// All mutable state is guarded by `lock`, and `NWListener`/`NWConnection` are documented
-/// thread-safe, so the type is `@unchecked Sendable`. Listener state changes and inbound
-/// connections (callback-driven on a dispatch queue) are bridged to `async`/`AsyncStream`.
-public final class NetworkFrameworkTransport: ServerTransport, @unchecked Sendable {
+/// Mutable state lives in a `Mutex` and the connection counter in an `Atomic`, so the type is
+/// genuinely `Sendable` (no `@unchecked`). Listener state changes and inbound connections
+/// (callback-driven on a dispatch queue) are bridged to `async`/`AsyncStream`.
+public final class NetworkFrameworkTransport: ServerTransport {
 
     /// The backbone this transport implements.
     public let backbone: TransportBackbone = .networkFramework
 
     private let configuration: TransportConfiguration
     private let queue = DispatchQueue(label: "http.transport.network-framework")
+    private let state = Mutex<State>(State())
+    private let connectionCounter = Atomic<UInt64>(0)
 
-    private let lock = NSLock()
-    private var listener: NWListener?
-    private var nextID: UInt64 = 0
-    private var isReady = false
-    private var failure: TransportError?
-    private var readyContinuation: CheckedContinuation<Void, any Error>?
+    private struct State {
+        var listener: NWListener?
+        var isReady = false
+        var failure: TransportError?
+        var readyContinuation: CheckedContinuation<Void, any Error>?
+    }
 
     /// Creates a Network.framework transport for `configuration`.
     public init(configuration: TransportConfiguration) {
@@ -38,7 +44,7 @@ public final class NetworkFrameworkTransport: ServerTransport, @unchecked Sendab
     /// The actual bound port (meaningful after ``start()`` returns; resolves port `0` to the
     /// ephemeral port the OS chose).
     public var boundPort: UInt16 {
-        withLock { listener?.port?.rawValue ?? 0 }
+        state.withLock { $0.listener?.port?.rawValue ?? 0 }
     }
 
     /// Binds the listener and begins accepting, returning a stream of inbound connections.
@@ -58,7 +64,7 @@ public final class NetworkFrameworkTransport: ServerTransport, @unchecked Sendab
             Task { await self?.shutdown() }
         }
 
-        withLock { self.listener = listener }
+        state.withLock { $0.listener = listener }
         listener.start(queue: queue)
         try await waitUntilReady()
         return stream
@@ -66,9 +72,9 @@ public final class NetworkFrameworkTransport: ServerTransport, @unchecked Sendab
 
     /// Cancels the listener and stops accepting.
     public func shutdown() async {
-        let listener: NWListener? = withLock {
-            let current = self.listener
-            self.listener = nil
+        let listener: NWListener? = state.withLock {
+            let current = $0.listener
+            $0.listener = nil
             return current
         }
         listener?.cancel()
@@ -89,10 +95,8 @@ public final class NetworkFrameworkTransport: ServerTransport, @unchecked Sendab
         _ nwConnection: NWConnection,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        let id = withLock { () -> TransportConnectionID in
-            nextID += 1
-            return TransportConnectionID(nextID)
-        }
+        let id = TransportConnectionID(
+            connectionCounter.wrappingAdd(1, ordering: .relaxed).newValue)
         nwConnection.start(queue: queue)
         continuation.yield(NetworkFrameworkConnection(id: id, connection: nwConnection))
     }
@@ -101,17 +105,17 @@ public final class NetworkFrameworkTransport: ServerTransport, @unchecked Sendab
         _ newState: NWListener.State,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        withLock {
+        state.withLock { current in
             switch newState {
             case .ready:
-                isReady = true
-                readyContinuation?.resume()
-                readyContinuation = nil
+                current.isReady = true
+                current.readyContinuation?.resume()
+                current.readyContinuation = nil
             case .failed(let error):
                 let failure = TransportError.bindFailed("\(error)")
-                self.failure = failure
-                readyContinuation?.resume(throwing: failure)
-                readyContinuation = nil
+                current.failure = failure
+                current.readyContinuation?.resume(throwing: failure)
+                current.readyContinuation = nil
                 continuation.finish()
             case .cancelled:
                 continuation.finish()
@@ -124,21 +128,15 @@ public final class NetworkFrameworkTransport: ServerTransport, @unchecked Sendab
     private func waitUntilReady() async throws {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, any Error>) in
-            withLock {
-                if isReady {
+            state.withLock { current in
+                if current.isReady {
                     continuation.resume()
-                } else if let failure {
+                } else if let failure = current.failure {
                     continuation.resume(throwing: failure)
                 } else {
-                    readyContinuation = continuation
+                    current.readyContinuation = continuation
                 }
             }
         }
-    }
-
-    private func withLock<R>(_ body: () -> R) -> R {
-        lock.lock()
-        defer { lock.unlock() }
-        return body()
     }
 }

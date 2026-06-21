@@ -3,21 +3,24 @@
 //  HTTPTransport
 //
 //  A TransportConnection over an accepted socket, using apple/swift-system's typed FileDescriptor
-//  for read/write/close (with Errno errors). Blocking syscalls are run on a dispatch queue and
-//  bridged to async via continuations.
+//  for read/write/close (Errno errors). Blocking syscalls run on a per-connection *serial* queue so
+//  read/write/close never overlap (closing the fd from under an in-flight syscall — and the OS
+//  reusing that fd number — cannot happen); task cancellation closes the descriptor to unblock a
+//  stalled read.
 //
-//  Standards: read()/write()/close() per POSIX.1-2017 (IEEE Std 1003.1-2017 / The Open Group Base
-//  Specifications Issue 7). The byte stream is TCP (RFC 9293) over IPv4 (RFC 791).
+//  Standards: read()/write()/close() per POSIX.1-2017 (IEEE Std 1003.1-2017). The byte stream is
+//  TCP (RFC 9293) over IPv4 (RFC 791).
 //
 
 internal import Dispatch
+internal import Synchronization
 internal import SystemPackage
 
 /// A ``TransportConnection`` backed by a swift-system `FileDescriptor` over an accepted socket.
 ///
-/// The descriptor is a trivial value and the per-connection HTTP request/response cycle serializes
-/// I/O, so the wrapper is `@unchecked Sendable`; blocking `read`/`write` run on `ioQueue`.
-public final class SwiftSystemConnection: TransportConnection, @unchecked Sendable {
+/// I/O is serialized on a per-connection queue (targeting a shared pool); an `Atomic` flag makes
+/// `close` idempotent. All stored state is `Sendable`, so the type needs no `@unchecked`.
+public final class SwiftSystemConnection: TransportConnection {
 
     /// The connection's stable identifier.
     public let id: TransportConnectionID
@@ -27,67 +30,91 @@ public final class SwiftSystemConnection: TransportConnection, @unchecked Sendab
 
     private let descriptor: FileDescriptor
     private let ioQueue: DispatchQueue
+    private let isClosed = Atomic<Bool>(false)
 
-    /// Wraps an accepted socket `descriptor`.
+    /// Wraps an accepted socket `descriptor`; I/O is serialized on a queue targeting `targetQueue`.
     init(
         id: TransportConnectionID,
         descriptor: FileDescriptor,
         peer: TransportAddress,
-        ioQueue: DispatchQueue
+        targetQueue: DispatchQueue
     ) {
         self.id = id
         self.peer = peer
         self.descriptor = descriptor
-        self.ioQueue = ioQueue
+        self.ioQueue = DispatchQueue(
+            label: "http.transport.swift-system.conn.\(id.rawValue)", target: targetQueue)
     }
 
-    /// Reads up to `maxLength` bytes (blocking on `ioQueue`), or `nil` at end of stream.
+    /// Reads up to `maxLength` bytes, or `nil` at end of stream.
+    ///
+    /// Cancellation closes the descriptor to unblock a stalled read.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
         let descriptor = self.descriptor
         let queue = self.ioQueue
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
-                do {
-                    var buffer = [UInt8](repeating: 0, count: max(1, maxLength))
-                    let count = try buffer.withUnsafeMutableBytes { try descriptor.read(into: $0) }
-                    if count == 0 {
-                        continuation.resume(returning: nil)  // EOF
-                    } else {
-                        continuation.resume(returning: Array(buffer[0..<count]))
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                queue.async {
+                    do {
+                        // One allocation, no zero-fill, no slice copy (CLAUDE.md allocation rule).
+                        let bytes = try [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) {
+                            buffer, filled in
+                            filled = try descriptor.read(
+                                into: UnsafeMutableRawBufferPointer(buffer))
+                        }
+                        continuation.resume(returning: bytes.isEmpty ? nil : bytes)
+                    } catch {
+                        continuation.resume(throwing: error)
                     }
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
+        } onCancel: {
+            closeDescriptor()
         }
     }
 
-    /// Writes all of `bytes` (blocking on `ioQueue`, handling partial writes).
+    /// Writes all of `bytes` (handling short writes), walking a `RawSpan` over the payload.
     public func send(_ bytes: [UInt8]) async throws {
         let descriptor = self.descriptor
         let queue = self.ioQueue
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, any Error>) in
-            queue.async {
-                do {
-                    try bytes.withUnsafeBytes { raw in
-                        var offset = 0
-                        while offset < raw.count {
-                            let written = try descriptor.write(
-                                UnsafeRawBufferPointer(rebasing: raw[offset...]))
-                            offset += written
-                        }
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, any Error>) in
+                queue.async {
+                    do {
+                        try Self.writeAll(bytes, to: descriptor)
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(throwing: error)
                     }
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
+        } onCancel: {
+            closeDescriptor()
         }
     }
 
-    /// Closes the descriptor.
+    /// Closes the descriptor (idempotent, serialized onto the connection's I/O queue).
     public func close() async {
-        try? descriptor.close()
+        closeDescriptor()
+    }
+
+    private func closeDescriptor() {
+        guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else { return }
+        let descriptor = self.descriptor
+        ioQueue.async { try? descriptor.close() }
+    }
+
+    /// Writes every byte of `bytes` to `descriptor`, advancing through a `RawSpan` and handling the
+    /// short writes that `write(2)` is permitted to return.
+    private static func writeAll(_ bytes: [UInt8], to descriptor: FileDescriptor) throws {
+        try bytes.withUnsafeBytes { raw in
+            let span = raw.bytes  // RawSpan view of the payload (zero-copy)
+            var start = 0
+            while start < span.byteCount {
+                let chunk = span.extracting(start..<span.byteCount)
+                start += try chunk.withUnsafeBytes { try descriptor.write($0) }
+            }
+        }
     }
 }

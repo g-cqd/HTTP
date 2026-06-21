@@ -6,21 +6,26 @@
 //  exposes FileDescriptor (read/write/close) but not socket setup, so the listener is created with
 //  the raw POSIX sockets API and accepted connections are wrapped in FileDescriptor.
 //
+//  Known limitation: blocking accept/read/write occupy worker threads, so under many
+//  simultaneously-blocked connections this backbone overcommits the thread pool and degrades near
+//  the pool ceiling. It exists to benchmark the blocking model against the event-driven backbones
+//  (Network.framework, Dispatch, kqueue); it is not the high-concurrency default.
+//
 //  Standards: socket()/setsockopt()/bind()/listen()/accept()/getsockname() per POSIX.1-2017
 //  (IEEE Std 1003.1-2017). The listener is a TCP (RFC 9293) stream socket over IPv4 (RFC 791).
 //
 
 internal import Darwin
 internal import Dispatch
-internal import Foundation
+internal import Synchronization
 internal import SystemPackage
 
 /// The apple/swift-system transport backbone (typed FileDescriptor I/O over POSIX sockets).
 ///
-/// All mutable state is guarded by `lock`; the blocking `accept()` runs on `acceptQueue` and
-/// per-connection blocking `read`/`write` on `ioQueue`. `@unchecked Sendable` for that lock-guarded
-/// state.
-public final class SwiftSystemTransport: ServerTransport, @unchecked Sendable {
+/// Mutable state lives in a `Mutex` and the connection counter in an `Atomic`, so the type is
+/// genuinely `Sendable` (no `@unchecked`). The blocking `accept()` runs on `acceptQueue`; each
+/// connection serializes its I/O on a child of the shared `ioQueue` pool.
+public final class SwiftSystemTransport: ServerTransport {
 
     /// The backbone this transport implements.
     public let backbone: TransportBackbone = .swiftSystem
@@ -29,11 +34,19 @@ public final class SwiftSystemTransport: ServerTransport, @unchecked Sendable {
     private let acceptQueue = DispatchQueue(label: "http.transport.swift-system.accept")
     private let ioQueue = DispatchQueue(
         label: "http.transport.swift-system.io", attributes: .concurrent)
-    private let lock = NSLock()
-    private var listenDescriptor: FileDescriptor?
-    private var boundPortValue: UInt16 = 0
-    private var nextID: UInt64 = 0
-    private var running = false
+    private let state = Mutex<State>(State())
+    private let connectionCounter = Atomic<UInt64>(0)
+
+    private struct State {
+        var listenDescriptor: FileDescriptor?
+        var boundPort: UInt16 = 0
+        var isRunning = false
+    }
+
+    private enum AcceptOutcome {
+        case retry
+        case stop
+    }
 
     /// Creates a swift-system transport for `configuration`.
     public init(configuration: TransportConfiguration) {
@@ -42,17 +55,17 @@ public final class SwiftSystemTransport: ServerTransport, @unchecked Sendable {
 
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
-        withLock { boundPortValue }
+        state.withLock { $0.boundPort }
     }
 
     /// Binds a POSIX TCP listening socket and begins accepting, returning a stream of connections.
     public func start() async throws -> AsyncStream<any TransportConnection> {
         let (descriptor, port) = try bindListenSocket()
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
-        withLock {
-            listenDescriptor = descriptor
-            boundPortValue = port
-            running = true
+        state.withLock {
+            $0.listenDescriptor = descriptor
+            $0.boundPort = port
+            $0.isRunning = true
         }
         continuation.onTermination = { [weak self] _ in
             Task { await self?.shutdown() }
@@ -65,10 +78,10 @@ public final class SwiftSystemTransport: ServerTransport, @unchecked Sendable {
 
     /// Closes the listening socket, which unblocks and ends the accept loop.
     public func shutdown() async {
-        let descriptor: FileDescriptor? = withLock {
-            let current = listenDescriptor
-            listenDescriptor = nil
-            running = false
+        let descriptor: FileDescriptor? = state.withLock {
+            let current = $0.listenDescriptor
+            $0.listenDescriptor = nil
+            $0.isRunning = false
             return current
         }
         try? descriptor?.close()
@@ -124,26 +137,54 @@ public final class SwiftSystemTransport: ServerTransport, @unchecked Sendable {
         listenDescriptor: FileDescriptor,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        while withLock({ running }) {
-            let clientFD = accept(listenDescriptor.rawValue, nil, nil)
-            guard clientFD >= 0 else { break }  // listen socket closed on shutdown
-            let id = withLock { () -> TransportConnectionID in
-                nextID += 1
-                return TransportConnectionID(nextID)
+        while state.withLock({ $0.isRunning }) {
+            var address = sockaddr_in()
+            var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+            let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    accept(listenDescriptor.rawValue, $0, &length)
+                }
             }
+            if clientFD < 0 {
+                if case .stop = classifyAcceptError(errno) { break }
+                continue
+            }
+            let id = TransportConnectionID(
+                connectionCounter.wrappingAdd(1, ordering: .relaxed).newValue)
             continuation.yield(
                 SwiftSystemConnection(
                     id: id,
                     descriptor: FileDescriptor(rawValue: clientFD),
-                    peer: TransportAddress(host: configuration.host, port: 0),
-                    ioQueue: ioQueue))
+                    peer: peerAddress(from: address),
+                    targetQueue: ioQueue))
         }
         continuation.finish()
     }
 
-    private func withLock<R>(_ body: () -> R) -> R {
-        lock.lock()
-        defer { lock.unlock() }
-        return body()
+    /// Decides whether an `accept()` failure is transient (retry) or terminal (stop) — so a single
+    /// `EINTR`/`ECONNABORTED`, or fd exhaustion (`EMFILE`/`ENFILE`), cannot permanently kill the
+    /// listener; only an actually-closed descriptor (`EBADF`/`EINVAL`) stops the loop.
+    private func classifyAcceptError(_ error: Int32) -> AcceptOutcome {
+        switch error {
+        case EINTR, ECONNABORTED:
+            return .retry
+        case EMFILE, ENFILE:
+            usleep(10_000)  // back off ~10 ms on fd exhaustion, then keep accepting
+            return .retry
+        default:
+            return .stop  // EBADF / EINVAL (descriptor closed) or unrecoverable
+        }
+    }
+
+    /// Resolves the peer's IPv4 address from the `sockaddr_in` filled by `accept()` (RFC 791).
+    private func peerAddress(from address: sockaddr_in) -> TransportAddress {
+        var source = address
+        var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+        withUnsafePointer(to: &source.sin_addr) { addressPointer in
+            _ = inet_ntop(AF_INET, addressPointer, &buffer, socklen_t(INET_ADDRSTRLEN))
+        }
+        let host = String(
+            decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return TransportAddress(host: host, port: UInt16(bigEndian: address.sin_port))
     }
 }
