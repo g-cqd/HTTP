@@ -31,17 +31,20 @@ jobs:
           swiftlint lint --strict
 
   # ---------------------------------------------------------------------------
-  # Build (warnings-as-errors, enforced here rather than via unsafe manifest flags
-  # so the package stays usable as a versioned dependency) + full test suite.
+  # Build + full test suite. Warnings-as-errors is enabled via HTTP_WARNINGS_AS_ERRORS, which the
+  # manifest scopes to OUR targets only (using .treatAllWarnings) — keeping the package reuse-safe
+  # and avoiding the -suppress-warnings conflict that a global -Xswiftc flag hits on dependencies.
   # ---------------------------------------------------------------------------
   build-test:
     runs-on: macos-15
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
         run: swift --version
       - name: Build (warnings as errors)
-        run: swift build --scratch-path "$SCRATCH" -Xswiftc -warnings-as-errors
+        run: swift build --scratch-path "$SCRATCH"
       - name: Test
         run: swift test --scratch-path "$SCRATCH"
 

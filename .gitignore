@@ -2,6 +2,8 @@
 .build/
 .swiftpm/
 Package.resolved.tmp
+# Reusable library: consumers resolve their own dependency versions.
+Package.resolved
 
 ## Xcode
 *.xcodeproj
