@@ -38,7 +38,8 @@ let package = Package(
         .iOS("18.0"),  // floor per CLAUDE.md
     ],
     products: [
-        .library(name: "HTTPCore", targets: ["HTTPCore"])
+        .library(name: "HTTPCore", targets: ["HTTPCore"]),
+        .library(name: "HTTP1", targets: ["HTTP1"]),
     ],
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
@@ -49,6 +50,15 @@ let package = Package(
         .testTarget(
             name: "HTTPCoreTests",
             dependencies: ["HTTPCore"]
+        ),
+        // RFC 9112 — the sans-I/O HTTP/1.1 message parser & serializer (no sockets, no recursion).
+        .target(
+            name: "HTTP1",
+            dependencies: ["HTTPCore"]
+        ),
+        .testTarget(
+            name: "HTTP1Tests",
+            dependencies: ["HTTP1"]
         ),
     ]
 )

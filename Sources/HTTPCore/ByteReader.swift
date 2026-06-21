@@ -111,4 +111,24 @@ public struct ByteReader {
         offset = end + 1  // advance just past the delimiter
         return slice
     }
+
+    /// Returns the bytes in `range` as a single contiguous view, clamped to the buffer.
+    ///
+    /// Zero-copy: the view borrows the underlying buffer. Use it to validate or compare a parsed
+    /// token without allocating; call ``string(in:)`` only when an owned value must escape.
+    @inlinable
+    public func slice(in range: Range<Int>) -> UnsafeRawBufferPointer {
+        let lower = max(0, min(range.lowerBound, bytes.count))
+        let upper = max(lower, min(range.upperBound, bytes.count))
+        return UnsafeRawBufferPointer(rebasing: bytes[lower..<upper])
+    }
+
+    /// Decodes the bytes in `range` as UTF-8 into an owned `String`.
+    ///
+    /// This is the single materialization boundary: parsing stays zero-copy up to here, then copies
+    /// exactly once when a value must outlive the borrowed buffer.
+    @inlinable
+    public func string(in range: Range<Int>) -> String {
+        String(decoding: slice(in: range), as: UTF8.self)
+    }
 }
