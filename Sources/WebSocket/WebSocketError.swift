@@ -2,11 +2,11 @@
 //  WebSocketError.swift
 //  WebSocket
 //
-//  RFC 6455 §5.2 / §5.5 — the protocol violations the frame decoder fails closed on, each mapped to
-//  the Close status code (§7.4.1) the connection should report before closing.
+//  RFC 6455 §5 / §7.4 — the framing and connection violations the engine fails closed on, each mapped
+//  to the Close status code (§7.4.1) the connection reports before closing.
 //
 
-/// A WebSocket framing violation (RFC 6455 §5), with the Close code it maps to (§7.4.1).
+/// A WebSocket framing or connection violation (RFC 6455 §5 / §6), with its Close code (§7.4.1).
 public enum WebSocketError: Error, Sendable, Equatable {
 
     /// A reserved bit (RSV1–RSV3) was set without a negotiated extension (RFC 6455 §5.2).
@@ -27,14 +27,36 @@ public enum WebSocketError: Error, Sendable, Equatable {
     /// The 64-bit length had its reserved most-significant bit set (RFC 6455 §5.2).
     case lengthHighBitSet
 
-    /// The payload exceeded the configured maximum — a resource-exhaustion guard.
+    /// A frame's payload exceeded the configured maximum — a resource-exhaustion guard.
     case payloadTooLong
 
+    /// A client-to-server frame was not masked (RFC 6455 §5.1).
+    case maskingRequired
+
+    /// A CONTINUATION frame arrived with no fragmented message in progress (RFC 6455 §5.4).
+    case unexpectedContinuation
+
+    /// A new data frame arrived while a fragmented message was still open (RFC 6455 §5.4).
+    case interleavedDataFrame
+
+    /// A reassembled message exceeded the configured maximum — a resource-exhaustion guard.
+    case messageTooLarge
+
+    /// A Close frame carried a single payload octet (a code must be 0 or ≥2 octets) (RFC 6455 §5.5.1).
+    case malformedClosePayload
+
+    /// A Close frame carried a status code that must not appear on the wire (RFC 6455 §7.4.1).
+    case invalidCloseCode
+
+    /// A text message (or Close reason) was not valid UTF-8 (RFC 6455 §8.1).
+    case invalidTextEncoding
+
     /// The Close status code to report for this violation before closing (RFC 6455 §7.4.1).
-    public var closeCode: UInt16 {
+    public var closeCode: WebSocketCloseCode {
         switch self {
-        case .payloadTooLong: 1009  // Message Too Big
-        default: 1002  // Protocol Error
+        case .payloadTooLong, .messageTooLarge: .messageTooBig  // 1009
+        case .invalidTextEncoding: .invalidPayloadData  // 1007
+        default: .protocolError  // 1002
         }
     }
 }

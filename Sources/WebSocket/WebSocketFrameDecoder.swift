@@ -15,9 +15,14 @@ public struct WebSocketFrameDecoder {
     /// The largest payload accepted, in octets — a resource-exhaustion guard (default 1 MiB).
     private let maxPayloadLength: Int
 
-    /// Creates a decoder that rejects payloads larger than `maxPayloadLength`.
-    public init(maxPayloadLength: Int = 1 << 20) {
+    /// Whether every frame must be masked (RFC 6455 §5.1) — true for a server reading client frames.
+    private let requireMaskedFrames: Bool
+
+    /// Creates a decoder rejecting payloads larger than `maxPayloadLength`; set `requireMaskedFrames`
+    /// for the server role, which MUST receive masked frames (RFC 6455 §5.1).
+    public init(maxPayloadLength: Int = 1 << 20, requireMaskedFrames: Bool = false) {
         self.maxPayloadLength = maxPayloadLength
+        self.requireMaskedFrames = requireMaskedFrames
     }
 
     /// Pulls the next complete frame from `reader`, advancing it; returns nil if one is still arriving.
@@ -36,6 +41,7 @@ public struct WebSocketFrameDecoder {
         guard opcode.isDefined else { throw .reservedOpcode(byte0 & 0x0F) }
 
         let isMasked = byte1 & 0x80 != 0
+        guard isMasked || !requireMaskedFrames else { throw .maskingRequired }  // §5.1
         if opcode.isControl {
             guard isFinal else { throw .fragmentedControlFrame }  // §5.5
             guard byte1 & 0x7F <= 125 else { throw .controlFrameTooLong }  // §5.5
