@@ -61,7 +61,7 @@ ordering/dedup, lowercase field-name enforcement (§8.2.1), forbidden connection
 CONTINUATION-frame count and cumulative block size → ENHANCE_YOUR_CALM
 (`HTTP2HeaderBlockAccumulator.swift`). Request body bounded by `maxBodySize` (`HTTP2Connection.swift`).
 Rapid-Reset *counter*, `maxConcurrentStreams` enforcement (→ REFUSED_STREAM), and inbound flow control
-are implemented (see the Pending note on the Rapid-Reset rolling window).
+are implemented, now with a time-windowed rolling budget (see the audit-hardening note below).
 
 ### Audit-driven hardening (2026-06-22)
 Traced in `Documentation/audit/2026-06-22-standards-and-improvements-audit.md`:
@@ -73,6 +73,10 @@ chunk-extension bound and trailer-field validation (H1-F1/F2/F3, RFC 9112 §7.1.
 connection ceiling `maxConnections` (T-F2); kqueue `EINTR`/`EAGAIN` parity (T-F3); a pinned TLS
 **max** version with a configurable, 1.3-default range (T-F5, BCP 195); reject `Transfer-Encoding`
 on HTTP/1.0 + unknown TE → 501 (H1-F5); and outbound WebSocket Close-code validation (WS-F6, §7.4.1).
+On the HTTP/2 engine: a unified **time-windowed abuse budget** that decays over `streamResetInterval`
+and charges *server-emitted* RST_STREAM, closing the **MadeYouReset** bypass (H2-F1/F2, CVE-2025-8671 /
+CVE-2023-44487); trailers scoped and validated as **stream** errors (H2-F2/F3/F5, §8.1); and a frame on
+a closed stream reported as **STREAM_CLOSED** via a bounded recently-closed-id set (F1, §5.1).
 
 ## Pending (tracked)
 
@@ -80,9 +84,6 @@ These are **not yet enforced** — do not rely on them until the referenced mile
 
 | Gap | Attack | Plan |
 |---|---|---|
-| **h2**: the Rapid-Reset / control-frame budgets are monotonic counters that never decay (`streamResetInterval` / `NowProvider` unused) | CVE-2023-44487 (long-window bypass + false positives on long-lived conns) | make them rolling-window rate limiters via the existing `NowProvider` / `TestClock` seam |
-| **h2**: server-*emitted* RST_STREAM is not rate-counted | CVE-2025-8671 "MadeYouReset" (bypasses the reset counter) | charge the same reset budget when the engine emits RST_STREAM |
-| **h2**: closed-stream → PROTOCOL_ERROR not STREAM_CLOSED; trailers skip field/pseudo-header validation; a 2nd HEADERS without END_STREAM is a *connection* (not *stream*) error | RFC 9113 §5.1 / §8.1 conformance (staged as `withKnownIssue` F1/F2/F3) | remember recently-closed stream IDs; validate trailer fields; scope the trailer error per-stream |
 | **transport**: strict ALPN no-overlap rejection (the platform does not send `no_application_protocol`) | ALPACA-class cross-protocol confusion | reject a TLS connection that resolved to a nil / unadvertised protocol (T-F6) |
 | **transport(kqueue)**: a parked read/write continuation leaks when the fd is closed mid-wait | task/memory leak via the Slowloris-timeout path | drain pending resumers in `KqueueEventLoop.closeDescriptor` (T-F7) |
 | **ws**: the `inbound` drain uses `removeFirst` (O(n) per read) | quadratic CPU under dribbled frames | consumed-offset + compaction (WS-F4; performance lane) |
