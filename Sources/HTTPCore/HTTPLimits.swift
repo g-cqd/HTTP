@@ -2,7 +2,8 @@
 //  HTTPLimits.swift
 //  HTTPCore
 //
-//  Defense-in-depth resource limits. Every engine enforces these and fails closed on breach.
+//  Defense-in-depth resource limits. Engines enforce these and fail closed on breach (the two
+//  inbound-decompression bounds are reserved until that feature lands — see their notes).
 //  Defaults are the reconciled safe values from the project's security analysis (RFCs + CVEs).
 //
 
@@ -30,11 +31,16 @@ public struct HTTPLimits: Sendable, Equatable {
     /// Maximum request body size before responding `413` (RFC 9110 §15.5.14).
     public var maxBodySize: Int
 
-    /// Maximum size of a decompressed body, and the maximum decompressed/compressed ratio
-    /// (gzip/brotli decompression bombs).
+    /// Maximum size of an inbound decompressed body (gzip/brotli decompression bombs; CWE-409).
+    ///
+    /// Reserved, **not yet enforced**: the server performs only response-side compression today, so no
+    /// request body is decompressed. This bound activates when inbound `Content-Encoding` decoding is
+    /// added.
     public var maxDecompressedBodySize: Int
 
-    /// Maximum allowed decompressed-to-compressed size ratio (decompression bombs).
+    /// Maximum decompressed-to-compressed size ratio for an inbound body (decompression bombs).
+    ///
+    /// Reserved alongside ``maxDecompressedBodySize`` — **not yet enforced** (no inbound decompression).
     public var maxDecompressionRatio: Int
 
     // MARK: HTTP/2 & HTTP/3 limits

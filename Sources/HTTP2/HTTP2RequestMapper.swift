@@ -34,6 +34,9 @@ enum HTTP2RequestMapper {
         var headerFields = HTTPFields()
         var sawRegularField = false
 
+        // `fields` arrives already bounded: the HPACK/QPACK decoder enforces `maxFieldCount`,
+        // `maxHeaderListSize`, and `maxFieldSize` at decode time (the single chokepoint), so the
+        // field-count / header-list exhaustion vectors are stopped upstream and not re-checked here.
         for field in fields {
             if field.name.hasPrefix(":") {
                 guard !sawRegularField else {
