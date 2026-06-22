@@ -45,6 +45,7 @@ let package = Package(
     products: [
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
         .library(name: "HTTP1", targets: ["HTTP1"]),
+        .library(name: "HPACK", targets: ["HPACK"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
         .executable(name: "httpd-example", targets: ["httpd-example"]),
@@ -72,6 +73,17 @@ let package = Package(
         .testTarget(
             name: "HTTP1Tests",
             dependencies: ["HTTP1"]
+        ),
+        // RFC 7541 — HPACK header compression for HTTP/2: §5.1 prefix integers, §5.2 string literals
+        // (with the canonical Huffman code), the static (App. A) & dynamic (§4) tables, and the §6
+        // field-representation codec. Sans-I/O; shared canonical Huffman lives in HTTPCore for QPACK.
+        .target(
+            name: "HPACK",
+            dependencies: ["HTTPCore"]
+        ),
+        .testTarget(
+            name: "HPACKTests",
+            dependencies: ["HPACK"]
         ),
         // M3 — the I/O boundary. Four switchable backbones (Network.framework + three POSIX-level
         // variants) behind one abstraction, each isolated in its own subfolder. The only target
