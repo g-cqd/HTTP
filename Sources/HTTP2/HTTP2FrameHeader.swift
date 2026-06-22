@@ -58,18 +58,18 @@ public struct HTTP2FrameHeader: Sendable, Equatable {
         reader.advance(by: encodedLength)
         let octets = reader.slice(in: start..<(start + encodedLength))
 
-        let payloadLength =
-            Int(octets.unsafeLoad(fromByteOffset: 0, as: UInt8.self)) << 16
-            | Int(octets.unsafeLoad(fromByteOffset: 1, as: UInt8.self)) << 8
-            | Int(octets.unsafeLoad(fromByteOffset: 2, as: UInt8.self))
-        let streamRaw =
-            UInt32(octets.unsafeLoad(fromByteOffset: 5, as: UInt8.self)) << 24
-            | UInt32(octets.unsafeLoad(fromByteOffset: 6, as: UInt8.self)) << 16
-            | UInt32(octets.unsafeLoad(fromByteOffset: 7, as: UInt8.self)) << 8
-            | UInt32(octets.unsafeLoad(fromByteOffset: 8, as: UInt8.self))
+        // Two unaligned big-endian loads instead of nine byte loads + shifts (the same
+        // `UInt32(bigEndian: loadUnaligned)` idiom HTTP2Connection already uses): octets 0–3 carry the
+        // 24-bit Length and the Type (`length << 8 | type`); octets 5–8 carry the 31-bit Stream
+        // Identifier (the reserved high bit is masked in HTTP2StreamID). Octet 4 (Flags) is the lone
+        // byte load. The reserved `R` bit is ignored on receipt (RFC 9113 §4.1).
+        let lengthAndType = UInt32(
+            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self))
+        let streamRaw = UInt32(
+            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 5, as: UInt32.self))
         return HTTP2FrameHeader(
-            payloadLength: payloadLength,
-            type: HTTP2FrameType(rawValue: octets.unsafeLoad(fromByteOffset: 3, as: UInt8.self)),
+            payloadLength: Int(lengthAndType >> 8),
+            type: HTTP2FrameType(rawValue: UInt8(truncatingIfNeeded: lengthAndType)),
             flags: HTTP2FrameFlags(rawValue: octets.unsafeLoad(fromByteOffset: 4, as: UInt8.self)),
             streamID: HTTP2StreamID(rawValue: streamRaw))
     }
