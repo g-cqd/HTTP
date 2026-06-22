@@ -177,4 +177,41 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
             errorCode(feeding: &connection, Self.stream, truncated, fin: true)
                 == HTTP3ErrorCode.h3FrameError.rawValue)
     }
+
+    // MARK: - Pseudo-header value validation & CONNECT (RFC 9114 §4.3.1 / §4.4)
+
+    /// QPACK literal values decode as raw UTF-8 and may carry CR/LF/NUL; control bytes in
+    /// :path/:authority/:scheme must be rejected (CWE-113/117), matching the HTTP/2 §8.3.1 screen.
+    @Test(
+        "a control byte in a pseudo-header value is H3_MESSAGE_ERROR (RFC 9114 §4.3.1)",
+        arguments: [
+            (name: ":path", value: "/a\r\nb"),
+            (name: ":authority", value: "example.com\r\nx-evil: 1"),
+            (name: ":scheme", value: "ht\r\ntps"),
+        ])
+    func controlByteInPseudoHeaderIsMalformed(probe: (name: String, value: String)) throws {
+        var fields = [
+            HeaderField(name: ":method", value: "GET"),
+            HeaderField(name: ":scheme", value: "https"),
+            HeaderField(name: ":authority", value: "example.com"),
+            HeaderField(name: ":path", value: "/"),
+        ]
+        fields.removeAll { $0.name == probe.name }
+        fields.append(HeaderField(name: probe.name, value: probe.value))
+        var connection = HTTP3Connection()
+        _ = try connection.receive(Self.stream, requestStream(fieldSection(fields)), fin: true)
+        #expect(resetStreamCode(&connection) == HTTP3ErrorCode.h3MessageError.rawValue)
+    }
+
+    @Test("a standard CONNECT carrying :scheme or :path is H3_MESSAGE_ERROR (RFC 9114 §4.4)")
+    func connectWithSchemeOrPathIsMalformed() throws {
+        let fields = [
+            HeaderField(name: ":method", value: "CONNECT"),
+            HeaderField(name: ":authority", value: "example.com:443"),
+            HeaderField(name: ":path", value: "/"),
+        ]
+        var connection = HTTP3Connection()
+        _ = try connection.receive(Self.stream, requestStream(fieldSection(fields)), fin: true)
+        #expect(resetStreamCode(&connection) == HTTP3ErrorCode.h3MessageError.rawValue)
+    }
 }
