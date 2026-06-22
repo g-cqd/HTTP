@@ -7,11 +7,12 @@
 //  ``QUICServerTransport``:
 //
 //    • ``LegacyQUICTransport`` — the `NWConnectionGroup` callback API available at the macOS 15 floor.
-//      It is also exercised on macOS 26, so it provides working HTTP/3 across the whole support range.
-//    • The modern `NetworkConnection<QUIC>` typed-channel API (macOS 26+) is the native path; it slots
-//      into the `#available` branch below once its channel send/receive surface is wired and validated.
+//      It also runs on macOS 26 but is not selected there.
+//    • The modern `NetworkConnection<QUIC>` typed-channel API (``ModernQUICTransport``), selected on
+//      macOS 26+ / iOS 26+ — the native path.
 //
-//  Keeping the gate here means every other file stays availability-free and floors at `macOS(.v15)`.
+//  Keeping the only `#available` here means every other file stays availability-free except the
+//  `@available(macOS 26)` modern backbone itself; the package floor stays `macOS(.v15)`.
 //
 
 public import HTTPCore
@@ -29,9 +30,7 @@ public enum QUICTransportFactory {
         limits: HTTPLimits = .default
     ) -> any QUICServerTransport {
         if #available(macOS 26, iOS 26, *) {
-            // The modern NetworkConnection<QUIC> backbone plugs in here; until its typed-channel API is
-            // wired, the legacy backbone (verified on macOS 26) serves this branch too.
-            return LegacyQUICTransport(configuration: configuration, limits: limits)
+            return ModernQUICTransport(configuration: configuration, limits: limits)
         }
         return LegacyQUICTransport(configuration: configuration, limits: limits)
     }
