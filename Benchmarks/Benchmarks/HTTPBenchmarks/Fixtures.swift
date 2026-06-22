@@ -140,3 +140,19 @@ let webSocketLargePayload = [UInt8](repeating: 0x61, count: 4096)
 /// A realistic mixed-script UTF-8 text message — exercises the §8.1 text-validation path (ASCII fast
 /// path plus 2-, 3-, and 4-byte sequences), used to measure validating without the String round-trip.
 let webSocketTextPayload = Array("The quick brown fox 🦊 jumps — café, naïve, 日本語, Ω≈ç√∞".utf8)
+
+// MARK: - gzip CRC-32 bodies (compressible text bracketing the 1 KiB compression threshold)
+
+let crcBody1KiB = makeCRCBody(1 << 10)
+let crcBody16KiB = makeCRCBody(16 << 10)
+let crcBody256KiB = makeCRCBody(256 << 10)
+
+/// Builds a `size`-octet body by tiling a realistic text snippet (content is irrelevant to CRC speed).
+private func makeCRCBody(_ size: Int) -> [UInt8] {
+    let unit = Array("The quick brown fox jumps over the lazy dog. 0123456789. ".utf8)
+    var body = [UInt8]()
+    body.reserveCapacity(size)
+    while body.count < size { body.append(contentsOf: unit) }
+    body.removeLast(body.count - size)
+    return body
+}

@@ -67,7 +67,8 @@ let package = Package(
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
         // Zero external dependencies, no I/O — the self-contained substrate every engine builds on.
         .target(
-            name: "HTTPCore"
+            name: "HTTPCore",
+            dependencies: ["CCRC32"]
         ),
         .testTarget(
             name: "HTTPCoreTests",
@@ -87,6 +88,13 @@ let package = Package(
         // hook; a no-op elsewhere), backing the `expectAllocations` zero-allocation perf guard.
         // Test/tooling-only; never shipped in an app binary. No dependencies, default C settings.
         .target(name: "CHTTPTestMalloc"),
+        // A C shim exposing hardware/SWAR CRC-32 backends for the gzip integrity checksum: the ARMv8
+        // CRC32 instructions, zlib's PCLMULQDQ-accelerated `crc32` (the correct x86 hardware path),
+        // and a portable slicing-by-8 table. Links the system zlib. Default C settings.
+        .target(
+            name: "CCRC32",
+            linkerSettings: [.linkedLibrary("z")]
+        ),
         // Test-only support: the deterministic async toolkit ported from ADTestKit (TestClock,
         // AsyncEventProbe, AsyncGate, ThreadGate, TaskProviderSpy) plus shared fakes, seeded fuzzing,
         // constrained-stack recursion guards, oracles, and the allocation counter. Linked by every
@@ -203,8 +211,8 @@ let package = Package(
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
 for target in package.targets {
-    // The C shim (`CHTTPTestMalloc`) has no Swift sources — Swift settings don't apply to it.
-    guard target.name != "CHTTPTestMalloc" else { continue }
+    // The C shims (`CHTTPTestMalloc`, `CCRC32`) have no Swift sources — Swift settings don't apply.
+    guard !["CHTTPTestMalloc", "CCRC32"].contains(target.name) else { continue }
     var settings = (target.swiftSettings ?? []) + strictSwiftSettings
     if treatWarningsAsErrors {
         settings.append(.treatAllWarnings(as: .error))
