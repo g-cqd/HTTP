@@ -48,6 +48,10 @@ public enum Huffman {
     /// Huffman-encodes `input`, padding the final partial octet with the high bits of `EOS` (§5.2).
     public static func encode(_ input: some Sequence<UInt8>) -> [UInt8] {
         var output = [UInt8]()
+        // Reserve up front so byte-at-a-time append doesn't pay repeated geometric re-grows. For the
+        // ASCII-dominant header text we encode the Huffman form is ≤ the input size, so the input's
+        // own count is a good single reservation (a `Sequence` with no count reserves nothing).
+        output.reserveCapacity(input.underestimatedCount)
         var bitBuffer: UInt64 = 0
         var bitCount = 0
         for byte in input {
@@ -77,6 +81,9 @@ public enum Huffman {
     public static func decode(_ input: RawSpan) throws(HuffmanError) -> [UInt8] {
         let table = decodeTable
         var output = [UInt8]()
+        // The shortest canonical code is 5 bits, so at most ⌈input·8 / 5⌉ symbols can decode out of
+        // the bit stream — reserve that exact upper bound once instead of re-growing per symbol.
+        output.reserveCapacity(input.byteCount * 8 / 5 + 1)
         var code: UInt32 = 0
         var length = 0
         var index = 0
