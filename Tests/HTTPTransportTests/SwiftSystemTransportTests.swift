@@ -5,6 +5,7 @@
 //  Loopback integration test for the apple/swift-system backbone (POSIX sockets + FileDescriptor).
 //
 
+import HTTPTestSupport
 internal import Network
 import Testing
 
@@ -39,24 +40,22 @@ struct SwiftSystemTransportTests {
         let connection = try #require(await iterator.next())
 
         let receiveTask = Task { try await connection.receive(maxLength: 64) }
-        try await Task.sleep(for: .milliseconds(200))  // let the read block in the kernel
+        // Inherent to a real-socket test: give the recv(2) a moment to actually park in the kernel
+        // before cancelling — there is no portable hook for "the syscall is now blocked". This is the
+        // one unavoidable real delay; the deadlock detection below is probe-driven, not a timed race.
+        try await Task.sleep(for: .milliseconds(200))
         receiveTask.cancel()
 
-        // With the shutdown(2) fix the cancelled read returns promptly; the deadlock would hang it.
-        let unblocked = await withTaskGroup(of: Bool.self) { group in
-            group.addTask {
-                _ = try? await receiveTask.value
-                return true
-            }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(3))
-                return false
-            }
-            let first = await group.next() ?? false
-            group.cancelAll()
-            return first
+        // With the shutdown(2) fix the cancelled read returns promptly; a deadlock would hang it.
+        // Record completion into a probe: `wait` returns the instant the recv unblocks, and only
+        // elapses its real-time deadline (throwing AsyncEventProbeTimeoutError) if it truly deadlocks.
+        let unblocked = AsyncEventProbe<Void>()
+        let joiner = Task {
+            _ = try? await receiveTask.value
+            unblocked.record(())
         }
-        #expect(unblocked, "cancelled receive deadlocked behind the serial-queue close")
+        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        await joiner.value
 
         await connection.close()
         client.cancel()

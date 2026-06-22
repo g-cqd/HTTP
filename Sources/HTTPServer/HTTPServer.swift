@@ -13,27 +13,35 @@ public import HTTPCore
 public import HTTPTransport
 internal import Synchronization
 
-/// An HTTP/1.1 server that drives an ``HTTPResponder`` over a ``ServerTransport``.
-public final class HTTPServer: Sendable {
+/// An HTTP/1.1 · HTTP/2 server that drives an ``HTTPResponder`` over a ``ServerTransport``.
+///
+/// The server is generic over the `Clock` its Slowloris/idle deadlines are timed against. Production
+/// uses the real ``ContinuousClock`` (via the convenience initializer); a test injects a
+/// deterministic clock, so the timeout paths run with zero real-time waiting.
+public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
 
     private let transport: any ServerTransport
     private let responder: any HTTPResponder
     private let limits: HTTPLimits
+    private let clock: C
 
     /// Active connection count per peer host, enforcing ``HTTPLimits/maxConnectionsPerClient``.
     ///
     /// A `Mutex` (not an actor) because the critical section is a single map update with no `await`.
     private let activeConnectionsPerHost = Mutex<[String: Int]>([:])
 
-    /// Creates a server bound to `transport`, handling requests with `responder`.
+    /// Creates a server bound to `transport`, handling requests with `responder` and timing its
+    /// Slowloris/idle deadlines against `clock`.
     public init(
         transport: any ServerTransport,
         responder: any HTTPResponder,
-        limits: HTTPLimits = .default
+        limits: HTTPLimits = .default,
+        clock: C
     ) {
         self.transport = transport
         self.responder = responder
         self.limits = limits
+        self.clock = clock
     }
 
     /// Starts accepting connections and serves each concurrently until the transport finishes.
@@ -182,7 +190,7 @@ public final class HTTPServer: Sendable {
         from connection: any TransportConnection,
         into buffer: inout [UInt8]
     ) async throws -> ReadOutcome {
-        var headerDeadline: ContinuousClock.Instant?
+        var headerDeadline: C.Instant?
         var scanOffset = 0  // resumable end-of-headers scan (keeps header framing O(n), not O(n²))
         var pending: PendingRequest?  // the head, parsed once, then reused as the body arrives
         while true {
@@ -254,14 +262,13 @@ public final class HTTPServer: Sendable {
     private func receiveTimeout(
         _ buffer: [UInt8],
         headersParsed: Bool,
-        _ headerDeadline: inout ContinuousClock.Instant?
+        _ headerDeadline: inout C.Instant?
     ) -> Duration {
         if buffer.isEmpty { return limits.keepAliveTimeout }  // idle, awaiting the next request
         if headersParsed { return limits.idleTimeout }  // body phase
-        let clock = ContinuousClock()
         let deadline = headerDeadline ?? clock.now.advanced(by: limits.headerReadTimeout)
         headerDeadline = deadline  // cumulative across the whole header section
-        return max(.zero, deadline - clock.now)
+        return max(.zero, clock.now.duration(to: deadline))
     }
 
     /// A sentinel for an operation that exceeded its deadline.
@@ -275,10 +282,11 @@ public final class HTTPServer: Sendable {
         _ duration: Duration,
         _ operation: @escaping @Sendable () async throws -> Value
     ) async throws -> Value {
-        try await withThrowingTaskGroup(of: Value.self) { group in
+        let clock = self.clock
+        return try await withThrowingTaskGroup(of: Value.self) { group in
             group.addTask { try await operation() }
             group.addTask {
-                try await Task.sleep(for: duration)
+                try await clock.sleep(for: duration)
                 throw TimeoutError()
             }
             defer { group.cancelAll() }
@@ -456,5 +464,20 @@ public final class HTTPServer: Sendable {
 
     private static func normalizedToken(_ option: Substring) -> String {
         option.lowercased().filter { $0 != " " && $0 != "\t" }
+    }
+}
+
+extension HTTPServer where C == ContinuousClock {
+    /// Creates a server timing its deadlines against the real ``ContinuousClock`` — the production
+    /// default.
+    ///
+    /// Inject a deterministic clock with the designated initializer in tests.
+    public convenience init(
+        transport: any ServerTransport,
+        responder: any HTTPResponder,
+        limits: HTTPLimits = .default
+    ) {
+        self.init(
+            transport: transport, responder: responder, limits: limits, clock: ContinuousClock())
     }
 }

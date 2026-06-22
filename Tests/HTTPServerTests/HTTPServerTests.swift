@@ -7,6 +7,7 @@
 //
 
 import HTTPCore
+import HTTPTestSupport
 import HTTPTransport
 import Testing
 
@@ -136,31 +137,50 @@ struct HTTPServerTests {
         "an idle persistent connection is closed after the keep-alive timeout (Slowloris)",
         .timeLimit(.minutes(1)))
     func idleTimeoutClosesConnection() async {
+        let clock = TestClock()
         let limits = HTTPLimits(keepAliveTimeout: .milliseconds(100))
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let connection = HangingConnection(id: TransportConnectionID(1))
-        let server = HTTPServer(transport: FakeTransport(), responder: responder, limits: limits)
-        // The peer never sends; serve() must time the read out and close, returning promptly.
-        await server.serve(connection)
+        let server = HTTPServer(
+            transport: FakeTransport(), responder: responder, limits: limits, clock: clock)
+
+        // Serve concurrently with a time pump that advances past every keep-alive deadline the server
+        // arms (the peer never sends), until serve() closes the connection. Zero real-time waiting —
+        // each `advance` fires the parked `clock.sleep` immediately, with no `Task.sleep`/`yield`.
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await server.serve(connection) }
+            group.addTask {
+                while !Task.isCancelled {
+                    try? await clock.waitForSleepers(atLeast: 1)
+                    clock.advance(by: .milliseconds(100))
+                }
+            }
+            await group.next()  // serve() returned — the connection timed out and closed
+            group.cancelAll()  // stop the pump
+        }
         #expect(await connection.isClosed())
     }
 
     @Test(
         "rejects connections beyond maxConnectionsPerClient for one peer",
         .timeLimit(.minutes(1)))
-    func perClientConnectionCap() async {
+    func perClientConnectionCap() async throws {
         let limits = HTTPLimits(maxConnectionsPerClient: 2)
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let peer = TransportAddress(host: "203.0.113.7", port: 0)
+        let probe = AsyncEventProbe<TransportConnectionID>()
         let connections = (1...3).map {
-            HangingConnection(id: TransportConnectionID(UInt64($0)), peer: peer)
+            HangingConnection(
+                id: TransportConnectionID(UInt64($0)), peer: peer, admissionProbe: probe)
         }
         let server = HTTPServer(
             transport: FakeTransport(connections: connections), responder: responder, limits: limits
         )
 
         let run = Task { try? await server.run() }
-        try? await Task.sleep(for: .milliseconds(200))  // let admission settle
+        // Each connection records once its admission is decided (admitted → read, rejected → close).
+        // Await all three decisions instead of guessing with a `Task.sleep`.
+        _ = try await probe.wait(forAtLeast: 3)
 
         // The cap is 2, so exactly one of the three same-peer connections is rejected (closed).
         var closedCount = 0
@@ -216,68 +236,5 @@ struct HTTPServerTests {
         await server.serve(connection)
         let wire = String(decoding: await connection.sentBytes(), as: UTF8.self)
         #expect(wire.hasSuffix("\r\n\r\nWikipedia"))
-    }
-}
-
-/// A connection whose `receive` blocks until cancelled — to exercise the read timeout and the cap.
-private actor HangingConnection: TransportConnection {
-
-    nonisolated let id: TransportConnectionID
-    nonisolated let peer: TransportAddress
-    private var closed = false
-
-    init(
-        id: TransportConnectionID, peer: TransportAddress = TransportAddress(host: "hang", port: 0)
-    ) {
-        self.id = id
-        self.peer = peer
-    }
-
-    func receive(maxLength: Int) async throws -> [UInt8]? {
-        try await Task.sleep(for: .seconds(3600))  // blocks until the task is cancelled
-        return nil
-    }
-
-    func send(_ bytes: [UInt8]) async throws {}
-
-    func close() async {
-        closed = true
-    }
-
-    func isClosed() -> Bool {
-        closed
-    }
-}
-
-/// A connection that releases its inbound bytes a few at a time, to exercise incremental reads.
-private actor DribblingConnection: TransportConnection {
-
-    nonisolated let id: TransportConnectionID
-    nonisolated let peer = TransportAddress(host: "drip", port: 0)
-    private var inbound: ArraySlice<UInt8>
-    private let chunkSize: Int
-    private var output: [UInt8] = []
-
-    init(id: TransportConnectionID, inbound: [UInt8], chunkSize: Int) {
-        self.id = id
-        self.inbound = inbound[...]
-        self.chunkSize = chunkSize
-    }
-
-    func receive(maxLength: Int) async throws -> [UInt8]? {
-        guard !inbound.isEmpty else { return nil }
-        let count = min(chunkSize, min(maxLength, inbound.count))
-        defer { inbound = inbound.dropFirst(count) }
-        return Array(inbound.prefix(count))
-    }
-
-    func send(_ bytes: [UInt8]) async throws {
-        output.append(contentsOf: bytes)
-    }
-
-    func close() async {}
-
-    func sentBytes() -> [UInt8] {
-        output
     }
 }
