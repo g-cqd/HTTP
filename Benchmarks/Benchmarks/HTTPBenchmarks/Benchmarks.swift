@@ -15,4 +15,5 @@ let benchmarks: @Sendable () -> Void = {
     registerHTTP2Benchmarks()  // HTTP/2 — frame layer + the sans-I/O connection engine (GET/POST)
     registerWebSocketBenchmarks()  // WebSocket — RFC 6455 frame decode (masked) + encode
     registerTransportBenchmarks()  // every backbone — loopback echo + in-memory abstraction
+    registerCompressionBenchmarks()  // gzip CRC-32 backends — slice1 vs slice8 vs zlib vs ARM
 }
