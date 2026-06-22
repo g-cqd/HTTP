@@ -14,6 +14,9 @@ DerivedData/
 ## Editors
 .vscode/
 
+## Claude Code agent state (settings, skills, and isolated worktrees — never committed)
+.claude/
+
 ## macOS
 .DS_Store
 
