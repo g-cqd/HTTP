@@ -43,4 +43,24 @@ public enum HTTP2HeadersFrame {
         }
         return payload[start..<end]
     }
+
+    /// The stream dependency declared in a HEADERS frame's deprecated priority section (RFC 9113
+    /// §5.3.2 / §6.2), or `nil` when the PRIORITY flag is clear.
+    ///
+    /// The priority section follows the optional PADDED pad-length octet: a 1-bit exclusive flag, a
+    /// 31-bit stream dependency, then an 8-bit weight. Only the dependency is read — to reject a
+    /// stream that depends on itself (RFC 9113 §5.3.1). Truncated input returns `nil`; the real
+    /// length check is ``fieldBlockFragment(_:flags:)``, which the caller invokes alongside this.
+    public static func priorityDependency(
+        _ payload: [UInt8],
+        flags: HTTP2FrameFlags
+    ) -> HTTP2StreamID? {
+        guard flags.contains(.priority) else { return nil }
+        let offset = flags.contains(.padded) ? 1 : 0
+        guard payload.count >= offset + priorityFieldLength else { return nil }
+        let dependency =
+            (UInt32(payload[offset]) << 24 | UInt32(payload[offset + 1]) << 16
+                | UInt32(payload[offset + 2]) << 8 | UInt32(payload[offset + 3])) & 0x7FFF_FFFF
+        return HTTP2StreamID(rawValue: dependency)
+    }
 }

@@ -34,6 +34,30 @@ extension HTTP2ConnectionTests {
         return out
     }
 
+    /// A HEADERS frame carrying the deprecated priority section (RFC 9113 §6.2) whose 31-bit stream
+    /// dependency points at its own `streamID` — the self-dependency rejected by §5.3.1.
+    func selfDependentHeadersFrame(streamID: UInt32) -> [UInt8] {
+        var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+        let block = encoder.encode([
+            HPACKField(name: ":method", value: "GET"),
+            HPACKField(name: ":scheme", value: "https"),
+            HPACKField(name: ":path", value: "/"),
+            HPACKField(name: ":authority", value: "example.com"),
+        ])
+        let priority: [UInt8] = [  // E=0, 31-bit dependency = streamID, weight = 0
+            UInt8((streamID >> 24) & 0xFF), UInt8((streamID >> 16) & 0xFF),
+            UInt8((streamID >> 8) & 0xFF), UInt8(streamID & 0xFF), 0x00,
+        ]
+        var out = [UInt8]()
+        HTTP2FrameHeader(
+            payloadLength: priority.count + block.count, type: .headers,
+            flags: [.endHeaders, .endStream, .priority], streamID: HTTP2StreamID(streamID)
+        ).encode(into: &out)
+        out.append(contentsOf: priority)
+        out.append(contentsOf: block)
+        return out
+    }
+
     func dataFrame(streamID: UInt32, payload: [UInt8], endStream: Bool) -> [UInt8] {
         var out = [UInt8]()
         HTTP2FrameHeader(

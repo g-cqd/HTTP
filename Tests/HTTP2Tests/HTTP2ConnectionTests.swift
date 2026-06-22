@@ -190,6 +190,21 @@ struct HTTP2ConnectionTests {
         #expect(refused?.code == .refusedStream)
     }
 
+    @Test("a stream that depends on itself is reset with PROTOCOL_ERROR (RFC 9113 §5.3.1)")
+    func selfDependentStreamReset() throws {
+        var connection = HTTP2Connection()
+        _ = connection.outboundBytes()  // discard the server SETTINGS preface
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += selfDependentHeadersFrame(streamID: 1)
+
+        let events = try connection.receive(wire)
+        #expect(events.isEmpty)  // the stream is rejected, not delivered; the connection survives
+        let reset = try firstRstStream(connection.outboundBytes())
+        #expect(reset?.streamID == HTTP2StreamID(1))
+        #expect(reset?.code == .protocolError)
+    }
+
     @Test("a PING flood is ENHANCE_YOUR_CALM (§6.7, clock-free leaky bucket)")
     func pingFlood() throws {
         var connection = HTTP2Connection(limits: HTTPLimits(maxStreamResetsPerInterval: 5))
@@ -311,7 +326,9 @@ struct HTTP2ConnectionTests {
         #expect(thrown == .protocolError)
     }
 
-    @Test("DATA beyond the advertised stream receive window is a FLOW_CONTROL_ERROR (§6.9)")
+    @Test(
+        "DATA beyond the advertised stream receive window resets the stream (FLOW_CONTROL_ERROR, §6.9)"
+    )
     func inboundStreamWindowEnforced() throws {
         var settings = HTTP2Settings()
         settings.initialWindowSize = 10  // we will accept only 10 DATA octets per stream
@@ -321,16 +338,17 @@ struct HTTP2ConnectionTests {
         wire += settingsFrame()
         wire += openStream(streamID: 1)  // POST awaiting a body
         _ = try connection.receive(wire)
+        _ = connection.outboundBytes()  // discard the SETTINGS ACK
 
-        var thrown: HTTP2ErrorCode?
-        do {
-            _ = try connection.receive(
-                dataFrame(
-                    streamID: 1, payload: [UInt8](repeating: 0x61, count: 20), endStream: true))
-        } catch {
-            thrown = error.code
-        }
-        #expect(thrown == .flowControlError)
+        // 20 octets exceed the 10-octet stream window. RFC 9113 §6.9 lets the receiver answer with a
+        // stream error — RST_STREAM(FLOW_CONTROL_ERROR) — so the connection (and its other streams)
+        // survives and `receive` does not throw.
+        let events = try connection.receive(
+            dataFrame(streamID: 1, payload: [UInt8](repeating: 0x61, count: 20), endStream: true))
+        #expect(events.isEmpty)
+        let reset = try firstRstStream(connection.outboundBytes())
+        #expect(reset?.streamID == HTTP2StreamID(1))
+        #expect(reset?.code == .flowControlError)
     }
 
     @Test(

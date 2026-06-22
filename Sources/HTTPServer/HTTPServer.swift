@@ -82,13 +82,15 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     ///
     /// The first octets are sniffed: a connection that opens with the HTTP/2 client preface (h2c
     /// "prior knowledge", RFC 9113 §3.4) is driven by the HTTP/2 engine; anything else is HTTP/1.x.
+    /// The distinctive prefix "PRI * HTTP/2.0\r\n" that no HTTP/1 request line can match; once it is
+    /// seen the connection is committed to HTTP/2 even if the *full* preface then proves invalid (so
+    /// the engine can answer with GOAWAY rather than mis-routing to HTTP/1).
+    private static var http2MarkerLength: Int { 16 }
+
     func serve(_ connection: any TransportConnection) async {
         var buffer = [UInt8]()
-        // Read until the preface is confirmed or ruled out (its 24 octets disambiguate from any
-        // HTTP/1 request line, which diverges within the first few bytes).
-        while buffer.count < HTTP2ConnectionPreface.client.count,
-            Self.couldBeHTTP2Preface(buffer)
-        {
+        // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).
+        while buffer.count < Self.http2MarkerLength, Self.couldBeHTTP2Preface(buffer) {
             guard
                 let chunk = try? await withTimeout(
                     limits.keepAliveTimeout, { try await connection.receive(maxLength: 16_384) }),
@@ -97,7 +99,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             buffer.append(contentsOf: chunk)
         }
 
-        if buffer.count >= HTTP2ConnectionPreface.client.count, Self.couldBeHTTP2Preface(buffer) {
+        if Self.matchesHTTP2Marker(buffer) {
             await serveHTTP2(connection, initialBytes: buffer)
         } else {
             while await serveOne(connection, buffer: &buffer) {}
@@ -111,6 +113,14 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         for index in 0..<min(buffer.count, marker.count) where buffer[index] != marker[index] {
             return false
         }
+        return true
+    }
+
+    /// Whether the first 16 octets of `buffer` are the HTTP/2 preface marker (the commit point to h2).
+    private static func matchesHTTP2Marker(_ buffer: [UInt8]) -> Bool {
+        let marker = HTTP2ConnectionPreface.client
+        guard buffer.count >= http2MarkerLength else { return false }
+        for index in 0..<http2MarkerLength where buffer[index] != marker[index] { return false }
         return true
     }
 

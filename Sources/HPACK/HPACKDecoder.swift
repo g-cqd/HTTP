@@ -43,6 +43,8 @@ public struct HPACKDecoder {
             } else if first & 0x40 != 0 {
                 fields.append(try decodeLiteral(&reader, prefixBits: 6, addToTable: true))
             } else if first & 0x20 != 0 {
+                // A dynamic table size update MUST precede any field in the block (RFC 7541 §4.2).
+                guard fields.isEmpty else { throw .invalidTableSizeUpdate }
                 try decodeSizeUpdate(&reader)
                 continue
             } else {
