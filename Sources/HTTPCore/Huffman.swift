@@ -29,10 +29,6 @@ public enum Huffman {
     @usableFromInline
     static let eosSymbol: UInt16 = 256
 
-    /// The longest code in the table (the 30-bit `EOS`); a longer accumulation is invalid.
-    @usableFromInline
-    static let maxCodeLength = 30
-
     // MARK: Encoding
 
     /// The number of octets `input` would occupy Huffman-encoded (RFC 7541 §5.2).
@@ -118,42 +114,44 @@ public enum Huffman {
 
     /// Decodes `input` into `buffer`, returning the number of octets written.
     ///
-    /// The shared bit-walk. `buffer` MUST be at least ``decodedUpperBound(of:)`` octets; throws on
-    /// the three §5.2 errors. Allocation-free — the caller owns the buffer.
+    /// Drives the nibble FSM (``nibbleDFA``): two table lookups per octet, each consuming four bits
+    /// and emitting at most one symbol. `buffer` MUST be at least ``decodedUpperBound(of:)`` octets;
+    /// throws on the three §5.2 errors. Allocation-free — the caller owns the buffer.
     static func decode(
         _ input: RawSpan, into buffer: UnsafeMutableBufferPointer<UInt8>
     ) throws(HuffmanError) -> Int {
-        let table = decodeTable
+        let dfa = nibbleDFA  // read the lazy `static let` once, not per nibble
+        let transitions = dfa.transitions
+        let emit = emitFlag
+        let eos = eosFlag
+        let errorFlags = eos | invalidFlag
+        var state = 0
         var written = 0
-        var code: UInt32 = 0
-        var length = 0
         var index = 0
         while index < input.byteCount {
             let octet = input.unsafeLoad(fromByteOffset: index, as: UInt8.self)
-            var bit = 7
-            while bit >= 0 {
-                code = (code << 1) | UInt32((octet >> bit) & 1)
-                length += 1
-                guard length <= maxCodeLength else { throw .invalidCode }
-                if let symbol = table.match(code: code, length: length) {
-                    guard symbol != eosSymbol else { throw .eosInInput }
-                    buffer[written] = UInt8(symbol)
-                    written += 1
-                    code = 0
-                    length = 0
-                }
-                bit -= 1
+            var transition = transitions[state * 16 + Int(octet >> 4)]  // high nibble
+            if transition.flags & errorFlags != 0 {
+                throw transition.flags & eos != 0 ? .eosInInput : .invalidCode
             }
+            if transition.flags & emit != 0 {
+                buffer[written] = transition.symbol
+                written += 1
+            }
+            state = Int(transition.nextState)
+            transition = transitions[state * 16 + Int(octet & 0x0F)]  // low nibble
+            if transition.flags & errorFlags != 0 {
+                throw transition.flags & eos != 0 ? .eosInInput : .invalidCode
+            }
+            if transition.flags & emit != 0 {
+                buffer[written] = transition.symbol
+                written += 1
+            }
+            state = Int(transition.nextState)
             index += 1
         }
-        try validatePadding(code: code, length: length)
+        // The stream must end at a symbol boundary or on valid EOS-prefix padding (RFC 7541 §5.2).
+        guard dfa.paddingValid[state] else { throw .invalidPadding }
         return written
-    }
-
-    /// Validates the trailing bits as EOS-prefix padding: at most 7 bits, all 1s (RFC 7541 §5.2).
-    private static func validatePadding(code: UInt32, length: Int) throws(HuffmanError) {
-        guard length > 0 else { return }
-        guard length <= 7 else { throw .invalidPadding }
-        guard code == (UInt32(1) << length) - 1 else { throw .invalidPadding }
     }
 }

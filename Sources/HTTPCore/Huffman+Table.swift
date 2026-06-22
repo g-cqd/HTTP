@@ -3,8 +3,8 @@
 //  HTTPCore
 //
 //  RFC 7541 Appendix B — the canonical Huffman code table (generated directly from the RFC text, not
-//  hand-transcribed) plus the derived canonical-decode lookup. Within each code length the RFC
-//  assigns consecutive code values, so decoding reduces to a per-length range check.
+//  hand-transcribed): the per-symbol code value and bit length, consumed by the encoder and by the
+//  nibble decode FSM (see Huffman+DFA.swift).
 //
 
 extension Huffman {
@@ -71,61 +71,4 @@ extension Huffman {
         24, 20, 21, 22, 21, 21, 23, 22, 22, 25, 25, 24, 24, 26, 23, 26, 27, 26, 26,
         27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26, 30,
     ]
-
-    /// The canonical-decode lookup derived once from the Appendix B table.
-    ///
-    /// For each code length it records how many codes exist, the smallest (first) code value, and
-    /// where that length's symbols begin in `symbols` (sorted by length, then code). Because the RFC
-    /// codes are canonical, a length's codes are consecutive, so a match is one range check.
-    @usableFromInline
-    struct DecodeTable: Sendable {
-
-        let symbols: [UInt16]
-        let count: [Int]
-        let firstCode: [UInt32]
-        let firstSymbolIndex: [Int]
-
-        /// Returns the symbol whose code is exactly `code` at `length` bits, or `nil` if none.
-        @usableFromInline
-        func match(code: UInt32, length: Int) -> UInt16? {
-            let codesAtLength = count[length]
-            guard codesAtLength > 0 else { return nil }
-            let first = firstCode[length]
-            guard code >= first, code < first + UInt32(codesAtLength) else { return nil }
-            return symbols[firstSymbolIndex[length] + Int(code - first)]
-        }
-    }
-
-    /// The decode lookup, built once from ``codes`` / ``lengths`` (thread-safe lazy `static let`).
-    @usableFromInline
-    static let decodeTable: DecodeTable = buildDecodeTable()
-
-    private static func buildDecodeTable() -> DecodeTable {
-        var entries: [(symbol: UInt16, code: UInt32, length: Int)] = []
-        entries.reserveCapacity(codes.count)
-        for symbol in codes.indices {
-            entries.append((UInt16(symbol), codes[symbol], Int(lengths[symbol])))
-        }
-        // Canonical order: by length, then by code value within a length.
-        entries.sort { lhs, rhs in
-            lhs.length != rhs.length ? lhs.length < rhs.length : lhs.code < rhs.code
-        }
-
-        var symbols = [UInt16]()
-        symbols.reserveCapacity(entries.count)
-        var count = [Int](repeating: 0, count: maxCodeLength + 1)
-        var firstCode = [UInt32](repeating: 0, count: maxCodeLength + 1)
-        var firstSymbolIndex = [Int](repeating: 0, count: maxCodeLength + 1)
-        for entry in entries {
-            if count[entry.length] == 0 {
-                firstCode[entry.length] = entry.code
-                firstSymbolIndex[entry.length] = symbols.count
-            }
-            count[entry.length] += 1
-            symbols.append(entry.symbol)
-        }
-        return DecodeTable(
-            symbols: symbols, count: count, firstCode: firstCode, firstSymbolIndex: firstSymbolIndex
-        )
-    }
 }
