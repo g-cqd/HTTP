@@ -97,10 +97,12 @@ public struct WebSocketConnection {
     public mutating func close(_ code: WebSocketCloseCode = .normalClosure, reason: String = "") {
         guard !closeSent else { return }
         closeSent = true
-        output += encoder.encode(
-            WebSocketFrame(
-                opcode: .close, payload: Self.closePayload(code, reason: Array(reason.utf8)))
-        )
+        // §7.4.1 — never put a code that must not appear on the wire (1005/1006/1015/undefined) out.
+        let safeCode = code.isValidOnWire ? code : .protocolError
+        // §5.5 — a control frame's payload is ≤125 octets; the 2-octet code leaves ≤123 for the reason.
+        let reasonBytes = Self.truncatedUTF8(Array(reason.utf8), maxBytes: 123)
+        let payload = Self.closePayload(safeCode, reason: reasonBytes)
+        output += encoder.encode(WebSocketFrame(opcode: .close, payload: payload))
     }
 
     // MARK: Frame handling
@@ -122,7 +124,9 @@ public struct WebSocketConnection {
     ) throws(WebSocketError) {
         switch frame.opcode {
         case .ping:
-            queue(WebSocketFrame(opcode: .pong, payload: frame.payload))  // §5.5.2 — MUST reply
+            // §5.5.2 — MUST reply with a Pong. After a Close is received we have already echoed a
+            // Close (setting closeSent), so `queue` here suppresses the Pong — the §5.5.2 exception.
+            queue(WebSocketFrame(opcode: .pong, payload: frame.payload))
             events.append(.ping(frame.payload))
         case .pong:
             events.append(.pong(frame.payload))
@@ -191,6 +195,15 @@ public struct WebSocketConnection {
         var payload = [UInt8(code.rawValue >> 8), UInt8(code.rawValue & 0xFF)]
         payload.append(contentsOf: reason)
         return payload
+    }
+
+    /// Truncates `bytes` to at most `maxBytes`, backing off to a UTF-8 scalar boundary so a multi-byte
+    /// sequence is never split (RFC 3629) — used to keep a Close reason within the §5.5 control limit.
+    private static func truncatedUTF8(_ bytes: [UInt8], maxBytes: Int) -> [UInt8] {
+        guard bytes.count > maxBytes else { return bytes }
+        var end = maxBytes
+        while end > 0, bytes[end] & 0xC0 == 0x80 { end -= 1 }  // step back over continuation octets
+        return Array(bytes[..<end])
     }
 
     /// Parses a Close frame body (RFC 6455 §5.5.1): empty, or a 2-octet code plus a UTF-8 reason.

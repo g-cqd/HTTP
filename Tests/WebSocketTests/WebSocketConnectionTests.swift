@@ -55,6 +55,38 @@ struct WebSocketConnectionTests {
         #expect(reply.first?.opcode == .close)
     }
 
+    @Test("does not answer a Ping received after a Close (RFC 6455 §5.5.2)")
+    func pingAfterCloseIsNotAnswered() throws {
+        var connection = WebSocketConnection()
+        var wire = clientFrame(.close, [0x03, 0xE8])  // code 1000
+        wire += clientFrame(.ping, Array("hi".utf8))
+        _ = try connection.receive(wire)
+        let replies = try serverFrames(connection.outboundBytes())
+        #expect(replies.allSatisfy { $0.opcode != .pong })  // §5.5.2 exception
+        #expect(replies.contains { $0.opcode == .close })
+    }
+
+    // MARK: Outbound Close-code validation (audit WS-F6)
+
+    @Test("close() never puts a non-wire code (1005) on the wire (RFC 6455 §7.4.1)")
+    func closeReplacesNonWireCode() throws {
+        var connection = WebSocketConnection()
+        connection.close(WebSocketCloseCode(rawValue: 1005))  // 1005 MUST NOT appear on the wire
+        let close = try #require(
+            serverFrames(connection.outboundBytes()).first { $0.opcode == .close })
+        let code = UInt16(close.payload[0]) << 8 | UInt16(close.payload[1])
+        #expect(code == WebSocketCloseCode.protocolError.rawValue)  // substituted 1002
+    }
+
+    @Test("close() truncates an over-long reason to fit a control frame (RFC 6455 §5.5)")
+    func closeTruncatesLongReason() throws {
+        var connection = WebSocketConnection()
+        connection.close(.normalClosure, reason: String(repeating: "x", count: 300))
+        let close = try #require(
+            serverFrames(connection.outboundBytes()).first { $0.opcode == .close })
+        #expect(close.payload.count <= 125)  // 2-octet code + ≤123 reason
+    }
+
     // MARK: Send
 
     @Test("send(text:) queues an unmasked server frame (RFC 6455 §5.1)")
