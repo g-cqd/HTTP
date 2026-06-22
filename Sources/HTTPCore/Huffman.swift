@@ -1,0 +1,110 @@
+//
+//  Huffman.swift
+//  HTTPCore
+//
+//  RFC 7541 §5.2 / Appendix B — the canonical HTTP Huffman code, shared by HPACK (HTTP/2) and QPACK
+//  (HTTP/3). Encoding pads the final octet with the most-significant bits of the EOS code; decoding
+//  is an iterative (no recursion) canonical-code walk that fails closed on the three §5.2 decoding
+//  errors: the EOS symbol appearing in the input, padding longer than 7 bits, and padding that is
+//  not all 1-bits.
+//
+
+/// An error decoding a Huffman-coded string (RFC 7541 §5.2).
+public enum HuffmanError: Error, Sendable, Equatable {
+
+    /// The encoded data decoded the `EOS` symbol, which MUST NOT appear in the input (§5.2).
+    case eosInInput
+
+    /// The trailing padding was longer than 7 bits, or was not the MSBs of `EOS` (all 1-bits) (§5.2).
+    case invalidPadding
+
+    /// The bit stream did not form any valid code within the maximum code length.
+    case invalidCode
+}
+
+/// The canonical HTTP Huffman code (RFC 7541 Appendix B).
+public enum Huffman {
+
+    /// The end-of-string symbol — its code's high bits pad the final octet; it is never a literal.
+    @usableFromInline
+    static let eosSymbol: UInt16 = 256
+
+    /// The longest code in the table (the 30-bit `EOS`); a longer accumulation is invalid.
+    @usableFromInline
+    static let maxCodeLength = 30
+
+    // MARK: Encoding
+
+    /// The number of octets `input` would occupy Huffman-encoded (RFC 7541 §5.2).
+    ///
+    /// The encoder uses this to honor the rule that the Huffman form is emitted only when it is no
+    /// longer than the literal.
+    public static func encodedByteLength(of input: some Sequence<UInt8>) -> Int {
+        var bits = 0
+        for byte in input { bits += Int(lengths[Int(byte)]) }
+        return (bits + 7) / 8
+    }
+
+    /// Huffman-encodes `input`, padding the final partial octet with the high bits of `EOS` (§5.2).
+    public static func encode(_ input: some Sequence<UInt8>) -> [UInt8] {
+        var output = [UInt8]()
+        var bitBuffer: UInt64 = 0
+        var bitCount = 0
+        for byte in input {
+            bitBuffer = (bitBuffer << lengths[Int(byte)]) | UInt64(codes[Int(byte)])
+            bitCount += Int(lengths[Int(byte)])
+            while bitCount >= 8 {
+                bitCount -= 8
+                output.append(UInt8((bitBuffer >> bitCount) & 0xFF))
+            }
+            bitBuffer &= (UInt64(1) << bitCount) - 1  // keep only the undrained low bits
+        }
+        if bitCount > 0 {
+            let padding = 8 - bitCount
+            let lastOctet = (bitBuffer << padding) | ((UInt64(1) << padding) - 1)
+            output.append(UInt8(lastOctet & 0xFF))
+        }
+        return output
+    }
+
+    // MARK: Decoding
+
+    /// Huffman-decodes `input` into its literal octets (RFC 7541 §5.2).
+    ///
+    /// Walks the bit stream one bit at a time over the canonical code (no recursion), emitting a
+    /// symbol as soon as the accumulated bits match a code of the current length. Fails closed on the
+    /// three §5.2 decoding errors.
+    public static func decode(_ input: RawSpan) throws(HuffmanError) -> [UInt8] {
+        let table = decodeTable
+        var output = [UInt8]()
+        var code: UInt32 = 0
+        var length = 0
+        var index = 0
+        while index < input.byteCount {
+            let octet = input.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+            var bit = 7
+            while bit >= 0 {
+                code = (code << 1) | UInt32((octet >> bit) & 1)
+                length += 1
+                guard length <= maxCodeLength else { throw .invalidCode }
+                if let symbol = table.match(code: code, length: length) {
+                    guard symbol != eosSymbol else { throw .eosInInput }
+                    output.append(UInt8(symbol))
+                    code = 0
+                    length = 0
+                }
+                bit -= 1
+            }
+            index += 1
+        }
+        try validatePadding(code: code, length: length)
+        return output
+    }
+
+    /// Validates the trailing bits as EOS-prefix padding: at most 7 bits, all 1s (RFC 7541 §5.2).
+    private static func validatePadding(code: UInt32, length: Int) throws(HuffmanError) {
+        guard length > 0 else { return }
+        guard length <= 7 else { throw .invalidPadding }
+        guard code == (UInt32(1) << length) - 1 else { throw .invalidPadding }
+    }
+}
