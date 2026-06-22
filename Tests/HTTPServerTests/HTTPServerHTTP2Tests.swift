@@ -51,6 +51,34 @@ struct HTTPServerHTTP2Tests {
         #expect(String(decoding: response.body, as: UTF8.self) == "h2 from /hi")
     }
 
+    @Test("an ALPN-negotiated h2 connection is driven by the engine, not the preface sniffer")
+    func alpnCommitsToHTTP2() async throws {
+        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        // First octets that are NOT the client preface: a sniffing server would mis-route this to
+        // HTTP/1.1, but ALPN "h2" commits the connection to HTTP/2 (RFC 9113 §3.3), so the engine
+        // answers with a GOAWAY (PROTOCOL_ERROR) — never an HTTP/1 status line.
+        let connection = FakeConnection(
+            id: TransportConnectionID(1), negotiatedApplicationProtocol: "h2",
+            inbound: Array("INVALID CONNECTION PREFACE\r\n\r\n".utf8))
+        let server = HTTPServer(transport: FakeTransport(), responder: responder)
+        await server.serve(connection)
+
+        let out = await connection.sentBytes()
+        #expect(out.first != UInt8(ascii: "H"))  // not an "HTTP/1.1 ..." status line
+        #expect(try http2FrameTypes(out).contains(.goAway))
+    }
+
+    /// The frame types present on the wire, in order (used to assert h2 framing in responses).
+    private func http2FrameTypes(_ bytes: [UInt8]) throws -> [HTTP2FrameType] {
+        var types: [HTTP2FrameType] = []
+        try bytes.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            let frames = HTTP2FrameDecoder()
+            while let frame = try frames.nextFrame(&reader) { types.append(frame.header.type) }
+        }
+        return types
+    }
+
     private func decodeHTTP2Response(_ bytes: [UInt8]) throws -> (status: String?, body: [UInt8]) {
         var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
         var status: String?

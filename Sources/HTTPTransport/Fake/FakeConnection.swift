@@ -15,6 +15,9 @@ public actor FakeConnection: TransportConnection {
     /// The peer's address.
     public nonisolated let peer: TransportAddress
 
+    /// The ALPN-negotiated protocol to report (RFC 7301), injected for routing tests.
+    public nonisolated let negotiatedApplicationProtocol: String?
+
     private var inbound: ArraySlice<UInt8>
     private var output: [UInt8] = []
     private var closed = false
@@ -23,10 +26,12 @@ public actor FakeConnection: TransportConnection {
     public init(
         id: TransportConnectionID,
         peer: TransportAddress = TransportAddress(host: "fake", port: 0),
+        negotiatedApplicationProtocol: String? = nil,
         inbound: [UInt8] = []
     ) {
         self.id = id
         self.peer = peer
+        self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
         self.inbound = inbound[...]
     }
 

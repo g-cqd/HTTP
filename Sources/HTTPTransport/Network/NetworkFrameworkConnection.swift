@@ -22,12 +22,20 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
     /// The peer's address.
     public let peer: TransportAddress
 
+    /// The ALPN-negotiated protocol (RFC 7301), captured once the handshake reached `.ready`.
+    public let negotiatedApplicationProtocol: String?
+
     private let connection: NWConnection
 
-    /// Wraps a started `NWConnection`.
-    init(id: TransportConnectionID, connection: NWConnection) {
+    /// Wraps a connection that has reached `.ready`, recording its negotiated ALPN protocol.
+    init(
+        id: TransportConnectionID,
+        connection: NWConnection,
+        negotiatedApplicationProtocol: String?
+    ) {
         self.id = id
         self.peer = Self.address(of: connection.endpoint)
+        self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
         self.connection = connection
     }
 

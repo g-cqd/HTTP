@@ -28,17 +28,25 @@ struct HTTPDExample {
     static func main() async {
         let port = parsePort()
         let backbone = parseBackbone()
+        let tls = makeTLS()
         let configuration = TransportConfiguration(
-            host: "127.0.0.1", port: port, backbone: backbone)
+            host: "127.0.0.1", port: port, backbone: backbone, tls: tls)
         let server = HTTPServer(
             transport: TransportFactory.make(configuration),
             responder: makeResponder()
         )
 
-        print(
-            "httpd-example: serving HTTP/1.1 + HTTP/2 (h2c) on http://127.0.0.1:\(port) "
-                + "via \(backbone.rawValue)")
-        print("httpd-example: try  curl -v --http2-prior-knowledge http://127.0.0.1:\(port)/")
+        if tls == nil {
+            print(
+                "httpd-example: serving HTTP/1.1 + HTTP/2 (h2c) on http://127.0.0.1:\(port) "
+                    + "via \(backbone.rawValue)")
+            print("httpd-example: try  curl -v --http2-prior-knowledge http://127.0.0.1:\(port)/")
+        } else {
+            print(
+                "httpd-example: serving HTTP/1.1 + HTTP/2 over TLS (ALPN) on "
+                    + "https://127.0.0.1:\(port) via \(backbone.rawValue)")
+            print("httpd-example: try  curl -vk --http2 https://127.0.0.1:\(port)/")
+        }
         do {
             try await server.run()
         } catch {
@@ -92,5 +100,19 @@ struct HTTPDExample {
             return backbone
         }
         return .networkFramework
+    }
+
+    /// A throwaway self-signed TLS identity when `tls` appears in the arguments (dev/test only).
+    ///
+    /// Advertises ALPN `h2` + `http/1.1`, so a `--http2` client negotiates HTTP/2 over TLS
+    /// (RFC 9113 §3.3). Honored only by the Network.framework backbone.
+    private static func makeTLS() -> TransportTLS? {
+        guard CommandLine.arguments.contains("tls") else { return nil }
+        do {
+            return try DevTLSIdentity.selfSigned()
+        } catch {
+            print("httpd-example: TLS disabled — \(error)")
+            return nil
+        }
     }
 }

@@ -37,7 +37,8 @@ struct NetworkFrameworkTransportTests {
         // Client side: connect, send "ping", read the echo (reusing the connection bridge).
         let endpointPort = try #require(NWEndpoint.Port(rawValue: port))
         let nwClient = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
-        let client = NetworkFrameworkConnection(id: TransportConnectionID(0), connection: nwClient)
+        let client = NetworkFrameworkConnection(
+            id: TransportConnectionID(0), connection: nwClient, negotiatedApplicationProtocol: nil)
         nwClient.start(queue: .global())
 
         try await client.send(Array("ping".utf8))

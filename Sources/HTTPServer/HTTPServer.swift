@@ -88,6 +88,16 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     private static var http2MarkerLength: Int { 16 }
 
     func serve(_ connection: any TransportConnection) async {
+        // TLS ALPN (RFC 7301) settles the protocol before any byte is read: "h2" commits the
+        // connection to HTTP/2 (RFC 9113 §3.3), so the engine — not the preface sniffer — drives it
+        // (a malformed preface then earns a GOAWAY instead of mis-routing to HTTP/1.1). Any other
+        // negotiated value, or cleartext (nil), falls through to the h2c/HTTP-1 sniff below.
+        if connection.negotiatedApplicationProtocol == "h2" {
+            await serveHTTP2(connection, initialBytes: [])
+            await connection.close()
+            return
+        }
+
         var buffer = [UInt8]()
         // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).
         while buffer.count < Self.http2MarkerLength, Self.couldBeHTTP2Preface(buffer) {

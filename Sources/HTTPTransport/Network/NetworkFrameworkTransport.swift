@@ -84,11 +84,23 @@ public final class NetworkFrameworkTransport: ServerTransport {
 
     private func makeListener() throws -> NWListener {
         let port = NWEndpoint.Port(rawValue: configuration.port) ?? .any
+        let parameters = try makeParameters()  // may throw TransportError.tlsConfigurationFailed
         do {
-            return try NWListener(using: .tcp, on: port)
+            return try NWListener(using: parameters, on: port)
         } catch {
             throw TransportError.bindFailed("\(error)")
         }
+    }
+
+    /// TLS `NWParameters` when ``TransportConfiguration/tls`` is set (advertising ALPN so a client can
+    /// pick `"h2"`, RFC 9113 §3.3), otherwise a cleartext TCP listener (h1 / h2c).
+    private func makeParameters() throws -> NWParameters {
+        guard let tls = configuration.tls else { return .tcp }
+        let identity = try NetworkFrameworkTLS.identity(
+            pkcs12: tls.pkcs12, passphrase: tls.passphrase)
+        let options = NetworkFrameworkTLS.options(
+            identity: identity, applicationProtocols: tls.applicationProtocols)
+        return NWParameters(tls: options)
     }
 
     private func handleNewConnection(
@@ -96,8 +108,25 @@ public final class NetworkFrameworkTransport: ServerTransport {
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
         let id = connectionIDs.next()
+        // Surface the connection only once the handshake settles (`.ready`), so its negotiated ALPN
+        // protocol (RFC 7301) is known and the server can commit to h2 vs h1 without sniffing. For a
+        // cleartext listener `.ready` is just the completed TCP connect and ALPN resolves to nil.
+        nwConnection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                nwConnection.stateUpdateHandler = nil
+                let alpn = NetworkFrameworkTLS.negotiatedApplicationProtocol(of: nwConnection)
+                continuation.yield(
+                    NetworkFrameworkConnection(
+                        id: id, connection: nwConnection, negotiatedApplicationProtocol: alpn))
+            case .failed, .cancelled:
+                nwConnection.stateUpdateHandler = nil
+                nwConnection.cancel()
+            default:
+                break
+            }
+        }
         nwConnection.start(queue: queue)
-        continuation.yield(NetworkFrameworkConnection(id: id, connection: nwConnection))
     }
 
     private func handleStateChange(

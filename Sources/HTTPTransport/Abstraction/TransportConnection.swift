@@ -47,6 +47,13 @@ public protocol TransportConnection: Sendable {
     /// The peer's address (for logging and per-client connection limits).
     var peer: TransportAddress { get }
 
+    /// The application protocol negotiated by TLS ALPN (RFC 7301) — e.g. `"h2"` or `"http/1.1"` —
+    /// or `nil` over cleartext or before the handshake completes.
+    ///
+    /// When this is `"h2"` the connection is committed to HTTP/2 (RFC 9113 §3.3) and the server
+    /// drives the HTTP/2 engine without preface sniffing; cleartext connections (`nil`) are sniffed.
+    var negotiatedApplicationProtocol: String? { get }
+
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
     func receive(maxLength: Int) async throws -> [UInt8]?
 
@@ -55,4 +62,11 @@ public protocol TransportConnection: Sendable {
 
     /// Closes the connection gracefully, flushing any pending output.
     func close() async
+}
+
+extension TransportConnection {
+
+    /// Cleartext and pre-handshake connections negotiate no application protocol; TLS backbones
+    /// override this once ALPN (RFC 7301) resolves.
+    public var negotiatedApplicationProtocol: String? { nil }
 }
