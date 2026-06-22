@@ -87,8 +87,11 @@ let package = Package(
             dependencies: ["HPACK"]
         ),
         // RFC 9113 — the sans-I/O HTTP/2 engine: frame layer (§4), connection preface (§3.4),
-        // SETTINGS (§6.5), stream state machine (§5.1), flow control (§5.2), and HEADERS/CONTINUATION
-        // assembly through HPACK. Includes the Rapid Reset / CONTINUATION-flood defenses.
+        // SETTINGS (§6.5), flow-control window (§5.2/§6.9), HEADERS field-block + request mapping
+        // (§6.2/§8.3) through HPACK, the stream state machine (§5.1), CONTINUATION assembly with the
+        // flood guard (§6.10 / CVE-2024-27316), and the connection engine that drives them all
+        // (preface → SETTINGS → request events). Remaining M5 work: response encoding (HEADERS+DATA),
+        // full inbound flow control, and the Rapid Reset defense (CVE-2023-44487).
         .target(
             name: "HTTP2",
             dependencies: ["HTTPCore", "HPACK"]
