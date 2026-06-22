@@ -206,9 +206,51 @@ public struct WebSocketConnection {
         return (code, reason)
     }
 
-    /// Whether `bytes` is well-formed UTF-8: a lossy decode re-encodes identically only when it is.
+    /// Whether `bytes` is well-formed UTF-8 (RFC 3629 / Unicode Table 3-7), allocation-free.
+    ///
+    /// A single forward pass over the well-formed byte-sequence ranges — rejecting overlong forms,
+    /// UTF-16 surrogates (U+D800…U+DFFF), and code points above U+10FFFF — instead of round-tripping
+    /// through a `String`, which allocates and decodes the payload twice.
     private static func isValidUTF8(_ bytes: [UInt8]) -> Bool {
-        String(decoding: bytes, as: UTF8.self).utf8.elementsEqual(bytes)
+        var index = 0
+        let count = bytes.count
+        while index < count {
+            let lead = bytes[index]
+            if lead < 0x80 {  // ASCII — the common case
+                index += 1
+                continue
+            }
+            guard let sequence = utf8Sequence(forLead: lead) else { return false }
+            guard index + sequence.length <= count else { return false }  // truncated
+            let second = bytes[index + 1]
+            guard second >= sequence.secondLow, second <= sequence.secondHigh else { return false }
+            var continuation = index + 2
+            while continuation < index + sequence.length {
+                guard bytes[continuation] >= 0x80, bytes[continuation] <= 0xBF else { return false }
+                continuation += 1
+            }
+            index += sequence.length
+        }
+        return true
+    }
+
+    /// For a non-ASCII lead byte (RFC 3629), the sequence length and the legal range for the *first*
+    /// continuation byte — which encodes the overlong / surrogate / max-code-point exclusions — or
+    /// nil when `lead` is `0x80…0xC1` or `0xF5…0xFF`, which can never begin a sequence.
+    private static func utf8Sequence(
+        forLead lead: UInt8
+    ) -> (length: Int, secondLow: UInt8, secondHigh: UInt8)? {
+        switch lead {
+        case 0xC2...0xDF: (2, 0x80, 0xBF)
+        case 0xE0: (3, 0xA0, 0xBF)  // reject overlong
+        case 0xE1...0xEC: (3, 0x80, 0xBF)
+        case 0xED: (3, 0x80, 0x9F)  // reject surrogates
+        case 0xEE...0xEF: (3, 0x80, 0xBF)
+        case 0xF0: (4, 0x90, 0xBF)  // reject overlong
+        case 0xF1...0xF3: (4, 0x80, 0xBF)
+        case 0xF4: (4, 0x80, 0x8F)  // reject > U+10FFFF
+        default: nil
+        }
     }
 
     // MARK: Frame decoding

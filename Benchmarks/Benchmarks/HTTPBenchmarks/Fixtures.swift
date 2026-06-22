@@ -70,6 +70,11 @@ let realisticHTTP1Request = Array(
 let sampleFieldName = Array("Content-Type".utf8)
 let sampleFieldValue = Array("text/html; charset=utf-8".utf8)
 
+/// A long (~198 B) but fully legal field value — the size at which SWAR (8 B/word) could beat the
+/// per-byte scan. `isValidFieldValue` runs on every header value, and real values (cookies, long
+/// Accept lists) reach this size, so this is the input that decides whether vectorizing pays off.
+let longFieldValue = Array(String(repeating: "session=a1b2c3; ", count: 12).utf8)
+
 // MARK: - HPACK fixtures
 
 let hpackFields = [
@@ -131,3 +136,7 @@ let webSocketPayload = Array("the quick brown fox jumps over the lazy dog".utf8)
 
 /// A 4 KiB payload — exercises the 16-bit extended length form and the per-byte unmask loop at scale.
 let webSocketLargePayload = [UInt8](repeating: 0x61, count: 4096)
+
+/// A realistic mixed-script UTF-8 text message — exercises the §8.1 text-validation path (ASCII fast
+/// path plus 2-, 3-, and 4-byte sequences), used to measure validating without the String round-trip.
+let webSocketTextPayload = Array("The quick brown fox 🦊 jumps — café, naïve, 日本語, Ω≈ç√∞".utf8)
