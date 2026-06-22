@@ -9,79 +9,13 @@
 
 import HPACK
 import HTTPCore
+import HTTPTestSupport
 import Testing
 
 @testable import HTTP2
 
 @Suite("RFC 9113 — connection engine")
 struct HTTP2ConnectionTests {
-
-    // MARK: Wire builders
-
-    private func settingsFrame() -> [UInt8] {
-        var out = [UInt8]()
-        HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection).encode(
-            into: &out)
-        return out
-    }
-
-    private func headersFrame(streamID: UInt32, fields: [HPACKField], endStream: Bool) -> [UInt8] {
-        var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
-        let block = encoder.encode(fields)
-        var flags: HTTP2FrameFlags = [.endHeaders]
-        if endStream { flags.insert(.endStream) }
-        var out = [UInt8]()
-        HTTP2FrameHeader(
-            payloadLength: block.count, type: .headers, flags: flags,
-            streamID: HTTP2StreamID(streamID)
-        ).encode(into: &out)
-        out.append(contentsOf: block)
-        return out
-    }
-
-    private func dataFrame(streamID: UInt32, payload: [UInt8], endStream: Bool) -> [UInt8] {
-        var out = [UInt8]()
-        HTTP2FrameHeader(
-            payloadLength: payload.count, type: .data, flags: endStream ? [.endStream] : [],
-            streamID: HTTP2StreamID(streamID)
-        ).encode(into: &out)
-        out.append(contentsOf: payload)
-        return out
-    }
-
-    private func get(streamID: UInt32, path: String) -> [UInt8] {
-        headersFrame(
-            streamID: streamID,
-            fields: [
-                HPACKField(name: ":method", value: "GET"),
-                HPACKField(name: ":scheme", value: "https"),
-                HPACKField(name: ":path", value: path),
-                HPACKField(name: ":authority", value: "example.com"),
-            ], endStream: true)
-    }
-
-    /// A HEADERS frame that opens a stream without END_STREAM (a body is still expected).
-    private func openStream(streamID: UInt32) -> [UInt8] {
-        headersFrame(
-            streamID: streamID,
-            fields: [
-                HPACKField(name: ":method", value: "POST"),
-                HPACKField(name: ":scheme", value: "https"),
-                HPACKField(name: ":path", value: "/"),
-                HPACKField(name: ":authority", value: "example.com"),
-            ], endStream: false)
-    }
-
-    private func rstStreamFrame(streamID: UInt32, code: UInt32 = 8) -> [UInt8] {
-        var out = [UInt8]()
-        HTTP2FrameHeader(payloadLength: 4, type: .rstStream, streamID: HTTP2StreamID(streamID))
-            .encode(into: &out)
-        out.append(contentsOf: [
-            UInt8((code >> 24) & 0xFF), UInt8((code >> 16) & 0xFF),
-            UInt8((code >> 8) & 0xFF), UInt8(code & 0xFF),
-        ])
-        return out
-    }
 
     // MARK: Handshake + request decoding
 
@@ -256,6 +190,23 @@ struct HTTP2ConnectionTests {
         #expect(refused?.code == .refusedStream)
     }
 
+    @Test("a PING flood is ENHANCE_YOUR_CALM (§6.7, clock-free leaky bucket)")
+    func pingFlood() throws {
+        var connection = HTTP2Connection(limits: HTTPLimits(maxStreamResetsPerInterval: 5))
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        for _ in 0..<10 { wire += pingFrame() }  // ten PINGs, no useful work — a flood
+
+        var thrown: HTTP2ErrorCode?
+        do {
+            _ = try connection.receive(wire)
+        } catch {
+            thrown = error.code
+        }
+        #expect(thrown == .enhanceYourCalm)
+    }
+
     // MARK: Response encoding
 
     @Test("encodes a response (HEADERS + DATA) for a received request")
@@ -285,37 +236,179 @@ struct HTTP2ConnectionTests {
         #expect(String(decoding: decoded.body, as: UTF8.self) == "hello")
     }
 
-    /// Parses a response off the wire: HPACK-decodes the HEADERS block and concatenates DATA.
-    private func decodeResponse(
+    // MARK: Performance guards
+
+    @Test("draining outbound bytes allocates nothing — a swap, not a copy-on-write copy")
+    func outboundDrainIsZeroAllocation() throws {
+        var connection = HTTP2Connection()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        _ = try connection.receive(wire)  // queues a SETTINGS ACK
+        _ = connection.outboundBytes()  // warm up: drain once
+
+        // `mallocDelta` reads a PROCESS-WIDE counter, and the test runner executes suites in parallel,
+        // so another suite's allocation can land in any one measurement window. Such noise only ever
+        // ADDS, so the minimum over several re-prepared trials is the true cost — zero for the swap.
+        var measurements: [Int] = []
+        for _ in 0..<16 {
+            _ = try connection.receive(settingsFrame())  // re-queue a SETTINGS ACK to drain
+            if let allocations = mallocDelta({ _ = connection.outboundBytes() }) {
+                measurements.append(allocations)
+            }
+        }
+        if let best = measurements.min() {  // nil only where counting is unavailable
+            #expect(best == 0)
+        }
+    }
+
+    // MARK: Flow control (RFC 9113 §6.9)
+
+    @Test("a response larger than the stream send window is deferred until WINDOW_UPDATE")
+    func deferredResponseDataAwaitsWindowUpdate() throws {
+        var connection = HTTP2Connection()
+        _ = connection.outboundBytes()  // discard the server SETTINGS preface
+
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame(initialWindowSize: 4)  // peer accepts only 4 DATA octets per stream
+        wire += get(streamID: 1, path: "/")
+        let events = try connection.receive(wire)
+        _ = connection.outboundBytes()  // discard the SETTINGS ACK
+
+        let event = try #require(events.first)
+        guard case .request(let streamID, _, _) = event else {
+            Issue.record("expected a request event")
+            return
+        }
+        try connection.respond(to: streamID, HTTPResponse(status: .ok), body: Array("hello".utf8))
+
+        // Only 4 of the 5 body octets fit the window; that DATA frame must NOT carry END_STREAM yet.
+        let first = try collectData(connection.outboundBytes())
+        #expect(first.bytes == Array("hell".utf8))
+        #expect(!first.endStream)
+
+        // Opening the window releases the final octet, now carrying END_STREAM.
+        _ = try connection.receive(windowUpdateFrame(streamID: 1, increment: 10))
+        let second = try collectData(connection.outboundBytes())
+        #expect(second.bytes == Array("o".utf8))
+        #expect(second.endStream)
+    }
+
+    @Test("a zero-increment WINDOW_UPDATE is a PROTOCOL_ERROR (RFC 9113 §6.9)")
+    func zeroWindowUpdateIsProtocolError() throws {
+        var connection = HTTP2Connection()
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += get(streamID: 1, path: "/")
+        _ = try connection.receive(wire)
+
+        var thrown: HTTP2ErrorCode?
+        do {
+            _ = try connection.receive(windowUpdateFrame(streamID: 0, increment: 0))
+        } catch {
+            thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
+        }
+        #expect(thrown == .protocolError)
+    }
+
+    @Test("DATA beyond the advertised stream receive window is a FLOW_CONTROL_ERROR (§6.9)")
+    func inboundStreamWindowEnforced() throws {
+        var settings = HTTP2Settings()
+        settings.initialWindowSize = 10  // we will accept only 10 DATA octets per stream
+        var connection = HTTP2Connection(localSettings: settings)
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += openStream(streamID: 1)  // POST awaiting a body
+        _ = try connection.receive(wire)
+
+        var thrown: HTTP2ErrorCode?
+        do {
+            _ = try connection.receive(
+                dataFrame(
+                    streamID: 1, payload: [UInt8](repeating: 0x61, count: 20), endStream: true))
+        } catch {
+            thrown = error.code
+        }
+        #expect(thrown == .flowControlError)
+    }
+
+    @Test(
+        "a large upload is admitted and the receive window replenished with WINDOW_UPDATEs (§6.9)")
+    func inboundUploadReplenished() throws {
+        var connection = HTTP2Connection()
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += openStream(streamID: 1)  // POST awaiting a body
+        _ = try connection.receive(wire)
+        _ = connection.outboundBytes()  // discard the SETTINGS ACK
+
+        // 100 KiB across 16 KiB DATA frames — well past the initial 65,535 receive window.
+        let chunk = [UInt8](repeating: 0x7a, count: 16_384)
+        var events: [HTTP2Connection.Event] = []
+        var windowUpdateTotal = 0
+        var total = 0
+        while total < 100_000 {
+            let last = total + chunk.count >= 100_000
+            let payload = last ? Array(chunk[0..<(100_000 - total)]) : chunk
+            events += try connection.receive(
+                dataFrame(streamID: 1, payload: payload, endStream: last))
+            windowUpdateTotal += try sumWindowUpdates(connection.outboundBytes())
+            total += payload.count
+        }
+
+        let event = try #require(events.first)
+        guard case .request(_, _, let body) = event else {
+            Issue.record("expected a request event")
+            return
+        }
+        #expect(body.count == 100_000)
+        #expect(windowUpdateTotal > 0)  // the server replenished its receive window mid-upload
+    }
+
+    @Test("a connection error queues a GOAWAY carrying the error code (§6.8)")
+    func connectionErrorSendsGoAway() throws {
+        var connection = HTTP2Connection()
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += get(streamID: 3, path: "/a")
+        wire += get(streamID: 1, path: "/b")  // non-increasing → connection PROTOCOL_ERROR
+
+        var thrown: HTTP2ErrorCode?
+        do {
+            _ = try connection.receive(wire)
+        } catch {
+            thrown = error.code
+        }
+        #expect(thrown == .protocolError)
+
+        let goAway = try firstGoAway(connection.outboundBytes())
+        #expect(goAway?.code == .protocolError)
+        #expect(goAway?.lastStreamID == HTTP2StreamID(3))  // last stream we processed
+    }
+
+    /// The first GOAWAY frame on the wire (its last-stream-id and decoded error code), if any.
+    private func firstGoAway(
         _ bytes: [UInt8]
-    ) throws -> (status: String?, contentType: String?, body: [UInt8]) {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
-        var status: String?
-        var contentType: String?
-        var body = [UInt8]()
+    ) throws -> (lastStreamID: HTTP2StreamID, code: HTTP2ErrorCode)? {
+        var found: (HTTP2StreamID, HTTP2ErrorCode)?
         try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
             let frames = HTTP2FrameDecoder()
-            while let frame = try frames.nextFrame(&reader) {
-                switch frame.header.type {
-                case .headers:
-                    let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
-                        frame.payload, flags: frame.header.flags)
-                    let fields = try Array(fragment).withUnsafeBytes {
-                        try decoder.decode($0.bytes)
-                    }
-                    for field in fields where field.name == ":status" { status = field.value }
-                    for field in fields where field.name == "content-type" {
-                        contentType = field.value
-                    }
-                case .data:
-                    body.append(contentsOf: frame.payload)
-                default:
-                    break
-                }
+            while found == nil, let frame = try frames.nextFrame(&reader) {
+                guard frame.header.type == .goAway, frame.payload.count >= 8 else { continue }
+                let lastID =
+                    UInt32(frame.payload[0]) << 24 | UInt32(frame.payload[1]) << 16
+                    | UInt32(frame.payload[2]) << 8 | UInt32(frame.payload[3])
+                let code =
+                    UInt32(frame.payload[4]) << 24 | UInt32(frame.payload[5]) << 16
+                    | UInt32(frame.payload[6]) << 8 | UInt32(frame.payload[7])
+                found = (HTTP2StreamID(rawValue: lastID), HTTP2ErrorCode(code: code))
             }
         }
-        return (status, contentType, body)
+        return found
     }
 
     /// The first RST_STREAM frame on the wire (its stream id and decoded error code), if any.

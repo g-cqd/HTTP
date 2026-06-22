@@ -124,7 +124,10 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             do {
                 events = try engine.receive(inbound)
             } catch {
-                // Connection-level protocol error — close (queuing a GOAWAY first is future work).
+                // Connection-level protocol error: the engine queued a GOAWAY (RFC 9113 §6.8) — send
+                // it best-effort so the peer learns the cause, then close.
+                let goAway = engine.outboundBytes()
+                if !goAway.isEmpty { try? await connection.send(goAway) }
                 break
             }
             inbound = []

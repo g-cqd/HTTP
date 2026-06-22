@@ -11,6 +11,9 @@ Package.resolved
 xcuserdata/
 DerivedData/
 
+## Editors
+.vscode/
+
 ## macOS
 .DS_Store
 

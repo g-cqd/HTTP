@@ -4,6 +4,7 @@ Tech Stack: HTTP1,2,3
 Closest to the hardware, linux is not a priority at all, swift idiomatic, meaningful dsl, minimal api surface
 Performance requirements: 200k rps, Minimal Memory and Allocation, Failsafe, reliable
 Possible framework usage: github(apple/*,swiftlang/*) - no Swift nio reliance
+Always reference RFC/ISO/Norms/Standards/CVE
 
 Swift stack: swift 6.4, macos floor 15.6, ios floor 18, strict memory, strict concurrency, lifetime experimental, strictest settings on all packages and subpackages, no force unwrap, no force casting, avoid as Any
 
@@ -20,4 +21,5 @@ we can omit return statement when possible
 avoid double allocation, or extra allocation, avoid paying the copy-on-write tax
 
 privilege zero copy and multithreading, use span and rawspan and prefer native apis and non-copy-bytes-manipulating apis (with lifetime)
+leverage SIMD/SWAR/Accelerate whenever benchmarked positively against other options
 cyclomatic complexity : < 15
