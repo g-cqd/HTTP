@@ -39,45 +39,82 @@ public final class HTTPServer: Sendable {
         }
     }
 
-    /// Serves a single connection: read a request, respond, write, close.
+    /// Serves a connection for its lifetime: read → respond → write, looping while it stays
+    /// persistent (RFC 9112 §9.3), then closes.
     func serve(_ connection: any TransportConnection) async {
         var buffer = [UInt8]()
-        do {
-            let parsed = try await readRequest(from: connection, into: &buffer)
-            let response = await responder.respond(to: parsed.request, body: parsed.body)
-            let bytes = ResponseSerializer.serialize(response.head, body: response.body)
-            try await connection.send(bytes)
-        } catch let error as HTTP1ParseError {
-            await sendErrorResponse(for: error, to: connection)
-        } catch {
-            // Transport-level failure — nothing to send; fall through to close.
-        }
+        while await serveOne(connection, buffer: &buffer) {}
         await connection.close()
     }
 
-    /// Reads from `connection`, accumulating into `buffer` until a complete request parses.
+    /// Serves one request/response exchange.
+    ///
+    /// Returns `true` to keep the persistent connection open for a following request, `false` to
+    /// close (a parse error, a `Connection: close`, EOF, or a transport failure).
+    private func serveOne(
+        _ connection: any TransportConnection,
+        buffer: inout [UInt8]
+    ) async -> Bool {
+        let outcome: ReadOutcome
+        do {
+            outcome = try await readRequest(from: connection, into: &buffer)
+        } catch let error as HTTP1ParseError {
+            await sendErrorResponse(for: error, to: connection)
+            return false  // fail closed
+        } catch {
+            return false  // transport-level read failure
+        }
+        guard case .request(let framed) = outcome else { return false }  // clean EOF on a boundary
+        buffer.removeFirst(framed.consumed)  // carry any pipelined remainder to the next iteration
+
+        let response = await responder.respond(to: framed.parsed.request, body: framed.parsed.body)
+        let bytes = ResponseSerializer.serialize(response.head, body: response.body)
+        do {
+            try await connection.send(bytes)
+        } catch {
+            return false
+        }
+        return !Self.shouldClose(request: framed.parsed.request, response: response.head)
+    }
+
+    /// Reads from `connection`, accumulating into `buffer` until a complete request frames, EOF on a
+    /// request boundary (graceful), or a parse error.
     private func readRequest(
         from connection: any TransportConnection,
         into buffer: inout [UInt8]
-    ) async throws -> ParsedRequest {
+    ) async throws -> ReadOutcome {
         while true {
             switch parseStep(buffer) {
-            case .complete(let request):
-                return request
+            case .complete(let parsed, let consumed):
+                return .request(FramedRequest(parsed: parsed, consumed: consumed))
             case .incomplete:
                 break  // need more bytes from the wire
             case .failed(let error):
                 throw error
             }
             guard let chunk = try await connection.receive(maxLength: 16_384), !chunk.isEmpty else {
-                throw HTTP1ParseError.incompleteHeaders  // peer closed mid-request
+                // EOF: graceful on a request boundary, truncation mid-request.
+                if buffer.isEmpty { return .cleanClose }
+                throw HTTP1ParseError.incompleteHeaders
             }
             buffer.append(contentsOf: chunk)
         }
     }
 
+    /// One framed request plus the byte count it consumed (so a pipelined remainder survives).
+    private struct FramedRequest {
+        let parsed: ParsedRequest
+        let consumed: Int
+    }
+
+    /// The result of reading toward one request: a framed request, or a graceful close.
+    private enum ReadOutcome {
+        case request(FramedRequest)
+        case cleanClose
+    }
+
     private enum ParseStep {
-        case complete(ParsedRequest)
+        case complete(ParsedRequest, consumed: Int)
         case incomplete
         case failed(HTTP1ParseError)
     }
@@ -91,15 +128,16 @@ public final class HTTPServer: Sendable {
     /// ``HTTP1ParseError/incompleteBody``, which also means "read more".
     private func parseStep(_ buffer: [UInt8]) -> ParseStep {
         guard Self.headerSectionComplete(buffer) else { return .incomplete }
-        let outcome: Result<ParsedRequest, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
+        let outcome: Result<FramedRequest, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
             Result { () throws(HTTP1ParseError) in
                 var reader = ByteReader(raw)
-                return try RequestParser.parse(&reader, limits: limits)
+                let parsed = try RequestParser.parse(&reader, limits: limits)
+                return FramedRequest(parsed: parsed, consumed: reader.position)
             }
         }
         switch outcome {
-        case .success(let request):
-            return .complete(request)
+        case .success(let framed):
+            return .complete(framed.parsed, consumed: framed.consumed)
         case .failure(.incompleteHeaders), .failure(.incompleteBody):
             return .incomplete
         case .failure(let error):
@@ -147,5 +185,24 @@ public final class HTTPServer: Sendable {
         default:
             .badRequest
         }
+    }
+
+    /// Whether the connection must close after this exchange.
+    ///
+    /// A `close` connection-option on either the request or the response ends persistence
+    /// (RFC 9110 §7.6.1; RFC 9112 §9.6).
+    private static func shouldClose(request: HTTPRequest, response: HTTPResponse) -> Bool {
+        requestsClose(request.headerFields) || requestsClose(response.headerFields)
+    }
+
+    /// Whether `fields` carries the `close` connection-option within the comma-separated
+    /// `Connection` list, matched case-insensitively (RFC 9110 §7.6.1).
+    private static func requestsClose(_ fields: HTTPFields) -> Bool {
+        guard let value = fields[.connection] else { return false }
+        return value.split(separator: ",").contains { isCloseToken($0) }
+    }
+
+    private static func isCloseToken(_ option: Substring) -> Bool {
+        option.lowercased().filter { $0 != " " && $0 != "\t" } == "close"
     }
 }

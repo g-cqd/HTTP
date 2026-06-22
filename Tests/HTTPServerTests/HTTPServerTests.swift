@@ -57,4 +57,32 @@ struct HTTPServerTests {
             responder: responder)
         #expect(wire.hasPrefix("HTTP/1.1 400 Bad Request\r\n"))
     }
+
+    @Test("keeps the connection alive and serves pipelined requests")
+    func keepsConnectionAlive() async {
+        let responder = ClosureResponder { request, _ in
+            ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
+        }
+        // Two requests pipelined on one persistent connection (RFC 9112 §9.3).
+        let wire = await serve(
+            request: "GET /a HTTP/1.1\r\nHost: x\r\n\r\nGET /b HTTP/1.1\r\nHost: x\r\n\r\n",
+            responder: responder)
+        #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 2)
+        #expect(wire.hasSuffix("\r\n\r\n/b"))  // second response served after the first
+        #expect(!wire.contains(" 400 "))  // a clean EOF on a boundary is not an error
+    }
+
+    @Test("honors Connection: close — serves one request then stops")
+    func honorsConnectionClose() async {
+        let responder = ClosureResponder { request, _ in
+            ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
+        }
+        // The first request asks to close; the pipelined second must be ignored (RFC 9110 §7.6.1).
+        let wire = await serve(
+            request:
+                "GET /a HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\nGET /b HTTP/1.1\r\nHost: x\r\n\r\n",
+            responder: responder)
+        #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 1)
+        #expect(wire.hasSuffix("\r\n\r\n/a"))
+    }
 }
