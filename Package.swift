@@ -47,6 +47,7 @@ let package = Package(
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
+        .executable(name: "httpd-example", targets: ["httpd-example"]),
     ],
     dependencies: [
         // apple/swift-system — typed, SwiftNIO-free wrappers over POSIX file/socket descriptors,
@@ -95,6 +96,13 @@ let package = Package(
         .testTarget(
             name: "HTTPServerTests",
             dependencies: ["HTTPServer"]
+        ),
+        // The runnable example server — the executable deliverable. Selects a transport backbone,
+        // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with
+        // `swift run httpd-example [port] [backbone]` and `curl --http1.1`.
+        .executableTarget(
+            name: "httpd-example",
+            dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport"]
         ),
     ]
 )
