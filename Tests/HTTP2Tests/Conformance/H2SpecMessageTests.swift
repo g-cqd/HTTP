@@ -7,11 +7,9 @@
 //  §8.1.2.3 request pseudo-headers, §8.1.2.6 malformed requests, and §8.2 server push. Malformed
 //  requests are stream errors (RST_STREAM PROTOCOL_ERROR, §8.1.1); a client PUSH_PROMISE is fatal.
 //
-//  Two findings are pre-staged with `withKnownIssue` (engine fix to follow, per the approved plan):
-//   • F2 — a second HEADERS without END_STREAM is escalated to a *connection* error; §8.1 wants a
-//     *stream* error PROTOCOL_ERROR.
-//   • F3 — a pseudo-header carried in trailers is not rejected: the trailers path advances the stream
-//     state without re-validating fields, so §8.1.2.1's "pseudo-header in trailers" passes silently.
+//  F2 (a second HEADERS without END_STREAM → stream PROTOCOL_ERROR, §8.1) and F3 (a pseudo-header
+//  carried in trailers → stream PROTOCOL_ERROR, §8.1.2.1) are now fixed: trailers are scoped as a
+//  stream error and validated for pseudo-headers/uppercase names like the request path.
 //
 
 import HPACK
@@ -36,11 +34,7 @@ struct H2SpecMessageTests {
         var wire = H2Wire.openStream(streamID: 1)  // first HEADERS, stream open
         wire += H2Wire.headers(
             streamID: 1, fields: H2Wire.requestFields(method: "POST"), endStream: false)
-        withKnownIssue(
-            "F2 — RFC 9113 §8.1: trailers without END_STREAM escalated to a connection error"
-        ) {
-            H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
-        }
+        H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
     }
 
     // MARK: §8.1.2 HTTP Header Fields
@@ -97,9 +91,7 @@ struct H2SpecMessageTests {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.openStream(streamID: 1)  // request open, awaiting trailers
         wire += H2Wire.headers(streamID: 1, fields: [hf(":status", "200")], endStream: true)
-        withKnownIssue("F3 — RFC 9113 §8.1.2.1: trailers bypass pseudo-header validation") {
-            H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
-        }
+        H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
     }
 
     // MARK: §8.1.2.2 Connection-Specific Header Fields

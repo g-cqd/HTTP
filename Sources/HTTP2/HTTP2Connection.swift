@@ -95,21 +95,23 @@ public struct HTTP2Connection {
     /// self-dependency is rejected as a stream error without desyncing the HPACK table (§5.3.1).
     private var pendingHeadersDependency: HTTP2StreamID?
     var lastPeerStreamID = HTTP2StreamID(0)
-    private var activeStreamResets = 0
+    // The abuse-budget state below is internal (not private) so the charge/decay helpers can live in
+    // HTTP2Connection+AbuseBudget.swift.
+    var activeStreamResets = 0
     /// Monotonic clock and rolling-window start for the abuse budgets (Rapid-Reset / MadeYouReset
     /// rate limiting, RFC 9113).
     ///
     /// The budgets reset every `resetIntervalNanos`, so a cap is a *rate* over `streamResetInterval`,
     /// not a per-connection total — closing both the long-window bypass and the false positive against
     /// a legitimately long-lived connection.
-    private let now: MonotonicNowProvider
-    private var windowStart: MonotonicNanoseconds
-    private let resetIntervalNanos: MonotonicNanoseconds
+    let now: MonotonicNowProvider
+    var windowStart: MonotonicNanoseconds
+    let resetIntervalNanos: MonotonicNanoseconds
     /// Leaky-bucket budget for ACK-generating control frames (PING / SETTINGS).
     ///
     /// Each charges it and a completed request drains it; a flood with no useful work in between
     /// trips ENHANCE_YOUR_CALM (RFC 9113 §6.5 / §6.7).
-    private var controlFrameBudget = 0
+    var controlFrameBudget = 0
     var remoteSettings = HTTP2Settings()
     private let frameDecoder: HTTP2FrameDecoder
     let localSettings: HTTP2Settings
@@ -335,39 +337,6 @@ public struct HTTP2Connection {
         writer.writeFrame(.ping, flags: .ack, streamID: .connection, payload: frame.payload)
     }
 
-    /// Charges one ACK-generating control frame against the flood budget, failing closed if a peer
-    /// floods PING/SETTINGS without useful work in between (RFC 9113 §6.5 / §6.7).
-    private mutating func chargeControlFrame() throws(HTTP2Error) {
-        decayBudgetsIfElapsed()
-        controlFrameBudget += 1
-        guard controlFrameBudget <= limits.maxStreamResetsPerInterval else {
-            throw .connection(.enhanceYourCalm, "excessive PING/SETTINGS frames")
-        }
-    }
-
-    /// Resets the abuse budgets once the rolling window has elapsed, so each cap is a *rate* over
-    /// `streamResetInterval` rather than a monotonic per-connection total (RFC 9113 Rapid-Reset
-    /// defense) — fixing both the long-window bypass and the false positive on long-lived connections.
-    private mutating func decayBudgetsIfElapsed() {
-        let timestamp = now()
-        guard timestamp - windowStart >= resetIntervalNanos else { return }
-        windowStart = timestamp
-        activeStreamResets = 0
-        controlFrameBudget = 0
-    }
-
-    /// Charges one stream reset against the rolling budget — whether the peer sent RST_STREAM or the
-    /// engine emitted one for a stream-scoped violation — tripping ENHANCE_YOUR_CALM past the cap
-    /// (RFC 9113; Rapid Reset CVE-2023-44487 / MadeYouReset CVE-2025-8671).
-    private mutating func chargeStreamReset() throws(HTTP2Error) {
-        decayBudgetsIfElapsed()
-        activeStreamResets += 1
-        guard activeStreamResets <= limits.maxStreamResetsPerInterval else {
-            throw .connection(
-                .enhanceYourCalm, "excessive stream resets (Rapid Reset / MadeYouReset)")
-        }
-    }
-
     // MARK: HEADERS / CONTINUATION / DATA
 
     private mutating func receiveHeaders(
@@ -409,7 +378,7 @@ public struct HTTP2Connection {
 
         // A second HEADERS block on an already-open stream is trailers (RFC 9113 §8.1).
         if streams[streamID] != nil {
-            try applyTrailers(streamID, endStream: endStream, into: &events)
+            try applyTrailers(streamID, fields: fields, endStream: endStream, into: &events)
             return
         }
         guard streamID.isClientInitiated else {
@@ -456,18 +425,34 @@ public struct HTTP2Connection {
         }
     }
 
-    /// Applies a trailing HEADERS block (trailers, RFC 9113 §8.1) — it must end the stream.
+    /// Applies a trailing HEADERS block (trailers, RFC 9113 §8.1) — it must end the stream and carry
+    /// no pseudo-header fields (§8.1.2.1) with only lowercase names (§8.2.1); both are malformed and
+    /// scoped as a *stream* error, like the request path (not silently accepted).
     private mutating func applyTrailers(
         _ streamID: HTTP2StreamID,
+        fields: [HPACKField],
         endStream: Bool,
         into events: inout [Event]
     ) throws(HTTP2Error) {
         guard var record = streams.removeValue(forKey: streamID) else { return }
         do {
-            try record.stream.receiveHeaders(endStream: endStream)  // trailers must set END_STREAM
+            // The state machine first: a frame on a closed stream is STREAM_CLOSED (§5.1) and trailers
+            // without END_STREAM is a §8.1 stream PROTOCOL_ERROR — both take precedence over the field
+            // checks below, so the §5.1 error code is reported for a closed stream.
+            try record.stream.receiveHeaders(endStream: endStream)
         } catch {
             streams[streamID] = record
             throw error
+        }
+        // Validate the accepted trailers: no pseudo-header fields, lowercase names only
+        // (RFC 9113 §8.1.2.1 / §8.2.1) — a malformed trailer is a stream error, like the request path.
+        for field in fields {
+            guard !field.name.hasPrefix(":") else {
+                throw .stream(streamID, .protocolError, "pseudo-header field in trailers")
+            }
+            guard !field.name.contains(where: \.isUppercase) else {
+                throw .stream(streamID, .protocolError, "uppercase field name in trailers")
+            }
         }
         streams[streamID] = record
         if endStream { try emitRequest(streamID, into: &events) }
