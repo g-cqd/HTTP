@@ -38,6 +38,18 @@ func registerHTTP1Benchmarks() {
         }
     }
 
+    // A realistic browser GET (~11 header fields, long values) — the HTTP/1.1 server's real
+    // per-request parse cost (request line + header scan + field validation + HTTPFields build),
+    // unlike the tiny `get` fixture above.
+    Benchmark("http1/RequestParser/realistic") { benchmark in
+        for _ in benchmark.scaledIterations {
+            realisticHTTP1Request.withUnsafeBytes { raw in
+                var reader = ByteReader(raw)
+                blackHole(try? RequestParser.parse(&reader, limits: .default))
+            }
+        }
+    }
+
     Benchmark("http1/RequestParser/post-content-length") { benchmark in
         for _ in benchmark.scaledIterations {
             postRequestBytes.withUnsafeBytes { raw in

@@ -54,6 +54,20 @@ func registerWebSocketBenchmarks() {
             blackHole(try? connection.receive(wire))
         }
     }
+
+    // §5.4 — a fragmented message: an opening binary frame + two continuations (last FIN), all
+    // masked → one reassembled message event (the fragment-accumulation path).
+    Benchmark("websocket/Connection/receive-fragmented") { benchmark in
+        let wire = maskedFragmentedMessage(parts: [
+            Array("the quick brown ".utf8),
+            Array("fox jumps over ".utf8),
+            Array("the lazy dog".utf8),
+        ])
+        for _ in benchmark.scaledIterations {
+            var connection = WebSocketConnection()
+            blackHole(try? connection.receive(wire))
+        }
+    }
 }
 
 /// A masked client→server binary frame carrying `payload` (RFC 6455 §5.2 / §5.3), with the length in
@@ -76,5 +90,23 @@ private func maskedBinaryFrame(payload: [UInt8]) -> [UInt8] {
     }
     wire.append(contentsOf: key)
     for (index, byte) in payload.enumerated() { wire.append(byte ^ key[index & 3]) }
+    return wire
+}
+
+/// A masked, multi-fragment binary message (RFC 6455 §5.4).
+///
+/// An opening binary frame (FIN=0) then continuation frames, the last with FIN=1; each `part` is
+/// assumed ≤ 125 octets.
+private func maskedFragmentedMessage(parts: [[UInt8]]) -> [UInt8] {
+    let key: [UInt8] = [0x37, 0xFA, 0x21, 0x3D]
+    var wire = [UInt8]()
+    for (index, part) in parts.enumerated() {
+        let isFinal = index == parts.count - 1
+        let opcode: UInt8 = index == 0 ? 0x02 : 0x00  // binary, then continuation
+        wire.append((isFinal ? 0x80 : 0x00) | opcode)  // FIN bit + opcode
+        wire.append(0x80 | UInt8(part.count))  // MASK bit + inline 7-bit length
+        wire.append(contentsOf: key)
+        for (byteIndex, byte) in part.enumerated() { wire.append(byte ^ key[byteIndex & 3]) }
+    }
     return wire
 }

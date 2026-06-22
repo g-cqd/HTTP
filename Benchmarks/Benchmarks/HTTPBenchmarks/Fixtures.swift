@@ -49,6 +49,22 @@ let chunkedRequestBytes = Array(
 
 let chunkedBodyBytes = Array("1a\r\nabcdefghijklmnopqrstuvwxyz\r\n0\r\n\r\n".utf8)
 
+/// A realistic browser GET (~11 header fields, long values) — the HTTP/1.1 server's real per-request
+/// parse cost, unlike the tiny `getRequestBytes` above.
+let realisticHTTP1Request = Array(
+    ("GET /api/v1/items?page=2&sort=desc HTTP/1.1\r\n"
+        + "Host: www.example.com\r\n"
+        + "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 "
+        + "Safari/605.1.15\r\n"
+        + "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n"
+        + "Accept-Encoding: gzip, deflate, br\r\n"
+        + "Accept-Language: en-US,en;q=0.9\r\n"
+        + "Cookie: session=8f3a2b1c9d4e5f6a7b8c; theme=dark; consent=granted\r\n"
+        + "Referer: https://www.example.com/dashboard\r\n"
+        + "Cache-Control: no-cache\r\n"
+        + "Connection: keep-alive\r\n"
+        + "\r\n").utf8)
+
 // MARK: - Byte-class / token fixtures
 
 let sampleFieldName = Array("Content-Type".utf8)
