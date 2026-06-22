@@ -72,4 +72,51 @@ func registerHPACKBenchmarks() {
             blackHole(HPACKStaticTable.field(at: HPACKStaticTable.count))  // last static entry
         }
     }
+
+    // A realistic browser request on a *fresh* connection — the first request, decoded with a cold
+    // dynamic table (literals + incremental indexing, one String per field). The cold-start cost.
+    Benchmark("hpack/request/decode-cold") { benchmark in
+        var seed = HPACKEncoder(maxDynamicTableSize: 4096)
+        let block = seed.encode(realisticRequestFields)
+        for _ in benchmark.scaledIterations {
+            block.withUnsafeBytes { raw in
+                var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+                blackHole(try? decoder.decode(raw.bytes))
+            }
+        }
+    }
+
+    // The steady state on a reused connection: the dynamic table is warm, so the repeated request is
+    // mostly indexed references (§6.1) — no literal decode, no per-field String. This is the path
+    // that runs every request after the first, i.e. the real HTTP/2 throughput hot path.
+    Benchmark("hpack/request/decode-warm") { benchmark in
+        // All priming (encode + the first-request warm-up decode) happens once at module scope below,
+        // so the measured loop is *only* the steady-state indexed decode — not the cold warm-up. A
+        // per-call copy of the warmed decoder is a cheap COW retain; the indexed block never mutates
+        // the table, so the decoder stays warm across iterations.
+        var decoder = warmedRequestDecoder
+        for _ in benchmark.scaledIterations {
+            indexedRequestBlock.withUnsafeBytes { raw in
+                blackHole(try? decoder.decode(raw.bytes))
+            }
+        }
+    }
 }
+
+/// The realistic request re-encoded against a primed table, so it is a block of indexed references
+/// (RFC 7541 §6.1) — the steady-state form a peer sends after the first request on a connection.
+private let indexedRequestBlock: [UInt8] = {
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+    _ = encoder.encode(realisticRequestFields)  // first request: literals + incremental indexing
+    return encoder.encode(realisticRequestFields)  // second request: all indexed references
+}()
+
+/// A decoder whose dynamic table is already warmed by the first request, ready to resolve the
+/// indexed references in ``indexedRequestBlock`` (decoding those is read-only, so it stays warm).
+private let warmedRequestDecoder: HPACKDecoder = {
+    var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+    let primer = encoder.encode(realisticRequestFields)
+    _ = primer.withUnsafeBytes { raw in try? decoder.decode(raw.bytes) }
+    return decoder
+}()

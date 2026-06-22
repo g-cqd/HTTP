@@ -65,6 +65,26 @@ let hpackFields = [
     HPACKField(name: "accept", value: "text/html,application/json"),
 ]
 
+/// A realistic browser GET request (~12 fields with cookies / accept-* / user-agent) — a
+/// representative header block for the steady-state HTTP/2 decode path, unlike the tiny set above.
+let realisticRequestFields = [
+    HPACKField(name: ":method", value: "GET"),
+    HPACKField(name: ":scheme", value: "https"),
+    HPACKField(name: ":authority", value: "www.example.com"),
+    HPACKField(name: ":path", value: "/api/v1/items?page=2&sort=desc"),
+    HPACKField(
+        name: "user-agent",
+        value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15"),
+    HPACKField(
+        name: "accept", value: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+    HPACKField(name: "accept-encoding", value: "gzip, deflate, br"),
+    HPACKField(name: "accept-language", value: "en-US,en;q=0.9"),
+    HPACKField(name: "cookie", value: "session=8f3a2b1c9d4e5f6a7b8c; theme=dark; consent=granted"),
+    HPACKField(name: "referer", value: "https://www.example.com/dashboard"),
+    HPACKField(name: "cache-control", value: "no-cache"),
+    HPACKField(name: "pragma", value: "no-cache"),
+]
+
 // MARK: - HTTP/2 fixtures (a DATA frame: length=8, type=0x0, flags=0, stream=1, + 8 payload octets)
 
 let http2FrameHeaderBytes: [UInt8] = [0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
