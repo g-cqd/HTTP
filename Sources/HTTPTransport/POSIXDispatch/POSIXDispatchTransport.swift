@@ -35,6 +35,9 @@ public final class POSIXDispatchTransport: ServerTransport {
         var acceptSource: (any DispatchSourceRead)?
         var boundPort: UInt16 = 0
         var isRunning = false
+        /// The connection-stream continuation, finished on ``shutdown()`` so a consumer's `for await`
+        /// completes instead of hanging.
+        var continuation: AsyncStream<any TransportConnection>.Continuation?
     }
 
     /// Creates a Dispatch transport for `configuration`.
@@ -65,6 +68,7 @@ public final class POSIXDispatchTransport: ServerTransport {
             $0.acceptSource = source
             $0.boundPort = listener.port
             $0.isRunning = true
+            $0.continuation = continuation
         }
         continuation.onTermination = { [weak self] _ in
             Task { await self?.shutdown() }
@@ -75,12 +79,16 @@ public final class POSIXDispatchTransport: ServerTransport {
 
     /// Cancels the read source (whose cancel handler closes the listening descriptor).
     public func shutdown() async {
-        let source: (any DispatchSourceRead)? = state.withLock {
+        let (source, continuation) = state.withLock {
             let current = $0.acceptSource
+            let cont = $0.continuation
             $0.acceptSource = nil
+            $0.continuation = nil
             $0.isRunning = false
-            return current
+            return (current, cont)
         }
+        // Finish the connection stream so a consumer's `for await` completes instead of hanging.
+        continuation?.finish()
         source?.cancel()
     }
 

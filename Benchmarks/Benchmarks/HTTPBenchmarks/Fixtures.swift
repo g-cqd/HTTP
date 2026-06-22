@@ -75,6 +75,14 @@ let sampleFieldValue = Array("text/html; charset=utf-8".utf8)
 /// Accept lists) reach this size, so this is the input that decides whether vectorizing pays off.
 let longFieldValue = Array(String(repeating: "session=a1b2c3; ", count: 12).utf8)
 
+/// A 48-octet value whose Huffman form is longer than the literal — the "raw-wins" encode branch.
+///
+/// Its octets (0x80…0xBF) all carry long RFC 7541 Huffman codes, so `HPACKString.encode` emits the raw
+/// bytes (a binary token / already-compressed value). The suite otherwise only exercises the
+/// Huffman-wins path, so this fixture decides whether fusing the encoder's length probe into the encode
+/// pass pays off — it must not pessimize this branch.
+let rawWinsFieldValue: [UInt8] = (0..<48).map { UInt8(0x80 + ($0 % 0x40)) }
+
 // MARK: - HPACK fixtures
 
 let hpackFields = [

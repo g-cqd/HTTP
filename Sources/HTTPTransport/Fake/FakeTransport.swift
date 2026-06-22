@@ -11,6 +11,9 @@ public final class FakeTransport: ServerTransport {
     /// The backbone identity (``TransportBackbone/fake``).
     public let backbone: TransportBackbone = .fake
 
+    /// Always `0` — the in-memory transport binds no socket.
+    public let boundPort: UInt16 = 0
+
     private let connections: [any TransportConnection]
 
     /// Creates a fake transport that will yield `connections` from ``start()``.

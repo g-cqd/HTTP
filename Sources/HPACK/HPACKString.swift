@@ -16,6 +16,14 @@ public enum HPACKString {
     private static let huffmanFlag: UInt8 = 0x80
 
     /// Encodes `bytes` as a string literal, using the Huffman form only when it is shorter (§5.2).
+    ///
+    /// NOTE (Phase 1.4, measured): the length is probed with the cheap `Huffman.encodedByteLength`
+    /// (a sum over `lengths[byte]`) *before* the expensive `Huffman.encode` bit-packing, so the
+    /// raw-wins branch skips the encode entirely — that is why `hpack/String/encode-raw` (~4.38 µs)
+    /// is cheaper than `hpack/String/encode` (~4.67 µs). Fusing the probe into a single encode pass
+    /// would save the cheap probe on Huffman-wins but force a wasted encode + scratch allocation on
+    /// raw-wins; not adopted — added complexity to pessimize the raw-wins branch for a marginal,
+    /// mix-dependent gain. The `encode-raw` benchmark guards this.
     public static func encode(_ bytes: some Collection<UInt8>, into output: inout [UInt8]) {
         let huffmanLength = Huffman.encodedByteLength(of: bytes)
         if huffmanLength < bytes.count {
