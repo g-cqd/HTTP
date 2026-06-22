@@ -83,4 +83,22 @@ public enum HPACKStaticTable {
         guard index >= 1, index <= count else { return nil }
         return entries[index - 1]
     }
+
+    /// Maps a full `(name, value)` field to its static index, for the encoder's exact-match lookup.
+    public static let exactIndex: [HPACKField: Int] = {
+        var map = [HPACKField: Int](minimumCapacity: count)
+        for (offset, field) in entries.enumerated() where map[field] == nil {
+            map[field] = offset + 1
+        }
+        return map
+    }()
+
+    /// Maps a field name to its lowest static index, for the encoder's name-match lookup (§6.2.1).
+    public static let nameIndex: [String: Int] = {
+        var map = [String: Int](minimumCapacity: count)
+        for (offset, field) in entries.enumerated() where map[field.name] == nil {
+            map[field.name] = offset + 1
+        }
+        return map
+    }()
 }

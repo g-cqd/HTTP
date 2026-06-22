@@ -8,7 +8,7 @@
 //
 
 /// A header field name/value pair as represented inside HPACK (RFC 7541 §1.3).
-public struct HPACKField: Sendable, Equatable {
+public struct HPACKField: Sendable, Equatable, Hashable {
 
     /// The field name (lower-case on the wire; may be a pseudo-header such as ":method").
     public let name: String

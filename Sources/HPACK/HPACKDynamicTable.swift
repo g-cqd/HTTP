@@ -38,6 +38,16 @@ public struct HPACKDynamicTable: Sendable, Equatable {
         return entries[position]
     }
 
+    /// Returns the combined HPACK index of the first entry satisfying `matches`, newest-first, or nil.
+    ///
+    /// Used by the encoder to find a usable dynamic-table reference (RFC 7541 §2.3.3 numbering).
+    public func firstIndex(where matches: (HPACKField) -> Bool) -> Int? {
+        for (position, field) in entries.enumerated() where matches(field) {
+            return HPACKStaticTable.count + 1 + position
+        }
+        return nil
+    }
+
     /// Inserts `field` as the newest entry, first evicting the oldest entries to make room (§4.4).
     ///
     /// If `field` is larger than the entire table, the table is emptied and nothing is inserted —
