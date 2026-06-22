@@ -34,7 +34,8 @@ struct ConditionalRequestMiddlewareTests {
     @Test("a matching If-None-Match collapses to 304 with no body (RFC 9110 §15.4.5)")
     func notModified() async {
         let first = await body("cached payload").respond(to: get(), body: [])
-        let etag = try? #require(first.head.headerFields[.etag])
+        let etag = first.head.headerFields[.etag]
+        #expect(etag != nil)
         let second = await body("cached payload").respond(
             to: get(ifNoneMatch: etag ?? ""), body: [])
         #expect(second.head.status == .notModified)
