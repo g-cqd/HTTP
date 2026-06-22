@@ -58,6 +58,17 @@ func registerHTTP2Benchmarks() {
             blackHole(connection.outboundBytes())
         }
     }
+
+    // The DATA path + inbound flow control: preface + SETTINGS + HEADERS(POST) + DATA(END_STREAM) →
+    // a request event, the connection debiting its receive window and queuing any WINDOW_UPDATE.
+    Benchmark("http2/Connection/receive-post") { benchmark in
+        let wire = clientPostWire(body: postBody)
+        for _ in benchmark.scaledIterations {
+            var connection = HTTP2Connection()
+            blackHole(connection.outboundBytes())  // discard the queued server SETTINGS preface
+            blackHole(try? connection.receive(wire))
+        }
+    }
 }
 
 /// Builds one client wire — connection preface + an empty SETTINGS frame + a HEADERS frame carrying
@@ -80,4 +91,30 @@ private func clientGetWire() -> [UInt8] {
     ).encode(into: &headers)
     headers.append(contentsOf: block)
     return HTTP2ConnectionPreface.client + settings + headers
+}
+
+/// Builds one client wire — preface + SETTINGS + HEADERS(POST, no END_STREAM) + a DATA frame with
+/// END_STREAM — to drive the engine's request-body + inbound-flow-control path.
+private func clientPostWire(body: [UInt8]) -> [UInt8] {
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+    let block = encoder.encode([
+        HPACKField(name: ":method", value: "POST"),
+        HPACKField(name: ":scheme", value: "https"),
+        HPACKField(name: ":path", value: "/submit"),
+        HPACKField(name: ":authority", value: "example.com"),
+    ])
+    var settings = [UInt8]()
+    HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection)
+        .encode(into: &settings)
+    var headers = [UInt8]()
+    HTTP2FrameHeader(
+        payloadLength: block.count, type: .headers, flags: [.endHeaders], streamID: HTTP2StreamID(1)
+    ).encode(into: &headers)
+    headers.append(contentsOf: block)
+    var data = [UInt8]()
+    HTTP2FrameHeader(
+        payloadLength: body.count, type: .data, flags: [.endStream], streamID: HTTP2StreamID(1)
+    ).encode(into: &data)
+    data.append(contentsOf: body)
+    return HTTP2ConnectionPreface.client + settings + headers + data
 }

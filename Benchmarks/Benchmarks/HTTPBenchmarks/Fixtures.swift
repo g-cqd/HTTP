@@ -75,3 +75,7 @@ let http2FrameBytes: [UInt8] =
 // MARK: - Transport payload
 
 let transportPayload = Array("ping-pong-loopback-throughput-probe".utf8)
+
+// MARK: - WebSocket payload (≤125 octets, so the 7-bit length form applies; RFC 6455 §5.2)
+
+let webSocketPayload = Array("the quick brown fox jumps over the lazy dog".utf8)

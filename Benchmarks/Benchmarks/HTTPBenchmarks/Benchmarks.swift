@@ -12,6 +12,7 @@ let benchmarks: @Sendable () -> Void = {
     registerCoreBenchmarks()  // HTTPCore — byte primitives, validation, fields
     registerHTTP1Benchmarks()  // HTTP/1.1 — request/header/chunked parsers + serializer
     registerHPACKBenchmarks()  // HPACK — integer/string codecs + header-block round-trip
-    registerHTTP2Benchmarks()  // HTTP/2 — frame header + frame decoder
+    registerHTTP2Benchmarks()  // HTTP/2 — frame layer + the sans-I/O connection engine (GET/POST)
+    registerWebSocketBenchmarks()  // WebSocket — RFC 6455 frame decode (masked) + encode
     registerTransportBenchmarks()  // every backbone — loopback echo + in-memory abstraction
 }

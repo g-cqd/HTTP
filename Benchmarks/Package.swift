@@ -32,6 +32,7 @@ let package = Package(
                 .product(name: "HTTP1", package: "HTTP"),
                 .product(name: "HPACK", package: "HTTP"),
                 .product(name: "HTTP2", package: "HTTP"),
+                .product(name: "WebSocket", package: "HTTP"),
                 .product(name: "HTTPTransport", package: "HTTP"),
                 .product(name: "Benchmark", package: "benchmark"),
             ],
