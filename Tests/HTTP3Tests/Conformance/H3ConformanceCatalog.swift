@@ -34,7 +34,8 @@ enum H3Source: String, Sendable {
 /// Whether the engine implements the behavior yet (drives whether the test is live or disabled).
 enum H3Status: Sendable {
     case pending  // M7 not implemented — the check is staged, its test disabled
-    case supported  // implemented — the check should run live
+    case supported  // implemented by the Swift engine — the check runs live as a drive-and-assert
+    case platform  // enforced by Apple's QUIC/TLS stack (RFC 9000/9001), not the Swift engine
 }
 
 /// One HTTP/3 conformance check: the malformation to inject and the error the endpoint must answer with.
@@ -66,7 +67,22 @@ struct H3Check: Sendable {
 enum H3Conformance {
 
     /// Every staged check: the 49 active h3spec cases plus the RFC 9114/9204 MUST-gaps h3spec omits.
-    static let checks: [H3Check] = quicTransport + quicTLS + http3 + qpack + gaps
+    ///
+    /// As of M7 the status is stamped by layer: the HTTP/3 (RFC 9114) and QPACK (RFC 9204) rows are
+    /// `.supported` — the Swift engine implements them and ``H3SpecTests`` drives each one — while the
+    /// QUIC-transport (RFC 9000) and QUIC-TLS (RFC 9001) rows are `.platform`: they are enforced by
+    /// Apple's QUIC stack beneath the engine and cannot be exercised from Swift, so they are not driven.
+    static let checks: [H3Check] = (quicTransport + quicTLS + http3 + qpack + gaps).map(stamped)
+
+    /// Stamps a check's status from its layer (engine-implemented vs platform-enforced).
+    private static func stamped(_ check: H3Check) -> H3Check {
+        var stamped = check
+        switch check.layer {
+        case .http3, .qpack: stamped.status = .supported
+        case .quicTransport, .quicTLS: stamped.status = .platform
+        }
+        return stamped
+    }
 
     // MARK: h3spec — QUIC transport (RFC 9000), 27 checks
 

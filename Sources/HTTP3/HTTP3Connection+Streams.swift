@@ -198,18 +198,6 @@ extension HTTP3Connection {
         }
     }
 
-    // MARK: Request streams (RFC 9114 §4) — framing + mapping land in P5
-
-    /// Handles request-stream bytes.
-    ///
-    /// The framing, QPACK decoding, and request mapping are implemented in P5; until then bytes are
-    /// buffered and no event is emitted.
-    mutating func processRequestStream(
-        _ streamID: QUICStreamID,
-        into events: inout [Event]
-    ) throws(HTTP3Error) {
-    }
-
     // MARK: Helpers
 
     /// Drains complete frames from a stream's buffer, advancing past the consumed octets.
