@@ -14,6 +14,7 @@
 //  in HTTP3Connection+Streams.swift; response encoding in HTTP3Connection+Response.swift.
 //
 
+public import HTTPConcurrency
 public import HTTPCore
 internal import QPACK
 
@@ -106,11 +107,25 @@ public struct HTTP3Connection {
     var lastGoAwayID: UInt64?
     /// The highest MAX_PUSH_ID received — it must not decrease (RFC 9114 §7.2.7).
     var maxPushID: UInt64?
-    /// A clock-free per-connection cap on stream resets — the Rapid Reset analog (RFC 9114 §8.1).
+    /// The injected monotonic clock the reset rolling window is measured against (RFC 9114 §8.1).
+    let now: MonotonicNowProvider
+    /// The start of the current reset-budget window; the count decays each ``resetIntervalNanos``.
+    var resetWindowStart: MonotonicNanoseconds
+    /// The rolling-window length in nanoseconds (`limits.streamResetInterval`).
+    let resetIntervalNanos: MonotonicNanoseconds
+    /// Stream resets charged in the current window — peer RESET_STREAM and engine-emitted alike, so
+    /// neither Rapid Reset (CVE-2023-44487) nor MadeYouReset (CVE-2025-8671) can bypass the cap.
     var streamResetCount = 0
 
     /// Creates a connection advertising `localSettings`, queuing the control + QPACK streams (§3.2).
-    public init(localSettings: HTTP3Settings = HTTP3Settings(), limits: HTTPLimits = .default) {
+    ///
+    /// `now` is the monotonic clock the Rapid-Reset / MadeYouReset rolling window is measured against;
+    /// it defaults to the live clock and a test injects a controllable one.
+    public init(
+        localSettings: HTTP3Settings = HTTP3Settings(),
+        limits: HTTPLimits = .default,
+        now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
+    ) {
         // v1 advertises a disabled QPACK dynamic table (RFC 9204 §3.2.2): pin capacity / blocked
         // streams to 0 and surface the decode bound as MAX_FIELD_SECTION_SIZE.
         var advertised = localSettings
@@ -126,6 +141,9 @@ public struct HTTP3Connection {
         // Bound a single frame's payload; HEADERS is bounded by the field-section size, and DATA is
         // streamed in +Streams, so the header-list size is a safe ceiling for the control plane.
         self.frameDecoder = HTTP3FrameDecoder(maxFrameSize: limits.maxHeaderListSize)
+        self.now = now
+        self.resetWindowStart = now()
+        self.resetIntervalNanos = limits.streamResetInterval.monotonicNanoseconds
         // RFC 9114 §6.2.1 — the control stream opens with its type byte (0x00) then the SETTINGS frame;
         // §4.2 / RFC 9204 §4.2 — the QPACK encoder (0x02) and decoder (0x03) streams open with just
         // their type byte (v1 sends no instructions: the dynamic table is disabled).
@@ -169,6 +187,7 @@ public struct HTTP3Connection {
                 if let streamID = error.streamID {
                     actions.append(.resetStream(streamID: streamID, errorCode: error.code))
                     streams[streamID] = nil
+                    chargeStreamReset()  // MadeYouReset parity: engine-emitted resets count too
                 }
                 return events
             }
@@ -184,12 +203,27 @@ public struct HTTP3Connection {
     /// H3_EXCESSIVE_LOAD, queuing CONNECTION_CLOSE for the driver (RFC 9114 §8.1).
     public mutating func resetStream(_ streamID: QUICStreamID, errorCode: UInt64) -> [Event] {
         if let state = streams.removeValue(forKey: streamID), state.kind == .request {
-            streamResetCount += 1
-            if streamResetCount > limits.maxStreamResetsPerInterval {
-                actions.append(.closeConnection(errorCode: HTTP3ErrorCode.h3ExcessiveLoad.rawValue))
-            }
+            chargeStreamReset()
         }
         return []
+    }
+
+    /// Charges one stream reset against the rolling budget — a peer RESET_STREAM or an engine-emitted
+    /// reset alike — queuing CONNECTION_CLOSE with H3_EXCESSIVE_LOAD past the cap (RFC 9114 §8.1).
+    ///
+    /// The count decays each `streamResetInterval` (a *rate*, not a per-connection total), and charging
+    /// engine-emitted resets too mirrors the HTTP/2 abuse budget — so neither Rapid Reset
+    /// (CVE-2023-44487) nor MadeYouReset (CVE-2025-8671) can bypass it.
+    mutating func chargeStreamReset() {
+        let timestamp = now()
+        if timestamp - resetWindowStart >= resetIntervalNanos {
+            resetWindowStart = timestamp
+            streamResetCount = 0
+        }
+        streamResetCount += 1
+        if streamResetCount > limits.maxStreamResetsPerInterval {
+            actions.append(.closeConnection(errorCode: HTTP3ErrorCode.h3ExcessiveLoad.rawValue))
+        }
     }
 
     /// Dispatches buffered stream bytes to the handler for the stream's classified kind.

@@ -9,6 +9,7 @@
 //
 
 import HTTPCore
+import HTTPTestSupport
 import QPACK
 import Testing
 
@@ -184,5 +185,30 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
             _ = connection.resetStream(QUICStreamID(raw), errorCode: 0x010C)
         }
         #expect(closeConnectionCode(&connection) == HTTP3ErrorCode.h3ExcessiveLoad.rawValue)
+    }
+
+    @Test("the reset budget decays over the rolling window — a rate, not a total (§8.1)")
+    func resetBudgetDecays() {
+        let clock = TestClock()
+        var limits = HTTPLimits()
+        limits.maxStreamResetsPerInterval = 2
+        limits.streamResetInterval = .seconds(1)
+        var connection = HTTP3Connection(limits: limits, now: clock.nowProvider)
+        _ = connection.outbound()  // drain the init actions
+        // Two resets — exactly at the cap within the first window; no trip.
+        for raw: UInt64 in [0, 4] {
+            connection.registerStream(QUICStreamID(raw), direction: .bidirectional)
+            _ = connection.resetStream(QUICStreamID(raw), errorCode: 0x010C)
+        }
+        #expect(closeConnectionCode(&connection) == nil)
+
+        clock.advance(by: .seconds(2))  // past the window → the budget decays
+
+        // Two more resets — allowed only because the window reset, so still no trip.
+        for raw: UInt64 in [8, 12] {
+            connection.registerStream(QUICStreamID(raw), direction: .bidirectional)
+            _ = connection.resetStream(QUICStreamID(raw), errorCode: 0x010C)
+        }
+        #expect(closeConnectionCode(&connection) == nil)
     }
 }

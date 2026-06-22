@@ -181,7 +181,19 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             for event in events {
                 if case .request(let streamID, let request, let body) = event {
                     let response = await responder.respond(to: request, body: body)
-                    try? engine.respond(to: streamID, response.head, body: response.body)
+                    do {
+                        try engine.respond(to: streamID, response.head, body: response.body)
+                    } catch {
+                        // A connection-level fault (e.g. responding to an unknown stream) is fatal:
+                        // flush the engine's queued GOAWAY (RFC 9113 §6.8) and close. A stream-level
+                        // fault is contained — the engine queued RST_STREAM, flushed with this batch
+                        // below — so other streams keep being served.
+                        if error.isConnectionError {
+                            let goAway = engine.outboundBytes()
+                            if !goAway.isEmpty { try? await connection.send(goAway) }
+                            return
+                        }
+                    }
                 } else {
                     await handleHTTP2Tunnel(event, engine: &engine, webSockets: &webSockets)
                 }

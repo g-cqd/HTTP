@@ -116,4 +116,60 @@ struct HTTP2RequestMapperTests {
         let ok = try make(request(adding: [HPACKField(name: "te", value: "trailers")]))
         #expect(ok.method == .get)
     }
+
+    // MARK: - Pseudo-header value validation (RFC 9113 §8.3.1; CWE-113/117)
+
+    /// HPACK literal values are decoded as raw UTF-8 and may carry CR/LF/NUL; the mapper must reject
+    /// control bytes in `:path`/`:authority`/`:scheme` so they cannot reach the access log (log
+    /// forging) or a reflecting handler (response splitting / smuggling).
+    @Test(
+        "a control byte in a pseudo-header value is malformed (§8.3.1)",
+        arguments: [
+            (name: ":path", value: "/a\r\nb"),
+            (name: ":path", value: "/a\nb"),
+            (name: ":path", value: "/a\u{00}b"),
+            (name: ":authority", value: "example.com\r\nx-evil: 1"),
+            (name: ":authority", value: "ex\u{00}ample.com"),
+            (name: ":scheme", value: "ht\r\ntps"),
+            (name: ":scheme", value: "https\n"),
+        ])
+    func controlByteInPseudoHeaderIsMalformed(probe: (name: String, value: String)) {
+        var fields = [
+            HPACKField(name: ":method", value: "GET"),
+            HPACKField(name: ":scheme", value: "https"),
+            HPACKField(name: ":authority", value: "example.com"),
+            HPACKField(name: ":path", value: "/"),
+        ]
+        fields.removeAll { $0.name == probe.name }
+        fields.append(HPACKField(name: probe.name, value: probe.value))
+        #expect(errorCode(fields) == .protocolError)
+    }
+
+    // MARK: - CONNECT (RFC 9113 §8.5 standard · RFC 8441 §4 extended)
+
+    @Test("standard CONNECT carries only :authority and is accepted (§8.5)")
+    func standardConnectAccepted() throws {
+        let mapped = try make([
+            HPACKField(name: ":method", value: "CONNECT"),
+            HPACKField(name: ":authority", value: "example.com:443"),
+        ])
+        #expect(mapped.method == .connect)
+        #expect(mapped.authority == "example.com:443")
+        #expect(mapped.scheme == nil)
+    }
+
+    @Test("standard CONNECT with :scheme or :path is malformed (§8.5)")
+    func connectWithSchemeOrPathIsMalformed() {
+        #expect(
+            errorCode([
+                HPACKField(name: ":method", value: "CONNECT"),
+                HPACKField(name: ":authority", value: "example.com:443"),
+                HPACKField(name: ":path", value: "/"),
+            ]) == .protocolError)
+    }
+
+    @Test("CONNECT without :authority is malformed (§8.5)")
+    func connectWithoutAuthorityIsMalformed() {
+        #expect(errorCode([HPACKField(name: ":method", value: "CONNECT")]) == .protocolError)
+    }
 }
