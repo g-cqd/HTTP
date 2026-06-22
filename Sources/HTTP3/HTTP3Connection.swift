@@ -72,9 +72,14 @@ public struct HTTP3Connection {
         var kind: StreamKind
         var buffer: [UInt8] = []
         var finReceived = false
-        /// Whether a HEADERS frame has been seen on a request stream (DATA-before-HEADERS guard, §4.1).
+        /// Whether the request HEADERS have been seen on a request stream (DATA-before-HEADERS guard,
+        /// RFC 9114 §4.1).
         var sawHeaders = false
-        /// The request being assembled on a request stream, and its body (filled in +Streams, P5).
+        /// Whether a trailing HEADERS block (trailers) has been seen — no frame may follow it (§4.1).
+        var sawTrailers = false
+        /// Whether the completed request has already been surfaced as an event (emit-once guard).
+        var requestEmitted = false
+        /// The request being assembled on a request stream, and its body.
         var request: HTTPRequest?
         var body: [UInt8] = []
     }

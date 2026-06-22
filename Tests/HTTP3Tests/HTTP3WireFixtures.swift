@@ -44,6 +44,11 @@ extension HTTP3WireFixtures {
         [0x00] + frame(.settings, settingsPayload(pairs))
     }
 
+    /// A QPACK-encoded field section from an explicit field list (may be intentionally malformed).
+    func fieldSection(_ fields: [HeaderField]) -> [UInt8] {
+        QPACKEncoder().encode(fields)
+    }
+
     /// A QPACK-encoded request field section (RIC=0, Base=0) for a simple GET.
     func requestFieldSection(
         method: String = "GET",
@@ -60,6 +65,57 @@ extension HTTP3WireFixtures {
         ]
         fields.append(contentsOf: extra)
         return QPACKEncoder().encode(fields)
+    }
+
+    /// The bytes of a request stream: a HEADERS frame and, optionally, a DATA frame.
+    func requestStream(_ section: [UInt8], body: [UInt8]? = nil) -> [UInt8] {
+        var out = frame(.headers, section)
+        if let body { out += frame(.data, body) }
+        return out
+    }
+
+    /// The error code of the first queued `resetStream` action, if any (a stream-scoped error).
+    func resetStreamCode(_ connection: inout HTTP3Connection) -> UInt64? {
+        for action in connection.outbound() {
+            if case .resetStream(_, let errorCode) = action { return errorCode }
+        }
+        return nil
+    }
+
+    /// The bytes and FIN of the first queued `send` action for `streamID`.
+    func sentBytes(
+        _ connection: inout HTTP3Connection, on streamID: QUICStreamID
+    ) -> (bytes: [UInt8], fin: Bool)? {
+        for action in connection.outbound() {
+            if case .send(.id(let id), let bytes, let fin) = action, id == streamID {
+                return (bytes, fin)
+            }
+        }
+        return nil
+    }
+
+    /// Decodes a server response off the wire: the `:status` and the concatenated DATA.
+    func decodeResponse(_ bytes: [UInt8]) throws -> (status: String?, body: [UInt8]) {
+        var status: String?
+        var body = [UInt8]()
+        try bytes.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            let frames = HTTP3FrameDecoder(maxFrameSize: 1 << 20)
+            while let next = try frames.nextFrame(&reader) {
+                switch next.type {
+                case .headers:
+                    let fields = try next.payload.withUnsafeBytes {
+                        try QPACKDecoder().decode($0.bytes)
+                    }
+                    for field in fields where field.name == ":status" { status = field.value }
+                case .data:
+                    body.append(contentsOf: next.payload)
+                default:
+                    break
+                }
+            }
+        }
+        return (status, body)
     }
 
     /// Feeds `bytes` for `stream` and returns the thrown error's code, or nil if none was thrown.
