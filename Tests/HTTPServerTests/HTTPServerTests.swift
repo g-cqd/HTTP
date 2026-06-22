@@ -191,6 +191,35 @@ struct HTTPServerTests {
         _ = await run.value
     }
 
+    @Test(
+        "rejects connections beyond the global maxConnections (audit T-F2)", .timeLimit(.minutes(1))
+    )
+    func globalConnectionCap() async throws {
+        // A high per-client cap with distinct peers, so only the *global* cap can trip.
+        let limits = HTTPLimits(maxConnectionsPerClient: 100, maxConnections: 2)
+        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let probe = AsyncEventProbe<TransportConnectionID>()
+        let connections = (1...3).map {
+            HangingConnection(
+                id: TransportConnectionID(UInt64($0)),
+                peer: TransportAddress(host: "198.51.100.\($0)", port: 0),
+                admissionProbe: probe)
+        }
+        let server = HTTPServer(
+            transport: FakeTransport(connections: connections), responder: responder, limits: limits
+        )
+
+        let run = Task { try? await server.run() }
+        _ = try await probe.wait(forAtLeast: 3)  // every admission decided
+
+        var closedCount = 0
+        for connection in connections where await connection.isClosed() { closedCount += 1 }
+        #expect(closedCount == 1)  // global cap 2 → exactly one of three is rejected
+
+        run.cancel()
+        _ = await run.value
+    }
+
     @Test("rejects a header section that never terminates, before exhausting memory")
     func boundsUnterminatedHeaderSection() async {
         // Small limits keep the test fast: the cap is 1 KiB + 4 KiB. The peer streams 16 KiB of

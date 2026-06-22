@@ -28,10 +28,18 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     let limits: HTTPLimits
     private let clock: C
 
-    /// Active connection count per peer host, enforcing ``HTTPLimits/maxConnectionsPerClient``.
+    /// Live connection counts: a global total (``HTTPLimits/maxConnections``) and a per-host map
+    /// (``HTTPLimits/maxConnectionsPerClient``), guarded together.
     ///
-    /// A `Mutex` (not an actor) because the critical section is a single map update with no `await`.
-    private let activeConnectionsPerHost = Mutex<[String: Int]>([:])
+    /// A `Mutex` (not an actor) because the critical section is a single map/counter update with no
+    /// `await`.
+    private let connectionCounts = Mutex<ConnectionCounts>(ConnectionCounts())
+
+    /// Live connection accounting: a global total plus per-host counts.
+    private struct ConnectionCounts {
+        var total = 0
+        var perHost: [String: Int] = [:]
+    }
 
     /// Creates a server bound to `transport`, handling requests with `responder` and timing its
     /// Slowloris/idle deadlines against `clock`.
@@ -59,17 +67,21 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         }
     }
 
-    /// Admits `connection` if its peer is under ``HTTPLimits/maxConnectionsPerClient``, serves it for
-    /// its lifetime, then releases the slot.
+    /// Admits `connection` if it is under both the global (``HTTPLimits/maxConnections``) and
+    /// per-client (``HTTPLimits/maxConnectionsPerClient``) caps, serves it for its lifetime, then
+    /// releases the slot.
     ///
-    /// A connection over the per-client cap is closed immediately — a per-source resource-exhaustion
-    /// defense (the spirit of a 429, applied before any request is read).
+    /// A connection over either cap is closed immediately — a resource-exhaustion defense (the spirit
+    /// of a 429): the per-client cap (T-F4) blunts a single source, the global cap (audit T-F2) bounds
+    /// total live connections so a many-source flood cannot exhaust file descriptors / tasks.
     private func accept(_ connection: any TransportConnection) async {
         let host = connection.peer.host
-        let admitted = activeConnectionsPerHost.withLock { counts in
-            let current = counts[host, default: 0]
+        let admitted = connectionCounts.withLock { counts in
+            guard counts.total < limits.maxConnections else { return false }
+            let current = counts.perHost[host, default: 0]
             guard current < limits.maxConnectionsPerClient else { return false }
-            counts[host] = current + 1
+            counts.perHost[host] = current + 1
+            counts.total += 1
             return true
         }
         guard admitted else {
@@ -77,9 +89,14 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             return
         }
         await serve(connection)
-        activeConnectionsPerHost.withLock { counts in
-            guard let current = counts[host] else { return }
-            if current <= 1 { counts[host] = nil } else { counts[host] = current - 1 }
+        connectionCounts.withLock { counts in
+            counts.total -= 1
+            guard let current = counts.perHost[host] else { return }
+            if current <= 1 {
+                counts.perHost[host] = nil
+            } else {
+                counts.perHost[host] = current - 1
+            }
         }
     }
 

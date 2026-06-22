@@ -74,6 +74,13 @@ public struct HTTPLimits: Sendable, Equatable {
     /// Maximum simultaneous connections from a single client address (→ `429`).
     public var maxConnectionsPerClient: Int
 
+    /// Maximum simultaneous connections across all clients — a global resource ceiling against FD /
+    /// task exhaustion (audit T-F2).
+    ///
+    /// Connections beyond it are closed immediately. Tune up for high-concurrency deployments (and
+    /// raise the process file-descriptor limit to match).
+    public var maxConnections: Int
+
     /// Creates a set of limits; every parameter defaults to its documented safe value.
     public init(
         maxRequestLineLength: Int = 8 * 1024,
@@ -92,7 +99,8 @@ public struct HTTPLimits: Sendable, Equatable {
         idleTimeout: Duration = .seconds(60),
         keepAliveTimeout: Duration = .seconds(15),
         streamResetInterval: Duration = .seconds(1),
-        maxConnectionsPerClient: Int = 20
+        maxConnectionsPerClient: Int = 20,
+        maxConnections: Int = 1024
     ) {
         self.maxRequestLineLength = maxRequestLineLength
         self.maxFieldSize = maxFieldSize
@@ -111,6 +119,7 @@ public struct HTTPLimits: Sendable, Equatable {
         self.keepAliveTimeout = keepAliveTimeout
         self.streamResetInterval = streamResetInterval
         self.maxConnectionsPerClient = maxConnectionsPerClient
+        self.maxConnections = maxConnections
     }
 
     /// The default, safe-by-default limits.
