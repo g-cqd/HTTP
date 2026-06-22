@@ -36,10 +36,13 @@ struct HTTPDExample {
         // consumer composes; reorder or replace any entry, or add their own `HTTPMiddleware`.
         let responder = MiddlewareChain(
             [
-                CompressionMiddleware(),
+                AccessLogMiddleware { print("httpd-example: \($0)") },  // logs the final exchange
+                CompressionMiddleware(),  // gzip the outgoing body
                 ServerHeaderMiddleware("httpd-example"),
-                AccessLogMiddleware { print("httpd-example: \($0)") },
+                DateHeaderMiddleware(),
+                SecurityHeadersMiddleware(),
                 CORSMiddleware(),
+                ConditionalRequestMiddleware(),  // ETag on the raw body, If-None-Match → 304
             ],
             terminatingAt: makeResponder())
         let server = HTTPServer(
