@@ -105,6 +105,7 @@ public final class POSIXDispatchTransport: ServerTransport {
                 break  // wouldBlock (drained) or stop
             }
             POSIXSocket.setNonBlocking(clientFD)
+            POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
             let id = connectionIDs.next()
             let channel = DispatchIO(type: .stream, fileDescriptor: clientFD, queue: ioQueue) { _ in
                 close(clientFD)

@@ -113,6 +113,7 @@ public final class POSIXKqueueTransport: ServerTransport {
                 break  // drained (wouldBlock) or the listener was closed
             }
             POSIXSocket.setNonBlocking(clientFD)
+            POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
             let id = connectionIDs.next()
             continuation.yield(
                 POSIXKqueueConnection(

@@ -101,6 +101,7 @@ public final class SwiftSystemTransport: ServerTransport {
                 if case .retry = POSIXSocket.classifyAcceptError(errno) { continue }
                 break  // a closed descriptor (shutdown) or unrecoverable error stops the loop
             }
+            POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
             let id = connectionIDs.next()
             continuation.yield(
                 SwiftSystemConnection(

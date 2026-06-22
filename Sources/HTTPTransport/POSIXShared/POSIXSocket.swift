@@ -35,6 +35,7 @@ enum POSIXSocket {
 
         var reuse: Int32 = 1
         _ = setsockopt(rawFD, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        setNoSIGPIPE(rawFD)
         if nonBlocking { setNonBlocking(rawFD) }
 
         var address = sockaddr_in()
@@ -67,6 +68,18 @@ enum POSIXSocket {
     static func setNonBlocking(_ rawFD: Int32) {
         let flags = fcntl(rawFD, F_GETFL, 0)
         _ = fcntl(rawFD, F_SETFL, flags | O_NONBLOCK)
+    }
+
+    /// Suppresses `SIGPIPE` on `rawFD` so a `write` to a peer that has closed its read end returns
+    /// `EPIPE` instead of delivering `SIGPIPE` — whose default disposition would terminate the whole
+    /// server process, a one-packet remote DoS (audit T-F1).
+    ///
+    /// Darwin exposes this as the `SO_NOSIGPIPE` socket option (POSIX.1-2017 has no portable
+    /// equivalent for `write`; Linux would use `MSG_NOSIGNAL` on `send`). Set on the listen socket and
+    /// on every accepted client socket so the entire byte path fails closed via `TransportError`.
+    static func setNoSIGPIPE(_ rawFD: Int32) {
+        var on: Int32 = 1
+        _ = setsockopt(rawFD, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
     }
 
     /// Reads the OS-assigned port via `getsockname()`.
