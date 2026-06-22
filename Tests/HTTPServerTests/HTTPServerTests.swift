@@ -171,6 +171,22 @@ struct HTTPServerTests {
         _ = await run.value
     }
 
+    @Test("rejects a header section that never terminates, before exhausting memory")
+    func boundsUnterminatedHeaderSection() async {
+        // Small limits keep the test fast: the cap is 1 KiB + 4 KiB. The peer streams 16 KiB of
+        // header bytes with no terminating CRLF CRLF — the parser's size limits cannot run without
+        // a terminator, so the server must cap the buffer and fail closed with 431.
+        let limits = HTTPLimits(maxRequestLineLength: 1024, maxHeaderListSize: 4 * 1024)
+        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let flood = "GET / HTTP/1.1\r\nX-Pad: " + String(repeating: "A", count: 16 * 1024)
+        let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array(flood.utf8))
+        let server = HTTPServer(transport: FakeTransport(), responder: responder, limits: limits)
+        await server.serve(connection)
+        let wire = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        #expect(wire.hasPrefix("HTTP/1.1 431"))
+        #expect(wire.contains("connection: close\r\n"))
+    }
+
     @Test("frames a Content-Length body delivered one octet per read (parse head once)")
     func incrementalContentLengthBody() async {
         let responder = ClosureResponder { _, body in

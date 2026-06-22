@@ -8,6 +8,7 @@
 //
 
 internal import HTTP1
+internal import HTTP2
 public import HTTPCore
 public import HTTPTransport
 internal import Synchronization
@@ -69,12 +70,71 @@ public final class HTTPServer: Sendable {
         }
     }
 
-    /// Serves a connection for its lifetime: read → respond → write, looping while it stays
-    /// persistent (RFC 9112 §9.3), then closes.
+    /// Serves a connection for its lifetime, dispatching by protocol, then closes.
+    ///
+    /// The first octets are sniffed: a connection that opens with the HTTP/2 client preface (h2c
+    /// "prior knowledge", RFC 9113 §3.4) is driven by the HTTP/2 engine; anything else is HTTP/1.x.
     func serve(_ connection: any TransportConnection) async {
         var buffer = [UInt8]()
-        while await serveOne(connection, buffer: &buffer) {}
+        // Read until the preface is confirmed or ruled out (its 24 octets disambiguate from any
+        // HTTP/1 request line, which diverges within the first few bytes).
+        while buffer.count < HTTP2ConnectionPreface.client.count,
+            Self.couldBeHTTP2Preface(buffer)
+        {
+            guard
+                let chunk = try? await withTimeout(
+                    limits.keepAliveTimeout, { try await connection.receive(maxLength: 16_384) }),
+                !chunk.isEmpty
+            else { break }
+            buffer.append(contentsOf: chunk)
+        }
+
+        if buffer.count >= HTTP2ConnectionPreface.client.count, Self.couldBeHTTP2Preface(buffer) {
+            await serveHTTP2(connection, initialBytes: buffer)
+        } else {
+            while await serveOne(connection, buffer: &buffer) {}
+        }
         await connection.close()
+    }
+
+    /// Whether `buffer` is a prefix of the HTTP/2 client preface (so the connection may still be h2).
+    private static func couldBeHTTP2Preface(_ buffer: [UInt8]) -> Bool {
+        let marker = HTTP2ConnectionPreface.client
+        for index in 0..<min(buffer.count, marker.count) where buffer[index] != marker[index] {
+            return false
+        }
+        return true
+    }
+
+    /// Drives the sans-I/O ``HTTP2Connection`` over `connection`: feed octets → events → respond →
+    /// flush, looping until EOF, a timeout, or a connection-level protocol error.
+    private func serveHTTP2(_ connection: any TransportConnection, initialBytes: [UInt8]) async {
+        var engine = HTTP2Connection(limits: limits)
+        var inbound = initialBytes
+        while true {
+            let events: [HTTP2Connection.Event]
+            do {
+                events = try engine.receive(inbound)
+            } catch {
+                // Connection-level protocol error — close (queuing a GOAWAY first is future work).
+                break
+            }
+            inbound = []
+            for case .request(let streamID, let request, let body) in events {
+                let response = await responder.respond(to: request, body: body)
+                try? engine.respond(to: streamID, response.head, body: response.body)
+            }
+            let outbound = engine.outboundBytes()
+            if !outbound.isEmpty {
+                do { try await connection.send(outbound) } catch { break }
+            }
+            guard
+                let chunk = try? await withTimeout(
+                    limits.idleTimeout, { try await connection.receive(maxLength: 16_384) }),
+                !chunk.isEmpty
+            else { break }
+            inbound = chunk
+        }
     }
 
     /// Serves one request/response exchange.
@@ -130,7 +190,15 @@ public final class HTTPServer: Sendable {
             case .request(let framed):
                 return .request(framed)
             case .incomplete:
-                break  // need more bytes from the wire
+                // Until the head parses, the parser's size limits can't run (no CRLF CRLF yet), so a
+                // peer that never terminates the header section would grow `buffer` unbounded.
+                // `pending == nil` ⇒ no terminator present ⇒ the buffer is all header bytes: cap it
+                // and fail closed with 431 instead of exhausting memory (RFC 9110 §15.5.13).
+                if pending == nil,
+                    buffer.count > limits.maxRequestLineLength + limits.maxHeaderListSize
+                {
+                    throw HTTP1ParseError.headerSectionTooLarge
+                }
             case .failed(let error):
                 throw error
             }

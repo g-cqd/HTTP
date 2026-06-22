@@ -114,15 +114,16 @@ let package = Package(
             name: "HTTPTransportTests",
             dependencies: ["HTTPTransport"]
         ),
-        // M4 — the server runtime: wires a transport backbone to the HTTP/1.1 engine via an
-        // HTTPResponder, fanning connections out across cores. The routing DSL layers on top later.
+        // M4 — the server runtime: wires a transport backbone to the HTTP/1.1 and HTTP/2 engines via
+        // an HTTPResponder, fanning connections out across cores and sniffing the protocol (HTTP/2
+        // prior-knowledge preface vs an HTTP/1.x request line). The routing DSL layers on top later.
         .target(
             name: "HTTPServer",
-            dependencies: ["HTTPCore", "HTTP1", "HTTPTransport"]
+            dependencies: ["HTTPCore", "HTTP1", "HTTP2", "HTTPTransport"]
         ),
         .testTarget(
             name: "HTTPServerTests",
-            dependencies: ["HTTPServer"]
+            dependencies: ["HTTPServer", "HTTP2", "HPACK"]
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with

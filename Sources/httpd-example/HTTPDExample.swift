@@ -4,7 +4,8 @@
 //
 //  A runnable example server — the library's end-to-end deliverable. It selects one of the four
 //  transport backbones, wires a small set of routes through a `ClosureResponder` (the result-builder
-//  routing DSL will replace this hand-written switch in a later milestone), and serves HTTP/1.1.
+//  routing DSL will replace this hand-written switch in a later milestone), and serves both HTTP/1.1
+//  and HTTP/2 cleartext (h2c, prior knowledge) on the same port — the server sniffs the protocol.
 //
 //  Usage:
 //    swift run httpd-example [port] [backbone]
@@ -13,8 +14,8 @@
 //
 //  Then, in another shell:
 //    curl -v --http1.1 http://127.0.0.1:8080/
-//    curl -v --http1.1 http://127.0.0.1:8080/health
-//    curl -v --http1.1 --data 'ping' http://127.0.0.1:8080/echo
+//    curl -v --http2-prior-knowledge http://127.0.0.1:8080/
+//    curl -v --http2-prior-knowledge --data 'ping' http://127.0.0.1:8080/echo
 //
 
 import HTTPCore
@@ -35,8 +36,9 @@ struct HTTPDExample {
         )
 
         print(
-            "httpd-example: serving HTTP/1.1 on http://127.0.0.1:\(port) via \(backbone.rawValue)")
-        print("httpd-example: try  curl -v --http1.1 http://127.0.0.1:\(port)/")
+            "httpd-example: serving HTTP/1.1 + HTTP/2 (h2c) on http://127.0.0.1:\(port) "
+                + "via \(backbone.rawValue)")
+        print("httpd-example: try  curl -v --http2-prior-knowledge http://127.0.0.1:\(port)/")
         do {
             try await server.run()
         } catch {
@@ -53,7 +55,7 @@ struct HTTPDExample {
             let method: HTTPMethod = request.method == .head ? .get : request.method
             switch (method, request.path) {
             case (.get, "/"):
-                return text(.ok, "Hello from a from-scratch, NIO-free HTTP/1.1 server.\n")
+                return text(.ok, "Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 server.\n")
             case (.get, "/health"):
                 return text(.ok, "OK\n")
             case (.post, "/echo"):

@@ -58,16 +58,19 @@ public struct HTTP2Connection {
 
     /// Creates a connection that advertises `localSettings`, queuing the server SETTINGS preface (§3.4).
     public init(localSettings: HTTP2Settings = HTTP2Settings(), limits: HTTPLimits = .default) {
-        self.localSettings = localSettings
+        // A server MUST NOT advertise ENABLE_PUSH with a non-zero value (RFC 9113 §6.5.2).
+        var advertised = localSettings
+        advertised.enablePush = false
+        self.localSettings = advertised
         self.limits = limits
         self.decoder = HPACKDecoder(
-            maxDynamicTableSize: localSettings.headerTableSize, limits: limits)
+            maxDynamicTableSize: advertised.headerTableSize, limits: limits)
         self.encoder = HPACKEncoder(maxDynamicTableSize: remoteSettings.headerTableSize)
         self.accumulator = HTTP2HeaderBlockAccumulator(
             maxContinuationFrames: limits.maxContinuationFrames,
             maxBlockSize: limits.maxHeaderListSize)
-        self.frameDecoder = HTTP2FrameDecoder(maxFrameSize: localSettings.maxFrameSize)
-        writeFrame(.settings, payload: localSettings.encodePayload())
+        self.frameDecoder = HTTP2FrameDecoder(maxFrameSize: advertised.maxFrameSize)
+        writeFrame(.settings, payload: advertised.encodePayload())
     }
 
     /// Drains the queued outbound octets (the server preface, ACKs, and responses).

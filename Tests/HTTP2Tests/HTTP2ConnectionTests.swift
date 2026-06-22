@@ -166,6 +166,23 @@ struct HTTP2ConnectionTests {
         #expect(events.count == 2)
     }
 
+    @Test("the server preface advertises ENABLE_PUSH = 0 (RFC 9113 §6.5.2)")
+    func serverDisablesPush() throws {
+        var connection = HTTP2Connection()
+        let preface = connection.outboundBytes()
+        var settings = HTTP2Settings()  // ENABLE_PUSH defaults to 1; the server frame must clear it
+        try preface.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            let frames = HTTP2FrameDecoder()
+            while let frame = try frames.nextFrame(&reader) {
+                if frame.header.type == .settings {
+                    try frame.payload.withUnsafeBytes { try settings.apply($0.bytes) }
+                }
+            }
+        }
+        #expect(settings.enablePush == false)
+    }
+
     // MARK: Failure modes
 
     @Test("a bad client preface is a PROTOCOL_ERROR")
