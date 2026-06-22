@@ -32,6 +32,9 @@ public final class POSIXKqueueTransport: ServerTransport {
         var listenFD: Int32 = -1
         var boundPort: UInt16 = 0
         var isRunning = false
+        /// The connection-stream continuation, finished on ``shutdown()`` so a consumer's `for await`
+        /// completes instead of hanging.
+        var continuation: AsyncStream<any TransportConnection>.Continuation?
     }
 
     /// Creates a kqueue transport for `configuration`.
@@ -56,6 +59,7 @@ public final class POSIXKqueueTransport: ServerTransport {
             $0.listenFD = listener.descriptor
             $0.boundPort = listener.port
             $0.isRunning = true
+            $0.continuation = continuation
         }
         continuation.onTermination = { [weak self] _ in
             Task { await self?.shutdown() }
@@ -66,14 +70,18 @@ public final class POSIXKqueueTransport: ServerTransport {
 
     /// Closes the listening socket and stops the event loop.
     public func shutdown() async {
-        let (eventLoop, listenFD): (KqueueEventLoop?, Int32) = state.withLock {
+        let (eventLoop, listenFD, continuation) = state.withLock {
             let loop = $0.eventLoop
             let fd = $0.listenFD
+            let cont = $0.continuation
             $0.eventLoop = nil
             $0.listenFD = -1
+            $0.continuation = nil
             $0.isRunning = false
-            return (loop, fd)
+            return (loop, fd, cont)
         }
+        // Finish the connection stream so a consumer's `for await` completes instead of hanging.
+        continuation?.finish()
         if listenFD >= 0 {
             eventLoop?.closeDescriptor(listenFD)
         }
