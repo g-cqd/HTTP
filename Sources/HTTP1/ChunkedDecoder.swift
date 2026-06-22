@@ -27,7 +27,8 @@ public enum ChunkedDecoder {
             guard let sizeLine = reader.readSlice(until: carriageReturn) else {
                 throw .incompleteBody
             }
-            guard reader.readByte() == lineFeed else { throw .malformedChunk }
+            guard let sizeLineFeed = reader.readByte() else { throw .incompleteBody }
+            guard sizeLineFeed == lineFeed else { throw .malformedChunk }
 
             let size = try parseChunkSize(reader.slice(in: sizeLine))
             if size == 0 {
@@ -45,7 +46,9 @@ public enum ChunkedDecoder {
             reader.slice(in: dataStart..<(dataStart + size)).withUnsafeBytes {
                 body.append(contentsOf: $0)
             }
-            // Each chunk-data is followed by CRLF (RFC 9112 §7.1).
+            // Each chunk-data is followed by CRLF (RFC 9112 §7.1). Too few octets means the CRLF has
+            // not arrived yet (incomplete), not that the framing is wrong (malformed).
+            guard reader.remaining >= 2 else { throw .incompleteBody }
             guard reader.readByte() == carriageReturn, reader.readByte() == lineFeed else {
                 throw .malformedChunk
             }
@@ -86,13 +89,15 @@ public enum ChunkedDecoder {
             guard let first = reader.peek() else { throw .incompleteBody }
             if first == carriageReturn {
                 _ = reader.readByte()  // CR
-                guard reader.readByte() == lineFeed else { throw .malformedChunk }
+                guard let emptyLineFeed = reader.readByte() else { throw .incompleteBody }
+                guard emptyLineFeed == lineFeed else { throw .malformedChunk }
                 return
             }
             guard let lineRange = reader.readSlice(until: carriageReturn) else {
                 throw .incompleteBody
             }
-            guard reader.readByte() == lineFeed else { throw .malformedChunk }
+            guard let trailerLineFeed = reader.readByte() else { throw .incompleteBody }
+            guard trailerLineFeed == lineFeed else { throw .malformedChunk }
             totalSize += lineRange.count + 2
             guard totalSize <= limits.maxHeaderListSize else { throw .headerSectionTooLarge }
         }

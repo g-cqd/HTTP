@@ -93,10 +93,12 @@ public final class HTTPServer: Sendable {
         into buffer: inout [UInt8]
     ) async throws -> ReadOutcome {
         var headerDeadline: ContinuousClock.Instant?
+        var scanOffset = 0  // resumable end-of-headers scan (keeps header framing O(n), not O(n²))
+        var pending: PendingRequest?  // the head, parsed once, then reused as the body arrives
         while true {
-            switch parseStep(buffer) {
-            case .complete(let parsed, let consumed):
-                return .request(FramedRequest(parsed: parsed, consumed: consumed))
+            switch assemble(buffer, scanOffset: &scanOffset, pending: &pending) {
+            case .request(let framed):
+                return .request(framed)
             case .incomplete:
                 break  // need more bytes from the wire
             case .failed(let error):
@@ -104,7 +106,9 @@ public final class HTTPServer: Sendable {
             }
             let chunk: [UInt8]?
             do {
-                chunk = try await withTimeout(receiveTimeout(buffer, &headerDeadline)) {
+                chunk = try await withTimeout(
+                    receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
+                ) {
                     try await connection.receive(maxLength: 16_384)
                 }
             } catch is TimeoutError {
@@ -119,13 +123,43 @@ public final class HTTPServer: Sendable {
         }
     }
 
+    /// Tries to assemble a complete request from `buffer`: parse the head exactly once (caching it in
+    /// `pending`), then frame the body against it.
+    ///
+    /// Returns `.incomplete` when more bytes are needed.
+    private func assemble(
+        _ buffer: [UInt8],
+        scanOffset: inout Int,
+        pending: inout PendingRequest?
+    ) -> AssembleStep {
+        if pending == nil {
+            guard Self.headerSectionEnd(buffer, from: &scanOffset) != nil else {
+                return .incomplete
+            }
+            switch parseHeadStep(buffer) {
+            case .parsed(let head): pending = head
+            case .failed(let error): return .failed(error)
+            }
+        }
+        guard let pending else { return .incomplete }
+        switch frameBody(buffer, pending) {
+        case .complete(let parsed, let consumed):
+            return .request(FramedRequest(parsed: parsed, consumed: consumed))
+        case .incomplete:
+            return .incomplete
+        case .failed(let error):
+            return .failed(error)
+        }
+    }
+
     /// The deadline for the next receive, chosen by request phase (the ``HTTPLimits`` Slowloris knobs).
     private func receiveTimeout(
         _ buffer: [UInt8],
+        headersParsed: Bool,
         _ headerDeadline: inout ContinuousClock.Instant?
     ) -> Duration {
         if buffer.isEmpty { return limits.keepAliveTimeout }  // idle, awaiting the next request
-        guard !Self.headerSectionComplete(buffer) else { return limits.idleTimeout }  // body phase
+        if headersParsed { return limits.idleTimeout }  // body phase
         let clock = ContinuousClock()
         let deadline = headerDeadline ?? clock.now.advanced(by: limits.headerReadTimeout)
         headerDeadline = deadline  // cumulative across the whole header section
@@ -167,54 +201,106 @@ public final class HTTPServer: Sendable {
         case cleanClose
     }
 
-    private enum ParseStep {
+    /// A request head parsed once, retained while its body is framed across reads.
+    private struct PendingRequest {
+        let head: RequestHead
+        let headerLength: Int
+    }
+
+    private enum AssembleStep {
+        case request(FramedRequest)
+        case incomplete
+        case failed(HTTP1ParseError)
+    }
+
+    private enum HeadStep {
+        case parsed(PendingRequest)
+        case failed(HTTP1ParseError)
+    }
+
+    private enum BodyStep {
         case complete(ParsedRequest, consumed: Int)
         case incomplete
         case failed(HTTP1ParseError)
     }
 
-    /// Attempts a parse over the borrowed buffer (zero-copy), distinguishing "need more data" from a
-    /// genuine protocol error.
+    /// The index just past the header section's terminating CRLF CRLF (RFC 9112 §2.1), or nil if it
+    /// has not arrived.
     ///
-    /// The one-shot M2 parsers can only tell "malformed" from "truncated" once the header section is
-    /// whole, so the server first frames at the end-of-headers marker (RFC 9112 §2.1, CRLF CRLF);
-    /// until it arrives the request is simply incomplete. A short body then surfaces as
-    /// ``HTTP1ParseError/incompleteBody``, which also means "read more".
-    private func parseStep(_ buffer: [UInt8]) -> ParseStep {
-        guard Self.headerSectionComplete(buffer) else { return .incomplete }
-        let outcome: Result<FramedRequest, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
+    /// Resumes scanning from `offset`, re-checking the last three octets so a terminator split across
+    /// reads is not missed; this keeps the total header scan O(n) rather than O(n²) over many chunks.
+    private static func headerSectionEnd(_ buffer: [UInt8], from offset: inout Int) -> Int? {
+        var index = max(offset, 3)
+        while index < buffer.count {
+            if buffer[index] == 0x0A, buffer[index - 1] == 0x0D,
+                buffer[index - 2] == 0x0A, buffer[index - 3] == 0x0D
+            {
+                return index + 1
+            }
+            index += 1
+        }
+        // Resume near the tail next time so a CRLF CRLF split across reads is still matched.
+        offset = max(3, buffer.count - 3)
+        return nil
+    }
+
+    /// Parses the request head over the borrowed buffer (zero-copy), once the header section is whole.
+    ///
+    /// The caller invokes this only after ``headerSectionEnd(_:from:)`` confirms the CRLF CRLF
+    /// terminator, so a failure here is a genuine malformed-head error, never "need more bytes".
+    private func parseHeadStep(_ buffer: [UInt8]) -> HeadStep {
+        let outcome: Result<PendingRequest, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
             Result { () throws(HTTP1ParseError) in
                 var reader = ByteReader(raw)
-                let parsed = try RequestParser.parse(&reader, limits: limits)
+                let head = try RequestParser.parseHead(&reader, limits: limits)
+                return PendingRequest(head: head, headerLength: reader.position)
+            }
+        }
+        switch outcome {
+        case .success(let pending): return .parsed(pending)
+        case .failure(let error): return .failed(error)
+        }
+    }
+
+    /// Frames the body against the already-parsed head, without re-parsing the head (RFC 9112 §6).
+    private func frameBody(_ buffer: [UInt8], _ pending: PendingRequest) -> BodyStep {
+        let head = pending.head
+        let start = pending.headerLength
+        switch head.framing {
+        case .none:
+            return .complete(
+                ParsedRequest(request: head.request, body: [], version: head.version),
+                consumed: start)
+        case .contentLength(let length):
+            guard buffer.count - start >= length else { return .incomplete }
+            let body = Array(buffer[start..<(start + length)])
+            return .complete(
+                ParsedRequest(request: head.request, body: body, version: head.version),
+                consumed: start + length)
+        case .chunked:
+            return frameChunkedBody(buffer, head: head, start: start)
+        }
+    }
+
+    /// Frames a chunked body from `start`, decoding only the body octets (never the head) until the
+    /// terminating zero-size chunk arrives (RFC 9112 §7.1).
+    private func frameChunkedBody(_ buffer: [UInt8], head: RequestHead, start: Int) -> BodyStep {
+        let outcome: Result<FramedRequest, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
+            Result { () throws(HTTP1ParseError) in
+                var reader = ByteReader(raw, startingAt: start)
+                let body = try ChunkedDecoder.decode(&reader, limits: limits)
+                let parsed = ParsedRequest(request: head.request, body: body, version: head.version)
                 return FramedRequest(parsed: parsed, consumed: reader.position)
             }
         }
         switch outcome {
         case .success(let framed):
             return .complete(framed.parsed, consumed: framed.consumed)
-        case .failure(.incompleteHeaders), .failure(.incompleteBody):
+        case .failure(.incompleteBody), .failure(.incompleteHeaders):
             return .incomplete
         case .failure(let error):
             return .failed(error)
         }
-    }
-
-    /// Whether `buffer` ends its header section.
-    ///
-    /// It contains the empty line CRLF CRLF that terminates the field block (RFC 9112 §2.1).
-    /// Scanned iteratively (no recursion).
-    private static func headerSectionComplete(_ buffer: [UInt8]) -> Bool {
-        guard buffer.count >= 4 else { return false }
-        var index = 3
-        while index < buffer.count {
-            if buffer[index] == 0x0A, buffer[index - 1] == 0x0D,
-                buffer[index - 2] == 0x0A, buffer[index - 3] == 0x0D
-            {
-                return true
-            }
-            index += 1
-        }
-        return false
     }
 
     private func sendErrorResponse(

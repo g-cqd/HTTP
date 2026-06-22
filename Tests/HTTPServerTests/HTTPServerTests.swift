@@ -144,6 +144,37 @@ struct HTTPServerTests {
         await server.serve(connection)
         #expect(await connection.isClosed())
     }
+
+    @Test("frames a Content-Length body delivered one octet per read (parse head once)")
+    func incrementalContentLengthBody() async {
+        let responder = ClosureResponder { _, body in
+            ServerResponse(HTTPResponse(status: .ok), body: body)
+        }
+        let request = "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
+        let connection = DribblingConnection(
+            id: TransportConnectionID(1), inbound: Array(request.utf8), chunkSize: 1)
+        let server = HTTPServer(transport: FakeTransport(), responder: responder)
+        await server.serve(connection)
+        let wire = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        #expect(wire.hasSuffix("\r\n\r\nhello"))
+    }
+
+    @Test("decodes a chunked body delivered across reads (head not re-parsed)")
+    func incrementalChunkedBody() async {
+        let responder = ClosureResponder { _, body in
+            ServerResponse(HTTPResponse(status: .ok), body: body)
+        }
+        // Two chunks then the terminating zero-size chunk (RFC 9112 §7.1) → body "Wikipedia".
+        let request =
+            "POST /echo HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n"
+            + "4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n"
+        let connection = DribblingConnection(
+            id: TransportConnectionID(1), inbound: Array(request.utf8), chunkSize: 3)
+        let server = HTTPServer(transport: FakeTransport(), responder: responder)
+        await server.serve(connection)
+        let wire = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        #expect(wire.hasSuffix("\r\n\r\nWikipedia"))
+    }
 }
 
 /// A connection whose `receive` blocks until cancelled — to exercise the read timeout.
@@ -170,5 +201,38 @@ private actor HangingConnection: TransportConnection {
 
     func isClosed() -> Bool {
         closed
+    }
+}
+
+/// A connection that releases its inbound bytes a few at a time, to exercise incremental reads.
+private actor DribblingConnection: TransportConnection {
+
+    nonisolated let id: TransportConnectionID
+    nonisolated let peer = TransportAddress(host: "drip", port: 0)
+    private var inbound: ArraySlice<UInt8>
+    private let chunkSize: Int
+    private var output: [UInt8] = []
+
+    init(id: TransportConnectionID, inbound: [UInt8], chunkSize: Int) {
+        self.id = id
+        self.inbound = inbound[...]
+        self.chunkSize = chunkSize
+    }
+
+    func receive(maxLength: Int) async throws -> [UInt8]? {
+        guard !inbound.isEmpty else { return nil }
+        let count = min(chunkSize, min(maxLength, inbound.count))
+        defer { inbound = inbound.dropFirst(count) }
+        return Array(inbound.prefix(count))
+    }
+
+    func send(_ bytes: [UInt8]) async throws {
+        output.append(contentsOf: bytes)
+    }
+
+    func close() async {}
+
+    func sentBytes() -> [UInt8] {
+        output
     }
 }

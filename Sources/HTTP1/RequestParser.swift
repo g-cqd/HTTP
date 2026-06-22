@@ -9,6 +9,42 @@
 
 public import HTTPCore
 
+/// How a request body is delimited on the wire (RFC 9112 §6).
+public enum BodyFraming: Sendable, Equatable {
+
+    /// No body (no `Content-Length`, no `Transfer-Encoding`).
+    case none
+
+    /// A fixed-length body of `Content-Length` octets (RFC 9112 §6.2).
+    case contentLength(Int)
+
+    /// A `Transfer-Encoding: chunked` body (RFC 9112 §6.1 / §7.1).
+    case chunked
+}
+
+/// A parsed request head: the message, its wire version, and how its body is framed.
+///
+/// It deliberately excludes the body, so a server can frame the body incrementally as it arrives
+/// without re-parsing the request-line and header section on every chunk.
+public struct RequestHead: Sendable, Equatable {
+
+    /// The request message (method, authority, path, header fields).
+    public let request: HTTPRequest
+
+    /// The request-line version (RFC 9112 §2.3).
+    public let version: HTTPVersion
+
+    /// How the body is delimited (RFC 9112 §6).
+    public let framing: BodyFraming
+
+    /// Creates a request head.
+    public init(request: HTTPRequest, version: HTTPVersion, framing: BodyFraming) {
+        self.request = request
+        self.version = version
+        self.framing = framing
+    }
+}
+
 /// Parses a complete HTTP/1.1 request message (RFC 9112).
 public enum RequestParser {
 
@@ -20,9 +56,19 @@ public enum RequestParser {
         _ reader: inout ByteReader,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> ParsedRequest {
+        let head = try parseHead(&reader, limits: limits)
+        let body = try decodeBody(&reader, framing: head.framing, limits: limits)
+        return ParsedRequest(request: head.request, body: body, version: head.version)
+    }
+
+    /// Parses the request-line and header section (not the body), validating the mandatory Host and
+    /// resolving the body framing (RFC 9112 §6) so the body can be read incrementally afterward.
+    public static func parseHead(
+        _ reader: inout ByteReader,
+        limits: HTTPLimits
+    ) throws(HTTP1ParseError) -> RequestHead {
         let requestLine = try RequestLineParser.parse(
             &reader, maxLength: limits.maxRequestLineLength)
-
         let headerFields = try HeaderParser.parse(&reader, limits: limits)
 
         // RFC 9110 §7.2: an HTTP/1.1 request MUST carry exactly one valid Host.
@@ -30,24 +76,23 @@ public enum RequestParser {
             throw .invalidHost
         }
 
-        let body = try decodeBody(&reader, headerFields: headerFields, limits: limits)
+        let framing = try resolveFraming(headerFields, limits: limits)
         let request = HTTPRequest(
             method: requestLine.method,
             authority: headerFields[.host],
             path: requestLine.target,
             headerFields: headerFields
         )
-        return ParsedRequest(request: request, body: body, version: requestLine.version)
+        return RequestHead(request: request, version: requestLine.version, framing: framing)
     }
 
-    /// Resolves the message body framing (RFC 9112 §6): Transfer-Encoding takes precedence over
-    /// Content-Length, the two together are a smuggling error, and the only supported coding is the
-    /// final `chunked`.
-    private static func decodeBody(
-        _ reader: inout ByteReader,
-        headerFields: HTTPFields,
+    /// Resolves the body framing without decoding (RFC 9112 §6): Transfer-Encoding takes precedence
+    /// over Content-Length, the two together are a smuggling error, and the only supported coding is
+    /// the final `chunked`.
+    public static func resolveFraming(
+        _ headerFields: HTTPFields,
         limits: HTTPLimits
-    ) throws(HTTP1ParseError) -> [UInt8] {
+    ) throws(HTTP1ParseError) -> BodyFraming {
         if headerFields.contains(.transferEncoding) {
             guard !headerFields.contains(.contentLength) else {
                 throw .contentLengthWithTransferEncoding
@@ -55,20 +100,35 @@ public enum RequestParser {
             guard isChunked(headerFields[.transferEncoding]) else {
                 throw .unsupportedTransferEncoding
             }
-            return try ChunkedDecoder.decode(&reader, limits: limits)
+            return .chunked
         }
-
         switch headerFields.contentLength {
         case .absent:
-            return []
+            return .none
         case .invalid:
             throw .invalidContentLength
         case .length(let length):
             guard length <= limits.maxBodySize else { throw .bodyTooLarge }
+            return .contentLength(length)
+        }
+    }
+
+    /// Decodes the body for an already-resolved `framing` (RFC 9112 §6).
+    private static func decodeBody(
+        _ reader: inout ByteReader,
+        framing: BodyFraming,
+        limits: HTTPLimits
+    ) throws(HTTP1ParseError) -> [UInt8] {
+        switch framing {
+        case .none:
+            return []
+        case .contentLength(let length):
             guard reader.remaining >= length else { throw .incompleteBody }
             let start = reader.position
             reader.advance(by: length)
             return reader.slice(in: start..<(start + length)).withUnsafeBytes { Array($0) }
+        case .chunked:
+            return try ChunkedDecoder.decode(&reader, limits: limits)
         }
     }
 
