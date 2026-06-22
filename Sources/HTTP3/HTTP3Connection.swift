@@ -1,0 +1,222 @@
+//
+//  HTTP3Connection.swift
+//  HTTP3
+//
+//  RFC 9114 — the sans-I/O HTTP/3 server connection engine. It is a pure, per-stream state machine:
+//  QUIC delivers bytes per stream (unlike HTTP/2's single demultiplexed octet stream), so the driver
+//  feeds `receive(streamID:bytes:fin:)` and drains role-addressed `outbound()` actions. The engine
+//  knows stream *semantics*; the transport owns stream *id allocation* — so outbound actions are
+//  addressed by realized id or by role (the control + QPACK streams are queued at init, §3.2, before
+//  QUIC has minted their ids; the driver resolves `.role` once it opens them).
+//
+//  This file holds the core: the public API, the connection state, init-time SETTINGS, the receive/
+//  reset/outbound entry points, and error scoping. The control / QPACK / request stream handling lives
+//  in HTTP3Connection+Streams.swift; response encoding in HTTP3Connection+Response.swift.
+//
+
+public import HTTPCore
+internal import QPACK
+
+/// A sans-I/O HTTP/3 server connection (RFC 9114): feed it per-stream octets, drain actions, collect
+/// events.
+public struct HTTP3Connection {
+
+    /// A high-level event surfaced to the connection driver.
+    public enum Event: Sendable, Equatable {
+        /// A complete request arrived on a request stream (HEADERS and any DATA received, RFC 9114 §4).
+        case request(streamID: QUICStreamID, request: HTTPRequest, body: [UInt8])
+        /// The peer sent GOAWAY, asking us to stop opening streams above `streamID` (RFC 9114 §5.2).
+        case goAway(streamID: QUICStreamID)
+    }
+
+    /// Where an outbound `send` is directed: a realized stream id, or a not-yet-opened role.
+    public enum StreamTarget: Sendable, Equatable {
+        /// A stream by its realized QUIC id (e.g. a request stream we are responding on).
+        case id(QUICStreamID)
+        /// A stream by role — the driver resolves it to the id it minted for that role (RFC 9114 §3.2).
+        case role(HTTP3StreamRole)
+    }
+
+    /// An outbound action for the driver to perform on the QUIC connection.
+    public enum Action: Sendable, Equatable {
+        /// Open a unidirectional stream for `role`, writing `preamble` first — the §6.2 Stream Type
+        /// byte, plus the SETTINGS frame for the control stream (RFC 9114 §6.2.1).
+        case openUniStream(role: HTTP3StreamRole, preamble: [UInt8])
+        /// Send `bytes` on a stream, ending it with FIN when `fin` is set.
+        case send(stream: StreamTarget, bytes: [UInt8], fin: Bool)
+        /// Abruptly reset a request stream with a QUIC application error code (RFC 9114 §8).
+        case resetStream(streamID: QUICStreamID, errorCode: UInt64)
+        /// Close the whole connection with a QUIC application error code (CONNECTION_CLOSE).
+        case closeConnection(errorCode: UInt64)
+    }
+
+    /// Whether a registered stream is bidirectional (a request) or unidirectional (control/QPACK/…).
+    public enum StreamDirection: Sendable, Equatable {
+        case bidirectional
+        case unidirectional
+    }
+
+    /// The classified role of a peer stream within the engine.
+    enum StreamKind: Sendable, Equatable {
+        case unclassifiedUni  // a unidirectional stream whose §6.2 type byte has not been read yet
+        case control
+        case qpackEncoder
+        case qpackDecoder
+        case reserved  // an unknown unidirectional stream type — data is discarded
+        case request  // a client-initiated bidirectional request stream
+    }
+
+    /// Per-stream receive state: the classified kind, the unconsumed byte buffer, and FIN.
+    struct StreamState: Sendable {
+        var kind: StreamKind
+        var buffer: [UInt8] = []
+        var finReceived = false
+        /// Whether a HEADERS frame has been seen on a request stream (DATA-before-HEADERS guard, §4.1).
+        var sawHeaders = false
+        /// The request being assembled on a request stream, and its body (filled in +Streams, P5).
+        var request: HTTPRequest?
+        var body: [UInt8] = []
+    }
+
+    let localSettings: HTTP3Settings
+    let limits: HTTPLimits
+    var decoder: QPACKDecoder
+    var encoder: QPACKEncoder
+    let frameDecoder: HTTP3FrameDecoder
+
+    /// Queued outbound actions, drained by ``outbound()``.
+    var actions: [Action] = []
+    /// Per-stream receive state, keyed by QUIC stream id.
+    var streams: [QUICStreamID: StreamState] = [:]
+
+    /// The peer's critical stream ids — each a singleton; a second of any kind is a creation error.
+    var peerControlStream: QUICStreamID?
+    var peerQpackEncoderStream: QUICStreamID?
+    var peerQpackDecoderStream: QUICStreamID?
+    /// Whether the peer's control stream has delivered its mandatory first SETTINGS frame (§6.2.1).
+    var peerSettingsReceived = false
+    /// The peer's settings, applied from its SETTINGS frame.
+    var remoteSettings = HTTP3Settings()
+    /// The last GOAWAY id received — a subsequent GOAWAY must not increase it (RFC 9114 §5.2).
+    var lastGoAwayID: UInt64?
+    /// The highest MAX_PUSH_ID received — it must not decrease (RFC 9114 §7.2.7).
+    var maxPushID: UInt64?
+    /// A clock-free per-connection cap on stream resets — the Rapid Reset analog (RFC 9114 §8.1).
+    var streamResetCount = 0
+
+    /// Creates a connection advertising `localSettings`, queuing the control + QPACK streams (§3.2).
+    public init(localSettings: HTTP3Settings = HTTP3Settings(), limits: HTTPLimits = .default) {
+        // v1 advertises a disabled QPACK dynamic table (RFC 9204 §3.2.2): pin capacity / blocked
+        // streams to 0 and surface the decode bound as MAX_FIELD_SECTION_SIZE.
+        var advertised = localSettings
+        advertised.qpackMaxTableCapacity = 0
+        advertised.qpackBlockedStreams = 0
+        if advertised.maxFieldSectionSize == nil {
+            advertised.maxFieldSectionSize = limits.maxHeaderListSize
+        }
+        self.localSettings = advertised
+        self.limits = limits
+        self.decoder = QPACKDecoder(limits: limits)
+        self.encoder = QPACKEncoder()
+        // Bound a single frame's payload; HEADERS is bounded by the field-section size, and DATA is
+        // streamed in +Streams, so the header-list size is a safe ceiling for the control plane.
+        self.frameDecoder = HTTP3FrameDecoder(maxFrameSize: limits.maxHeaderListSize)
+        // RFC 9114 §6.2.1 — the control stream opens with its type byte (0x00) then the SETTINGS frame;
+        // §4.2 / RFC 9204 §4.2 — the QPACK encoder (0x02) and decoder (0x03) streams open with just
+        // their type byte (v1 sends no instructions: the dynamic table is disabled).
+        let settingsFrame = HTTP3FrameWriter.frame(.settings, payload: advertised.encodePayload())
+        actions.append(.openUniStream(role: .control, preamble: [0x00] + settingsFrame))
+        actions.append(.openUniStream(role: .qpackEncoder, preamble: [0x02]))
+        actions.append(.openUniStream(role: .qpackDecoder, preamble: [0x03]))
+    }
+
+    /// Registers a newly opened peer stream so the engine tracks it before bytes arrive.
+    ///
+    /// Optional — ``receive(_:_:fin:)`` auto-registers from the stream id's class — but the driver may
+    /// call it as soon as QUIC surfaces the stream.
+    public mutating func registerStream(_ id: QUICStreamID, direction: StreamDirection) {
+        guard streams[id] == nil else { return }
+        streams[id] = StreamState(kind: direction == .unidirectional ? .unclassifiedUni : .request)
+    }
+
+    /// Drains the queued outbound actions for the driver to perform.
+    public mutating func outbound() -> [Action] {
+        var drained = [Action]()
+        swap(&drained, &actions)
+        return drained
+    }
+
+    /// Feeds inbound octets for one stream, with `fin` marking the stream's end, and returns any events
+    /// they complete (RFC 9114).
+    ///
+    /// A connection-scoped error is fatal: it queues CONNECTION_CLOSE and rethrows so the driver closes.
+    /// A stream-scoped error resets just that stream and the connection continues.
+    public mutating func receive(
+        _ streamID: QUICStreamID,
+        _ bytes: [UInt8],
+        fin: Bool
+    ) throws(HTTP3Error) -> [Event] {
+        var events = [Event]()
+        do {
+            try process(streamID, bytes, fin: fin, into: &events)
+        } catch {
+            guard error.isConnectionError else {
+                if let streamID = error.streamID {
+                    actions.append(.resetStream(streamID: streamID, errorCode: error.code))
+                    streams[streamID] = nil
+                }
+                return events
+            }
+            actions.append(.closeConnection(errorCode: error.code))
+            throw error
+        }
+        return events
+    }
+
+    /// Reacts to a peer RESET_STREAM on `streamID` (RFC 9114 §8 / QUIC RESET_STREAM).
+    ///
+    /// Drops the stream and charges the Rapid Reset analog: too many resets of active streams trip
+    /// H3_EXCESSIVE_LOAD, queuing CONNECTION_CLOSE for the driver (RFC 9114 §8.1).
+    public mutating func resetStream(_ streamID: QUICStreamID, errorCode: UInt64) -> [Event] {
+        if let state = streams.removeValue(forKey: streamID), state.kind == .request {
+            streamResetCount += 1
+            if streamResetCount > limits.maxStreamResetsPerInterval {
+                actions.append(.closeConnection(errorCode: HTTP3ErrorCode.h3ExcessiveLoad.rawValue))
+            }
+        }
+        return []
+    }
+
+    /// Dispatches buffered stream bytes to the handler for the stream's classified kind.
+    private mutating func process(
+        _ streamID: QUICStreamID,
+        _ bytes: [UInt8],
+        fin: Bool,
+        into events: inout [Event]
+    ) throws(HTTP3Error) {
+        var state =
+            streams[streamID]
+            ?? StreamState(
+                kind: streamID.isUnidirectional ? .unclassifiedUni : .request)
+        state.buffer.append(contentsOf: bytes)
+        if fin { state.finReceived = true }
+        streams[streamID] = state
+        try dispatch(streamID, into: &events)
+    }
+
+    /// Routes a stream to its kind-specific handler (control/QPACK in +Streams; request in +Streams).
+    mutating func dispatch(
+        _ streamID: QUICStreamID,
+        into events: inout [Event]
+    ) throws(HTTP3Error) {
+        guard let kind = streams[streamID]?.kind else { return }
+        switch kind {
+        case .unclassifiedUni: try classifyUniStream(streamID, into: &events)
+        case .control: try processControlStream(streamID, into: &events)
+        case .qpackEncoder: try processQpackEncoderStream(streamID)
+        case .qpackDecoder: try processQpackDecoderStream(streamID)
+        case .reserved: streams[streamID]?.buffer.removeAll(keepingCapacity: false)  // §6.2 discard
+        case .request: try processRequestStream(streamID, into: &events)
+        }
+    }
+}
