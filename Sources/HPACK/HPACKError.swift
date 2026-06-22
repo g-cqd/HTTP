@@ -15,4 +15,13 @@ public enum HPACKError: Error, Sendable, Equatable {
 
     /// A prefix integer exceeded the decoder's bound — an overflow / oversized-length attack (§5.1).
     case integerOverflow
+
+    /// The octet stream ended before a string literal's declared length (RFC 7541 §5.2).
+    case truncatedString
+
+    /// A string literal's declared length exceeded the configured maximum — oversized-field abuse.
+    case stringTooLong
+
+    /// A Huffman-coded string failed to decode: EOS in input, bad padding, or an invalid code (§5.2).
+    case invalidHuffman
 }
