@@ -95,7 +95,7 @@ let package = Package(
         ),
         .testTarget(
             name: "HTTP2Tests",
-            dependencies: ["HTTP2"]
+            dependencies: ["HTTP2", "HPACK"]
         ),
         // M3 — the I/O boundary. Four switchable backbones (Network.framework + three POSIX-level
         // variants) behind one abstraction, each isolated in its own subfolder. The only target
