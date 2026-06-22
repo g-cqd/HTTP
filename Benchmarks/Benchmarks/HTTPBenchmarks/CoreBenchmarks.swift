@@ -30,6 +30,14 @@ func registerCoreBenchmarks() {
         }
     }
 
+    // The same validator over a realistic long value (~198 B) — the size that decides whether a
+    // SWAR (8 B/word) rewrite beats the per-byte scan.
+    Benchmark("core/FieldValidation/isValidFieldValue-long") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(FieldValidation.isValidFieldValue(longFieldValue))
+        }
+    }
+
     Benchmark("core/HTTPFieldName/parse-mixed-case") { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(HTTPFieldName("Content-Type"))

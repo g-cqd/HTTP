@@ -68,13 +68,23 @@ func registerWebSocketBenchmarks() {
             blackHole(try? connection.receive(wire))
         }
     }
+
+    // §8.1 — a text message: the engine validates the payload is well-formed UTF-8. This is the path
+    // measured to decide whether to replace the allocating String round-trip with a scalar validator.
+    Benchmark("websocket/Connection/receive-text") { benchmark in
+        let wire = maskedBinaryFrame(opcode: 0x01, payload: webSocketTextPayload)
+        for _ in benchmark.scaledIterations {
+            var connection = WebSocketConnection()
+            blackHole(try? connection.receive(wire))
+        }
+    }
 }
 
 /// A masked client→server binary frame carrying `payload` (RFC 6455 §5.2 / §5.3), with the length in
 /// the minimal 7/16/64-bit form so any size round-trips.
-private func maskedBinaryFrame(payload: [UInt8]) -> [UInt8] {
+private func maskedBinaryFrame(opcode: UInt8 = 0x02, payload: [UInt8]) -> [UInt8] {
     let key: [UInt8] = [0x37, 0xFA, 0x21, 0x3D]
-    var wire: [UInt8] = [0x82]  // FIN + binary opcode
+    var wire: [UInt8] = [0x80 | opcode]  // FIN + opcode
     let count = payload.count
     if count <= 125 {
         wire.append(0x80 | UInt8(count))  // MASK bit + inline 7-bit length
