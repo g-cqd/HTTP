@@ -45,10 +45,12 @@ public struct HTTP2Connection {
     private var inbound = [UInt8]()
     private var output = [UInt8]()
     private var decoder: HPACKDecoder
+    private var encoder: HPACKEncoder
     private var accumulator: HTTP2HeaderBlockAccumulator
     private var streams: [HTTP2StreamID: StreamRecord] = [:]
     private var pendingHeadersEndStream = false
     private var lastPeerStreamID = HTTP2StreamID(0)
+    private var remoteSettings = HTTP2Settings()
     private let frameDecoder: HTTP2FrameDecoder
     private let localSettings: HTTP2Settings
     private let limits: HTTPLimits
@@ -59,6 +61,7 @@ public struct HTTP2Connection {
         self.limits = limits
         self.decoder = HPACKDecoder(
             maxDynamicTableSize: localSettings.headerTableSize, limits: limits)
+        self.encoder = HPACKEncoder(maxDynamicTableSize: remoteSettings.headerTableSize)
         self.accumulator = HTTP2HeaderBlockAccumulator(
             maxContinuationFrames: limits.maxContinuationFrames,
             maxBlockSize: limits.maxHeaderListSize)
@@ -173,14 +176,14 @@ public struct HTTP2Connection {
             }
             return  // acknowledgement of our settings; nothing to apply
         }
+        var updated = remoteSettings  // SETTINGS frames are deltas applied to the running set
         let applied: Result<HTTP2Settings, HTTP2Error> = frame.payload.withUnsafeBytes { raw in
             Result { () throws(HTTP2Error) in
-                var remote = HTTP2Settings()
-                try remote.apply(raw.bytes)
-                return remote
+                try updated.apply(raw.bytes)
+                return updated
             }
         }
-        _ = try applied.get()  // validate; the remote settings drive flow control in a later step
+        remoteSettings = try applied.get()
         writeFrame(.settings, flags: .ack)  // acknowledge (§6.5.3)
     }
 
@@ -274,6 +277,55 @@ public struct HTTP2Connection {
         streams[frame.header.streamID] = nil
         events.append(
             .streamReset(streamID: frame.header.streamID, code: HTTP2ErrorCode(code: code)))
+    }
+
+    // MARK: Response
+
+    /// Queues a response on `streamID`: a HEADERS frame and, if present, DATA frames (RFC 9113 §8.3.2).
+    ///
+    /// The header block is HPACK-encoded with `:status` first; the body is split into DATA frames no
+    /// larger than the peer's SETTINGS_MAX_FRAME_SIZE, with END_STREAM on the final frame. The stream
+    /// is advanced through its §5.1 state machine and dropped once closed.
+    public mutating func respond(
+        to streamID: HTTP2StreamID,
+        _ response: HTTPResponse,
+        body: [UInt8] = []
+    ) throws(HTTP2Error) {
+        guard var record = streams[streamID] else {
+            throw .connection(.internalError, "response for an unknown stream")
+        }
+        let hasBody = !body.isEmpty
+        // Advance the state machine before touching the encoder, so a bad state never desyncs HPACK.
+        try record.stream.sendHeaders(endStream: !hasBody)
+        let block = encoder.encode(responseFields(response))
+        var headerFlags: HTTP2FrameFlags = [.endHeaders]
+        if !hasBody { headerFlags.insert(.endStream) }
+        writeFrame(.headers, flags: headerFlags, streamID: streamID, payload: block)
+        if hasBody {
+            try record.stream.sendData(endStream: true)
+            writeData(streamID: streamID, body: body)
+        }
+        streams[streamID] = record.stream.state == .closed ? nil : record
+    }
+
+    private func responseFields(_ response: HTTPResponse) -> [HPACKField] {
+        var fields = [HPACKField(name: ":status", value: String(response.status.code))]
+        for field in response.headerFields {
+            fields.append(HPACKField(name: field.name.rawName, value: field.value))
+        }
+        return fields
+    }
+
+    private mutating func writeData(streamID: HTTP2StreamID, body: [UInt8]) {
+        let maxChunk = max(1, remoteSettings.maxFrameSize)
+        var offset = 0
+        while offset < body.count {
+            let end = min(offset + maxChunk, body.count)
+            writeFrame(
+                .data, flags: end == body.count ? [.endStream] : [], streamID: streamID,
+                payload: Array(body[offset..<end]))
+            offset = end
+        }
     }
 
     // MARK: Helpers

@@ -176,4 +176,66 @@ struct HTTP2ConnectionTests {
         } catch {}
         #expect(thrown == .protocolError)
     }
+
+    // MARK: Response encoding
+
+    @Test("encodes a response (HEADERS + DATA) for a received request")
+    func encodesResponse() throws {
+        var connection = HTTP2Connection()
+        _ = connection.outboundBytes()  // discard the server SETTINGS preface
+
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += get(streamID: 1, path: "/")
+        let events = try connection.receive(wire)
+        _ = connection.outboundBytes()  // discard the SETTINGS ACK
+
+        let event = try #require(events.first)
+        guard case .request(let streamID, _, _) = event else {
+            Issue.record("expected a request event")
+            return
+        }
+
+        var response = HTTPResponse(status: .ok)
+        _ = response.headerFields.append("text/plain", for: .contentType)
+        try connection.respond(to: streamID, response, body: Array("hello".utf8))
+
+        let decoded = try decodeResponse(connection.outboundBytes())
+        #expect(decoded.status == "200")
+        #expect(decoded.contentType == "text/plain")
+        #expect(String(decoding: decoded.body, as: UTF8.self) == "hello")
+    }
+
+    /// Parses a response off the wire: HPACK-decodes the HEADERS block and concatenates DATA.
+    private func decodeResponse(
+        _ bytes: [UInt8]
+    ) throws -> (status: String?, contentType: String?, body: [UInt8]) {
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var status: String?
+        var contentType: String?
+        var body = [UInt8]()
+        try bytes.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            let frames = HTTP2FrameDecoder()
+            while let frame = try frames.nextFrame(&reader) {
+                switch frame.header.type {
+                case .headers:
+                    let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
+                        frame.payload, flags: frame.header.flags)
+                    let fields = try Array(fragment).withUnsafeBytes {
+                        try decoder.decode($0.bytes)
+                    }
+                    for field in fields where field.name == ":status" { status = field.value }
+                    for field in fields where field.name == "content-type" {
+                        contentType = field.value
+                    }
+                case .data:
+                    body.append(contentsOf: frame.payload)
+                default:
+                    break
+                }
+            }
+        }
+        return (status, contentType, body)
+    }
 }
