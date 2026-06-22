@@ -34,6 +34,7 @@ extension HTTPServer {
     /// malformed upgrade gets the rejection status (§4.4) and the connection is left to close.
     func serveWebSocket(
         _ connection: any TransportConnection,
+        deadline: IdleDeadline<C.Instant>,
         request: HTTPRequest,
         handler: any WebSocketHandler,
         carryover: [UInt8]
@@ -58,13 +59,14 @@ extension HTTPServer {
         guard (try? await connection.send(ResponseSerializer.serialize(accepted))) != nil else {
             return
         }
-        await driveWebSocket(connection, handler: handler, carryover: carryover)
+        await driveWebSocket(connection, deadline: deadline, handler: handler, carryover: carryover)
     }
 
     /// Pumps the ``WebSocketConnection`` over `connection`: receive → events → handler actions →
     /// flush, looping until a Close is sent, EOF, an idle timeout, or a send failure (RFC 6455 §6).
     private func driveWebSocket(
         _ connection: any TransportConnection,
+        deadline: IdleDeadline<C.Instant>,
         handler: any WebSocketHandler,
         carryover: [UInt8]
     ) async {
@@ -85,9 +87,9 @@ extension HTTPServer {
             if !outbound.isEmpty, (try? await connection.send(outbound)) == nil { break }
             if failed || engine.isClosing { break }
 
-            let chunk: [UInt8]? = try? await withTimeout(limits.keepAliveTimeout) {
-                try await connection.receive(maxLength: 16_384)
-            }
+            deadline.arm(clock.now.advanced(by: limits.keepAliveTimeout))
+            let chunk = try? await connection.receive(maxLength: 16_384)
+            deadline.disarm()
             guard let chunk, !chunk.isEmpty else { break }  // EOF, idle timeout, or read failure
             inbound = chunk
         }

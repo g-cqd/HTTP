@@ -119,58 +119,46 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// The distinctive prefix "PRI * HTTP/2.0\r\n" that no HTTP/1 request line can match; once it is
     /// seen the connection is committed to HTTP/2 even if the *full* preface then proves invalid (so
     /// the engine can answer with GOAWAY rather than mis-routing to HTTP/1).
-    private static var http2MarkerLength: Int { 16 }
-
     func serve(_ connection: any TransportConnection) async {
         // TLS ALPN (RFC 7301) settles the protocol before any byte is read: "h2" commits the
         // connection to HTTP/2 (RFC 9113 §3.3), so the engine — not the preface sniffer — drives it
         // (a malformed preface then earns a GOAWAY instead of mis-routing to HTTP/1.1). Any other
         // negotiated value, or cleartext (nil), falls through to the h2c/HTTP-1 sniff below.
         if connection.negotiatedApplicationProtocol == "h2" {
-            await serveHTTP2(connection, initialBytes: [])
+            await withIdleWatchdog(connection) { deadline in
+                await self.serveHTTP2(connection, deadline: deadline, initialBytes: [])
+            }
             await connection.close()
             return
         }
 
-        var buffer = [UInt8]()
-        // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).
-        while buffer.count < Self.http2MarkerLength, Self.couldBeHTTP2Preface(buffer) {
-            guard
-                let chunk = try? await withTimeout(
-                    limits.keepAliveTimeout, { try await connection.receive(maxLength: 16_384) }),
-                !chunk.isEmpty
-            else { break }
-            buffer.append(contentsOf: chunk)
-        }
+        await withIdleWatchdog(connection) { deadline in
+            var buffer = [UInt8]()
+            // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).
+            while buffer.count < Self.http2MarkerLength, Self.couldBeHTTP2Preface(buffer) {
+                deadline.arm(self.clock.now.advanced(by: self.limits.keepAliveTimeout))
+                let chunk = try? await connection.receive(maxLength: 16_384)
+                deadline.disarm()
+                guard let chunk, !chunk.isEmpty else { break }
+                buffer.append(contentsOf: chunk)
+            }
 
-        if Self.matchesHTTP2Marker(buffer) {
-            await serveHTTP2(connection, initialBytes: buffer)
-        } else {
-            while await serveOne(connection, buffer: &buffer) {}
+            if Self.matchesHTTP2Marker(buffer) {
+                await self.serveHTTP2(connection, deadline: deadline, initialBytes: buffer)
+            } else {
+                while await self.serveOne(connection, deadline: deadline, buffer: &buffer) {}
+            }
         }
         await connection.close()
     }
 
-    /// Whether `buffer` is a prefix of the HTTP/2 client preface (so the connection may still be h2).
-    private static func couldBeHTTP2Preface(_ buffer: [UInt8]) -> Bool {
-        let marker = HTTP2ConnectionPreface.client
-        for index in 0..<min(buffer.count, marker.count) where buffer[index] != marker[index] {
-            return false
-        }
-        return true
-    }
-
-    /// Whether the first 16 octets of `buffer` are the HTTP/2 preface marker (the commit point to h2).
-    private static func matchesHTTP2Marker(_ buffer: [UInt8]) -> Bool {
-        let marker = HTTP2ConnectionPreface.client
-        guard buffer.count >= http2MarkerLength else { return false }
-        for index in 0..<http2MarkerLength where buffer[index] != marker[index] { return false }
-        return true
-    }
-
     /// Drives the sans-I/O ``HTTP2Connection`` over `connection`: feed octets → events → respond →
     /// flush, looping until EOF, a timeout, or a connection-level protocol error.
-    private func serveHTTP2(_ connection: any TransportConnection, initialBytes: [UInt8]) async {
+    private func serveHTTP2(
+        _ connection: any TransportConnection,
+        deadline: IdleDeadline<C.Instant>,
+        initialBytes: [UInt8]
+    ) async {
         // Advertise Extended CONNECT (RFC 8441 §3) only when a WebSocket handler can service it.
         var settings = HTTP2Settings()
         settings.enableConnectProtocol = webSocketHandler != nil
@@ -216,11 +204,10 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             if !outbound.isEmpty {
                 do { try await connection.send(outbound) } catch { break }
             }
-            guard
-                let chunk = try? await withTimeout(
-                    limits.idleTimeout, { try await connection.receive(maxLength: 16_384) }),
-                !chunk.isEmpty
-            else { break }
+            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            let chunk = try? await connection.receive(maxLength: 16_384)
+            deadline.disarm()
+            guard let chunk, !chunk.isEmpty else { break }
             inbound = chunk
         }
     }
@@ -231,11 +218,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// close (a parse error, a `Connection: close`, EOF, or a transport failure).
     private func serveOne(
         _ connection: any TransportConnection,
+        deadline: IdleDeadline<C.Instant>,
         buffer: inout [UInt8]
     ) async -> Bool {
         let outcome: ReadOutcome
         do {
-            outcome = try await readRequest(from: connection, into: &buffer)
+            outcome = try await readRequest(from: connection, deadline: deadline, into: &buffer)
         } catch let error as HTTP1ParseError {
             await sendErrorResponse(for: error, to: connection)
             return false  // fail closed
@@ -251,7 +239,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         if let handler = webSocketHandler, Self.isWebSocketUpgrade(request),
             handler.shouldUpgrade(request)
         {
-            await serveWebSocket(connection, request: request, handler: handler, carryover: buffer)
+            await serveWebSocket(
+                connection, deadline: deadline, request: request, handler: handler,
+                carryover: buffer)
             return false
         }
         let response = await responder.respond(to: request, body: framed.parsed.body)
@@ -276,6 +266,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// while a body streams in (RFC 9112 §9.3; the limits are the defense-in-depth knobs).
     private func readRequest(
         from connection: any TransportConnection,
+        deadline: IdleDeadline<C.Instant>,
         into buffer: inout [UInt8]
     ) async throws -> ReadOutcome {
         var headerDeadline: C.Instant?
@@ -300,16 +291,20 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             case .failed(let error):
                 throw error
             }
+            deadline.arm(
+                clock.now.advanced(
+                    by: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)))
             let chunk: [UInt8]?
             do {
-                chunk = try await withTimeout(
-                    receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
-                ) {
-                    try await connection.receive(maxLength: 16_384)
-                }
-            } catch is TimeoutError {
-                return .cleanClose  // idle or slow-request timeout — close (Slowloris defense)
+                chunk = try await connection.receive(maxLength: 16_384)
+            } catch {
+                deadline.disarm()
+                // The watchdog closed the connection (idle / Slowloris), or a genuine transport fault.
+                if deadline.hasLapsed { return .cleanClose }
+                throw error
             }
+            deadline.disarm()
+            if deadline.hasLapsed { return .cleanClose }  // timeout (the close surfaced as EOF)
             guard let chunk, !chunk.isEmpty else {
                 // EOF: graceful on a request boundary, truncation mid-request.
                 if buffer.isEmpty { return .cleanClose }
