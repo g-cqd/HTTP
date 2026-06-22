@@ -49,6 +49,7 @@ let package = Package(
         .library(name: "HPACK", targets: ["HPACK"]),
         .library(name: "QPACK", targets: ["QPACK"]),
         .library(name: "HTTP2", targets: ["HTTP2"]),
+        .library(name: "HTTP3", targets: ["HTTP3"]),
         .library(name: "WebSocket", targets: ["WebSocket"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
@@ -163,12 +164,20 @@ let package = Package(
             name: "HTTP2Tests",
             dependencies: ["HTTP2", "HPACK", "HTTPTestSupport"]
         ),
-        // M7 (planned) — RFC 9114 (HTTP/3) + RFC 9204 (QPACK) over QUIC. The engine is not built yet;
-        // this is a test-only conformance scaffold that carries the h3spec + RFC 9114/9204 catalog so
-        // the suite is staged and turns green incrementally as M7 lands. No source target and no product
-        // dependency — the catalog is pure data validated with Testing; engine-driven cases are disabled.
+        // RFC 9114 — the sans-I/O HTTP/3 engine: the §7.1 frame layer (varint type+length), the §6.2
+        // unidirectional stream-type layer, §7.2.4 SETTINGS (rejecting the reserved HTTP/2 ids), the
+        // per-stream connection state machine (control/QPACK singletons, GOAWAY monotonicity, the
+        // Rapid-Reset analog), request mapping (§4) through QPACK, and response encoding. Per-stream
+        // (QUIC delivers per-stream bytes); the transport owns id allocation. Sans-I/O.
+        .target(
+            name: "HTTP3",
+            dependencies: ["HTTPCore", "QPACK", "HTTPConcurrency"]
+        ),
+        // M7 — the HTTP/3 conformance suite: the h3spec + RFC 9114/9204 catalog (pure data) plus the
+        // engine-driven drive-and-assert cases that go live as the engine lands.
         .testTarget(
-            name: "HTTP3Tests"
+            name: "HTTP3Tests",
+            dependencies: ["HTTP3", "QPACK", "HTTPCore", "HTTPTestSupport"]
         ),
         // RFC 6455 — the sans-I/O WebSocket engine: the §5.2 frame layer (FIN/RSV/opcode, the
         // 7/16/64-bit payload length, §5.3 masking), close codes (§7.4), and — layered on later — the
