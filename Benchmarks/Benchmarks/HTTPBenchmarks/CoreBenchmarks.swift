@@ -60,4 +60,21 @@ func registerCoreBenchmarks() {
             blackHole(fields.contentLength)
         }
     }
+
+    // The canonical HPACK/QPACK Huffman code (RFC 7541 §5.2 / App. B) — the bit-level codec shared by
+    // HTTP/2 and HTTP/3 header compression, and a prime SIMD/SWAR candidate.
+    Benchmark("core/Huffman/encode") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(Huffman.encode(sampleFieldValue))
+        }
+    }
+
+    Benchmark("core/Huffman/decode") { benchmark in
+        let encoded = Huffman.encode(sampleFieldValue)
+        for _ in benchmark.scaledIterations {
+            encoded.withUnsafeBytes { raw in
+                blackHole(try? Huffman.decode(raw.bytes))
+            }
+        }
+    }
 }

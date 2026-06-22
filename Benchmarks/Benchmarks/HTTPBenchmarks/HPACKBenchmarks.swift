@@ -55,4 +55,21 @@ func registerHPACKBenchmarks() {
             }
         }
     }
+
+    // RFC 7541 §2.3.2 — newest-first insertion into the dynamic table (the FIFO eviction store).
+    Benchmark("hpack/DynamicTable/add") { benchmark in
+        for _ in benchmark.scaledIterations {
+            var table = HPACKDynamicTable(maxSize: 4096)
+            for field in hpackFields { table.add(field) }
+            blackHole(table)
+        }
+    }
+
+    // RFC 7541 App. A — the O(1) static-table index lookup (first and last entries).
+    Benchmark("hpack/StaticTable/lookup") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(HPACKStaticTable.field(at: 2))  // :method GET
+            blackHole(HPACKStaticTable.field(at: HPACKStaticTable.count))  // last static entry
+        }
+    }
 }
