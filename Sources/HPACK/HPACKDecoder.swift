@@ -53,6 +53,10 @@ public struct HPACKDecoder {
             // Bound the running decoded list size before accepting the field (§4.1 sizing).
             if let field = fields.last { decodedSize += field.tableSize }
             guard decodedSize <= limits.maxHeaderListSize else { throw .headerListTooLarge }
+            // Bound the field *count* too: a swarm of tiny indexed references / Cookie crumbs
+            // (RFC 9113 §8.2.3) can stay under the byte budget yet exhaust per-field allocation —
+            // the header-count bomb (CVE-2016-6581 class). The byte limit alone misses it.
+            guard fields.count <= limits.maxFieldCount else { throw .tooManyFields }
         }
         return fields
     }

@@ -34,6 +34,22 @@ struct HPACKDecoderTests {
         try block.withUnsafeBytes { try decoder.decode($0.bytes) }
     }
 
+    @Test("a block past maxFieldCount is a decoding error — the header-count bomb (audit HP-F1)")
+    func tooManyFieldsIsRejected() {
+        // Four indexed `:method GET` references (0x82) against a 3-field cap — each is one octet, so
+        // the byte budget never trips; only the count limit catches it (RFC 9113 §8.2.3).
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4096, limits: HTTPLimits(maxFieldCount: 3))
+        #expect(throws: HPACKError.tooManyFields) {
+            _ = try self.decode(&decoder, [0x82, 0x82, 0x82, 0x82])
+        }
+    }
+
+    @Test("a block at exactly maxFieldCount still decodes (boundary)")
+    func atMaxFieldCountDecodes() throws {
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4096, limits: HTTPLimits(maxFieldCount: 3))
+        #expect(try decode(&decoder, [0x82, 0x82, 0x82]).count == 3)
+    }
+
     // The decoded request/response field lists are identical for the raw and Huffman variants.
     private let request1 = [
         HPACKField(name: ":method", value: "GET"), HPACKField(name: ":scheme", value: "http"),

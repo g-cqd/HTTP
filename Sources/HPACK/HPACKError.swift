@@ -33,4 +33,9 @@ public enum HPACKError: Error, Sendable, Equatable {
 
     /// The decoded header list exceeded the configured maximum — a decompression-bomb defense.
     case headerListTooLarge
+
+    /// The block decoded to more than ``HTTPLimits/maxFieldCount`` fields — a header-count bomb
+    /// (e.g. thousands of 1-octet indexed references or Cookie crumbs, RFC 9113 §8.2.3) that slips
+    /// under the byte budget. The byte-size limit alone cannot catch it (CVE-2016-6581 class).
+    case tooManyFields
 }
