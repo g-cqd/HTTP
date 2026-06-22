@@ -56,7 +56,9 @@ public final class POSIXKqueueConnection: TransportConnection {
             try await withCheckedThrowingContinuation { continuation in
                 let once = OnceResumer(continuation)
                 eventLoop.waitReadable(descriptor) {
-                    Self.readAvailable(descriptor: descriptor, maxLength: maxLength, into: once)
+                    Self.readAvailable(
+                        descriptor: descriptor, maxLength: maxLength, eventLoop: eventLoop,
+                        into: once)
                 }
             }
         } onCancel: {
@@ -91,16 +93,31 @@ public final class POSIXKqueueConnection: TransportConnection {
         eventLoop.closeDescriptor(descriptor)
     }
 
+    /// A non-blocking `read` reported it would block — re-arm readability rather than fail (audit T-F3).
+    private struct WouldBlockOnRead: Error {}
+
     private static func readAvailable(
-        descriptor: Int32, maxLength: Int, into once: OnceResumer<[UInt8]?>
+        descriptor: Int32, maxLength: Int, eventLoop: KqueueEventLoop,
+        into once: OnceResumer<[UInt8]?>
     ) {
         do {
-            let bytes = try POSIXSocket.readBuffer(maxLength: maxLength) { raw in
-                let count = read(descriptor, raw.baseAddress, raw.count)
-                guard count >= 0 else { throw TransportError.ioFailed("read errno \(errno)") }
-                return count
+            let bytes = try POSIXSocket.readBuffer(maxLength: maxLength) { raw -> Int in
+                while true {
+                    let count = read(descriptor, raw.baseAddress, raw.count)
+                    if count >= 0 { return count }
+                    // EINTR: interrupted by a signal before any data — retry the read. EAGAIN: a
+                    // spurious EVFILT_READ wakeup (data consumed elsewhere) — re-arm, don't fail.
+                    if errno == EINTR { continue }
+                    if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlockOnRead() }
+                    throw TransportError.ioFailed("read errno \(errno)")
+                }
             }
             once.resume(returning: bytes)  // nil == EOF (a zero-length read)
+        } catch is WouldBlockOnRead {
+            eventLoop.waitReadable(descriptor) {
+                readAvailable(
+                    descriptor: descriptor, maxLength: maxLength, eventLoop: eventLoop, into: once)
+            }
         } catch {
             once.resume(throwing: error)
         }
@@ -117,6 +134,8 @@ public final class POSIXKqueueConnection: TransportConnection {
                     descriptor, raw.baseAddress?.advanced(by: offset), raw.count - offset)
                 if written > 0 {
                     offset += written
+                } else if written < 0, errno == EINTR {
+                    continue  // interrupted by a signal before any byte — retry (audit T-F3)
                 } else if written < 0, errno == EWOULDBLOCK || errno == EAGAIN {
                     return .wouldBlock(offset: offset)
                 } else {
