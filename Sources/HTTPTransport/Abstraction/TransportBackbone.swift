@@ -53,6 +53,9 @@ public enum TransportError: Error, Sendable, Equatable {
     /// Binding or starting the listener failed, with a diagnostic message.
     case bindFailed(String)
 
+    /// A read or write on a connection failed, with a diagnostic message.
+    case ioFailed(String)
+
     /// The connection or listener has already been closed.
     case closed
 }
