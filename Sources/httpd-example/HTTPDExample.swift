@@ -45,9 +45,15 @@ struct HTTPDExample {
                 ConditionalRequestMiddleware(),  // ETag on the raw body, If-None-Match → 304
             ],
             terminatingAt: makeResponder())
+        // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
+        // QUIC/TLS); the server advertises it via Alt-Svc (RFC 7838) on the h1/h2 responses so a
+        // browser upgrades to h3 on the next request.
+        let quicTransport: (any QUICServerTransport)? =
+            tls != nil ? QUICTransportFactory.make(configuration) : nil
         let server = HTTPServer(
             transport: TransportFactory.make(configuration),
             responder: responder,
+            quicTransport: quicTransport,
             webSocketHandler: makeWebSocketEcho()
         )
 
@@ -58,9 +64,9 @@ struct HTTPDExample {
             print("httpd-example: try  curl -v --http2-prior-knowledge http://127.0.0.1:\(port)/")
         } else {
             print(
-                "httpd-example: serving HTTP/1.1 + HTTP/2 over TLS (ALPN) on "
+                "httpd-example: serving HTTP/1.1 + HTTP/2 + HTTP/3 over TLS (ALPN + Alt-Svc) on "
                     + "https://127.0.0.1:\(port) via \(backbone.rawValue)")
-            print("httpd-example: try  curl -vk --http2 https://127.0.0.1:\(port)/")
+            print("httpd-example: curl -vk --http2 https://127.0.0.1:\(port)/  (h3: a browser)")
         }
         do {
             try await server.run()
