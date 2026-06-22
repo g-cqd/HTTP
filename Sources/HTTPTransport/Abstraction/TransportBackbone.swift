@@ -73,16 +73,43 @@ public struct TransportTLS: Sendable {
     /// ALPN protocols to offer, most-preferred first (RFC 7301) — e.g. `["h2", "http/1.1"]`.
     public var applicationProtocols: [String]
 
-    /// Creates a TLS configuration from a PKCS#12 identity and the ALPN protocols to advertise.
+    /// The lowest TLS version to negotiate (RFC 9325 / BCP 195).
+    ///
+    /// Defaults to TLS 1.3.
+    public var minVersion: TLSVersion
+
+    /// The highest TLS version to negotiate.
+    ///
+    /// Defaults to TLS 1.3, pinning the ceiling (audit T-F5) so a future platform draft version
+    /// cannot be negotiated unintentionally.
+    public var maxVersion: TLSVersion
+
+    /// Creates a TLS configuration from a PKCS#12 identity, the ALPN protocols to advertise, and the
+    /// TLS version range (default: TLS 1.3-only).
     public init(
         pkcs12: [UInt8],
         passphrase: String,
-        applicationProtocols: [String] = ["h2", "http/1.1"]
+        applicationProtocols: [String] = ["h2", "http/1.1"],
+        minVersion: TLSVersion = .tlsV13,
+        maxVersion: TLSVersion = .tlsV13
     ) {
         self.pkcs12 = pkcs12
         self.passphrase = passphrase
         self.applicationProtocols = applicationProtocols
+        self.minVersion = minVersion
+        self.maxVersion = maxVersion
     }
+}
+
+/// A TLS protocol version, expressed backbone-agnostically (each backbone maps it to its platform
+/// TLS API).
+///
+/// TLS 1.3 is the strict default; 1.2 is the BCP 195 baseline for broader compatibility.
+public enum TLSVersion: Sendable, Equatable {
+    /// TLS 1.2 (RFC 5246) — the BCP 195 minimum baseline.
+    case tlsV12
+    /// TLS 1.3 (RFC 8446) — AEAD-only with forward secrecy; the strict default.
+    case tlsV13
 }
 
 /// Errors raised by a transport backbone.

@@ -66,21 +66,34 @@ enum NetworkFrameworkTLS {
     }
 
     /// Builds `NWProtocolTLS.Options` advertising `applicationProtocols` (ALPN, RFC 7301) and the
-    /// server `identity`, with a TLS 1.3 floor (RFC 8446; required for the h2/h3 secure path).
+    /// server `identity`, pinning the TLS version range (RFC 8446 / RFC 9325; default TLS 1.3-only).
     static func options(
         identity: sec_identity_t,
-        applicationProtocols: [String]
+        applicationProtocols: [String],
+        minVersion: TLSVersion = .tlsV13,
+        maxVersion: TLSVersion = .tlsV13
     ) -> NWProtocolTLS.Options {
         let options = NWProtocolTLS.Options()
         let security = options.securityProtocolOptions
         sec_protocol_options_set_local_identity(security, identity)
-        sec_protocol_options_set_min_tls_protocol_version(security, .TLSv13)
+        sec_protocol_options_set_min_tls_protocol_version(security, protocolVersion(minVersion))
+        // Pin the ceiling too (audit T-F5): without a max, a future OS draft/experimental version
+        // could be negotiated unintentionally (RFC 9325 / BCP 195 defense-in-depth).
+        sec_protocol_options_set_max_tls_protocol_version(security, protocolVersion(maxVersion))
         // ALPN strings are short ASCII tokens; `withCString` hands the C API a valid pointer for the
         // call's duration only — no retained pointer, no allocation beyond the transient buffer.
         for proto in applicationProtocols {
             proto.withCString { sec_protocol_options_add_tls_application_protocol(security, $0) }
         }
         return options
+    }
+
+    /// Maps a backbone-agnostic ``TLSVersion`` to the Security framework's `tls_protocol_version_t`.
+    private static func protocolVersion(_ version: TLSVersion) -> tls_protocol_version_t {
+        switch version {
+        case .tlsV12: .TLSv12
+        case .tlsV13: .TLSv13
+        }
     }
 
     /// The ALPN-negotiated application protocol of a ready `connection` (RFC 7301), or `nil` when the

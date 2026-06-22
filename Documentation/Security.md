@@ -60,6 +60,19 @@ ordering/dedup, lowercase field-name enforcement (§8.2.1), forbidden connection
 (`HTTP2Stream.swift`); and the **CONTINUATION flood guard (CVE-2024-27316)** — caps on
 CONTINUATION-frame count and cumulative block size → ENHANCE_YOUR_CALM
 (`HTTP2HeaderBlockAccumulator.swift`). Request body bounded by `maxBodySize` (`HTTP2Connection.swift`).
+Rapid-Reset *counter*, `maxConcurrentStreams` enforcement (→ REFUSED_STREAM), and inbound flow control
+are implemented (see the Pending note on the Rapid-Reset rolling window).
+
+### Audit-driven hardening (2026-06-22)
+Traced in `Documentation/audit/2026-06-22-standards-and-improvements-audit.md`:
+`SO_NOSIGPIPE` on every POSIX socket so a peer RST mid-`write` cannot kill the process (T-F1,
+POSIX.1-2017); a WebSocket `Origin` allowlist hook against cross-site WebSocket hijacking (WS-F1,
+RFC 6455 §10.2 / CWE-1385); an HPACK field-**count** cap closing the header-count bomb (HP-F1,
+RFC 9113 §8.2.3); a **resumable chunked decoder** removing the O(n²) re-decode DoS, plus a
+chunk-extension bound and trailer-field validation (H1-F1/F2/F3, RFC 9112 §7.1.1/§7.1.2); a global
+connection ceiling `maxConnections` (T-F2); kqueue `EINTR`/`EAGAIN` parity (T-F3); a pinned TLS
+**max** version with a configurable, 1.3-default range (T-F5, BCP 195); reject `Transfer-Encoding`
+on HTTP/1.0 + unknown TE → 501 (H1-F5); and outbound WebSocket Close-code validation (WS-F6, §7.4.1).
 
 ## Pending (tracked)
 
@@ -67,12 +80,15 @@ These are **not yet enforced** — do not rely on them until the referenced mile
 
 | Gap | Attack | Plan |
 |---|---|---|
-| **h1**: header-accumulation buffer is unbounded before the `CRLF CRLF` terminator (`HTTPServer.readRequest`) | memory exhaustion | cap at `maxRequestLineLength + maxHeaderListSize` → 431 *before* the terminator |
-| **h2**: HTTP/2 Rapid Reset | CVE-2023-44487 | RST churn counter enforcing `maxStreamResetsPerInterval` over `streamResetInterval` → GOAWAY |
-| **h2**: `maxConcurrentStreams` not enforced on inbound HEADERS (`HTTP2Connection`) | stream exhaustion | reject the (N+1)th open stream → REFUSED_STREAM |
-| **h2**: inbound flow control not enforced (`WINDOW_UPDATE` is a no-op) | unbounded buffering / sender stall | track the receive window and emit `WINDOW_UPDATE` |
-| Decompression ratio/size not enforced | content-coding bomb | when content-coding lands |
-| TLS/ALPN hardening | downgrade / weak ciphers | when TLS config lands (Network.framework) |
+| **h2**: the Rapid-Reset / control-frame budgets are monotonic counters that never decay (`streamResetInterval` / `NowProvider` unused) | CVE-2023-44487 (long-window bypass + false positives on long-lived conns) | make them rolling-window rate limiters via the existing `NowProvider` / `TestClock` seam |
+| **h2**: server-*emitted* RST_STREAM is not rate-counted | CVE-2025-8671 "MadeYouReset" (bypasses the reset counter) | charge the same reset budget when the engine emits RST_STREAM |
+| **h2**: closed-stream → PROTOCOL_ERROR not STREAM_CLOSED; trailers skip field/pseudo-header validation; a 2nd HEADERS without END_STREAM is a *connection* (not *stream*) error | RFC 9113 §5.1 / §8.1 conformance (staged as `withKnownIssue` F1/F2/F3) | remember recently-closed stream IDs; validate trailer fields; scope the trailer error per-stream |
+| **transport**: strict ALPN no-overlap rejection (the platform does not send `no_application_protocol`) | ALPACA-class cross-protocol confusion | reject a TLS connection that resolved to a nil / unadvertised protocol (T-F6) |
+| **transport(kqueue)**: a parked read/write continuation leaks when the fd is closed mid-wait | task/memory leak via the Slowloris-timeout path | drain pending resumers in `KqueueEventLoop.closeDescriptor` (T-F7) |
+| **ws**: the `inbound` drain uses `removeFirst` (O(n) per read) | quadratic CPU under dribbled frames | consumed-offset + compaction (WS-F4; performance lane) |
+| **h1**: no `Expect: 100-continue` handling | stalled compliant clients / pause-desync | emit interim `100 Continue` or `417` (H1-F4) |
 
-> Resolved since the first review: per-client connection cap (`maxConnectionsPerClient`) and the
-> HTTP/2 CONTINUATION flood guard (CVE-2024-27316) are now implemented.
+> Resolved since the first review (now implemented): per-client **and** global connection caps; the
+> CONTINUATION flood guard (CVE-2024-27316); the h1 header-accumulation cap; the HTTP/2 Rapid-Reset
+> *counter*, `maxConcurrentStreams`, and inbound flow control; TLS/ALPN with a TLS 1.3 floor **and**
+> pinned ceiling; decompression bounds (gzip middleware); and the 2026-06-22 audit-driven items above.

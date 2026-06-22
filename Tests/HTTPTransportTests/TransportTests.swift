@@ -33,6 +33,18 @@ struct TransportTests {
         #expect(ids == [TransportConnectionID(1), TransportConnectionID(2)])
     }
 
+    @Test("TransportTLS pins TLS 1.3-only by default, and stores a custom range (audit T-F5)")
+    func tlsVersionDefaults() {
+        let strict = TransportTLS(pkcs12: [], passphrase: "")
+        #expect(strict.minVersion == .tlsV13)
+        #expect(strict.maxVersion == .tlsV13)  // ceiling pinned, not left open to future drafts
+
+        let compat = TransportTLS(
+            pkcs12: [], passphrase: "", minVersion: .tlsV12, maxVersion: .tlsV13)
+        #expect(compat.minVersion == .tlsV12)
+        #expect(compat.maxVersion == .tlsV13)
+    }
+
     @Test("FakeConnection delivers inbound bytes then EOF, and records sent bytes")
     func fakeConnectionRoundTrip() async throws {
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array("ping".utf8))

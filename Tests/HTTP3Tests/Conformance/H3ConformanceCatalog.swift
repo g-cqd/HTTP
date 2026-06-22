@@ -226,7 +226,7 @@ enum H3Conformance {
             "a field line references an invalid static-table index",
             "QPACK_DECOMPRESSION_FAILED (0x0200)"),
         H3Check(
-            .h3spec, .qpack, "§4.1.3",
+            .h3spec, .qpack, "§4.1.3/§4.3.1",
             "a Set Dynamic Table Capacity above the limit", "QPACK_ENCODER_STREAM_ERROR (0x0201)"),
         H3Check(
             .h3spec, .qpack, "§4.2",
@@ -246,7 +246,7 @@ enum H3Conformance {
             .rfc9114, .http3, "§6.2.1",
             "the peer's control stream is closed", "H3_CLOSED_CRITICAL_STREAM (0x0104)"),
         H3Check(
-            .rfc9114, .http3, "§7.2.3",
+            .rfc9114, .http3, "§7.2.5",
             "a PUSH_PROMISE frame on the control stream", "H3_FRAME_UNEXPECTED (0x0105)"),
         H3Check(
             .rfc9114, .http3, "§5.2/§7.2.6",
@@ -276,6 +276,40 @@ enum H3Conformance {
             .rfc9204, .qpack, "§2.1.1",
             "a Required Insert Count beyond the blocked-streams limit",
             "QPACK_DECOMPRESSION_FAILED (0x0200)"),
+        // Frame-on-wrong-stream and sequence rules (RFC 9114 §4.1 / §7.2) the h3spec list omits.
+        H3Check(
+            .rfc9114, .http3, "§4.1",
+            "a DATA frame before any HEADERS on a request stream", "H3_FRAME_UNEXPECTED (0x0105)"),
+        H3Check(
+            .rfc9114, .http3, "§7.2.6",
+            "a GOAWAY frame on a request stream", "H3_FRAME_UNEXPECTED (0x0105)"),
+        H3Check(
+            .rfc9114, .http3, "§7.2.4",
+            "a SETTINGS frame on a request stream", "H3_FRAME_UNEXPECTED (0x0105)"),
+        H3Check(
+            .rfc9114, .http3, "§6.2.2",
+            "a server receives a client-initiated push stream",
+            "H3_STREAM_CREATION_ERROR (0x0103)"),
+        H3Check(
+            .rfc9114, .http3, "§7.2.3",
+            "a CANCEL_PUSH for a Push ID above MAX_PUSH_ID", "H3_ID_ERROR (0x0108)"),
+        // SETTINGS validity (RFC 9114 §7.2.4 / §7.2.4.1).
+        H3Check(
+            .rfc9114, .http3, "§7.2.4",
+            "a duplicate setting identifier in one SETTINGS frame", "H3_SETTINGS_ERROR (0x0109)"),
+        H3Check(
+            .rfc9114, .http3, "§7.2.4.1",
+            "a reserved HTTP/2 setting identifier (0x02/0x03/0x04/0x05)",
+            "H3_SETTINGS_ERROR (0x0109)"),
+        // The two QPACK error codes h3spec never triggers (RFC 9204 §3.1 / §4.4.3).
+        H3Check(
+            .rfc9204, .qpack, "§3.1",
+            "an encoder-stream instruction referencing an evicted entry",
+            "QPACK_ENCODER_STREAM_ERROR (0x0201)"),
+        H3Check(
+            .rfc9204, .qpack, "§4.4.3",
+            "an Insert Count Increment beyond what the encoder sent",
+            "QPACK_DECODER_STREAM_ERROR (0x0202)"),
     ]
 
     // MARK: RFC error-code registries (locked by H3SpecTests so the wire values cannot drift)

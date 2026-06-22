@@ -478,6 +478,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             .contentTooLarge
         case .unsupportedVersion:
             .httpVersionNotSupported
+        case .unsupportedTransferEncoding:
+            // A transfer coding the server doesn't understand (RFC 9112 §6.1; audit H1-F5).
+            .notImplemented
         default:
             .badRequest
         }

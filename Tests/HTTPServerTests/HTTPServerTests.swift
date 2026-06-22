@@ -59,6 +59,15 @@ struct HTTPServerTests {
         #expect(wire.hasPrefix("HTTP/1.1 400 Bad Request\r\n"))
     }
 
+    @Test("maps an unsupported Transfer-Encoding to 501 (RFC 9112 §6.1; audit H1-F5)")
+    func mapsUnsupportedTransferEncodingTo501() async {
+        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let wire = await serve(
+            request: "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: gzip\r\n\r\n",
+            responder: responder)
+        #expect(wire.hasPrefix("HTTP/1.1 501 "))
+    }
+
     @Test("keeps the connection alive and serves pipelined requests")
     func keepsConnectionAlive() async {
         let responder = ClosureResponder { request, _ in

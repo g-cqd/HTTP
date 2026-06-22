@@ -76,7 +76,7 @@ public enum RequestParser {
             throw .invalidHost
         }
 
-        let framing = try resolveFraming(headerFields, limits: limits)
+        let framing = try resolveFraming(headerFields, version: requestLine.version, limits: limits)
         let request = HTTPRequest(
             method: requestLine.method,
             authority: headerFields[.host],
@@ -91,9 +91,14 @@ public enum RequestParser {
     /// the final `chunked`.
     public static func resolveFraming(
         _ headerFields: HTTPFields,
+        version: HTTPVersion,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> BodyFraming {
         if headerFields.contains(.transferEncoding) {
+            // Chunked is an HTTP/1.1 feature (RFC 9112 §6.1); a Transfer-Encoding on a nominal
+            // HTTP/1.0 message is a classic front-end/back-end discrepancy used in request smuggling —
+            // reject it rather than honor a coding the version cannot carry (audit H1-F5).
+            guard version == .http11 else { throw .unsupportedTransferEncoding }
             guard !headerFields.contains(.contentLength) else {
                 throw .contentLengthWithTransferEncoding
             }
