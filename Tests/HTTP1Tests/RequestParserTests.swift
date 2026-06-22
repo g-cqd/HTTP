@@ -84,6 +84,16 @@ struct RequestParserTests {
         }
     }
 
+    @Test(
+        "rejects Transfer-Encoding on an HTTP/1.0 request (smuggling, RFC 9112 §6.1; audit H1-F5)")
+    func rejectsTransferEncodingOnHTTP10() {
+        // chunked is an HTTP/1.1 feature; honoring it on a 1.0 message is a desync vector.
+        #expect(throws: HTTP1ParseError.unsupportedTransferEncoding) {
+            try parse(
+                "POST / HTTP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n")
+        }
+    }
+
     @Test("accepts case-insensitive 'chunked' transfer-coding (RFC 9112 §7)")
     func acceptsCaseInsensitiveChunked() throws {
         let parsed = try parse(
