@@ -47,6 +47,7 @@ let package = Package(
         .library(name: "HTTPConcurrency", targets: ["HTTPConcurrency"]),
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HPACK", targets: ["HPACK"]),
+        .library(name: "QPACK", targets: ["QPACK"]),
         .library(name: "HTTP2", targets: ["HTTP2"]),
         .library(name: "WebSocket", targets: ["WebSocket"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
@@ -133,6 +134,19 @@ let package = Package(
         .testTarget(
             name: "HPACKTests",
             dependencies: ["HPACK", "HTTPTestSupport"]
+        ),
+        // RFC 9204 — QPACK header compression for HTTP/3. Mirrors HPACK: the §4.1.1 prefix integers,
+        // §4.1.2 string literals (the canonical Huffman code, shared from HTTPCore), the 99-entry
+        // 0-based static table (App. A), and the §4.5 field-line representations with the §4.5.1
+        // encoded field-section prefix. The dynamic table is disabled in v1 (capacity 0, RFC 9204
+        // §3.2.2) — static-table + literals only, so RIC is required to be 0. Sans-I/O.
+        .target(
+            name: "QPACK",
+            dependencies: ["HTTPCore"]
+        ),
+        .testTarget(
+            name: "QPACKTests",
+            dependencies: ["QPACK", "HTTPTestSupport"]
         ),
         // RFC 9113 — the sans-I/O HTTP/2 engine: frame layer (§4), connection preface (§3.4),
         // SETTINGS (§6.5), HEADERS field-block + request mapping (§6.2/§8.3) through HPACK, the stream
