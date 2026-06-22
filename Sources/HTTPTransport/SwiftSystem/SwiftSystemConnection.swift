@@ -5,13 +5,18 @@
 //  A TransportConnection over an accepted socket, using apple/swift-system's typed FileDescriptor
 //  for read/write/close (Errno errors). Blocking syscalls run on a per-connection *serial* queue so
 //  read/write/close never overlap (closing the fd from under an in-flight syscall — and the OS
-//  reusing that fd number — cannot happen); task cancellation closes the descriptor to unblock a
-//  stalled read.
+//  reusing that fd number — cannot happen).
 //
-//  Standards: read()/write()/close() per POSIX.1-2017 (IEEE Std 1003.1-2017). The byte stream is
-//  TCP (RFC 9293) over IPv4 (RFC 791).
+//  Task cancellation must NOT close via that serial queue: a blocked read already occupies the
+//  queue, so a queued close would deadlock behind it. Instead cancellation calls shutdown(2) directly
+//  (thread-safe, off-queue), which wakes the stalled read/write so the queue frees and the real
+//  close() then runs in order.
+//
+//  Standards: read()/write()/close()/shutdown() per POSIX.1-2017 (IEEE Std 1003.1-2017). The byte
+//  stream is TCP (RFC 9293) over IPv4 (RFC 791).
 //
 
+internal import Darwin
 internal import Dispatch
 internal import Synchronization
 internal import SystemPackage
@@ -69,7 +74,7 @@ public final class SwiftSystemConnection: TransportConnection {
                 }
             }
         } onCancel: {
-            closeDescriptor()
+            shutdownDescriptor()
         }
     }
 
@@ -90,7 +95,7 @@ public final class SwiftSystemConnection: TransportConnection {
                 }
             }
         } onCancel: {
-            closeDescriptor()
+            shutdownDescriptor()
         }
     }
 
@@ -103,6 +108,16 @@ public final class SwiftSystemConnection: TransportConnection {
         guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else { return }
         let descriptor = self.descriptor
         ioQueue.async { try? descriptor.close() }
+    }
+
+    /// Wakes a stalled `read`/`write` on cancellation via `shutdown(2)` — directly, off the serial
+    /// queue the blocking syscall occupies (a queued close would deadlock behind it).
+    ///
+    /// Skipped once `close()` has begun, so it can never act on a descriptor whose number the OS may
+    /// have recycled.
+    private func shutdownDescriptor() {
+        guard !isClosed.load(ordering: .acquiring) else { return }
+        _ = Darwin.shutdown(descriptor.rawValue, SHUT_RDWR)
     }
 
     /// Writes every byte of `bytes` to `descriptor`, advancing through a `RawSpan` and handling the

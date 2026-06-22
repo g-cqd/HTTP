@@ -77,15 +77,22 @@ public final class HTTPServer: Sendable {
         } catch {
             return false
         }
-        return !Self.shouldClose(request: request, response: response.head)
+        return !Self.shouldClose(
+            version: framed.parsed.version, request: request, response: response.head)
     }
 
     /// Reads from `connection`, accumulating into `buffer` until a complete request frames, EOF on a
-    /// request boundary (graceful), or a parse error.
+    /// request boundary (graceful), a timeout (idle / Slowloris — fail closed), or a parse error.
+    ///
+    /// Each receive is bounded by a phase-appropriate limit from ``HTTPLimits``: the keep-alive
+    /// timeout while idle between requests, a *cumulative* header-read deadline while the header
+    /// section is still arriving (so a byte-at-a-time Slowloris cannot reset it), and the idle timeout
+    /// while a body streams in (RFC 9112 §9.3; the limits are the defense-in-depth knobs).
     private func readRequest(
         from connection: any TransportConnection,
         into buffer: inout [UInt8]
     ) async throws -> ReadOutcome {
+        var headerDeadline: ContinuousClock.Instant?
         while true {
             switch parseStep(buffer) {
             case .complete(let parsed, let consumed):
@@ -95,12 +102,56 @@ public final class HTTPServer: Sendable {
             case .failed(let error):
                 throw error
             }
-            guard let chunk = try await connection.receive(maxLength: 16_384), !chunk.isEmpty else {
+            let chunk: [UInt8]?
+            do {
+                chunk = try await withTimeout(receiveTimeout(buffer, &headerDeadline)) {
+                    try await connection.receive(maxLength: 16_384)
+                }
+            } catch is TimeoutError {
+                return .cleanClose  // idle or slow-request timeout — close (Slowloris defense)
+            }
+            guard let chunk, !chunk.isEmpty else {
                 // EOF: graceful on a request boundary, truncation mid-request.
                 if buffer.isEmpty { return .cleanClose }
                 throw HTTP1ParseError.incompleteHeaders
             }
             buffer.append(contentsOf: chunk)
+        }
+    }
+
+    /// The deadline for the next receive, chosen by request phase (the ``HTTPLimits`` Slowloris knobs).
+    private func receiveTimeout(
+        _ buffer: [UInt8],
+        _ headerDeadline: inout ContinuousClock.Instant?
+    ) -> Duration {
+        if buffer.isEmpty { return limits.keepAliveTimeout }  // idle, awaiting the next request
+        guard !Self.headerSectionComplete(buffer) else { return limits.idleTimeout }  // body phase
+        let clock = ContinuousClock()
+        let deadline = headerDeadline ?? clock.now.advanced(by: limits.headerReadTimeout)
+        headerDeadline = deadline  // cumulative across the whole header section
+        return max(.zero, deadline - clock.now)
+    }
+
+    /// A sentinel for an operation that exceeded its deadline.
+    private struct TimeoutError: Error {}
+
+    /// Runs `operation`, cancelling it and throwing ``TimeoutError`` if it outlasts `duration`.
+    ///
+    /// The cancellation propagates to the connection's read (which honors it — closing the descriptor
+    /// to unblock a stalled syscall), so a stalled peer cannot pin the task past the deadline.
+    private func withTimeout<Value: Sendable>(
+        _ duration: Duration,
+        _ operation: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        try await withThrowingTaskGroup(of: Value.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: duration)
+                throw TimeoutError()
+            }
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else { throw TimeoutError() }
+            return result
         }
     }
 
@@ -195,20 +246,31 @@ public final class HTTPServer: Sendable {
 
     /// Whether the connection must close after this exchange.
     ///
-    /// A `close` connection-option on either the request or the response ends persistence
-    /// (RFC 9110 §7.6.1; RFC 9112 §9.6).
-    private static func shouldClose(request: HTTPRequest, response: HTTPResponse) -> Bool {
-        requestsClose(request.headerFields) || requestsClose(response.headerFields)
+    /// An explicit `close` connection-option on either message always ends persistence (RFC 9110
+    /// §7.6.1). Otherwise the default follows the request version (RFC 9112 §9.3): HTTP/1.1 persists,
+    /// while HTTP/1.0 closes unless the request asked to `keep-alive`.
+    private static func shouldClose(
+        version: HTTPVersion,
+        request: HTTPRequest,
+        response: HTTPResponse
+    ) -> Bool {
+        if connectionContains(request.headerFields, "close")
+            || connectionContains(response.headerFields, "close")
+        {
+            return true
+        }
+        if version.major == 1, version.minor >= 1 { return false }
+        return !connectionContains(request.headerFields, "keep-alive")
     }
 
-    /// Whether `fields` carries the `close` connection-option within the comma-separated
-    /// `Connection` list, matched case-insensitively (RFC 9110 §7.6.1).
-    private static func requestsClose(_ fields: HTTPFields) -> Bool {
+    /// Whether the `Connection` field's comma-separated list contains `option` (case-insensitive,
+    /// OWS-trimmed) — RFC 9110 §7.6.1.
+    private static func connectionContains(_ fields: HTTPFields, _ option: String) -> Bool {
         guard let value = fields[.connection] else { return false }
-        return value.split(separator: ",").contains { isCloseToken($0) }
+        return value.split(separator: ",").contains { normalizedToken($0) == option }
     }
 
-    private static func isCloseToken(_ option: Substring) -> Bool {
-        option.lowercased().filter { $0 != " " && $0 != "\t" } == "close"
+    private static func normalizedToken(_ option: Substring) -> String {
+        option.lowercased().filter { $0 != " " && $0 != "\t" }
     }
 }

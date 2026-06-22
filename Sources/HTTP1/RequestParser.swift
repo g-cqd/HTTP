@@ -37,7 +37,7 @@ public enum RequestParser {
             path: requestLine.target,
             headerFields: headerFields
         )
-        return ParsedRequest(request: request, body: body)
+        return ParsedRequest(request: request, body: body, version: requestLine.version)
     }
 
     /// Resolves the message body framing (RFC 9112 §6): Transfer-Encoding takes precedence over
