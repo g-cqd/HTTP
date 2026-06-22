@@ -64,4 +64,23 @@ struct FieldValueValidationTests {
         #expect(!FieldValidation.isFieldValueByte(0x7F))  // DEL rejected
         #expect(FieldValidation.isFieldValueByte(0x80))  // obs-text start allowed
     }
+
+    /// SWAR contiguous validation must match the per-octet classifier for every byte value.
+    ///
+    /// Places each value 0–255 at every lane offset — covering each of the eight word lanes and the
+    /// `< 8`-octet scalar tail — to guard the bit-trick against an off-by-one or a boundary slip.
+    @Test("SWAR contiguous validation matches the per-octet classifier for all 256 bytes × offsets")
+    func swarMatchesScalarForEveryByte() {
+        let filler: UInt8 = 0x61  // 'a', a valid VCHAR
+        for value in UInt8.min...UInt8.max {
+            for prefix in 0...17 {  // span the lanes + word/tail boundary
+                var bytes = [UInt8](repeating: filler, count: prefix)
+                bytes.append(value)
+                bytes.append(contentsOf: [UInt8](repeating: filler, count: 3))
+                #expect(
+                    FieldValidation.isValidFieldValue(bytes)
+                        == FieldValidation.isFieldValueByte(value))
+            }
+        }
+    }
 }

@@ -109,6 +109,16 @@ public struct ByteReader: ~Escapable {
     /// Returns the index of the first occurrence of `byte` at or after the current position.
     ///
     /// Returns `nil` if `byte` does not occur. Iterative; never advances the cursor or copies bytes.
+    ///
+    /// NOTE (measured, Phase 1.1): an 8-byte SWAR zero-byte scan (and a libc `memchr`) were A/B
+    /// benchmarked against this scalar loop and are **not** a clear win. HTTP/1.1 request lines and most
+    /// header lines are short (≈20–50 B), so the delimiter usually falls inside the first word, where a
+    /// SWAR word-load + mask + `trailingZeroBitCount` costs about as much as a few byte compares:
+    /// `core/ByteReader/readSlice-to-CRLF` stayed flat, `http1/HeaderParser/parse` improved ≈5% but
+    /// `http1/RequestLineParser/parse` regressed ≈2%, and the end-to-end `http1/RequestParser/realistic`
+    /// moved < 1% (noise). The scalar scan is the measured optimum for short delimiters; do not
+    /// "optimize" it into SWAR/`memchr` (the unaligned-load + endianness cost is not repaid here). Same
+    /// lesson as the rejected lookup table in ``FieldValidation/isTokenByte(_:)``.
     @inlinable
     public func firstIndex(of byte: UInt8) -> Int? {
         var index = offset
