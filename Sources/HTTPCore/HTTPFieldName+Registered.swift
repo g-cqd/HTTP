@@ -77,7 +77,8 @@ extension HTTPFieldName {
 
     // MARK: CORS (WHATWG Fetch — Cross-Origin Resource Sharing)
 
-    /// `Origin` (RFC 6454 §7) — the request's origin.
+    /// `Origin` (RFC 6454 §7) — the request's origin; also checked to defend WebSocket upgrades
+    /// against cross-site hijacking (RFC 6455 §10.2, CWE-1385).
     public static let origin = HTTPFieldName(unchecked: "origin")
     /// `Access-Control-Request-Method` — the method a CORS preflight asks about.
     public static let accessControlRequestMethod = HTTPFieldName(

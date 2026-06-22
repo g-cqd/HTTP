@@ -58,9 +58,38 @@ struct HTTPServerWebSocketTests {
         #expect(head.hasPrefix("HTTP/1.1 426 "))
     }
 
+    @Test("rejects a cross-site Origin with 403 and does not upgrade (CSWSH, RFC 6455 §10.2)")
+    func rejectsDisallowedOrigin() async throws {
+        let handler = ClosureWebSocketHandler(
+            isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] })
+        let connection = FakeConnection(
+            id: TransportConnectionID(3), inbound: upgradeRequest(origin: "https://evil.example"))
+        let server = HTTPServer(
+            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler)
+        await server.serve(connection)
+
+        let head = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        #expect(head.hasPrefix("HTTP/1.1 403 "))
+        #expect(!head.contains("101 Switching Protocols"))
+    }
+
+    @Test("accepts an allowlisted Origin and upgrades (RFC 6455 §4.2)")
+    func acceptsAllowlistedOrigin() async throws {
+        let handler = ClosureWebSocketHandler(
+            isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] })
+        let connection = FakeConnection(
+            id: TransportConnectionID(4), inbound: upgradeRequest(origin: "https://good.example"))
+        let server = HTTPServer(
+            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler)
+        await server.serve(connection)
+
+        let head = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        #expect(head.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
+    }
+
     // MARK: Fixtures
 
-    private func upgradeRequest() -> [UInt8] {
+    private func upgradeRequest(origin: String? = nil) -> [UInt8] {
         var wire = [UInt8]()
         wire += Array("GET /chat HTTP/1.1\r\n".utf8)
         wire += Array("Host: example.com\r\n".utf8)
@@ -68,6 +97,7 @@ struct HTTPServerWebSocketTests {
         wire += Array("Connection: Upgrade\r\n".utf8)
         wire += Array("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n".utf8)
         wire += Array("Sec-WebSocket-Version: 13\r\n".utf8)
+        if let origin { wire += Array("Origin: \(origin)\r\n".utf8) }
         wire += Array("\r\n".utf8)
         return wire
     }

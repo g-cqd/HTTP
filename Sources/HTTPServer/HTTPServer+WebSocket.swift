@@ -38,6 +38,14 @@ extension HTTPServer {
         handler: any WebSocketHandler,
         carryover: [UInt8]
     ) async {
+        // Cross-site WebSocket hijacking defense (RFC 6455 §10.2, CWE-1385): the handshake is exempt
+        // from the Same-Origin Policy and CORS, so reject a disallowed Origin with 403 before
+        // completing the upgrade. The default policy admits any origin; apps allowlist via the handler.
+        guard handler.isOriginAllowed(request.headerFields[.origin]) else {
+            let rejection = ResponseSerializer.serialize(HTTPResponse(status: .forbidden))
+            try? await connection.send(rejection)
+            return
+        }
         let accepted: HTTPResponse
         do {
             accepted = try WebSocketHandshake.response(to: request)
@@ -99,7 +107,11 @@ extension HTTPServer {
         guard let handler = webSocketHandler else { return }
         switch event {
         case .extendedConnect(let streamID, let request, let proto):
-            guard proto == "websocket", handler.shouldUpgrade(request) else { return }
+            // Same CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the
+            // tunnel, treated like a declined upgrade.
+            guard proto == "websocket", handler.shouldUpgrade(request),
+                handler.isOriginAllowed(request.headerFields[.origin])
+            else { return }
             try? engine.acceptTunnel(streamID)  // 200, no END_STREAM (RFC 8441 §5)
             webSockets[streamID] = WebSocketConnection(maxMessageSize: limits.maxBodySize)
         case .tunnelData(let streamID, let bytes):
