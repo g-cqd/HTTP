@@ -238,8 +238,10 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         var headerDeadline: C.Instant?
         var scanOffset = 0  // resumable end-of-headers scan (keeps header framing O(n), not O(n²))
         var pending: PendingRequest?  // the head, parsed once, then reused as the body arrives
+        // Resumable chunked-body decode kept across reads — O(n), not O(n²) (audit H1-F1).
+        var chunked = ChunkedProgress()
         while true {
-            switch assemble(buffer, scanOffset: &scanOffset, pending: &pending) {
+            switch assemble(buffer, scanOffset: &scanOffset, pending: &pending, chunked: &chunked) {
             case .request(let framed):
                 return .request(framed)
             case .incomplete:
@@ -281,7 +283,8 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     private func assemble(
         _ buffer: [UInt8],
         scanOffset: inout Int,
-        pending: inout PendingRequest?
+        pending: inout PendingRequest?,
+        chunked: inout ChunkedProgress
     ) -> AssembleStep {
         if pending == nil {
             guard Self.headerSectionEnd(buffer, from: &scanOffset) != nil else {
@@ -293,7 +296,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             }
         }
         guard let pending else { return .incomplete }
-        switch frameBody(buffer, pending) {
+        switch frameBody(buffer, pending, chunked: &chunked) {
         case .complete(let parsed, let consumed):
             return .request(FramedRequest(parsed: parsed, consumed: consumed))
         case .incomplete:
@@ -369,7 +372,8 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         case failed(HTTP1ParseError)
     }
 
-    private enum BodyStep {
+    // Internal (not private) so the chunked framing in HTTPServer+Chunked.swift can produce it.
+    enum BodyStep {
         case complete(ParsedRequest, consumed: Int)
         case incomplete
         case failed(HTTP1ParseError)
@@ -414,7 +418,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     }
 
     /// Frames the body against the already-parsed head, without re-parsing the head (RFC 9112 §6).
-    private func frameBody(_ buffer: [UInt8], _ pending: PendingRequest) -> BodyStep {
+    private func frameBody(
+        _ buffer: [UInt8], _ pending: PendingRequest, chunked: inout ChunkedProgress
+    ) -> BodyStep {
         let head = pending.head
         let start = pending.headerLength
         switch head.framing {
@@ -429,28 +435,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                 ParsedRequest(request: head.request, body: body, version: head.version),
                 consumed: start + length)
         case .chunked:
-            return frameChunkedBody(buffer, head: head, start: start)
-        }
-    }
-
-    /// Frames a chunked body from `start`, decoding only the body octets (never the head) until the
-    /// terminating zero-size chunk arrives (RFC 9112 §7.1).
-    private func frameChunkedBody(_ buffer: [UInt8], head: RequestHead, start: Int) -> BodyStep {
-        let outcome: Result<FramedRequest, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
-            Result { () throws(HTTP1ParseError) in
-                var reader = ByteReader(raw, startingAt: start)
-                let body = try ChunkedDecoder.decode(&reader, limits: limits)
-                let parsed = ParsedRequest(request: head.request, body: body, version: head.version)
-                return FramedRequest(parsed: parsed, consumed: reader.position)
-            }
-        }
-        switch outcome {
-        case .success(let framed):
-            return .complete(framed.parsed, consumed: framed.consumed)
-        case .failure(.incompleteBody), .failure(.incompleteHeaders):
-            return .incomplete
-        case .failure(let error):
-            return .failed(error)
+            return frameChunkedBody(buffer, head: head, start: start, chunked: &chunked)
         }
     }
 

@@ -57,6 +57,9 @@ public enum HTTP1ParseError: Error, Sendable, Equatable {
     /// A chunk was framed incorrectly — missing the CRLF around its data (RFC 9112 §7.1).
     case malformedChunk
 
+    /// The cumulative chunk-extension length exceeded the configured bound (RFC 9112 §7.1.1; → `400`).
+    case chunkExtensionTooLarge
+
     /// The decoded body exceeded ``HTTPLimits/maxBodySize`` (→ `413`).
     case bodyTooLarge
 
