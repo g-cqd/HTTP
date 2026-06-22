@@ -21,6 +21,7 @@
 import HTTPCore
 import HTTPServer
 import HTTPTransport
+import WebSocket
 
 @main
 struct HTTPDExample {
@@ -33,7 +34,8 @@ struct HTTPDExample {
             host: "127.0.0.1", port: port, backbone: backbone, tls: tls)
         let server = HTTPServer(
             transport: TransportFactory.make(configuration),
-            responder: makeResponder()
+            responder: makeResponder(),
+            webSocketHandler: makeWebSocketEcho()
         )
 
         if tls == nil {
@@ -72,6 +74,22 @@ struct HTTPDExample {
                 return text(.notFound, "Not Found\n")
             }
         }
+    }
+
+    /// A WebSocket echo handler on `/ws` (RFC 6455): every text/binary message is sent straight back.
+    private static func makeWebSocketEcho() -> ClosureWebSocketHandler {
+        ClosureWebSocketHandler(
+            shouldUpgrade: { $0.path == "/ws" },
+            handle: { event in
+                switch event {
+                case .message(let opcode, let payload):
+                    return opcode == .text
+                        ? [.sendText(String(decoding: payload, as: UTF8.self))]
+                        : [.sendBinary(payload)]
+                default:
+                    return []  // Ping is auto-answered by the engine; Pong/Close need no reply
+                }
+            })
     }
 
     /// Builds a `text/plain` response (RFC 9110 §8.3) carrying `message`.

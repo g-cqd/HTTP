@@ -12,6 +12,7 @@ internal import HTTP2
 public import HTTPCore
 public import HTTPTransport
 internal import Synchronization
+public import WebSocket
 
 /// An HTTP/1.1 · HTTP/2 server that drives an ``HTTPResponder`` over a ``ServerTransport``.
 ///
@@ -22,7 +23,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
 
     private let transport: any ServerTransport
     private let responder: any HTTPResponder
-    private let limits: HTTPLimits
+    /// Handles connections that upgrade to WebSocket (RFC 6455 §4), or nil to refuse upgrades.
+    let webSocketHandler: (any WebSocketHandler)?
+    let limits: HTTPLimits
     private let clock: C
 
     /// Active connection count per peer host, enforcing ``HTTPLimits/maxConnectionsPerClient``.
@@ -35,11 +38,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     public init(
         transport: any ServerTransport,
         responder: any HTTPResponder,
+        webSocketHandler: (any WebSocketHandler)? = nil,
         limits: HTTPLimits = .default,
         clock: C
     ) {
         self.transport = transport
         self.responder = responder
+        self.webSocketHandler = webSocketHandler
         self.limits = limits
         self.clock = clock
     }
@@ -189,6 +194,14 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         buffer.removeFirst(framed.consumed)  // carry any pipelined remainder to the next iteration
 
         let request = framed.parsed.request
+        // A WebSocket Upgrade request (RFC 6455 §4) the app accepts hands the connection to the
+        // WebSocket engine for its lifetime; the h1 keep-alive loop ends here.
+        if let handler = webSocketHandler, Self.isWebSocketUpgrade(request),
+            handler.shouldUpgrade(request)
+        {
+            await serveWebSocket(connection, request: request, handler: handler, carryover: buffer)
+            return false
+        }
         let response = await responder.respond(to: request, body: framed.parsed.body)
         // A response to HEAD repeats the GET header section but sends no body (RFC 9112 §6.3).
         let bytes = ResponseSerializer.serialize(
@@ -301,7 +314,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     ///
     /// The cancellation propagates to the connection's read (which honors it — closing the descriptor
     /// to unblock a stalled syscall), so a stalled peer cannot pin the task past the deadline.
-    private func withTimeout<Value: Sendable>(
+    func withTimeout<Value: Sendable>(
         _ duration: Duration,
         _ operation: @escaping @Sendable () async throws -> Value
     ) async throws -> Value {
@@ -498,9 +511,11 @@ extension HTTPServer where C == ContinuousClock {
     public convenience init(
         transport: any ServerTransport,
         responder: any HTTPResponder,
+        webSocketHandler: (any WebSocketHandler)? = nil,
         limits: HTTPLimits = .default
     ) {
         self.init(
-            transport: transport, responder: responder, limits: limits, clock: ContinuousClock())
+            transport: transport, responder: responder, webSocketHandler: webSocketHandler,
+            limits: limits, clock: ContinuousClock())
     }
 }

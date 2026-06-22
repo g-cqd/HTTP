@@ -52,9 +52,13 @@ public enum ResponseSerializer {
         appendReasonPhrase(for: response.status, to: &output)
         output.append(contentsOf: crlf)
 
-        // Auto-frame the body with Content-Length unless a framing header is already present.
+        // Auto-frame the body with Content-Length unless a framing header is already present, or the
+        // status forbids content — 1xx / 204 / 304 carry no body and MUST NOT be framed (RFC 9110
+        // §6.4.1), which is also what lets a 101 hand the connection cleanly to WebSocket.
         var fields = response.headerFields
-        if !fields.contains(.contentLength), !fields.contains(.transferEncoding) {
+        if !Self.forbidsContent(response.status), !fields.contains(.contentLength),
+            !fields.contains(.transferEncoding)
+        {
             fields.append("\(body.count)", for: .contentLength)
         }
         for field in fields {
@@ -68,6 +72,12 @@ public enum ResponseSerializer {
 
         if !omitBody { output.append(contentsOf: body) }
         return output
+    }
+
+    /// Whether `status` forbids a response body: 1xx Informational, 204 No Content, 304 Not Modified
+    /// (RFC 9110 §6.4.1) — none may carry Content-Length.
+    private static func forbidsContent(_ status: HTTPStatus) -> Bool {
+        (100..<200).contains(status.code) || status.code == 204 || status.code == 304
     }
 
     /// Appends a status code's three decimal digits (the code is an invariant `100...599`).

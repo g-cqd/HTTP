@@ -179,18 +179,20 @@ let package = Package(
         // prior-knowledge preface vs an HTTP/1.x request line). The routing DSL layers on top later.
         .target(
             name: "HTTPServer",
-            dependencies: ["HTTPCore", "HTTP1", "HTTP2", "HTTPTransport", "HTTPConcurrency"]
+            dependencies: [
+                "HTTPCore", "HTTP1", "HTTP2", "WebSocket", "HTTPTransport", "HTTPConcurrency",
+            ]
         ),
         .testTarget(
             name: "HTTPServerTests",
-            dependencies: ["HTTPServer", "HTTP2", "HPACK", "HTTPTestSupport"]
+            dependencies: ["HTTPServer", "HTTP2", "HPACK", "WebSocket", "HTTPTestSupport"]
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with
         // `swift run httpd-example [port] [backbone]` and `curl --http1.1`.
         .executableTarget(
             name: "httpd-example",
-            dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport"]
+            dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport", "WebSocket"]
         ),
     ]
 )
