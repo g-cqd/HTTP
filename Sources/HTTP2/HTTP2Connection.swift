@@ -50,6 +50,7 @@ public struct HTTP2Connection {
     private var streams: [HTTP2StreamID: StreamRecord] = [:]
     private var pendingHeadersEndStream = false
     private var lastPeerStreamID = HTTP2StreamID(0)
+    private var activeStreamResets = 0
     private var remoteSettings = HTTP2Settings()
     private let frameDecoder: HTTP2FrameDecoder
     private let localSettings: HTTP2Settings
@@ -270,6 +271,18 @@ public struct HTTP2Connection {
     ) throws(HTTP2Error) {
         guard frame.payload.count == 4 else {
             throw .connection(.frameSizeError, "RST_STREAM payload must be 4 octets")
+        }
+        guard frame.header.streamID != .connection, frame.header.streamID <= lastPeerStreamID else {
+            throw .connection(.protocolError, "RST_STREAM on an idle or connection-level stream")
+        }
+        // Resetting a stream the server is still working on is the Rapid Reset signature
+        // (CVE-2023-44487). A clock-free per-connection cap on such resets fails closed with
+        // ENHANCE_YOUR_CALM before the cheap-to-send / costly-to-process churn does damage.
+        if streams[frame.header.streamID] != nil {
+            activeStreamResets += 1
+            guard activeStreamResets <= limits.maxStreamResetsPerInterval else {
+                throw .connection(.enhanceYourCalm, "excessive stream resets (Rapid Reset)")
+            }
         }
         let code =
             UInt32(frame.payload[0]) << 24 | UInt32(frame.payload[1]) << 16

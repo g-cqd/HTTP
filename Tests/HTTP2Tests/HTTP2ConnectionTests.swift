@@ -60,6 +60,29 @@ struct HTTP2ConnectionTests {
             ], endStream: true)
     }
 
+    /// A HEADERS frame that opens a stream without END_STREAM (a body is still expected).
+    private func openStream(streamID: UInt32) -> [UInt8] {
+        headersFrame(
+            streamID: streamID,
+            fields: [
+                HPACKField(name: ":method", value: "POST"),
+                HPACKField(name: ":scheme", value: "https"),
+                HPACKField(name: ":path", value: "/"),
+                HPACKField(name: ":authority", value: "example.com"),
+            ], endStream: false)
+    }
+
+    private func rstStreamFrame(streamID: UInt32, code: UInt32 = 8) -> [UInt8] {
+        var out = [UInt8]()
+        HTTP2FrameHeader(payloadLength: 4, type: .rstStream, streamID: HTTP2StreamID(streamID))
+            .encode(into: &out)
+        out.append(contentsOf: [
+            UInt8((code >> 24) & 0xFF), UInt8((code >> 16) & 0xFF),
+            UInt8((code >> 8) & 0xFF), UInt8(code & 0xFF),
+        ])
+        return out
+    }
+
     // MARK: Handshake + request decoding
 
     @Test("performs the handshake and decodes a GET request")
@@ -175,6 +198,27 @@ struct HTTP2ConnectionTests {
             thrown = error.code
         } catch {}
         #expect(thrown == .protocolError)
+    }
+
+    @Test("excessive stream resets trigger ENHANCE_YOUR_CALM (Rapid Reset, CVE-2023-44487)")
+    func rapidReset() {
+        var connection = HTTP2Connection(limits: HTTPLimits(maxStreamResetsPerInterval: 5))
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        var streamID: UInt32 = 1
+        for _ in 0..<10 {  // open a stream then immediately reset it, ten times
+            wire += openStream(streamID: streamID)
+            wire += rstStreamFrame(streamID: streamID)
+            streamID += 2
+        }
+        var thrown: HTTP2ErrorCode?
+        do {
+            _ = try connection.receive(wire)
+        } catch let error as HTTP2Error {
+            thrown = error.code
+        } catch {}
+        #expect(thrown == .enhanceYourCalm)
     }
 
     // MARK: Response encoding
