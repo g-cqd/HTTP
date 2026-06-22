@@ -48,6 +48,7 @@ let package = Package(
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HPACK", targets: ["HPACK"]),
         .library(name: "HTTP2", targets: ["HTTP2"]),
+        .library(name: "WebSocket", targets: ["WebSocket"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
         .executable(name: "httpd-example", targets: ["httpd-example"]),
@@ -139,6 +140,17 @@ let package = Package(
         .testTarget(
             name: "HTTP2Tests",
             dependencies: ["HTTP2", "HPACK", "HTTPTestSupport"]
+        ),
+        // RFC 6455 — the sans-I/O WebSocket engine: the §5.2 frame layer (FIN/RSV/opcode, the
+        // 7/16/64-bit payload length, §5.3 masking), close codes (§7.4), and — layered on later — the
+        // §4 opening handshake over the HTTP/1.1 Upgrade (and RFC 9220 over HTTP/2). No sockets.
+        .target(
+            name: "WebSocket",
+            dependencies: ["HTTPCore"]
+        ),
+        .testTarget(
+            name: "WebSocketTests",
+            dependencies: ["WebSocket", "HTTPTestSupport"]
         ),
         // M3 — the I/O boundary. Four switchable backbones (Network.framework + three POSIX-level
         // variants) behind one abstraction, each isolated in its own subfolder. The only target
