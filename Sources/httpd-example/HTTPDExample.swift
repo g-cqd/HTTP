@@ -36,6 +36,7 @@ struct HTTPDExample {
         // consumer composes; reorder or replace any entry, or add their own `HTTPMiddleware`.
         let responder = MiddlewareChain(
             [
+                CompressionMiddleware(),
                 ServerHeaderMiddleware("httpd-example"),
                 AccessLogMiddleware { print("httpd-example: \($0)") },
                 CORSMiddleware(),
@@ -77,6 +78,9 @@ struct HTTPDExample {
                 return text(.ok, "Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 server.\n")
             case (.get, "/health"):
                 return text(.ok, "OK\n")
+            case (.get, "/large"):
+                // A large, compressible body to exercise the gzip middleware (curl --compressed).
+                return text(.ok, String(repeating: "from-scratch swift http server. ", count: 256))
             case (.post, "/echo"):
                 return ServerResponse(HTTPResponse(status: .ok), body: body)  // echo the body
             default:
