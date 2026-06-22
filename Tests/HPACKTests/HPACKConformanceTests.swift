@@ -71,7 +71,7 @@ struct HPACKConformanceTests {
     ) {
         #expect(throws: testCase.error) {
             var decoder = HPACKDecoder(maxDynamicTableSize: testCase.maxTable)
-            try testCase.bytes.withUnsafeBytes { try decoder.decode($0.bytes) }
+            _ = try testCase.bytes.withUnsafeBytes { try decoder.decode($0.bytes) }
         }
     }
 
