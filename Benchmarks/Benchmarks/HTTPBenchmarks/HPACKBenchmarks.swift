@@ -101,6 +101,24 @@ func registerHPACKBenchmarks() {
             }
         }
     }
+
+    // The server's response-encode side, cold: a fresh connection's first response — all literals +
+    // incremental indexing (Huffman-encode + a table insert per field).
+    Benchmark("hpack/response/encode-cold") { benchmark in
+        for _ in benchmark.scaledIterations {
+            var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+            blackHole(encoder.encode(realisticResponseFields))
+        }
+    }
+
+    // Steady state: the encoder table is warm, so the repeated response is emitted as indexed
+    // references (§6.1) — no Huffman encode, no insert. The mirror of request/decode-warm.
+    Benchmark("hpack/response/encode-warm") { benchmark in
+        var encoder = warmedResponseEncoder
+        for _ in benchmark.scaledIterations {
+            blackHole(encoder.encode(realisticResponseFields))
+        }
+    }
 }
 
 /// The realistic request re-encoded against a primed table, so it is a block of indexed references
@@ -119,4 +137,12 @@ private let warmedRequestDecoder: HPACKDecoder = {
     let primer = encoder.encode(realisticRequestFields)
     _ = primer.withUnsafeBytes { raw in try? decoder.decode(raw.bytes) }
     return decoder
+}()
+
+/// An encoder whose dynamic table is already primed by the first response, so re-encoding the same
+/// response yields indexed references (RFC 7541 §6.1) — re-encoding does not mutate the table.
+private let warmedResponseEncoder: HPACKEncoder = {
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+    _ = encoder.encode(realisticResponseFields)
+    return encoder
 }()

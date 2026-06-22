@@ -85,6 +85,19 @@ let realisticRequestFields = [
     HPACKField(name: "pragma", value: "no-cache"),
 ]
 
+/// A realistic JSON-API response header set — the server's encode side, mirroring the request set.
+let realisticResponseFields = [
+    HPACKField(name: ":status", value: "200"),
+    HPACKField(name: "content-type", value: "application/json; charset=utf-8"),
+    HPACKField(name: "content-length", value: "4096"),
+    HPACKField(name: "server", value: "http-swift/0.1"),
+    HPACKField(name: "date", value: "Sun, 22 Jun 2026 12:00:00 GMT"),
+    HPACKField(name: "cache-control", value: "private, max-age=0"),
+    HPACKField(name: "vary", value: "accept-encoding"),
+    HPACKField(name: "x-request-id", value: "a1b2c3d4-e5f6-7890-abcd-ef0123456789"),
+    HPACKField(name: "strict-transport-security", value: "max-age=31536000; includeSubDomains"),
+]
+
 // MARK: - HTTP/2 fixtures (a DATA frame: length=8, type=0x0, flags=0, stream=1, + 8 payload octets)
 
 let http2FrameHeaderBytes: [UInt8] = [0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
@@ -99,3 +112,6 @@ let transportPayload = Array("ping-pong-loopback-throughput-probe".utf8)
 // MARK: - WebSocket payload (≤125 octets, so the 7-bit length form applies; RFC 6455 §5.2)
 
 let webSocketPayload = Array("the quick brown fox jumps over the lazy dog".utf8)
+
+/// A 4 KiB payload — exercises the 16-bit extended length form and the per-byte unmask loop at scale.
+let webSocketLargePayload = [UInt8](repeating: 0x61, count: 4096)
