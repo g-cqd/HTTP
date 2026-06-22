@@ -24,4 +24,13 @@ public enum HPACKError: Error, Sendable, Equatable {
 
     /// A Huffman-coded string failed to decode: EOS in input, bad padding, or an invalid code (§5.2).
     case invalidHuffman
+
+    /// A representation referenced an index that addresses no table entry (RFC 7541 §2.3.3).
+    case invalidIndex
+
+    /// A dynamic table size update exceeded the protocol-negotiated maximum (RFC 7541 §6.3).
+    case invalidTableSizeUpdate
+
+    /// The decoded header list exceeded the configured maximum — a decompression-bomb defense.
+    case headerListTooLarge
 }
