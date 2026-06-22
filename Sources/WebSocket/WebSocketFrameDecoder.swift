@@ -61,10 +61,11 @@ public struct WebSocketFrameDecoder {
         reader.advance(by: headerLength)
         let start = reader.position
         reader.advance(by: payloadLength)
-        var payload = reader.slice(in: start..<(start + payloadLength)).withUnsafeBytes {
-            Array($0)
+        let payload = reader.slice(in: start..<(start + payloadLength)).withUnsafeBytes {
+            source in
+            if let maskKey { return Self.unmaskedCopy(of: source, with: maskKey) }
+            return Array(source)
         }
-        if let maskKey { Self.unmask(&payload, with: maskKey) }
         return WebSocketFrame(isFinal: isFinal, opcode: opcode, payload: payload)
     }
 
@@ -104,16 +105,42 @@ public struct WebSocketFrameDecoder {
         return (a, b, c, d)
     }
 
-    /// Unmasks `payload` in place: `payload[i] ^= key[i mod 4]` (RFC 6455 §5.3).
-    private static func unmask(_ payload: inout [UInt8], with key: (UInt8, UInt8, UInt8, UInt8)) {
-        let bytes = (key.0, key.1, key.2, key.3)
-        for index in payload.indices {
-            switch index & 0x3 {
-            case 0: payload[index] ^= bytes.0
-            case 1: payload[index] ^= bytes.1
-            case 2: payload[index] ^= bytes.2
-            default: payload[index] ^= bytes.3
+    /// Returns the unmasked copy of `source`: `out[i] = source[i] ^ key[i % 4]` (RFC 6455 §5.3).
+    ///
+    /// One pass, 16 octets at a time via `SIMD16<UInt8>` — the 4-octet key repeated four times is
+    /// phase-aligned (16 % 4 == 0), so each vector XOR applies the correct key byte to every lane; a
+    /// scalar loop finishes the final < 16 octets. Fused with the slice copy, so the payload is
+    /// touched once instead of being copied and then re-scanned. (A `UInt64` SWAR variant measured
+    /// equivalent — both are bounded by `loadUnaligned`/`storeBytes`, not the lane width.)
+    private static func unmaskedCopy(
+        of source: UnsafeRawBufferPointer,
+        with key: (UInt8, UInt8, UInt8, UInt8)
+    ) -> [UInt8] {
+        let count = source.count
+        let keyVector = SIMD16<UInt8>(
+            key.0, key.1, key.2, key.3, key.0, key.1, key.2, key.3,
+            key.0, key.1, key.2, key.3, key.0, key.1, key.2, key.3)
+        return [UInt8](unsafeUninitializedCapacity: count) { destination, initialized in
+            let raw = UnsafeMutableRawBufferPointer(destination)
+            var index = 0
+            while index + 16 <= count {
+                let chunk = source.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
+                raw.storeBytes(of: chunk ^ keyVector, toByteOffset: index, as: SIMD16<UInt8>.self)
+                index += 16
             }
+            // Scalar tail (< 16 octets); index stays a multiple of 16, so the key phase holds.
+            while index < count {
+                let keyByte: UInt8
+                switch index & 0x3 {
+                case 0: keyByte = key.0
+                case 1: keyByte = key.1
+                case 2: keyByte = key.2
+                default: keyByte = key.3
+                }
+                destination[index] = source[index] ^ keyByte
+                index += 1
+            }
+            initialized = count
         }
     }
 }
