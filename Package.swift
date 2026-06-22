@@ -141,6 +141,13 @@ let package = Package(
             name: "HTTP2Tests",
             dependencies: ["HTTP2", "HPACK", "HTTPTestSupport"]
         ),
+        // M7 (planned) — RFC 9114 (HTTP/3) + RFC 9204 (QPACK) over QUIC. The engine is not built yet;
+        // this is a test-only conformance scaffold that carries the h3spec + RFC 9114/9204 catalog so
+        // the suite is staged and turns green incrementally as M7 lands. No source target and no product
+        // dependency — the catalog is pure data validated with Testing; engine-driven cases are disabled.
+        .testTarget(
+            name: "HTTP3Tests"
+        ),
         // RFC 6455 — the sans-I/O WebSocket engine: the §5.2 frame layer (FIN/RSV/opcode, the
         // 7/16/64-bit payload length, §5.3 masking), close codes (§7.4), and — layered on later — the
         // §4 opening handshake over the HTTP/1.1 Upgrade (and RFC 9220 over HTTP/2). No sockets.
