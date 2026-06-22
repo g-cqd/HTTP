@@ -115,16 +115,15 @@ public final class POSIXDispatchTransport: ServerTransport {
             POSIXSocket.setNonBlocking(clientFD)
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
             let id = connectionIDs.next()
-            let channel = DispatchIO(type: .stream, fileDescriptor: clientFD, queue: ioQueue) { _ in
-                close(clientFD)
-            }
-            // Deliver bytes as soon as ≥1 is available, rather than buffering to the read length —
-            // otherwise a `read(length:)` blocks until the buffer fills or the peer half-closes.
-            channel.setLimit(lowWater: 1)
+            // A per-connection *serial* queue targeting the shared concurrent pool: it serializes this
+            // connection's read/write readiness handling and close (so a close never races a syscall on
+            // the fd), while still spreading connections across the pool's threads.
+            let connectionQueue = DispatchQueue(
+                label: "http.transport.posix-dispatch.conn", target: ioQueue)
             continuation.yield(
                 POSIXDispatchConnection(
-                    id: id, channel: channel,
-                    peer: POSIXSocket.peerAddress(from: address), queue: ioQueue))
+                    id: id, descriptor: clientFD,
+                    peer: POSIXSocket.peerAddress(from: address), queue: connectionQueue))
         }
     }
 }
