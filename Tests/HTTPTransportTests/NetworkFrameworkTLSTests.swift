@@ -8,6 +8,7 @@
 //
 
 internal import Dispatch
+import HTTPTestSupport
 internal import Network
 internal import Security
 import Testing
@@ -19,18 +20,38 @@ struct NetworkFrameworkTLSTests {
 
     @Test("a dev self-signed identity imports through SecPKCS12Import (PKCS#12 round-trip)")
     func devIdentityImports() throws {
-        let tls = try DevTLSIdentity.selfSigned(commonName: "localhost", passphrase: "round-trip")
+        let tls = try SharedDevTLSIdentity.value()
         #expect(!tls.pkcs12.isEmpty)
         #expect(tls.applicationProtocols.contains("h2"))
         // The blob must import into a sec_identity — the exact path the server takes on bind.
         _ = try NetworkFrameworkTLS.identity(pkcs12: tls.pkcs12, passphrase: tls.passphrase)
     }
 
+    @Test("concurrent PKCS#12 imports all succeed — SecPKCS12Import is serialized, not raced")
+    func concurrentImportsAreSerialized() async throws {
+        let tls = try SharedDevTLSIdentity.value()
+        // SecPKCS12Import is not thread-safe; the backbone serializes it. Fan many imports out at
+        // once: every one must succeed. Without the lock this races intermittently with an
+        // internal/MAC error (the flake this guards against) — here it is deterministic.
+        let count = 32
+        let succeeded = await withTaskGroup(of: Bool.self) { group in
+            for _ in 0..<count {
+                group.addTask {
+                    let identity = try? NetworkFrameworkTLS.identity(
+                        pkcs12: tls.pkcs12, passphrase: tls.passphrase)
+                    return identity != nil
+                }
+            }
+            return await group.reduce(into: 0) { $0 += $1 ? 1 : 0 }
+        }
+        #expect(succeeded == count)
+    }
+
     @Test(
         "negotiates ALPN h2 over TLS and reports it on the accepted connection",
         .timeLimit(.minutes(1)))
     func negotiatesHTTP2OverTLS() async throws {
-        let tls = try DevTLSIdentity.selfSigned()
+        let tls = try SharedDevTLSIdentity.value()
         let transport = NetworkFrameworkTransport(
             configuration: TransportConfiguration(port: 0, backbone: .networkFramework, tls: tls))
         let connections = try await transport.start()

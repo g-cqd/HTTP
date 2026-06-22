@@ -16,19 +16,33 @@
 internal import Foundation
 internal import Network
 internal import Security
+internal import Synchronization
 
 /// Safe Swift wrappers over the Security/Network C TLS APIs used by the Network backbone.
 enum NetworkFrameworkTLS {
+
+    /// Serializes `SecPKCS12Import`, which is not thread-safe: concurrent calls intermittently fail
+    /// with an internal/MAC error (`errSecPkcs12VerifyFailure`).
+    ///
+    /// A server imports its identity once at listener start, so the lock is uncontended in production
+    /// — it costs nothing and removes a race that only surfaces when many TLS handshakes are set up at
+    /// once (e.g. a parallel test suite).
+    private static let importLock = Mutex<Void>(())
 
     /// Imports a PKCS#12 (RFC 7292) blob into a `sec_identity_t`, failing closed on any error.
     ///
     /// Wraps `SecPKCS12Import` + `sec_identity_create`: a non-success `OSStatus`, a blob with no
     /// identity, a value that is not a `SecIdentity`, or a `nil` `sec_identity_t` each surface as a
-    /// `TransportError.tlsConfigurationFailed` rather than a force-cast or a silent `nil`.
+    /// `TransportError.tlsConfigurationFailed` rather than a force-cast or a silent `nil`. The import
+    /// step is serialized (see ``importLock``).
     static func identity(pkcs12: [UInt8], passphrase: String) throws -> sec_identity_t {
         let options = [kSecImportExportPassphrase as String: passphrase] as CFDictionary
-        var rawItems: CFArray?
-        let status = SecPKCS12Import(Data(pkcs12) as CFData, options, &rawItems)
+        // `SecPKCS12Import` is serialized (see `importLock`). `rawItems` is local to this call and
+        // only written inside the lock, so reading it afterwards is sound — hence `nonisolated(unsafe)`.
+        nonisolated(unsafe) var rawItems: CFArray?
+        let status = importLock.withLock { _ in
+            SecPKCS12Import(Data(pkcs12) as CFData, options, &rawItems)
+        }
         guard status == errSecSuccess else {
             throw TransportError.tlsConfigurationFailed(
                 "SecPKCS12Import failed (OSStatus \(status))")
