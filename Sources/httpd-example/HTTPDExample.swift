@@ -48,15 +48,18 @@ struct HTTPDExample {
 
     private static func makeResponder() -> ClosureResponder {
         ClosureResponder { request, body in
-            switch (request.method, request.path) {
+            // HEAD is GET without a body; the server strips the body, so route the two together
+            // (RFC 9110 §9.3.2).
+            let method: HTTPMethod = request.method == .head ? .get : request.method
+            switch (method, request.path) {
             case (.get, "/"):
-                text(.ok, "Hello from a from-scratch, NIO-free HTTP/1.1 server.\n")
+                return text(.ok, "Hello from a from-scratch, NIO-free HTTP/1.1 server.\n")
             case (.get, "/health"):
-                text(.ok, "OK\n")
+                return text(.ok, "OK\n")
             case (.post, "/echo"):
-                ServerResponse(HTTPResponse(status: .ok), body: body)  // echo the request body
+                return ServerResponse(HTTPResponse(status: .ok), body: body)  // echo the body
             default:
-                text(.notFound, "Not Found\n")
+                return text(.notFound, "Not Found\n")
             }
         }
     }

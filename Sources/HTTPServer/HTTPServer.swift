@@ -67,14 +67,17 @@ public final class HTTPServer: Sendable {
         guard case .request(let framed) = outcome else { return false }  // clean EOF on a boundary
         buffer.removeFirst(framed.consumed)  // carry any pipelined remainder to the next iteration
 
-        let response = await responder.respond(to: framed.parsed.request, body: framed.parsed.body)
-        let bytes = ResponseSerializer.serialize(response.head, body: response.body)
+        let request = framed.parsed.request
+        let response = await responder.respond(to: request, body: framed.parsed.body)
+        // A response to HEAD repeats the GET header section but sends no body (RFC 9112 §6.3).
+        let bytes = ResponseSerializer.serialize(
+            response.head, body: response.body, omitBody: request.method == .head)
         do {
             try await connection.send(bytes)
         } catch {
             return false
         }
-        return !Self.shouldClose(request: framed.parsed.request, response: response.head)
+        return !Self.shouldClose(request: request, response: response.head)
     }
 
     /// Reads from `connection`, accumulating into `buffer` until a complete request frames, EOF on a
@@ -167,7 +170,10 @@ public final class HTTPServer: Sendable {
         for error: HTTP1ParseError,
         to connection: any TransportConnection
     ) async {
-        let bytes = ResponseSerializer.serialize(HTTPResponse(status: Self.status(for: error)))
+        var response = HTTPResponse(status: Self.status(for: error))
+        // The server fails closed on a parse error, so it tells the peer (RFC 9112 §9.6).
+        response.headerFields.append("close", for: .connection)
+        let bytes = ResponseSerializer.serialize(response)
         try? await connection.send(bytes)
     }
 

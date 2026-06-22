@@ -33,9 +33,17 @@ public enum ResponseSerializer {
     ]
 
     /// Serializes `response` and `body` into a complete HTTP/1.1 response message.
-    public static func serialize(_ response: HTTPResponse, body: [UInt8] = []) -> [UInt8] {
+    ///
+    /// When `omitBody` is `true` the body octets are not written, but `Content-Length` is still
+    /// framed from `body.count` — the response to a `HEAD` request carries the same header section
+    /// as the equivalent `GET` would, with no body (RFC 9112 §6.3).
+    public static func serialize(
+        _ response: HTTPResponse,
+        body: [UInt8] = [],
+        omitBody: Bool = false
+    ) -> [UInt8] {
         var output = [UInt8]()
-        output.reserveCapacity(64 + body.count)
+        output.reserveCapacity(64 + (omitBody ? 0 : body.count))
 
         // Status-line: HTTP-version SP status-code SP [ reason-phrase ] CRLF (RFC 9112 §3.1).
         output.append(contentsOf: statusLinePrefix)
@@ -58,7 +66,7 @@ public enum ResponseSerializer {
         }
         output.append(contentsOf: crlf)  // blank line terminates the header section
 
-        output.append(contentsOf: body)
+        if !omitBody { output.append(contentsOf: body) }
         return output
     }
 

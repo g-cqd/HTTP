@@ -33,6 +33,14 @@ struct ResponseSerializerTests {
         #expect(wire == "HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n")
     }
 
+    @Test("omits the body but keeps the equivalent Content-Length (HEAD, RFC 9112 §6.3)")
+    func omitsBodyForHead() {
+        let bytes = ResponseSerializer.serialize(
+            HTTPResponse(status: .ok), body: Array("0123456789".utf8), omitBody: true)
+        let wire = String(decoding: bytes, as: UTF8.self)
+        #expect(wire == "HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\n")
+    }
+
     @Test("does not override an explicit Content-Length")
     func explicitContentLength() {
         var fields = HTTPFields()
