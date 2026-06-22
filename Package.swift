@@ -46,6 +46,7 @@ let package = Package(
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HPACK", targets: ["HPACK"]),
+        .library(name: "HTTP2", targets: ["HTTP2"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
         .executable(name: "httpd-example", targets: ["httpd-example"]),
@@ -84,6 +85,17 @@ let package = Package(
         .testTarget(
             name: "HPACKTests",
             dependencies: ["HPACK"]
+        ),
+        // RFC 9113 — the sans-I/O HTTP/2 engine: frame layer (§4), connection preface (§3.4),
+        // SETTINGS (§6.5), stream state machine (§5.1), flow control (§5.2), and HEADERS/CONTINUATION
+        // assembly through HPACK. Includes the Rapid Reset / CONTINUATION-flood defenses.
+        .target(
+            name: "HTTP2",
+            dependencies: ["HTTPCore", "HPACK"]
+        ),
+        .testTarget(
+            name: "HTTP2Tests",
+            dependencies: ["HTTP2"]
         ),
         // M3 — the I/O boundary. Four switchable backbones (Network.framework + three POSIX-level
         // variants) behind one abstraction, each isolated in its own subfolder. The only target
