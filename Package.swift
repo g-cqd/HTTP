@@ -46,6 +46,7 @@ let package = Package(
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
+        .library(name: "HTTPServer", targets: ["HTTPServer"]),
     ],
     dependencies: [
         // apple/swift-system — typed, SwiftNIO-free wrappers over POSIX file/socket descriptors,
@@ -84,6 +85,16 @@ let package = Package(
         .testTarget(
             name: "HTTPTransportTests",
             dependencies: ["HTTPTransport"]
+        ),
+        // M4 — the server runtime: wires a transport backbone to the HTTP/1.1 engine via an
+        // HTTPResponder, fanning connections out across cores. The routing DSL layers on top later.
+        .target(
+            name: "HTTPServer",
+            dependencies: ["HTTPCore", "HTTP1", "HTTPTransport"]
+        ),
+        .testTarget(
+            name: "HTTPServerTests",
+            dependencies: ["HTTPServer"]
         ),
     ]
 )
