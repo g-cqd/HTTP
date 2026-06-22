@@ -55,13 +55,20 @@ public struct HTTP2Connection {
     private let frameDecoder: HTTP2FrameDecoder
     private let localSettings: HTTP2Settings
     private let limits: HTTPLimits
+    /// The concurrent-stream cap advertised to and enforced against the peer (RFC 9113 §5.1.2).
+    private let maxConcurrentStreams: Int
 
     /// Creates a connection that advertises `localSettings`, queuing the server SETTINGS preface (§3.4).
     public init(localSettings: HTTP2Settings = HTTP2Settings(), limits: HTTPLimits = .default) {
         // A server MUST NOT advertise ENABLE_PUSH with a non-zero value (RFC 9113 §6.5.2).
         var advertised = localSettings
         advertised.enablePush = false
+        // Advertise + enforce a concurrent-stream cap (RFC 9113 §5.1.2); default to the limits knob.
+        if advertised.maxConcurrentStreams == nil {
+            advertised.maxConcurrentStreams = limits.maxConcurrentStreams
+        }
         self.localSettings = advertised
+        self.maxConcurrentStreams = advertised.maxConcurrentStreams ?? limits.maxConcurrentStreams
         self.limits = limits
         self.decoder = HPACKDecoder(
             maxDynamicTableSize: advertised.headerTableSize, limits: limits)
@@ -240,6 +247,13 @@ public struct HTTP2Connection {
         lastPeerStreamID = streamID
 
         let fields = try decodeHeaderBlock(block)
+        // Refuse a stream past the concurrency cap (RFC 9113 §5.1.2). The block was still HPACK-
+        // decoded above so the dynamic table stays in sync; RST_STREAM(REFUSED_STREAM) keeps the
+        // connection alive instead of opening the stream.
+        guard streams.count < maxConcurrentStreams else {
+            writeRstStream(streamID, code: .refusedStream)
+            return
+        }
         let request = try HTTP2RequestMapper.makeRequest(from: fields, streamID: streamID)
         var stream = HTTP2Stream(id: streamID)
         try stream.receiveHeaders(endStream: endStream)
@@ -371,5 +385,16 @@ public struct HTTP2Connection {
             payloadLength: payload.count, type: type, flags: flags, streamID: streamID)
         header.encode(into: &output)
         output.append(contentsOf: payload)
+    }
+
+    /// Queues an RST_STREAM frame carrying `code` for `streamID` (RFC 9113 §6.4).
+    private mutating func writeRstStream(_ streamID: HTTP2StreamID, code: HTTP2ErrorCode) {
+        let raw = code.rawValue
+        writeFrame(
+            .rstStream, streamID: streamID,
+            payload: [
+                UInt8((raw >> 24) & 0xFF), UInt8((raw >> 16) & 0xFF),
+                UInt8((raw >> 8) & 0xFF), UInt8(raw & 0xFF),
+            ])
     }
 }

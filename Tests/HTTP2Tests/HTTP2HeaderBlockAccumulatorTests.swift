@@ -86,9 +86,9 @@ struct HTTP2HeaderBlockAccumulatorTests {
             } == .enhanceYourCalm)
     }
 
-    private func errorCode(_ body: () throws -> Void) -> HTTP2ErrorCode? {
+    private func errorCode<T>(_ body: () throws -> T) -> HTTP2ErrorCode? {
         do {
-            try body()
+            _ = try body()
             return nil
         } catch let error as HTTP2Error {
             return error.code

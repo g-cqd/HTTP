@@ -4,8 +4,12 @@ A from-scratch, **SwiftNIO-free** HTTP/1.1 · HTTP/2 · HTTP/3 server library fo
 platforms, written in Swift 6.4 and built directly on **Network.framework**. It is designed
 to be a small, reusable **API package** that other projects embed.
 
-> **Status:** Work in progress (TDD, milestone-by-milestone). M0 (scaffold + tooling) is in
-> place; `HTTPCore` is under construction. See the milestone list below.
+> **Status:** Work in progress (TDD, milestone-by-milestone). `HTTPCore`, the HTTP/1.1 engine,
+> HPACK, the four transport backbones, and an HTTP/1.1 server runtime are in place. The HTTP/2
+> sans-I/O connection engine receives requests end-to-end (preface, SETTINGS, HEADERS/CONTINUATION
+> with the flood guard, HPACK, DATA, and the §5.1 stream state machine); response encoding, inbound
+> flow control, the Rapid Reset defense, and transport/ALPN wiring are in active development. The
+> routing DSL is not built yet. See the milestone list below for implemented vs planned.
 
 ## Why
 
@@ -24,15 +28,19 @@ to be a small, reusable **API package** that other projects embed.
 | **No recursion** | All parsers/tries/Huffman decoders are explicit iterative loops — no stack exhaustion on adversarial input. |
 | **Strict safety** | Swift 6 complete concurrency, value types, typed `throws`; no force-unwrap / force-cast / IUO (lint-enforced). |
 | **Zero-copy first** | Parsing runs over borrowed buffers via a bounds-checked `ByteReader` that returns offsets/ranges — never intermediate copies. Bytes become owned values only when they must outlive the receive buffer. |
-| **Multithreaded** | Work scales across cores: per-connection actors run concurrently, the accept loop fans out over a task group / multiple `NWListener` queues, and the hot path holds no global locks. |
+| **Multithreaded** | Work scales across cores: each connection is served by its own `Task` off a discarding task group, and the hot path holds no global locks — per-connection state is isolated and guarded by `Mutex`/`Atomic` from `Synchronization`. |
 | **Minimal allocation** | Reused scratch space and ring-buffer compression tables on top of the zero-copy reader — targeting 200k rps. |
 | **Own currency types** | First-party `HTTPRequest`/`HTTPResponse`/`HTTPFields`/`HTTPStatus`/`HTTPMethod` (RFC 9110), shared across h1/h2/h3 — **zero external dependencies**. |
 
-## Standards implemented
+## Standards
 
-HTTP Semantics (RFC 9110), Caching (9111), HTTP/1.1 (9112), HTTP/2 (9113), HPACK (7541),
-HTTP/3 (9114), QPACK (9204), QUIC via Network.framework (9000/9001/9002), Structured Fields
-(8941), Cookies (6265bis), Priorities (9218), Alt-Svc (7838), WebSocket (6455 / 9220).
+**Implemented:** HTTP Semantics (RFC 9110), HTTP/1.1 (RFC 9112) with request-smuggling defenses,
+and HPACK (RFC 7541). The HTTP/2 (RFC 9113) frame layer, SETTINGS, flow-control window, and request
+mapping exist as sans-I/O primitives; the connection/stream engine that drives them is in progress.
+
+**Planned:** HTTP/2 connection engine, Caching (9111), HTTP/3 (9114) + QPACK (9204) over QUIC
+(Network.framework, RFC 9000/9001/9002), Structured Fields (8941), Cookies (6265bis), Priorities
+(9218), Alt-Svc (7838), WebSocket (6455 / 9220).
 
 Security hardening is traced to its RFC §/CVE in `Documentation/Security.md` (e.g. HTTP/2 Rapid
 Reset CVE-2023-44487, CONTINUATION flood CVE-2024-27316, request smuggling, decompression bombs).
@@ -56,15 +64,15 @@ swiftlint lint --strict
 
 ## Milestones
 
-- **M0** — Package scaffold & tooling ✅ in progress
-- **M1** — `HTTPCore` (RFC 9110 semantics, byte primitives, limits, Huffman)
-- **M2** — HTTP/1.1 engine (RFC 9112) + smuggling defenses
-- **M3** — `HTTPTransport` (Network.framework bridge, TLS+ALPN, dev certs)
-- **M4** — Routing result-builder DSL + server (h1)
-- **M5** — HPACK (7541) + HTTP/2 (9113)
-- **M6** — Middleware (compression, caching, cookies, CORS) + WebSocket
-- **M7** — QPACK (9204) + HTTP/3 (9114) over QUIC
-- **M8** — Hardening, benchmarks, example server
+- **M0** — Package scaffold & tooling ✅
+- **M1** — `HTTPCore` (RFC 9110 semantics, byte primitives, limits, Huffman) ✅
+- **M2** — HTTP/1.1 engine (RFC 9112) + smuggling defenses ✅
+- **M3** — `HTTPTransport` (four backbones: Network.framework + POSIX kqueue/Dispatch/swift-system) ✅; TLS+ALPN, dev certs 🚧
+- **M4** — HTTP/1.1 server ✅; routing result-builder DSL 🚧
+- **M5** — HPACK (7541) ✅ + HTTP/2 (9113): frame primitives ✅, sans-I/O connection/stream engine (request path) ✅; response encoding · flow control · Rapid Reset · ALPN wiring 🚧
+- **M6** — Middleware (compression, caching, cookies, CORS) + WebSocket — planned
+- **M7** — QPACK (9204) + HTTP/3 (9114) over QUIC — planned
+- **M8** — Hardening, benchmarks, example server (example ✅; benchmarks 🚧)
 
 ## License
 

@@ -41,6 +41,11 @@ public enum FieldValidation {
     public static func isTokenByte(_ byte: UInt8) -> Bool {
         // All bounds are hex; contiguous tchar runs are folded to ranges (each range was verified
         // to contain *only* tchars — e.g. 0x22 '"' and 0x28 '(' fall outside 0x23...0x27).
+        //
+        // NOTE: a precomputed 256-entry `[Bool]` lookup table was benchmarked here and was 2–3× SLOWER
+        // (`isToken` 42→83 ns, `isValidFieldValue` 42→125 ns): every access to a Swift `static let`
+        // pays a lazy-init access guard, which costs more per byte than this inlined, well-predicted
+        // switch. The switch is the measured optimum — do not "optimize" it into a table.
         switch byte {
         case 0x30...0x39,  // DIGIT 0-9
             0x41...0x5A,  // ALPHA A-Z

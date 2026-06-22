@@ -193,9 +193,9 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(bad)
-        } catch let error as HTTP2Error {
-            thrown = error.code
-        } catch {}
+        } catch {
+            thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
+        }
         #expect(thrown == .protocolError)
     }
 
@@ -211,9 +211,9 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(wire)
-        } catch let error as HTTP2Error {
-            thrown = error.code
-        } catch {}
+        } catch {
+            thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
+        }
         #expect(thrown == .protocolError)
     }
 
@@ -232,10 +232,28 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(wire)
-        } catch let error as HTTP2Error {
-            thrown = error.code
-        } catch {}
+        } catch {
+            thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
+        }
         #expect(thrown == .enhanceYourCalm)
+    }
+
+    @Test("refuses streams beyond SETTINGS_MAX_CONCURRENT_STREAMS (RFC 9113 §5.1.2)")
+    func refusesExcessConcurrentStreams() throws {
+        var connection = HTTP2Connection(limits: HTTPLimits(maxConcurrentStreams: 2))
+        _ = connection.outboundBytes()  // discard the server SETTINGS preface
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += openStream(streamID: 1)  // opens (no END_STREAM, stays active)
+        wire += openStream(streamID: 3)  // opens — now at the cap of 2
+        wire += openStream(streamID: 5)  // exceeds the cap — must be refused, not fatal
+
+        let events = try connection.receive(wire)
+        #expect(events.isEmpty)  // none completed; the 3rd is refused, the connection survives
+        // The server queued RST_STREAM(REFUSED_STREAM) for the excess stream.
+        let refused = try firstRstStream(connection.outboundBytes())
+        #expect(refused?.streamID == HTTP2StreamID(5))
+        #expect(refused?.code == .refusedStream)
     }
 
     // MARK: Response encoding
@@ -298,5 +316,25 @@ struct HTTP2ConnectionTests {
             }
         }
         return (status, contentType, body)
+    }
+
+    /// The first RST_STREAM frame on the wire (its stream id and decoded error code), if any.
+    private func firstRstStream(
+        _ bytes: [UInt8]
+    ) throws -> (streamID: HTTP2StreamID, code: HTTP2ErrorCode)? {
+        var found: (HTTP2StreamID, HTTP2ErrorCode)?
+        try bytes.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            let frames = HTTP2FrameDecoder()
+            while found == nil, let frame = try frames.nextFrame(&reader) {
+                guard frame.header.type == .rstStream, frame.payload.count == 4 else { continue }
+                let code =
+                    UInt32(frame.payload[0]) << 24 | UInt32(frame.payload[1]) << 16
+                    | UInt32(frame.payload[2]) << 8 | UInt32(frame.payload[3])
+                found = (frame.header.streamID, HTTP2ErrorCode(code: code))
+            }
+        }
+        guard let found else { return nil }
+        return (streamID: found.0, code: found.1)
     }
 }

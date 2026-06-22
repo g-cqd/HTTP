@@ -10,6 +10,7 @@ only_rules:
   - force_try
   - implicitly_unwrapped_optional
   - cyclomatic_complexity     # CLAUDE.md: "cyclomatic complexity : < 15"
+  - file_length               # CLAUDE.md: "max line per file 400 unless justification"
 
 strict: true                  # any violation fails CI
 
@@ -24,6 +25,10 @@ implicitly_unwrapped_optional:
 cyclomatic_complexity:
   warning: 12
   error: 15                   # complexity of 15+ fails — enforces "< 15"
+file_length:
+  warning: 400                # files over 400 lines fail (strict) — enforces the CLAUDE.md cap
+  error: 600                  # hard ceiling even with a justified `// swiftlint:disable file_length`
+  ignore_comment_only_lines: true  # the RFC-citation headers/doc comments don't count toward code size
 
 included:
   - Sources
