@@ -20,15 +20,6 @@ struct TransportTests {
         }
     }
 
-    @Test("real backbones report notImplemented until their I/O lands")
-    func backbonesNotYetImplemented() async {
-        let configuration = TransportConfiguration(port: 0, backbone: .posixKqueue)
-        let transport = TransportFactory.make(configuration)
-        await #expect(throws: TransportError.notImplemented(.posixKqueue)) {
-            _ = try await transport.start()
-        }
-    }
-
     @Test("FakeTransport yields its seeded connections in order")
     func fakeTransportYieldsConnections() async throws {
         let transport = FakeTransport(connections: [
