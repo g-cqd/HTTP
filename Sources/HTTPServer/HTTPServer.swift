@@ -22,11 +22,15 @@ public import WebSocket
 public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
 
     private let transport: any ServerTransport
-    private let responder: any HTTPResponder
+    /// An optional QUIC transport run alongside the TCP one to serve HTTP/3 (RFC 9114).
+    let quicTransport: (any QUICServerTransport)?
+    let responder: any HTTPResponder
     /// Handles connections that upgrade to WebSocket (RFC 6455 §4), or nil to refuse upgrades.
     let webSocketHandler: (any WebSocketHandler)?
     let limits: HTTPLimits
     private let clock: C
+    /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
+    let altSvc = Mutex<String?>(nil)
 
     /// Live connection counts: a global total (``HTTPLimits/maxConnections``) and a per-host map
     /// (``HTTPLimits/maxConnectionsPerClient``), guarded together.
@@ -46,11 +50,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     public init(
         transport: any ServerTransport,
         responder: any HTTPResponder,
+        quicTransport: (any QUICServerTransport)? = nil,
         webSocketHandler: (any WebSocketHandler)? = nil,
         limits: HTTPLimits = .default,
         clock: C
     ) {
         self.transport = transport
+        self.quicTransport = quicTransport
         self.responder = responder
         self.webSocketHandler = webSocketHandler
         self.limits = limits
@@ -58,9 +64,15 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     }
 
     /// Starts accepting connections and serves each concurrently until the transport finishes.
+    ///
+    /// When a ``QUICServerTransport`` was supplied it is run alongside the TCP listener to serve
+    /// HTTP/3 (RFC 9114), and `Alt-Svc` (RFC 7838) is advertised on the h1/h2 responses.
     public func run() async throws {
         let connections = try await transport.start()
         await withDiscardingTaskGroup { group in
+            if quicTransport != nil {
+                group.addTask { await self.runHTTP3() }
+            }
             for await connection in connections {
                 group.addTask { await self.accept(connection) }
             }
@@ -182,7 +194,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                 if case .request(let streamID, let request, let body) = event {
                     let response = await responder.respond(to: request, body: body)
                     do {
-                        try engine.respond(to: streamID, response.head, body: response.body)
+                        // `withAltSvc` advertises HTTP/3 (RFC 7838) when a QUIC listener is running.
+                        try engine.respond(
+                            to: streamID, withAltSvc(response.head), body: response.body)
                     } catch {
                         // A connection-level fault (e.g. responding to an unknown stream) is fatal:
                         // flush the engine's queued GOAWAY (RFC 9113 §6.8) and close. A stream-level
@@ -243,7 +257,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         let response = await responder.respond(to: request, body: framed.parsed.body)
         // A response to HEAD repeats the GET header section but sends no body (RFC 9112 §6.3).
         let bytes = ResponseSerializer.serialize(
-            response.head, body: response.body, omitBody: request.method == .head)
+            withAltSvc(response.head), body: response.body, omitBody: request.method == .head)
         do {
             try await connection.send(bytes)
         } catch {
@@ -537,11 +551,12 @@ extension HTTPServer where C == ContinuousClock {
     public convenience init(
         transport: any ServerTransport,
         responder: any HTTPResponder,
+        quicTransport: (any QUICServerTransport)? = nil,
         webSocketHandler: (any WebSocketHandler)? = nil,
         limits: HTTPLimits = .default
     ) {
         self.init(
-            transport: transport, responder: responder, webSocketHandler: webSocketHandler,
-            limits: limits, clock: ContinuousClock())
+            transport: transport, responder: responder, quicTransport: quicTransport,
+            webSocketHandler: webSocketHandler, limits: limits, clock: ContinuousClock())
     }
 }
