@@ -211,12 +211,16 @@ let package = Package(
         .target(
             name: "HTTPServer",
             dependencies: [
-                "HTTPCore", "HTTP1", "HTTP2", "WebSocket", "HTTPTransport", "HTTPConcurrency",
+                "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
+                "HTTPConcurrency",
             ]
         ),
         .testTarget(
             name: "HTTPServerTests",
-            dependencies: ["HTTPServer", "HTTP2", "HPACK", "WebSocket", "HTTPTestSupport"]
+            dependencies: [
+                "HTTPServer", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket", "HTTPTransport",
+                "HTTPTestSupport",
+            ]
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with

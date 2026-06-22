@@ -52,10 +52,14 @@ final class LegacyQUICStream: QUICStream, @unchecked Sendable {
 
     func send(_ bytes: [UInt8], fin: Bool) async throws {
         let stream = connection
+        // QUIC's stream FIN rides the `.finalMessage` content context (its `isFinal`), not `isComplete`
+        // alone, so the peer sees end-of-stream (RFC 9000 §2).
+        let context: NWConnection.ContentContext = fin ? .finalMessage : .defaultMessage
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, any Error>) in
             stream.send(
                 content: bytes.isEmpty ? nil : Data(bytes),
+                contentContext: context,
                 isComplete: fin,
                 completion: .contentProcessed { error in
                     if let error {
