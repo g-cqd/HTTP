@@ -20,15 +20,17 @@ enum HTTP2RequestMapper {
         "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade",
     ]
 
-    /// Builds an ``HTTPRequest`` from `fields`, validating the §8.3 / §8.2 rules for `streamID`.
+    /// Builds an ``HTTPRequest`` from `fields`, validating the §8.3 / §8.2 rules for `streamID`, and
+    /// surfaces the Extended CONNECT `:protocol` (RFC 8441 §4) when present.
     static func makeRequest(
         from fields: [HPACKField],
         streamID: HTTP2StreamID
-    ) throws(HTTP2Error) -> HTTPRequest {
+    ) throws(HTTP2Error) -> (request: HTTPRequest, connectProtocol: String?) {
         var method: String?
         var scheme: String?
         var authority: String?
         var path: String?
+        var connectProtocol: String?
         var headerFields = HTTPFields()
         var sawRegularField = false
 
@@ -39,7 +41,7 @@ enum HTTP2RequestMapper {
                 }
                 try assignPseudo(
                     field, method: &method, scheme: &scheme, authority: &authority,
-                    path: &path, streamID: streamID)
+                    path: &path, connectProtocol: &connectProtocol, streamID: streamID)
             } else {
                 sawRegularField = true
                 try appendRegular(field, to: &headerFields, streamID: streamID)
@@ -52,9 +54,14 @@ enum HTTP2RequestMapper {
         guard let parsedMethod = HTTPMethod(rawValue: method) else {
             throw malformed(streamID, "invalid :method token")
         }
-        return HTTPRequest(
+        // `:protocol` is only valid on an Extended CONNECT request (RFC 8441 §4).
+        if connectProtocol != nil, parsedMethod != .connect {
+            throw malformed(streamID, ":protocol is only valid on a CONNECT request")
+        }
+        let request = HTTPRequest(
             method: parsedMethod, scheme: scheme, authority: authority, path: path,
             headerFields: headerFields)
+        return (request, connectProtocol)
     }
 
     /// Assigns one request pseudo-header, rejecting duplicates and unknown names (RFC 9113 §8.3).
@@ -64,6 +71,7 @@ enum HTTP2RequestMapper {
         scheme: inout String?,
         authority: inout String?,
         path: inout String?,
+        connectProtocol: inout String?,
         streamID: HTTP2StreamID
     ) throws(HTTP2Error) {
         switch field.name {
@@ -71,6 +79,8 @@ enum HTTP2RequestMapper {
         case ":scheme": try setOnce(&scheme, to: field.value, named: ":scheme", streamID)
         case ":authority": try setOnce(&authority, to: field.value, named: ":authority", streamID)
         case ":path": try setOnce(&path, to: field.value, named: ":path", streamID)
+        case ":protocol":
+            try setOnce(&connectProtocol, to: field.value, named: ":protocol", streamID)
         default: throw malformed(streamID, "unknown request pseudo-header \(field.name)")
         }
     }

@@ -142,7 +142,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// Drives the sans-I/O ``HTTP2Connection`` over `connection`: feed octets → events → respond →
     /// flush, looping until EOF, a timeout, or a connection-level protocol error.
     private func serveHTTP2(_ connection: any TransportConnection, initialBytes: [UInt8]) async {
-        var engine = HTTP2Connection(limits: limits)
+        // Advertise Extended CONNECT (RFC 8441 §3) only when a WebSocket handler can service it.
+        var settings = HTTP2Settings()
+        settings.enableConnectProtocol = webSocketHandler != nil
+        var engine = HTTP2Connection(localSettings: settings, limits: limits)
+        // Per-stream WebSocket engines for active WebSocket-over-HTTP/2 tunnels (RFC 8441).
+        var webSockets: [HTTP2StreamID: WebSocketConnection] = [:]
         var inbound = initialBytes
         while true {
             let events: [HTTP2Connection.Event]
@@ -156,9 +161,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                 break
             }
             inbound = []
-            for case .request(let streamID, let request, let body) in events {
-                let response = await responder.respond(to: request, body: body)
-                try? engine.respond(to: streamID, response.head, body: response.body)
+            for event in events {
+                if case .request(let streamID, let request, let body) = event {
+                    let response = await responder.respond(to: request, body: body)
+                    try? engine.respond(to: streamID, response.head, body: response.body)
+                } else {
+                    await handleHTTP2Tunnel(event, engine: &engine, webSockets: &webSockets)
+                }
             }
             let outbound = engine.outboundBytes()
             if !outbound.isEmpty {

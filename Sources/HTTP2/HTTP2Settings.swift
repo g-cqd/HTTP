@@ -23,6 +23,8 @@ public enum HTTP2SettingsParameter: UInt16, Sendable, Equatable {
     case maxFrameSize = 0x05
     /// `SETTINGS_MAX_HEADER_LIST_SIZE` (0x06).
     case maxHeaderListSize = 0x06
+    /// `SETTINGS_ENABLE_CONNECT_PROTOCOL` (0x08) — permits the Extended CONNECT method (RFC 8441 §3).
+    case enableConnectProtocol = 0x08
 }
 
 /// The set of known HTTP/2 SETTINGS parameters, with protocol defaults (RFC 9113 §6.5.2).
@@ -43,6 +45,11 @@ public struct HTTP2Settings: Sendable, Equatable {
     public var maxFrameSize = 16_384
     /// Advisory maximum header list size in octets, or `nil` for unset (the default).
     public var maxHeaderListSize: Int?
+    /// Whether the Extended CONNECT method is permitted (RFC 8441 §3) — the WebSocket-over-HTTP/2
+    /// bootstrap (RFC 9220).
+    ///
+    /// A server advertises `true`; the default is `false`.
+    public var enableConnectProtocol = false
 
     /// Creates a settings set at the protocol defaults.
     public init() {}
@@ -94,6 +101,11 @@ public struct HTTP2Settings: Sendable, Equatable {
             maxFrameSize = Int(value)
         case .maxHeaderListSize:
             maxHeaderListSize = Int(value)
+        case .enableConnectProtocol:
+            guard value <= 1 else {
+                throw .connection(.protocolError, "ENABLE_CONNECT_PROTOCOL must be 0 or 1")
+            }
+            enableConnectProtocol = value == 1
         case nil:
             break  // unknown identifier — ignore (§6.5.2)
         }
@@ -111,6 +123,9 @@ public struct HTTP2Settings: Sendable, Equatable {
         append(.maxFrameSize, UInt32(maxFrameSize), to: &output)
         if let maxHeaderListSize {
             append(.maxHeaderListSize, UInt32(maxHeaderListSize), to: &output)
+        }
+        if enableConnectProtocol {
+            append(.enableConnectProtocol, 1, to: &output)
         }
         return output
     }

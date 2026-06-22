@@ -19,7 +19,7 @@ struct HTTP2RequestMapperTests {
     private let stream = HTTP2StreamID(1)
 
     private func make(_ fields: [HPACKField]) throws -> HTTPRequest {
-        try HTTP2RequestMapper.makeRequest(from: fields, streamID: stream)
+        try HTTP2RequestMapper.makeRequest(from: fields, streamID: stream).request
     }
 
     private func errorCode(_ fields: [HPACKField]) -> HTTP2ErrorCode? {

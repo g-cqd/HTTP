@@ -25,6 +25,16 @@ public struct HTTP2Connection {
         /// A complete request arrived on a stream (all HEADERS and body received).
         case request(streamID: HTTP2StreamID, request: HTTPRequest, body: [UInt8])
 
+        /// An Extended CONNECT opened a tunnel on a stream (RFC 8441 §4) — `protocol` names it (e.g.
+        /// `"websocket"`, RFC 9220). The driver accepts with ``acceptTunnel(_:)`` or resets the stream.
+        case extendedConnect(streamID: HTTP2StreamID, request: HTTPRequest, protocol: String)
+
+        /// Opaque bytes arrived on a tunnel stream's DATA frames (RFC 8441 §5).
+        case tunnelData(streamID: HTTP2StreamID, bytes: [UInt8])
+
+        /// The peer ended a tunnel stream with END_STREAM (RFC 8441 §5).
+        case tunnelClosed(streamID: HTTP2StreamID)
+
         /// The peer reset a stream with the given code (RFC 9113 §6.4).
         case streamReset(streamID: HTTP2StreamID, code: HTTP2ErrorCode)
     }
@@ -54,6 +64,9 @@ public struct HTTP2Connection {
         var pending: [UInt8] = []
         var pendingOffset = 0
         var pendingEndStream = false
+        /// Whether this stream is an Extended CONNECT tunnel (RFC 8441 §5): its DATA carries opaque
+        /// tunnel bytes (e.g. WebSocket frames) rather than an HTTP request/response body.
+        var isTunnel = false
     }
 
     private var phase = Phase.awaitingPreface
@@ -369,13 +382,27 @@ public struct HTTP2Connection {
             writer.writeRstStream(streamID, code: .refusedStream)
             return
         }
-        let request = try HTTP2RequestMapper.makeRequest(from: fields, streamID: streamID)
+        let (request, connectProtocol) = try HTTP2RequestMapper.makeRequest(
+            from: fields, streamID: streamID)
         var stream = HTTP2Stream(id: streamID)
         try stream.receiveHeaders(endStream: endStream)
-        streams[streamID] = StreamRecord(
+        var record = StreamRecord(
             stream: stream, request: request, body: [],
             sendWindow: HTTP2FlowControlWindow(initialSize: remoteSettings.initialWindowSize),
             receiveWindow: localSettings.initialWindowSize)
+        // An Extended CONNECT (RFC 8441 §4) opens a tunnel rather than a request: surface it for the
+        // driver to accept, and route this stream's DATA as opaque tunnel bytes from here on.
+        if let connectProtocol {
+            guard localSettings.enableConnectProtocol else {
+                throw .stream(streamID, .protocolError, "Extended CONNECT was not enabled")
+            }
+            record.isTunnel = true
+            streams[streamID] = record
+            events.append(
+                .extendedConnect(streamID: streamID, request: request, protocol: connectProtocol))
+            return
+        }
+        streams[streamID] = record
         if endStream {
             try emitRequest(streamID, into: &events)
         }

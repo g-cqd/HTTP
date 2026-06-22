@@ -11,7 +11,12 @@ import HTTPCore
 
 @testable import HTTP2
 
-extension HTTP2ConnectionTests {
+/// Wire-frame builders + parsers shared by the HTTP/2 connection-engine test suites.
+protocol HTTP2WireFixtures {}
+
+extension HTTP2ConnectionTests: HTTP2WireFixtures {}
+
+extension HTTP2WireFixtures {
 
     func settingsFrame() -> [UInt8] {
         var out = [UInt8]()
@@ -87,6 +92,19 @@ extension HTTP2ConnectionTests {
                 HPACKField(name: ":method", value: "POST"),
                 HPACKField(name: ":scheme", value: "https"),
                 HPACKField(name: ":path", value: "/"),
+                HPACKField(name: ":authority", value: "example.com"),
+            ], endStream: false)
+    }
+
+    /// An Extended CONNECT HEADERS frame (RFC 8441 §4) opening a tunnel for `protocol`, no END_STREAM.
+    func extendedConnectFrame(streamID: UInt32, protocol proto: String) -> [UInt8] {
+        headersFrame(
+            streamID: streamID,
+            fields: [
+                HPACKField(name: ":method", value: "CONNECT"),
+                HPACKField(name: ":protocol", value: proto),
+                HPACKField(name: ":scheme", value: "https"),
+                HPACKField(name: ":path", value: "/chat"),
                 HPACKField(name: ":authority", value: "example.com"),
             ], endStream: false)
     }

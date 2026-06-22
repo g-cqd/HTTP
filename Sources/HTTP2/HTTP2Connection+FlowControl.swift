@@ -36,6 +36,15 @@ extension HTTP2Connection {
         let body = try Self.dataBody(frame)
         let endStream = frame.header.flags.contains(.endStream)
         try record.stream.receiveData(endStream: endStream)
+        // A tunnel stream's DATA is opaque (RFC 8441 §5): surface it as tunnel bytes — still
+        // flow-controlled, but never buffered as a request body or bounded by the body limit.
+        if record.isTunnel {
+            consumeReceiveWindows(streamID, &record, by: length, endStream: endStream)
+            streams[streamID] = record
+            if !body.isEmpty { events.append(.tunnelData(streamID: streamID, bytes: Array(body))) }
+            if endStream { events.append(.tunnelClosed(streamID: streamID)) }
+            return
+        }
         guard record.body.count + body.count <= limits.maxBodySize else {
             throw .stream(streamID, .enhanceYourCalm, "request body exceeds the limit")
         }
@@ -108,7 +117,17 @@ extension HTTP2Connection {
             _ = record.sendWindow.reserve(chunk)
         }
         let fullyFlushed = record.pendingOffset >= record.pending.count
-        streams[streamID] = fullyFlushed && record.stream.state == .closed ? nil : record
+        guard !(fullyFlushed && record.stream.state == .closed) else {
+            streams[streamID] = nil
+            return
+        }
+        // Drop the octets already sent so a long-lived tunnel's queue stays bounded (RFC 8441 §5); a
+        // one-shot response simply flushes to empty here.
+        if record.pendingOffset > 0 {
+            record.pending.removeFirst(record.pendingOffset)
+            record.pendingOffset = 0
+        }
+        streams[streamID] = record
     }
 
     /// Flushes every stream that still has pending DATA — the connection send window just grew.

@@ -10,6 +10,7 @@
 
 internal import Foundation
 internal import HTTP1
+internal import HTTP2
 internal import HTTPCore
 internal import HTTPTransport
 internal import WebSocket
@@ -83,5 +84,56 @@ extension HTTPServer {
             inbound = chunk
         }
         await connection.close()
+    }
+
+    // MARK: WebSocket over HTTP/2 (RFC 8441 / RFC 9220)
+
+    /// Dispatches a tunnel event from the HTTP/2 engine for a WebSocket-over-HTTP/2 stream: accept an
+    /// Extended CONNECT (RFC 8441 §4), pump tunnel DATA through that stream's WebSocket engine, and
+    /// tear the stream down on close or reset.
+    func handleHTTP2Tunnel(
+        _ event: HTTP2Connection.Event,
+        engine: inout HTTP2Connection,
+        webSockets: inout [HTTP2StreamID: WebSocketConnection]
+    ) async {
+        guard let handler = webSocketHandler else { return }
+        switch event {
+        case .extendedConnect(let streamID, let request, let proto):
+            guard proto == "websocket", handler.shouldUpgrade(request) else { return }
+            try? engine.acceptTunnel(streamID)  // 200, no END_STREAM (RFC 8441 §5)
+            webSockets[streamID] = WebSocketConnection(maxMessageSize: limits.maxBodySize)
+        case .tunnelData(let streamID, let bytes):
+            guard var socket = webSockets[streamID] else { return }
+            await driveTunnel(
+                &socket, bytes: bytes, streamID: streamID, engine: &engine, handler: handler)
+            if socket.isClosing {
+                try? engine.closeTunnel(streamID)
+                webSockets[streamID] = nil
+            } else {
+                webSockets[streamID] = socket
+            }
+        case .tunnelClosed(let streamID), .streamReset(let streamID, _):
+            webSockets[streamID] = nil
+        default:
+            break
+        }
+    }
+
+    /// Feeds tunnel `bytes` to the stream's WebSocket engine and writes the frames it produces back as
+    /// tunnel DATA (RFC 8441 §5 over RFC 6455 §6); a violation leaves a queued Close to flush.
+    private func driveTunnel(
+        _ socket: inout WebSocketConnection,
+        bytes: [UInt8],
+        streamID: HTTP2StreamID,
+        engine: inout HTTP2Connection,
+        handler: any WebSocketHandler
+    ) async {
+        // A violation leaves a queued Close and sets `isClosing`; flush it below.
+        let events = (try? socket.receive(bytes)) ?? []
+        for event in events {
+            for action in await handler.handle(event) { socket.apply(action) }
+        }
+        let outbound = socket.outboundBytes()
+        if !outbound.isEmpty { engine.sendTunnelData(streamID, outbound) }
     }
 }
