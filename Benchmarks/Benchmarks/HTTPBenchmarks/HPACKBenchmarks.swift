@@ -30,13 +30,7 @@ func registerHPACKBenchmarks() {
         }
     }
 
-    Benchmark("hpack/String/encode") { benchmark in
-        for _ in benchmark.scaledIterations {
-            var output = [UInt8]()
-            HPACKString.encode(sampleFieldValue, into: &output)
-            blackHole(output)
-        }
-    }
+    registerHPACKStringBenchmarks()
 
     Benchmark("hpack/headerBlock/encode") { benchmark in
         for _ in benchmark.scaledIterations {
@@ -117,6 +111,29 @@ func registerHPACKBenchmarks() {
         var encoder = warmedResponseEncoder
         for _ in benchmark.scaledIterations {
             blackHole(encoder.encode(realisticResponseFields))
+        }
+    }
+}
+
+/// The RFC 7541 §5.2 string-literal encode benchmarks (Huffman-wins and raw-wins), split out so
+/// ``registerHPACKBenchmarks()`` stays under the cyclomatic-complexity limit.
+func registerHPACKStringBenchmarks() {
+    Benchmark("hpack/String/encode") { benchmark in
+        for _ in benchmark.scaledIterations {
+            var output = [UInt8]()
+            HPACKString.encode(sampleFieldValue, into: &output)
+            blackHole(output)
+        }
+    }
+
+    // The "raw-wins" branch: a high-entropy value whose Huffman form is longer, so the literal bytes
+    // are emitted. Today the length probe (Huffman.encodedByteLength) avoids the expensive encode pass
+    // on this branch; this benchmark guards against a fusion that would force it.
+    Benchmark("hpack/String/encode-raw") { benchmark in
+        for _ in benchmark.scaledIterations {
+            var output = [UInt8]()
+            HPACKString.encode(rawWinsFieldValue, into: &output)
+            blackHole(output)
         }
     }
 }
