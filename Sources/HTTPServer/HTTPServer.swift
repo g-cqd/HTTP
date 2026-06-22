@@ -10,6 +10,7 @@
 internal import HTTP1
 public import HTTPCore
 public import HTTPTransport
+internal import Synchronization
 
 /// An HTTP/1.1 server that drives an ``HTTPResponder`` over a ``ServerTransport``.
 public final class HTTPServer: Sendable {
@@ -17,6 +18,11 @@ public final class HTTPServer: Sendable {
     private let transport: any ServerTransport
     private let responder: any HTTPResponder
     private let limits: HTTPLimits
+
+    /// Active connection count per peer host, enforcing ``HTTPLimits/maxConnectionsPerClient``.
+    ///
+    /// A `Mutex` (not an actor) because the critical section is a single map update with no `await`.
+    private let activeConnectionsPerHost = Mutex<[String: Int]>([:])
 
     /// Creates a server bound to `transport`, handling requests with `responder`.
     public init(
@@ -34,8 +40,32 @@ public final class HTTPServer: Sendable {
         let connections = try await transport.start()
         await withDiscardingTaskGroup { group in
             for await connection in connections {
-                group.addTask { await self.serve(connection) }
+                group.addTask { await self.accept(connection) }
             }
+        }
+    }
+
+    /// Admits `connection` if its peer is under ``HTTPLimits/maxConnectionsPerClient``, serves it for
+    /// its lifetime, then releases the slot.
+    ///
+    /// A connection over the per-client cap is closed immediately — a per-source resource-exhaustion
+    /// defense (the spirit of a 429, applied before any request is read).
+    private func accept(_ connection: any TransportConnection) async {
+        let host = connection.peer.host
+        let admitted = activeConnectionsPerHost.withLock { counts in
+            let current = counts[host, default: 0]
+            guard current < limits.maxConnectionsPerClient else { return false }
+            counts[host] = current + 1
+            return true
+        }
+        guard admitted else {
+            await connection.close()
+            return
+        }
+        await serve(connection)
+        activeConnectionsPerHost.withLock { counts in
+            guard let current = counts[host] else { return }
+            if current <= 1 { counts[host] = nil } else { counts[host] = current - 1 }
         }
     }
 

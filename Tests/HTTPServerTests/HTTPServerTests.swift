@@ -145,6 +145,32 @@ struct HTTPServerTests {
         #expect(await connection.isClosed())
     }
 
+    @Test(
+        "rejects connections beyond maxConnectionsPerClient for one peer",
+        .timeLimit(.minutes(1)))
+    func perClientConnectionCap() async {
+        let limits = HTTPLimits(maxConnectionsPerClient: 2)
+        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let peer = TransportAddress(host: "203.0.113.7", port: 0)
+        let connections = (1...3).map {
+            HangingConnection(id: TransportConnectionID(UInt64($0)), peer: peer)
+        }
+        let server = HTTPServer(
+            transport: FakeTransport(connections: connections), responder: responder, limits: limits
+        )
+
+        let run = Task { try? await server.run() }
+        try? await Task.sleep(for: .milliseconds(200))  // let admission settle
+
+        // The cap is 2, so exactly one of the three same-peer connections is rejected (closed).
+        var closedCount = 0
+        for connection in connections where await connection.isClosed() { closedCount += 1 }
+        #expect(closedCount == 1)
+
+        run.cancel()
+        _ = await run.value
+    }
+
     @Test("frames a Content-Length body delivered one octet per read (parse head once)")
     func incrementalContentLengthBody() async {
         let responder = ClosureResponder { _, body in
@@ -177,15 +203,18 @@ struct HTTPServerTests {
     }
 }
 
-/// A connection whose `receive` blocks until cancelled — to exercise the read timeout.
+/// A connection whose `receive` blocks until cancelled — to exercise the read timeout and the cap.
 private actor HangingConnection: TransportConnection {
 
     nonisolated let id: TransportConnectionID
-    nonisolated let peer = TransportAddress(host: "hang", port: 0)
+    nonisolated let peer: TransportAddress
     private var closed = false
 
-    init(id: TransportConnectionID) {
+    init(
+        id: TransportConnectionID, peer: TransportAddress = TransportAddress(host: "hang", port: 0)
+    ) {
         self.id = id
+        self.peer = peer
     }
 
     func receive(maxLength: Int) async throws -> [UInt8]? {
