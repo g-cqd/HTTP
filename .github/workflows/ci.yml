@@ -18,7 +18,7 @@ jobs:
   # Style & safety gates: native swift-format + SwiftLint (force-unwrap/cast/try).
   # ---------------------------------------------------------------------------
   lint:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -36,7 +36,7 @@ jobs:
   # and avoiding the -suppress-warnings conflict that a global -Xswiftc flag hits on dependencies.
   # ---------------------------------------------------------------------------
   build-test:
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
@@ -45,14 +45,14 @@ jobs:
         run: swift --version
       - name: Build (warnings as errors)
         run: swift build --scratch-path "$SCRATCH"
-      - name: Test
-        run: swift test --scratch-path "$SCRATCH"
+      - name: Test (with coverage)
+        run: swift test --scratch-path "$SCRATCH" --enable-code-coverage
 
   # ---------------------------------------------------------------------------
   # Hard constraint (CLAUDE.md): SwiftNIO MUST NOT appear in the dependency graph.
   # ---------------------------------------------------------------------------
   no-swiftnio:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Assert no SwiftNIO transitive dependency
@@ -68,7 +68,7 @@ jobs:
   # Data-race & memory checks. Parsers must stay clean under ASan/TSan.
   # ---------------------------------------------------------------------------
   sanitizers:
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +78,22 @@ jobs:
       - name: Test under ${{ matrix.sanitizer }} sanitizer
         run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
 
-# NOTE: jobs assume the runner provides the Swift 6.4 toolchain (pin via xcode-select or the
-# swiftlang toolchain installer once 6.4 ships in a stable image). Benchmarks (package-benchmark),
-# fuzz smoke runs, and `h2spec` conformance are added as their milestones land (M5/M7/M8).
+  # ---------------------------------------------------------------------------
+  # Benchmark smoke run (ordo-one/package-benchmark, isolated in Benchmarks/). Non-gating: it guards
+  # against the harness failing to build or a benchmark crashing — not perf drift (runner noise is
+  # too high to gate on). Promote to a `benchmark baseline check` once a runner baseline is captured.
+  # ---------------------------------------------------------------------------
+  benchmarks:
+    runs-on: macos-26
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Benchmark smoke (build + run)
+        run: swift package --package-path Benchmarks --disable-sandbox benchmark
+
+# NOTE: jobs run on the `macos-26` image with the Swift 6.4 development toolchain. If a specific 6.4
+# snapshot is needed beyond the image default, install it as the first step of each job with swiftly
+# (`swiftly install 6.4-snapshot --use`). `h2spec` conformance and fuzz smoke runs are added as their
+# milestones land (M7/M8); the benchmark smoke job is wired above.
