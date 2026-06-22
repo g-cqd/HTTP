@@ -100,4 +100,27 @@ extension HTTPFieldName {
         unchecked: "access-control-allow-credentials")
     /// `Access-Control-Max-Age` — how long a preflight result may be cached.
     public static let accessControlMaxAge = HTTPFieldName(unchecked: "access-control-max-age")
+
+    // MARK: Conditional requests (RFC 9110 §13)
+
+    /// `If-None-Match` (RFC 9110 §13.1.2) — the validators a cache holds; matches make a 304.
+    public static let ifNoneMatch = HTTPFieldName(unchecked: "if-none-match")
+    /// `If-Modified-Since` (RFC 9110 §13.1.3).
+    public static let ifModifiedSince = HTTPFieldName(unchecked: "if-modified-since")
+    /// `Last-Modified` (RFC 9110 §8.8.2).
+    public static let lastModified = HTTPFieldName(unchecked: "last-modified")
+
+    // MARK: Security response headers (WHATWG / RFC 6797 / W3C)
+
+    /// `Strict-Transport-Security` (RFC 6797) — pins the client to HTTPS for a duration.
+    public static let strictTransportSecurity = HTTPFieldName(
+        unchecked: "strict-transport-security")
+    /// `X-Content-Type-Options` — `nosniff` stops content-type sniffing.
+    public static let xContentTypeOptions = HTTPFieldName(unchecked: "x-content-type-options")
+    /// `X-Frame-Options` — legacy clickjacking defense (framing policy).
+    public static let xFrameOptions = HTTPFieldName(unchecked: "x-frame-options")
+    /// `Referrer-Policy` (W3C) — controls the `Referer` sent to other origins.
+    public static let referrerPolicy = HTTPFieldName(unchecked: "referrer-policy")
+    /// `Content-Security-Policy` (W3C CSP) — restricts the resources a page may load.
+    public static let contentSecurityPolicy = HTTPFieldName(unchecked: "content-security-policy")
 }
