@@ -65,4 +65,13 @@ extension HTTPFieldName {
     public static let setCookie = HTTPFieldName(unchecked: "set-cookie")
     /// `User-Agent` (RFC 9110 §10.1.5).
     public static let userAgent = HTTPFieldName(unchecked: "user-agent")
+
+    // MARK: WebSocket handshake (RFC 6455 §4.1 / §4.2)
+
+    /// `Sec-WebSocket-Key` (RFC 6455 §4.1) — the client's base64 nonce.
+    public static let secWebSocketKey = HTTPFieldName(unchecked: "sec-websocket-key")
+    /// `Sec-WebSocket-Accept` (RFC 6455 §4.2.2) — the server's handshake confirmation hash.
+    public static let secWebSocketAccept = HTTPFieldName(unchecked: "sec-websocket-accept")
+    /// `Sec-WebSocket-Version` (RFC 6455 §4.1) — the negotiated WebSocket version (13).
+    public static let secWebSocketVersion = HTTPFieldName(unchecked: "sec-websocket-version")
 }

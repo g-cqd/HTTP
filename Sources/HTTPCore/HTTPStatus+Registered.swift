@@ -53,6 +53,8 @@ extension HTTPStatus {
     public static let contentTooLarge = HTTPStatus(unchecked: 413)
     /// `414 URI Too Long` (RFC 9110 §15.5.15).
     public static let uriTooLong = HTTPStatus(unchecked: 414)
+    /// `426 Upgrade Required` (RFC 9110 §15.5.22) — rejects a WebSocket handshake naming a version.
+    public static let upgradeRequired = HTTPStatus(unchecked: 426)
     /// `429 Too Many Requests` (RFC 6585 §4).
     public static let tooManyRequests = HTTPStatus(unchecked: 429)
     /// `431 Request Header Fields Too Large` (RFC 6585 §5).
