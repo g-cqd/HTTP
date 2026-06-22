@@ -99,7 +99,8 @@ public final class NetworkFrameworkTransport: ServerTransport {
         let identity = try NetworkFrameworkTLS.identity(
             pkcs12: tls.pkcs12, passphrase: tls.passphrase)
         let options = NetworkFrameworkTLS.options(
-            identity: identity, applicationProtocols: tls.applicationProtocols)
+            identity: identity, applicationProtocols: tls.applicationProtocols,
+            minVersion: tls.minVersion, maxVersion: tls.maxVersion)
         return NWParameters(tls: options)
     }
 
