@@ -22,15 +22,37 @@ import Testing
 @Suite("HTTP/3 server — loopback")
 struct HTTPServerHTTP3Tests {
 
-    @Test("an HTTP/3 GET returns the responder's response", .timeLimit(.minutes(1)))
-    func http3Get() async throws {
+    @Test(
+        "an HTTP/3 GET over the legacy QUIC backbone returns the response", .timeLimit(.minutes(1)))
+    func http3GetLegacy() async throws {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
-        let quic = LegacyQUICTransport(
-            configuration: TransportConfiguration(
-                host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls))
-        let connections = try await quic.start()
-        let port = quic.boundPort
+        let (status, body) = try await serveAndGet(
+            transport: LegacyQUICTransport(
+                configuration: TransportConfiguration(
+                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls)))
+        #expect(status == "200")
+        #expect(body == Array("hello h3".utf8))
+    }
 
+    @Test(
+        "an HTTP/3 GET over the modern QUIC backbone returns the response", .timeLimit(.minutes(1)))
+    func http3GetModern() async throws {
+        guard #available(macOS 26, iOS 26, *) else { return }
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let (status, body) = try await serveAndGet(
+            transport: ModernQUICTransport(
+                configuration: TransportConfiguration(
+                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls)))
+        #expect(status == "200")
+        #expect(body == Array("hello h3".utf8))
+    }
+
+    /// Starts `transport`, drives the HTTP/3 server over it, and performs one GET, returning the reply.
+    private func serveAndGet(
+        transport: any QUICServerTransport
+    ) async throws -> (status: String?, body: [UInt8]) {
+        let connections = try await transport.start()
+        let port = transport.boundPort
         let responder = ClosureResponder { request, _ in
             #expect(request.method == .get)
             return ServerResponse(HTTPResponse(status: .ok), body: Array("hello h3".utf8))
@@ -38,7 +60,6 @@ struct HTTPServerHTTP3Tests {
         let server = HTTPServer(
             transport: TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
             responder: responder)
-
         let serving = Task {
             await withDiscardingTaskGroup { group in
                 for await connection in connections {
@@ -48,12 +69,9 @@ struct HTTPServerHTTP3Tests {
         }
         defer {
             serving.cancel()
-            Task { await quic.shutdown() }
+            Task { await transport.shutdown() }
         }
-
-        let (status, body) = try await get(port: port, path: "/")
-        #expect(status == "200")
-        #expect(body == Array("hello h3".utf8))
+        return try await get(port: port, path: "/")
     }
 
     // MARK: A minimal HTTP/3 client over Network.framework QUIC

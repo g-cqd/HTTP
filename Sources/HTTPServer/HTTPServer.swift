@@ -28,7 +28,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// Handles connections that upgrade to WebSocket (RFC 6455 §4), or nil to refuse upgrades.
     let webSocketHandler: (any WebSocketHandler)?
     let limits: HTTPLimits
-    private let clock: C
+    let clock: C
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
     let altSvc = Mutex<String?>(nil)
 
@@ -360,30 +360,6 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         let deadline = headerDeadline ?? clock.now.advanced(by: limits.headerReadTimeout)
         headerDeadline = deadline  // cumulative across the whole header section
         return max(.zero, clock.now.duration(to: deadline))
-    }
-
-    /// A sentinel for an operation that exceeded its deadline.
-    private struct TimeoutError: Error {}
-
-    /// Runs `operation`, cancelling it and throwing ``TimeoutError`` if it outlasts `duration`.
-    ///
-    /// The cancellation propagates to the connection's read (which honors it — closing the descriptor
-    /// to unblock a stalled syscall), so a stalled peer cannot pin the task past the deadline.
-    func withTimeout<Value: Sendable>(
-        _ duration: Duration,
-        _ operation: @escaping @Sendable () async throws -> Value
-    ) async throws -> Value {
-        let clock = self.clock
-        return try await withThrowingTaskGroup(of: Value.self) { group in
-            group.addTask { try await operation() }
-            group.addTask {
-                try await clock.sleep(for: duration)
-                throw TimeoutError()
-            }
-            defer { group.cancelAll() }
-            guard let result = try await group.next() else { throw TimeoutError() }
-            return result
-        }
     }
 
     /// One framed request plus the byte count it consumed (so a pipelined remainder survives).
