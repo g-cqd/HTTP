@@ -23,6 +23,11 @@ extension HTTP2Connection {
         // sharing the buffer, making every DATA frame copy the whole accumulated body — O(n²) over a
         // streamed upload. On any throw the record is simply dropped (the connection is closing).
         guard var record = streams.removeValue(forKey: streamID) else {
+            // DATA on a recently-closed stream is a STREAM_CLOSED stream error (§5.1); on a
+            // never-opened (idle) stream it is a connection PROTOCOL_ERROR (audit F1).
+            if isRecentlyClosed(streamID) {
+                throw .stream(streamID, .streamClosed, "DATA on a closed stream")
+            }
             throw .connection(.protocolError, "DATA on an unopened stream")
         }
         // The entire DATA payload (incl. any padding) is flow-controlled (RFC 9113 §6.9.1).
@@ -119,6 +124,7 @@ extension HTTP2Connection {
         let fullyFlushed = record.pendingOffset >= record.pending.count
         guard !(fullyFlushed && record.stream.state == .closed) else {
             streams[streamID] = nil
+            markStreamClosed(streamID)  // a late frame on it is STREAM_CLOSED, not fatal (audit F1)
             return
         }
         // Drop the octets already sent so a long-lived tunnel's queue stays bounded (RFC 8441 §5); a

@@ -95,6 +95,13 @@ public struct HTTP2Connection {
     /// self-dependency is rejected as a stream error without desyncing the HPACK table (§5.3.1).
     private var pendingHeadersDependency: HTTP2StreamID?
     var lastPeerStreamID = HTTP2StreamID(0)
+    /// Recently-closed client stream ids (a bounded FIFO).
+    ///
+    /// A frame on one is a STREAM_CLOSED *stream* error (RFC 9113 §5.1); a never-opened / unexpected id
+    /// is a connection PROTOCOL_ERROR (§5.1.1). Bounded by the concurrency cap so it cannot grow
+    /// without limit (audit F1).
+    private var closedStreams = Set<HTTP2StreamID>()
+    private var closedStreamOrder = [HTTP2StreamID]()
     // The abuse-budget state below is internal (not private) so the charge/decay helpers can live in
     // HTTP2Connection+AbuseBudget.swift.
     var activeStreamResets = 0
@@ -243,6 +250,7 @@ public struct HTTP2Connection {
             guard let streamID = error.streamID else { throw error }
             writer.writeRstStream(streamID, code: error.code)
             streams[streamID] = nil
+            markStreamClosed(streamID)
             // A server-*emitted* RST_STREAM counts against the reset budget too — otherwise an attacker
             // provokes unbounded resets the client never sends, bypassing the Rapid-Reset defense:
             // MadeYouReset (CVE-2025-8671).
@@ -385,6 +393,11 @@ public struct HTTP2Connection {
             throw .connection(.protocolError, "client used a non-odd stream identifier")
         }
         guard streamID > lastPeerStreamID else {
+            // A reused, already-closed stream id → STREAM_CLOSED stream error (§5.1); a never-opened
+            // smaller id → the §5.1.1 "unexpected identifier" connection error (audit F1).
+            if isRecentlyClosed(streamID) {
+                throw .stream(streamID, .streamClosed, "HEADERS on a closed stream")
+            }
             throw .connection(.protocolError, "stream identifier did not increase")
         }
         lastPeerStreamID = streamID
@@ -480,11 +493,25 @@ public struct HTTP2Connection {
             UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self))
         }
         streams[frame.header.streamID] = nil
+        markStreamClosed(frame.header.streamID)
         events.append(
             .streamReset(streamID: frame.header.streamID, code: HTTP2ErrorCode(code: code)))
     }
 
     // MARK: Helpers
+
+    /// Records `streamID` as recently closed (bounded FIFO) so a later frame on it reports
+    /// STREAM_CLOSED rather than a connection error (RFC 9113 §5.1; audit F1).
+    mutating func markStreamClosed(_ streamID: HTTP2StreamID) {
+        guard closedStreams.insert(streamID).inserted else { return }
+        closedStreamOrder.append(streamID)
+        if closedStreamOrder.count > maxConcurrentStreams {
+            closedStreams.remove(closedStreamOrder.removeFirst())
+        }
+    }
+
+    /// Whether `streamID` was recently closed (opened then gone), per RFC 9113 §5.1.
+    func isRecentlyClosed(_ streamID: HTTP2StreamID) -> Bool { closedStreams.contains(streamID) }
 
     mutating func emitRequest(
         _ streamID: HTTP2StreamID, into events: inout [Event]

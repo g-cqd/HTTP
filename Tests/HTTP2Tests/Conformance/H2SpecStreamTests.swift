@@ -6,10 +6,9 @@
 //  states (the idle/half-closed/closed frame matrix), §5.1.1 identifiers, §5.1.2 concurrency, §5.3.1
 //  dependencies, §5.4.1 connection-error handling, and §5.5 extension frames.
 //
-//  Two findings are pre-staged with `withKnownIssue` (engine fix to follow, per the approved plan):
-//   • F1 — the engine drops a stream once closed, so a DATA/HEADERS frame on a *closed* stream is
-//     reported as a connection PROTOCOL_ERROR rather than the §5.1 STREAM_CLOSED. The wrapper auto-
-//     fails (a reminder to delete it) once the engine tracks recently-closed stream ids.
+//  F1 is now fixed: the engine tracks a bounded set of recently-closed stream ids, so a DATA/HEADERS
+//  frame on a closed stream is the §5.1 STREAM_CLOSED *stream* error (survivable) rather than a
+//  connection PROTOCOL_ERROR that tears down every multiplexed stream.
 //  A lone CONTINUATION on a half-closed/closed stream is a connection PROTOCOL_ERROR here (RFC 9113
 //  §6.10: a CONTINUATION with no open block has no stream context to scope to); h2spec's STREAM_CLOSED
 //  expectation for that sub-case is noted inline as a defensible divergence, not a bug.
@@ -74,7 +73,7 @@ struct H2SpecStreamTests {
             .protocolError, feeding: H2Wire.continuation(streamID: 1), on: &connection)
     }
 
-    // MARK: §5.1 Stream States — closed (F1: engine forgets closed streams)
+    // MARK: §5.1 Stream States — closed (recently-closed ids tracked → STREAM_CLOSED, audit F1)
 
     @Test("5.1/closed-after-RST — DATA is a STREAM_CLOSED stream error (§5.1)")
     func closedAfterResetDataIsStreamClosed() throws {
@@ -83,14 +82,10 @@ struct H2SpecStreamTests {
         open += H2Wire.rstStream(streamID: 1)  // client closes the stream
         _ = try connection.receive(open)
         _ = connection.outboundBytes()
-        withKnownIssue(
-            "F1 — RFC 9113 §5.1: closed stream reported as PROTOCOL_ERROR, not STREAM_CLOSED"
-        ) {
-            H2Wire.expectStreamError(
-                .streamClosed, on: 1,
-                feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
-                connection: &connection)
-        }
+        H2Wire.expectStreamError(
+            .streamClosed, on: 1,
+            feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
+            connection: &connection)
     }
 
     @Test("5.1/closed-after-RST — HEADERS is a STREAM_CLOSED stream error (§5.1)")
@@ -100,17 +95,13 @@ struct H2SpecStreamTests {
         open += H2Wire.rstStream(streamID: 1)
         _ = try connection.receive(open)
         _ = connection.outboundBytes()
-        withKnownIssue(
-            "F1 — RFC 9113 §5.1: closed stream reported as PROTOCOL_ERROR, not STREAM_CLOSED"
-        ) {
-            H2Wire.expectStreamError(
-                .streamClosed, on: 1,
-                feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields()),
-                connection: &connection)
-        }
+        H2Wire.expectStreamError(
+            .streamClosed, on: 1,
+            feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields()),
+            connection: &connection)
     }
 
-    @Test("5.1/closed — DATA after a completed response is a STREAM_CLOSED connection error (§5.1)")
+    @Test("5.1/closed — DATA after a completed response is a STREAM_CLOSED stream error (§5.1)")
     func closedStreamDataIsStreamClosed() throws {
         var connection = try H2Wire.handshaked()
         _ = try connection.receive(H2Wire.get(streamID: 1))
@@ -118,33 +109,23 @@ struct H2SpecStreamTests {
         // A response with no body sets END_STREAM, closing the stream.
         try connection.respond(to: HTTP2StreamID(1), HTTPResponse(status: .ok))
         _ = connection.outboundBytes()
-        withKnownIssue(
-            "F1 — RFC 9113 §5.1: closed stream reported as PROTOCOL_ERROR, not STREAM_CLOSED"
-        ) {
-            H2Wire.expectConnectionError(
-                .streamClosed,
-                feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
-                on: &connection, requireGoAway: false)
-        }
+        H2Wire.expectStreamError(
+            .streamClosed, on: 1,
+            feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
+            connection: &connection)
     }
 
-    @Test(
-        "5.1/closed — HEADERS after a completed response is a STREAM_CLOSED connection error (§5.1)"
-    )
+    @Test("5.1/closed — HEADERS after a completed response is a STREAM_CLOSED stream error (§5.1)")
     func closedStreamHeadersIsStreamClosed() throws {
         var connection = try H2Wire.handshaked()
         _ = try connection.receive(H2Wire.get(streamID: 1))
         _ = connection.outboundBytes()
         try connection.respond(to: HTTP2StreamID(1), HTTPResponse(status: .ok))
         _ = connection.outboundBytes()
-        withKnownIssue(
-            "F1 — RFC 9113 §5.1: closed stream reported as PROTOCOL_ERROR, not STREAM_CLOSED"
-        ) {
-            H2Wire.expectConnectionError(
-                .streamClosed,
-                feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields()),
-                on: &connection, requireGoAway: false)
-        }
+        H2Wire.expectStreamError(
+            .streamClosed, on: 1,
+            feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields()),
+            connection: &connection)
     }
 
     @Test(
