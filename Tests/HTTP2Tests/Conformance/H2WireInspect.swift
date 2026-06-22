@@ -144,7 +144,10 @@ extension H2Wire {
     ) -> HTTP2Connection.Event? {
         do {
             let events = try connection.receive(bytes)
-            let request = events.first { if case .request = $0 { return true } else { return false } }
+            let request = events.first {
+                guard case .request = $0 else { return false }
+                return true
+            }
             #expect(request != nil, "expected a request event", sourceLocation: sourceLocation)
             return request
         } catch {

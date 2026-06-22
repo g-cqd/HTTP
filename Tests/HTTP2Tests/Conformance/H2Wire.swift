@@ -204,7 +204,8 @@ enum H2Wire {
         fragment: [UInt8] = [],
         endHeaders: Bool = true
     ) -> [UInt8] {
-        frame(.continuation, flags: endHeaders ? [.endHeaders] : [], streamID: streamID,
+        frame(
+            .continuation, flags: endHeaders ? [.endHeaders] : [], streamID: streamID,
             payload: fragment)
     }
 
