@@ -32,9 +32,18 @@ struct HTTPDExample {
         let tls = makeTLS()
         let configuration = TransportConfiguration(
             host: "127.0.0.1", port: port, backbone: backbone, tls: tls)
+        // A middleware chain (outermost first) wraps the application responder — a stand-in for what a
+        // consumer composes; reorder or replace any entry, or add their own `HTTPMiddleware`.
+        let responder = MiddlewareChain(
+            [
+                ServerHeaderMiddleware("httpd-example"),
+                AccessLogMiddleware { print("httpd-example: \($0)") },
+                CORSMiddleware(),
+            ],
+            terminatingAt: makeResponder())
         let server = HTTPServer(
             transport: TransportFactory.make(configuration),
-            responder: makeResponder(),
+            responder: responder,
             webSocketHandler: makeWebSocketEcho()
         )
 

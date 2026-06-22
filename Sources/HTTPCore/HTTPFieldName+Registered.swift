@@ -74,4 +74,29 @@ extension HTTPFieldName {
     public static let secWebSocketAccept = HTTPFieldName(unchecked: "sec-websocket-accept")
     /// `Sec-WebSocket-Version` (RFC 6455 §4.1) — the negotiated WebSocket version (13).
     public static let secWebSocketVersion = HTTPFieldName(unchecked: "sec-websocket-version")
+
+    // MARK: CORS (WHATWG Fetch — Cross-Origin Resource Sharing)
+
+    /// `Origin` (RFC 6454 §7) — the request's origin.
+    public static let origin = HTTPFieldName(unchecked: "origin")
+    /// `Access-Control-Request-Method` — the method a CORS preflight asks about.
+    public static let accessControlRequestMethod = HTTPFieldName(
+        unchecked: "access-control-request-method")
+    /// `Access-Control-Request-Headers` — the headers a CORS preflight asks about.
+    public static let accessControlRequestHeaders = HTTPFieldName(
+        unchecked: "access-control-request-headers")
+    /// `Access-Control-Allow-Origin` — the origin(s) the server permits.
+    public static let accessControlAllowOrigin = HTTPFieldName(
+        unchecked: "access-control-allow-origin")
+    /// `Access-Control-Allow-Methods` — the methods the server permits cross-origin.
+    public static let accessControlAllowMethods = HTTPFieldName(
+        unchecked: "access-control-allow-methods")
+    /// `Access-Control-Allow-Headers` — the request headers the server permits cross-origin.
+    public static let accessControlAllowHeaders = HTTPFieldName(
+        unchecked: "access-control-allow-headers")
+    /// `Access-Control-Allow-Credentials` — whether credentials may accompany the request.
+    public static let accessControlAllowCredentials = HTTPFieldName(
+        unchecked: "access-control-allow-credentials")
+    /// `Access-Control-Max-Age` — how long a preflight result may be cached.
+    public static let accessControlMaxAge = HTTPFieldName(unchecked: "access-control-max-age")
 }
