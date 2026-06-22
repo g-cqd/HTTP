@@ -101,4 +101,28 @@ public enum FieldValidation {
             false
         }
     }
+
+    /// Returns `true` iff `byte` may appear in a request-target or in an HTTP/2 `:path` / `:authority`
+    /// / `:scheme` pseudo-header: any octet that is **not** a control, SP, or DEL.
+    ///
+    /// Rejecting CR (0x0D), LF (0x0A), NUL (0x00), the other C0/C1 controls, SP (0x20), and DEL (0x7F)
+    /// is the defense against request-line / header / log injection and response splitting
+    /// (CWE-113 / CWE-117) when these values are reflected or logged (RFC 9112 §3.2, RFC 9113 §8.3.1).
+    @inlinable
+    public static func isRequestTargetByte(_ byte: UInt8) -> Bool {
+        byte > 0x20 && byte != 0x7F
+    }
+
+    /// Returns `true` iff every byte of `bytes` satisfies ``isRequestTargetByte(_:)`` — no control,
+    /// SP, or DEL octet.
+    ///
+    /// Iterates once (`O(n)` time, `O(1)` space), never recurses. The empty sequence returns `true`;
+    /// callers enforce non-emptiness separately (e.g. `:path` MUST be non-empty).
+    @inlinable
+    public static func isRequestTargetValue(_ bytes: some Sequence<UInt8>) -> Bool {
+        for byte in bytes where !isRequestTargetByte(byte) {
+            return false
+        }
+        return true
+    }
 }
