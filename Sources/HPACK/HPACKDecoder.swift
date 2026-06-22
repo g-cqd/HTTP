@@ -75,14 +75,13 @@ public struct HPACKDecoder {
         let nameIndex = try HPACKInteger.decode(&reader, prefixBits: prefixBits)
         let name: String
         if nameIndex == 0 {
-            let bytes = try HPACKString.decode(&reader, maxEncodedLength: limits.maxFieldSize)
-            name = String(decoding: bytes, as: UTF8.self)
+            name = try HPACKString.decodeString(&reader, maxEncodedLength: limits.maxFieldSize)
         } else {
             guard let entry = dynamicTable.field(at: nameIndex) else { throw .invalidIndex }
             name = entry.name
         }
-        let valueBytes = try HPACKString.decode(&reader, maxEncodedLength: limits.maxFieldSize)
-        let field = HPACKField(name: name, value: String(decoding: valueBytes, as: UTF8.self))
+        let value = try HPACKString.decodeString(&reader, maxEncodedLength: limits.maxFieldSize)
+        let field = HPACKField(name: name, value: value)
         if addToTable { dynamicTable.add(field) }
         return field
     }

@@ -21,6 +21,13 @@ struct HPACKStringTests {
         }
     }
 
+    private func decodeString(_ bytes: [UInt8], maxEncodedLength: Int = 4096) throws -> String {
+        try bytes.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            return try HPACKString.decodeString(&reader, maxEncodedLength: maxEncodedLength)
+        }
+    }
+
     private func encode(_ string: String) -> [UInt8] {
         var output = [UInt8]()
         HPACKString.encode(Array(string.utf8), into: &output)
@@ -71,6 +78,16 @@ struct HPACKStringTests {
         ])
     func roundTrips(string: String) throws {
         #expect(try decode(encode(string)) == Array(string.utf8))
+    }
+
+    @Test(
+        "decodeString round-trips straight to String (raw + Huffman, incl. non-ASCII)",
+        arguments: [
+            "", "a", "custom-key", "www.example.com", "no-cache",
+            "Mon, 21 Oct 2013 20:13:21 GMT", "🌍 unicode 世界",
+        ])
+    func decodeStringRoundTrips(string: String) throws {
+        #expect(try decodeString(encode(string)) == string)
     }
 
     // MARK: §5.2 failure modes

@@ -79,11 +79,52 @@ public enum Huffman {
     /// symbol as soon as the accumulated bits match a code of the current length. Fails closed on the
     /// three §5.2 decoding errors.
     public static func decode(_ input: RawSpan) throws(HuffmanError) -> [UInt8] {
+        var caught: (any Error)?
+        let output = [UInt8](unsafeUninitializedCapacity: decodedUpperBound(of: input)) {
+            buffer, count in
+            do { count = try decode(input, into: buffer) } catch { caught = error }
+        }
+        if let caught { throw (caught as? HuffmanError) ?? .invalidCode }
+        return output
+    }
+
+    /// Huffman-decodes `input` straight into a `String` (RFC 7541 §5.2).
+    ///
+    /// Repairs non-UTF-8 octets exactly as `String(decoding:as:)` does. The bit-walk runs into a
+    /// stack scratch buffer, so a typical small value costs a single heap allocation — the `String` —
+    /// with no throwaway intermediate `[UInt8]`. This is the HPACK decoder's hot path.
+    public static func decodeString(_ input: RawSpan) throws(HuffmanError) -> String {
+        var decoded: String?
+        var caught: (any Error)?
+        withUnsafeTemporaryAllocation(of: UInt8.self, capacity: decodedUpperBound(of: input)) {
+            buffer in
+            do {
+                let written = try decode(input, into: buffer)
+                decoded = String(
+                    decoding: UnsafeBufferPointer(rebasing: buffer[..<written]), as: UTF8.self)
+            } catch {
+                caught = error
+            }
+        }
+        if let caught { throw (caught as? HuffmanError) ?? .invalidCode }
+        return decoded ?? ""
+    }
+
+    /// The maximum octets `input` can decode to (shortest code is 5 bits → ≤ ⌈input·8 / 5⌉ symbols).
+    @usableFromInline
+    static func decodedUpperBound(of input: RawSpan) -> Int {
+        max(1, input.byteCount * 8 / 5 + 1)
+    }
+
+    /// Decodes `input` into `buffer`, returning the number of octets written.
+    ///
+    /// The shared bit-walk. `buffer` MUST be at least ``decodedUpperBound(of:)`` octets; throws on
+    /// the three §5.2 errors. Allocation-free — the caller owns the buffer.
+    static func decode(
+        _ input: RawSpan, into buffer: UnsafeMutableBufferPointer<UInt8>
+    ) throws(HuffmanError) -> Int {
         let table = decodeTable
-        var output = [UInt8]()
-        // The shortest canonical code is 5 bits, so at most ⌈input·8 / 5⌉ symbols can decode out of
-        // the bit stream — reserve that exact upper bound once instead of re-growing per symbol.
-        output.reserveCapacity(input.byteCount * 8 / 5 + 1)
+        var written = 0
         var code: UInt32 = 0
         var length = 0
         var index = 0
@@ -96,7 +137,8 @@ public enum Huffman {
                 guard length <= maxCodeLength else { throw .invalidCode }
                 if let symbol = table.match(code: code, length: length) {
                     guard symbol != eosSymbol else { throw .eosInInput }
-                    output.append(UInt8(symbol))
+                    buffer[written] = UInt8(symbol)
+                    written += 1
                     code = 0
                     length = 0
                 }
@@ -105,7 +147,7 @@ public enum Huffman {
             index += 1
         }
         try validatePadding(code: code, length: length)
-        return output
+        return written
     }
 
     /// Validates the trailing bits as EOS-prefix padding: at most 7 bits, all 1s (RFC 7541 §5.2).

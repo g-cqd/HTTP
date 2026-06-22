@@ -35,22 +35,44 @@ public enum HPACKString {
         _ reader: inout ByteReader,
         maxEncodedLength: Int
     ) throws(HPACKError) -> [UInt8] {
+        let (huffmanCoded, range) = try parseHeader(&reader, maxEncodedLength: maxEncodedLength)
+        let payload = reader.slice(in: range)
+        if huffmanCoded {
+            do { return try Huffman.decode(payload) } catch { throw .invalidHuffman }
+        }
+        return payload.withUnsafeBytes { Array($0) }
+    }
+
+    /// Decodes a string literal straight into a `String` (RFC 7541 §5.2).
+    ///
+    /// Avoids the throwaway `[UInt8]` that ``decode(_:maxEncodedLength:)`` materializes — the HPACK
+    /// decoder's hot path. Non-UTF-8 octets are repaired exactly as `String(decoding:as:)` does.
+    public static func decodeString(
+        _ reader: inout ByteReader,
+        maxEncodedLength: Int
+    ) throws(HPACKError) -> String {
+        let (huffmanCoded, range) = try parseHeader(&reader, maxEncodedLength: maxEncodedLength)
+        let payload = reader.slice(in: range)
+        if huffmanCoded {
+            do { return try Huffman.decodeString(payload) } catch { throw .invalidHuffman }
+        }
+        return payload.withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
+    }
+
+    /// Parses the §5.2 string header (H flag + 7-bit length), bounds the declared length against
+    /// `maxEncodedLength`, advances `reader` past the payload, and returns the Huffman flag and the
+    /// payload's byte range within the reader.
+    private static func parseHeader(
+        _ reader: inout ByteReader,
+        maxEncodedLength: Int
+    ) throws(HPACKError) -> (huffmanCoded: Bool, range: Range<Int>) {
         guard let first = reader.peek() else { throw .truncatedString }
         let huffmanCoded = (first & huffmanFlag) != 0
         let length = try HPACKInteger.decode(&reader, prefixBits: 7)
         guard length <= maxEncodedLength else { throw .stringTooLong }
         guard reader.remaining >= length else { throw .truncatedString }
-
         let start = reader.position
         reader.advance(by: length)
-        let payload = reader.slice(in: start..<(start + length))
-        if huffmanCoded {
-            do {
-                return try Huffman.decode(payload)
-            } catch {
-                throw .invalidHuffman
-            }
-        }
-        return payload.withUnsafeBytes { Array($0) }
+        return (huffmanCoded, start..<(start + length))
     }
 }
