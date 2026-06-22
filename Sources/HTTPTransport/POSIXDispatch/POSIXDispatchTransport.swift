@@ -29,7 +29,7 @@ public final class POSIXDispatchTransport: ServerTransport {
     private let ioQueue = DispatchQueue(
         label: "http.transport.posix-dispatch.io", attributes: .concurrent)
     private let state = Mutex<State>(State())
-    private let connectionCounter = Atomic<UInt64>(0)
+    private let connectionIDs = ConnectionIDAllocator()
 
     private struct State {
         var acceptSource: (any DispatchSourceRead)?
@@ -105,8 +105,7 @@ public final class POSIXDispatchTransport: ServerTransport {
                 break  // wouldBlock (drained) or stop
             }
             POSIXSocket.setNonBlocking(clientFD)
-            let id = TransportConnectionID(
-                connectionCounter.wrappingAdd(1, ordering: .relaxed).newValue)
+            let id = connectionIDs.next()
             let channel = DispatchIO(type: .stream, fileDescriptor: clientFD, queue: ioQueue) { _ in
                 close(clientFD)
             }

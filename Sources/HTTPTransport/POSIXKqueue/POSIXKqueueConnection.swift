@@ -95,13 +95,12 @@ public final class POSIXKqueueConnection: TransportConnection {
         descriptor: Int32, maxLength: Int, into once: OnceResumer<[UInt8]?>
     ) {
         do {
-            let bytes = try [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) {
-                buffer, filled in
-                let count = read(descriptor, buffer.baseAddress, buffer.count)
-                if count < 0 { throw TransportError.ioFailed("read errno \(errno)") }
-                filled = count
+            let bytes = try POSIXSocket.readBuffer(maxLength: maxLength) { raw in
+                let count = read(descriptor, raw.baseAddress, raw.count)
+                guard count >= 0 else { throw TransportError.ioFailed("read errno \(errno)") }
+                return count
             }
-            once.resume(returning: bytes.isEmpty ? nil : bytes)  // empty == EOF
+            once.resume(returning: bytes)  // nil == EOF (a zero-length read)
         } catch {
             once.resume(throwing: error)
         }

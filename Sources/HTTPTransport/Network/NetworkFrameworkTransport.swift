@@ -27,7 +27,7 @@ public final class NetworkFrameworkTransport: ServerTransport {
     private let configuration: TransportConfiguration
     private let queue = DispatchQueue(label: "http.transport.network-framework")
     private let state = Mutex<State>(State())
-    private let connectionCounter = Atomic<UInt64>(0)
+    private let connectionIDs = ConnectionIDAllocator()
 
     private struct State {
         var listener: NWListener?
@@ -95,8 +95,7 @@ public final class NetworkFrameworkTransport: ServerTransport {
         _ nwConnection: NWConnection,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        let id = TransportConnectionID(
-            connectionCounter.wrappingAdd(1, ordering: .relaxed).newValue)
+        let id = connectionIDs.next()
         nwConnection.start(queue: queue)
         continuation.yield(NetworkFrameworkConnection(id: id, connection: nwConnection))
     }

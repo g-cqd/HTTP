@@ -25,7 +25,7 @@ public final class POSIXKqueueTransport: ServerTransport {
 
     private let configuration: TransportConfiguration
     private let state = Mutex<State>(State())
-    private let connectionCounter = Atomic<UInt64>(0)
+    private let connectionIDs = ConnectionIDAllocator()
 
     private struct State {
         var eventLoop: KqueueEventLoop?
@@ -113,8 +113,7 @@ public final class POSIXKqueueTransport: ServerTransport {
                 break  // drained (wouldBlock) or the listener was closed
             }
             POSIXSocket.setNonBlocking(clientFD)
-            let id = TransportConnectionID(
-                connectionCounter.wrappingAdd(1, ordering: .relaxed).newValue)
+            let id = connectionIDs.next()
             continuation.yield(
                 POSIXKqueueConnection(
                     id: id, descriptor: clientFD,

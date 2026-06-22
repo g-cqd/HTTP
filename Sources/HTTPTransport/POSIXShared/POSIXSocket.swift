@@ -107,4 +107,19 @@ enum POSIXSocket {
             return .stop  // EBADF / EINVAL or unrecoverable
         }
     }
+
+    /// Reads up to `maxLength` bytes via `read`, or returns `nil` at end of stream.
+    ///
+    /// One allocation, never zero-filled, trimmed to the count `read` reports (no slice copy), per the
+    /// CLAUDE.md allocation rules. `read` writes into the buffer and returns the byte count it
+    /// produced; a zero-length read is end of stream.
+    static func readBuffer(
+        maxLength: Int,
+        _ read: (UnsafeMutableRawBufferPointer) throws -> Int
+    ) rethrows -> [UInt8]? {
+        let bytes = try [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) { buffer, filled in
+            filled = try read(UnsafeMutableRawBufferPointer(buffer))
+        }
+        return bytes.isEmpty ? nil : bytes
+    }
 }

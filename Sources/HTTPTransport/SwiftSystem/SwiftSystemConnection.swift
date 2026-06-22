@@ -61,13 +61,10 @@ public final class SwiftSystemConnection: TransportConnection {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
                     do {
-                        // One allocation, no zero-fill, no slice copy (CLAUDE.md allocation rule).
-                        let bytes = try [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) {
-                            buffer, filled in
-                            filled = try descriptor.read(
-                                into: UnsafeMutableRawBufferPointer(buffer))
+                        let bytes = try POSIXSocket.readBuffer(maxLength: maxLength) {
+                            try descriptor.read(into: $0)
                         }
-                        continuation.resume(returning: bytes.isEmpty ? nil : bytes)
+                        continuation.resume(returning: bytes)
                     } catch {
                         continuation.resume(throwing: error)
                     }

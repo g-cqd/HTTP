@@ -34,7 +34,7 @@ public final class SwiftSystemTransport: ServerTransport {
     private let ioQueue = DispatchQueue(
         label: "http.transport.swift-system.io", attributes: .concurrent)
     private let state = Mutex<State>(State())
-    private let connectionCounter = Atomic<UInt64>(0)
+    private let connectionIDs = ConnectionIDAllocator()
 
     private struct State {
         var listenDescriptor: FileDescriptor?
@@ -101,8 +101,7 @@ public final class SwiftSystemTransport: ServerTransport {
                 if case .retry = POSIXSocket.classifyAcceptError(errno) { continue }
                 break  // a closed descriptor (shutdown) or unrecoverable error stops the loop
             }
-            let id = TransportConnectionID(
-                connectionCounter.wrappingAdd(1, ordering: .relaxed).newValue)
+            let id = connectionIDs.next()
             continuation.yield(
                 SwiftSystemConnection(
                     id: id,
