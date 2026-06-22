@@ -6,6 +6,7 @@
 //  size, and out-of-range indexing.
 //
 
+import HTTPCore
 import Testing
 
 @testable import HPACK

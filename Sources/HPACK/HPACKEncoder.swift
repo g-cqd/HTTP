@@ -9,6 +9,8 @@
 //  decoder's, so the two stay synchronized across a stream. Stateful: one per connection-direction.
 //
 
+public import HTTPCore
+
 /// A stateful HPACK encoder (RFC 7541 §6); its dynamic table mirrors the peer decoder's.
 public struct HPACKEncoder {
 

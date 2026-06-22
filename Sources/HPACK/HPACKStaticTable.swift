@@ -7,6 +7,8 @@
 //  62 and up are dynamic.
 //
 
+public import HTTPCore
+
 /// The RFC 7541 Appendix A static table.
 public enum HPACKStaticTable {
 

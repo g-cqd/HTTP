@@ -9,6 +9,7 @@
 //
 
 internal import HPACK
+internal import HTTPCore
 
 extension HTTP2Connection {
 

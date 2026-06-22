@@ -6,6 +6,7 @@
 //  address space (§2.3.3), FIFO eviction (§4.4), size updates (§6.3), and the empty-on-oversize rule.
 //
 
+import HTTPCore
 import Testing
 
 @testable import HPACK

@@ -8,6 +8,8 @@
 //  entries to honor the size bound (§4.4), and an entry larger than the whole table empties it.
 //
 
+public import HTTPCore
+
 /// The RFC 7541 §2.3.2 dynamic table (with the combined §2.3.3 index lookup).
 public struct HPACKDynamicTable: Sendable, Equatable {
 
