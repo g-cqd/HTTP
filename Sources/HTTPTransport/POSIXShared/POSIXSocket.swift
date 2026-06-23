@@ -28,13 +28,20 @@ enum POSIXSocket {
     /// Creates, binds (IPv4, RFC 791), and listens (TCP, RFC 9293) on a POSIX.1-2017 stream socket,
     /// returning the descriptor and the OS-assigned port.
     static func makeListenSocket(
-        host: String, port: UInt16, nonBlocking: Bool
+        host: String, port: UInt16, nonBlocking: Bool, reusePort: Bool = false
     ) throws -> (descriptor: Int32, port: UInt16) {
         let rawFD = socket(AF_INET, SOCK_STREAM, 0)
         guard rawFD >= 0 else { throw TransportError.bindFailed("socket() errno \(errno)") }
 
         var reuse: Int32 = 1
         _ = setsockopt(rawFD, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        if reusePort {
+            // SO_REUSEPORT lets N prefork workers bind the same port; the kernel load-balances
+            // accepted connections across them (a worker per core). Off by default so a second,
+            // accidental instance still fails with EADDRINUSE rather than silently sharing the port.
+            _ = setsockopt(
+                rawFD, SOL_SOCKET, SO_REUSEPORT, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        }
         setNoSIGPIPE(rawFD)
         if nonBlocking { setNonBlocking(rawFD) }
 

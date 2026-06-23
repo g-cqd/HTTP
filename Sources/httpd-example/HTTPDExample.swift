@@ -28,11 +28,18 @@ import WebSocket
 struct HTTPDExample {
 
     static func main() async {
+        // Prefork: HTTPD_WORKERS=N makes this the supervisor (it forks N fresh worker processes and
+        // never returns); each worker re-enters here with HTTPD_WORKER set and serves with
+        // SO_REUSEPORT so the kernel load-balances across them. POSIX backbones only.
+        if !Prefork.isWorker, let workers = Prefork.workerCount {
+            Prefork.supervise(workers: workers)
+        }
         let port = parsePort()
         let backbone = parseBackbone()
         let tls = makeTLS()
         let configuration = TransportConfiguration(
-            host: "127.0.0.1", port: port, backbone: backbone, tls: tls)
+            host: "127.0.0.1", port: port, backbone: backbone, tls: tls,
+            reusePort: Prefork.isWorker)
         // A middleware chain (outermost first) wraps the application responder — a stand-in for what a
         // consumer composes; reorder or replace any entry, or add their own `HTTPMiddleware`.
         let responder = MiddlewareChain(
@@ -59,7 +66,9 @@ struct HTTPDExample {
             limits: makeLimits()
         )
 
-        if tls == nil {
+        if Prefork.isWorker {
+            print("httpd-example: worker \(getpid()) serving on \(port) via \(backbone.rawValue)")
+        } else if tls == nil {
             print(
                 "httpd-example: serving HTTP/1.1 + HTTP/2 (h2c) on http://127.0.0.1:\(port) "
                     + "via \(backbone.rawValue)")

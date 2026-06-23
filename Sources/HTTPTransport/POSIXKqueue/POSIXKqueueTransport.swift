@@ -50,7 +50,8 @@ public final class POSIXKqueueTransport: ServerTransport {
     /// Binds a non-blocking TCP socket and begins accepting via the kqueue loop.
     public func start() async throws -> AsyncStream<any TransportConnection> {
         let listener = try POSIXSocket.makeListenSocket(
-            host: configuration.host, port: configuration.port, nonBlocking: true)
+            host: configuration.host, port: configuration.port, nonBlocking: true,
+            reusePort: configuration.reusePort)
         let eventLoop = KqueueEventLoop()
         eventLoop.start()
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()

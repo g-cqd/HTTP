@@ -55,7 +55,8 @@ public final class SwiftSystemTransport: ServerTransport {
     /// Binds a POSIX TCP listening socket and begins accepting, returning a stream of connections.
     public func start() async throws -> AsyncStream<any TransportConnection> {
         let listener = try POSIXSocket.makeListenSocket(
-            host: configuration.host, port: configuration.port, nonBlocking: false)
+            host: configuration.host, port: configuration.port, nonBlocking: false,
+            reusePort: configuration.reusePort)
         let descriptor = FileDescriptor(rawValue: listener.descriptor)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
         state.withLock {

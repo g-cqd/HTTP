@@ -42,17 +42,25 @@ public struct TransportConfiguration: Sendable {
     /// fake backbones are cleartext and ignore it.
     public var tls: TransportTLS?
 
+    /// Whether to bind the listen socket with `SO_REUSEPORT` (POSIX backbones only).
+    ///
+    /// Set by a prefork worker so N workers can share the port and the kernel load-balances accepts
+    /// across them. Off by default — see ``POSIXSocket/makeListenSocket(host:port:nonBlocking:reusePort:)``.
+    public var reusePort: Bool
+
     /// Creates a transport configuration.
     public init(
         host: String = "127.0.0.1",
         port: UInt16,
         backbone: TransportBackbone,
-        tls: TransportTLS? = nil
+        tls: TransportTLS? = nil,
+        reusePort: Bool = false
     ) {
         self.host = host
         self.port = port
         self.backbone = backbone
         self.tls = tls
+        self.reusePort = reusePort
     }
 }
 
