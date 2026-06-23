@@ -78,9 +78,16 @@ func registerHTTP1Benchmarks() {
     }
 
     Benchmark("http1/ResponseSerializer/serialize") { benchmark in
+        // A realistic response header set — content type, server, and the security/CORS headers a
+        // middleware chain adds. Several names are >15 bytes, so they exercise the field-name emit
+        // path that must not heap-allocate a String per registered name.
         var fields = HTTPFields()
         fields.append("text/plain; charset=utf-8", for: .contentType)
         fields.append("HTTPBench/1.0", for: .server)
+        fields.append("nosniff", for: .xContentTypeOptions)
+        fields.append("max-age=63072000", for: .strictTransportSecurity)
+        fields.append("default-src 'self'", for: .contentSecurityPolicy)
+        fields.append("*", for: .accessControlAllowOrigin)
         let response = HTTPResponse(status: .ok, headerFields: fields)
         let body = Array("Hello, world!".utf8)
         for _ in benchmark.scaledIterations {

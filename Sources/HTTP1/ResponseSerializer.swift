@@ -62,7 +62,7 @@ public enum ResponseSerializer {
             fields.append("\(body.count)", for: .contentLength)
         }
         for field in fields {
-            output.append(contentsOf: field.name.rawName.utf8)
+            field.name.appendRawNameUTF8(to: &output)
             output.append(colon)
             output.append(space)
             output.append(contentsOf: field.value.utf8)

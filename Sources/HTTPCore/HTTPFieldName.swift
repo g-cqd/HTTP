@@ -32,10 +32,26 @@ public struct HTTPFieldName: Sendable, Hashable {
     public let canonicalName: String
 
     /// The field name in its original spelling (e.g. `"Content-Type"`).
+    ///
+    /// Materializes a `String` for the registered-constant (`StaticString`) case; prefer
+    /// ``appendRawNameUTF8(to:)`` on the response hot path, which avoids that allocation.
     public var rawName: String {
         switch storage {
         case .literal(let name): name.description
         case .parsed(let name): name
+        }
+    }
+
+    /// Appends the original-spelling name as UTF-8 bytes to `output`.
+    ///
+    /// Zero-allocation for the registered-constant case — `StaticString.withUTF8Buffer` exposes the
+    /// literal's bytes directly, so the response serializer no longer builds a throwaway `String` per
+    /// header (it ran once for every registered name — Content-Type, Server, Date, … — on every
+    /// response).
+    public func appendRawNameUTF8(to output: inout [UInt8]) {
+        switch storage {
+        case .literal(let name): name.withUTF8Buffer { output.append(contentsOf: $0) }
+        case .parsed(let name): output.append(contentsOf: name.utf8)
         }
     }
 

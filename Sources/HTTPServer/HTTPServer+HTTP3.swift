@@ -114,11 +114,10 @@ extension HTTPServer {
     /// Adds the `Alt-Svc` HTTP/3 advertisement (RFC 7838) to an h1/h2 response, when a QUIC listener
     /// is running, so clients can discover and upgrade to HTTP/3 on the same authority.
     func withAltSvc(_ response: HTTPResponse) -> HTTPResponse {
-        guard let value = altSvc.withLock({ $0 }), let name = HTTPFieldName("alt-svc") else {
-            return response
-        }
+        guard let value = altSvc.withLock({ $0 }) else { return response }
         var advertised = response
-        advertised.headerFields.append(value, for: name)
+        // Use the registered constant (no per-response token re-validation / canonicalName build).
+        advertised.headerFields.append(value, for: .altSvc)
         return advertised
     }
 
