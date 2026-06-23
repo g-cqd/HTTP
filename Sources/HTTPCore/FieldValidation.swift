@@ -159,8 +159,41 @@ public enum FieldValidation {
     /// callers enforce non-emptiness separately (e.g. `:path` MUST be non-empty).
     @inlinable
     public static func isRequestTargetValue(_ bytes: some Sequence<UInt8>) -> Bool {
+        if let valid = bytes.withContiguousStorageIfAvailable(requestTargetBytesAreValid) {
+            return valid
+        }
         for byte in bytes where !isRequestTargetByte(byte) {
             return false
+        }
+        return true
+    }
+
+    /// SWAR validation of a contiguous request-target/pseudo-header buffer: eight octets per word.
+    ///
+    /// An octet is invalid iff it is a control or SP (`<= 0x20`) or DEL (`0x7F`); obs-text (`0x80–0xFF`)
+    /// is valid. Same high-bit tricks as ``fieldValueBytesAreValid`` (Hacker's Delight / Bit Twiddling
+    /// Hacks): `(word - ones*0x21) & ~word & highs` flags octet `<= 0x20`, the `== 0x7F` test flags DEL.
+    /// This runs on every HTTP/2 `:scheme`/`:authority`/`:path`/`:protocol` value (`HTTP2RequestMapper`),
+    /// and `:path`/`:authority` can be long — a full scan, exactly the access pattern SWAR pays off on.
+    @usableFromInline
+    static func requestTargetBytesAreValid(_ buffer: UnsafeBufferPointer<UInt8>) -> Bool {
+        guard let base = buffer.baseAddress else { return true }
+        let count = buffer.count
+        let ones: UInt64 = 0x0101_0101_0101_0101
+        let highs: UInt64 = 0x8080_8080_8080_8080
+        let controlOrSpace = ones &* 0x21  // detect octet < 0x21, i.e. a control or SP (<= 0x20)
+        let del = ones &* 0x7F
+        var index = 0
+        while index &+ 8 <= count {
+            let word = UnsafeRawPointer(base + index).loadUnaligned(as: UInt64.self)
+            let isControlOrSpace = (word &- controlOrSpace) & ~word & highs  // octet <= 0x20
+            let isDEL = ((word ^ del) &- ones) & ~(word ^ del) & highs  // octet == 0x7F
+            if (isControlOrSpace | isDEL) != 0 { return false }
+            index &+= 8
+        }
+        while index < count {
+            if !isRequestTargetByte(base[index]) { return false }
+            index &+= 1
         }
         return true
     }

@@ -38,6 +38,14 @@ func registerCoreBenchmarks() {
         }
     }
 
+    // The request-target / pseudo-header validator over a realistic long `:path` (~140 B) — runs on
+    // every HTTP/2 pseudo-header, so the SWAR rewrite pays off here.
+    Benchmark("core/FieldValidation/isRequestTargetValue-long") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(FieldValidation.isRequestTargetValue(longRequestTarget))
+        }
+    }
+
     Benchmark("core/HTTPFieldName/parse-mixed-case") { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(HTTPFieldName("Content-Type"))

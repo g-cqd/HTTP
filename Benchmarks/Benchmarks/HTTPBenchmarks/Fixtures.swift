@@ -75,6 +75,12 @@ let sampleFieldValue = Array("text/html; charset=utf-8".utf8)
 /// Accept lists) reach this size, so this is the input that decides whether vectorizing pays off.
 let longFieldValue = Array(String(repeating: "session=a1b2c3; ", count: 12).utf8)
 
+/// A realistic long request-target / `:path` (~140 B) — the size at which SWAR (8 B/word) validation
+/// beats the per-byte scan. `isRequestTargetValue` runs on every HTTP/2 `:path`/`:authority`/`:scheme`.
+let longRequestTarget = Array(
+    ("/api/v2/users/12345/posts?filter=published&sort=-created_at&page=3&limit=50"
+        + "&include=author,comments,tags&fields=id,title,body,excerpt,created_at").utf8)
+
 /// A 48-octet value whose Huffman form is longer than the literal — the "raw-wins" encode branch.
 ///
 /// Its octets (0x80…0xBF) all carry long RFC 7541 Huffman codes, so `HPACKString.encode` emits the raw
