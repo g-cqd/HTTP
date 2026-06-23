@@ -139,7 +139,12 @@ struct HTTPDExample {
         {
             return backbone
         }
-        return .networkFramework
+        // Default: swiftSystem leads cleartext throughput (~140k req/s at moderate concurrency). It
+        // runs blocking syscalls on a thread per connection, so for very high connection counts or
+        // tail-latency-sensitive workloads prefer the async posixKqueue/posixDispatch backbones (lower
+        // p99, no thread-per-connection). TLS — and therefore h2-over-TLS and h3 — is honored only by
+        // Network.framework, so fall back to it whenever TLS is requested.
+        return arguments.contains("tls") ? .networkFramework : .swiftSystem
     }
 
     /// A throwaway self-signed TLS identity when `tls` appears in the arguments (dev/test only).
