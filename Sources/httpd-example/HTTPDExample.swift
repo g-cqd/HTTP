@@ -18,6 +18,7 @@
 //    curl -v --http2-prior-knowledge --data 'ping' http://127.0.0.1:8080/echo
 //
 
+import Foundation
 import HTTPCore
 import HTTPServer
 import HTTPTransport
@@ -54,7 +55,8 @@ struct HTTPDExample {
             transport: TransportFactory.make(configuration),
             responder: responder,
             quicTransport: quicTransport,
-            webSocketHandler: makeWebSocketEcho()
+            webSocketHandler: makeWebSocketEcho(),
+            limits: makeLimits()
         )
 
         if tls == nil {
@@ -122,6 +124,19 @@ struct HTTPDExample {
             HTTPResponse(status: status, headerFields: fields),
             body: Array(message.utf8)
         )
+    }
+
+    /// Server limits, with an optional `HTTPD_MAX_CONN` env override for benchmarking/tuning.
+    ///
+    /// The default `maxConnectionsPerClient` (20) is a single-IP DoS guard that a loopback load test
+    /// trips; set `HTTPD_MAX_CONN` to raise both the per-client and global caps without recompiling.
+    private static func makeLimits() -> HTTPLimits {
+        var limits = HTTPLimits.default
+        if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = Int(raw) {
+            limits.maxConnectionsPerClient = value
+            limits.maxConnections = value
+        }
+        return limits
     }
 
     // MARK: Argument parsing
