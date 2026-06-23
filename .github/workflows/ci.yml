@@ -65,6 +65,28 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # Trap-surface gate. The request path must stay free of process-aborting traps, so one bad request
+  # can never crash the whole server (the in-process half of crash defense; prefork covers app traps).
+  # SwiftLint already gates try!/as!/force-unwrap; this covers fatalError/precondition/assertionFailure
+  # /.unsafelyUnwrapped, which abort in release.
+  # ---------------------------------------------------------------------------
+  trap-lint:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert the request path is trap-free
+        run: |
+          targets="Sources/HTTPCore Sources/HTTP1 Sources/HTTP2 Sources/HPACK Sources/QPACK Sources/HTTP3 Sources/WebSocket Sources/HTTPServer Sources/HTTPTransport Sources/HTTPConcurrency"
+          pattern='(fatalError|preconditionFailure|assertionFailure)\(|(^|[^A-Za-z.])precondition\(|(^|[^A-Za-z])assert\(|\.unsafelyUnwrapped'
+          hits="$(grep -rnE "$pattern" $targets --include='*.swift' 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)"
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::process-aborting trap in the request path — one bad request must not crash the server"
+            exit 1
+          fi
+          echo "request path is trap-free"
+
+  # ---------------------------------------------------------------------------
   # Data-race & memory checks. Parsers must stay clean under ASan/TSan.
   # ---------------------------------------------------------------------------
   sanitizers:
