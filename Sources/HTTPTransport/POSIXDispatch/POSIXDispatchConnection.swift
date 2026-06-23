@@ -196,8 +196,11 @@ public final class POSIXDispatchConnection: TransportConnection {
 
     /// Closes the socket once, idempotently.
     ///
-    /// Cancels any parked source first, then closes the fd, then fails the awaiting continuation; the
-    /// serial queue guarantees no source handler runs concurrently with the close.
+    /// `DispatchSource.cancel()` is asynchronous — a readiness handler the kernel just made ready may
+    /// still be queued — so the fd is safe to close only once GCD has quiesced delivery, i.e. from the
+    /// source's *cancellation handler*. Closing it inline after `cancel()` would race that handler onto
+    /// a since-reused fd (cross-connection corruption). With no source armed there is no watcher, so an
+    /// inline close is correct. Runs on `queue`.
     private func closeDescriptor() {
         guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else { return }
         let fd = descriptor
@@ -206,9 +209,15 @@ public final class POSIXDispatchConnection: TransportConnection {
                 defer { current = nil }
                 return current
             }
-            parked?.source.cancel()
-            Darwin.close(fd)
-            parked?.fail()
+            guard let parked else {
+                Darwin.close(fd)  // no armed source watching the fd → safe to close directly
+                return
+            }
+            parked.source.setCancelHandler {
+                Darwin.close(fd)  // GCD guarantees delivery has stopped before this runs
+                parked.fail()  // unblock the parked receive/send (EOF / error)
+            }
+            parked.source.cancel()
         }
     }
 }

@@ -80,9 +80,11 @@ extension HTTPServer {
                 }
                 try? await clock.sleep(until: target, tolerance: nil)
             } else {
-                // Between reads the deadline is briefly nil; re-check after a bounded nap so a
-                // deadline armed during it is still enforced within ~keepAliveTimeout of lapsing.
-                try? await clock.sleep(for: limits.keepAliveTimeout, tolerance: nil)
+                // Between reads the deadline is briefly nil; nap the SHORTEST read-deadline knob (not
+                // just keepAliveTimeout) and re-check, so a header-phase deadline (headerReadTimeout)
+                // armed during the nap is still enforced near its intended bound, not up to 15s late.
+                let nap = min(limits.headerReadTimeout, limits.idleTimeout, limits.keepAliveTimeout)
+                try? await clock.sleep(for: nap, tolerance: nil)
             }
         }
     }
