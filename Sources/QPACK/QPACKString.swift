@@ -30,7 +30,7 @@ public enum QPACKString {
             let flagged = firstByte | (1 << UInt8(prefixBits))
             QPACKInteger.encode(
                 huffmanLength, prefixBits: prefixBits, firstByte: flagged, into: &output)
-            output.append(contentsOf: Huffman.encode(bytes))
+            Huffman.encode(bytes, into: &output)
         } else {
             QPACKInteger.encode(
                 bytes.count, prefixBits: prefixBits, firstByte: firstByte, into: &output)

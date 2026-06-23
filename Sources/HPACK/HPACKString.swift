@@ -28,7 +28,7 @@ public enum HPACKString {
         let huffmanLength = Huffman.encodedByteLength(of: bytes)
         if huffmanLength < bytes.count {
             HPACKInteger.encode(huffmanLength, prefixBits: 7, firstByte: huffmanFlag, into: &output)
-            output.append(contentsOf: Huffman.encode(bytes))
+            Huffman.encode(bytes, into: &output)
         } else {
             HPACKInteger.encode(bytes.count, prefixBits: 7, firstByte: 0, into: &output)
             output.append(contentsOf: bytes)

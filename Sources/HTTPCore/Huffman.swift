@@ -48,6 +48,13 @@ public enum Huffman {
         // ASCII-dominant header text we encode the Huffman form is ≤ the input size, so the input's
         // own count is a good single reservation (a `Sequence` with no count reserves nothing).
         output.reserveCapacity(input.underestimatedCount)
+        encode(input, into: &output)
+        return output
+    }
+
+    /// Huffman-encodes `input` straight into `output` (§5.2) — no throwaway array for callers (HPACK /
+    /// QPACK string literals) that already hold a destination buffer.
+    public static func encode(_ input: some Sequence<UInt8>, into output: inout [UInt8]) {
         var bitBuffer: UInt64 = 0
         var bitCount = 0
         for byte in input {
@@ -64,7 +71,6 @@ public enum Huffman {
             let lastOctet = (bitBuffer << padding) | ((UInt64(1) << padding) - 1)
             output.append(UInt8(lastOctet & 0xFF))
         }
-        return output
     }
 
     // MARK: Decoding
