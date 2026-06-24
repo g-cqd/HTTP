@@ -33,6 +33,40 @@ struct CookieTests {
         #expect(cookie.headerValue == "id=x; Expires=Sun, 06 Nov 1994 08:49:37 GMT")
     }
 
+    // MARK: Per-attribute emission (mutation-resistance; see Tests/MUTATION-OPERATORS.md M5/M7).
+    // An all-attributes-set fixture cannot catch an "always emit X" mutation — each attribute is
+    // therefore asserted in isolation, and the minimal cookie pins the no-attributes baseline.
+
+    @Test("a name/value cookie serializes with no attributes (RFC 6265bis §4.1.1)")
+    func serializesMinimalCookie() {
+        #expect(SetCookie(name: "a", value: "b").headerValue == "a=b")
+    }
+
+    @Test(
+        "each attribute is emitted only when it is set",
+        arguments: [
+            (SetCookie(name: "s", value: "v", domain: "example.com"), "s=v; Domain=example.com"),
+            (SetCookie(name: "s", value: "v", path: "/app"), "s=v; Path=/app"),
+            (SetCookie(name: "s", value: "v", maxAge: 0), "s=v; Max-Age=0"),
+            (SetCookie(name: "s", value: "v", isSecure: true), "s=v; Secure"),
+            (SetCookie(name: "s", value: "v", isHTTPOnly: true), "s=v; HttpOnly")
+        ] as [(SetCookie, String)])
+    func emitsOnlySetAttributes(_ cookie: SetCookie, _ expected: String) {
+        #expect(cookie.headerValue == expected)
+    }
+
+    @Test(
+        "SameSite serializes each policy verbatim (RFC 6265bis §4.1.2.7)",
+        arguments: [
+            (SetCookie.SameSite.strict, "Strict"),
+            (.lax, "Lax"),
+            (.none, "None")
+        ] as [(SetCookie.SameSite, String)])
+    func serializesSameSite(_ policy: SetCookie.SameSite, _ token: String) {
+        let cookie = SetCookie(name: "s", value: "v", sameSite: policy)
+        #expect(cookie.headerValue == "s=v; SameSite=\(token)")
+    }
+
     @Test("rejects values that could inject attributes or split the header (CWE-113)")
     func rejectsInjection() {
         #expect(!SetCookie(name: "a", value: "b; Secure").isValid)  // attribute injection

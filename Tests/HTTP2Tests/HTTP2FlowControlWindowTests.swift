@@ -57,4 +57,40 @@ struct HTTP2FlowControlWindowTests {
         #expect(window.available == 0)
         #expect(window.reserve(50) == 0)  // nothing may be sent while negative
     }
+
+    // MARK: Boundary exactness (mutation-resistance; see Tests/MUTATION-OPERATORS.md M1/M4/M7/M9)
+
+    @Test("WINDOW_UPDATE lands exactly on 2^31-1, overflows one past it (§6.9.1)")
+    func increaseBoundary() {
+        var window = HTTP2FlowControlWindow(initialSize: HTTP2FlowControlWindow.maxSize - 100)
+        #expect(window.increase(by: 100) == .applied)  // delta == maxSize - size: lands on the cap
+        #expect(window.size == HTTP2FlowControlWindow.maxSize)
+        #expect(window.increase(by: 1) == .overflow)  // one past the cap
+        #expect(window.size == HTTP2FlowControlWindow.maxSize)  // unchanged
+    }
+
+    @Test("a SETTINGS grow lands exactly on 2^31-1, overflows one past it (§6.9.2)")
+    func shiftInitialBoundary() {
+        var window = HTTP2FlowControlWindow(initialSize: HTTP2FlowControlWindow.maxSize - 50)
+        #expect(window.shiftInitial(by: 51) == .overflow)  // one past the cap
+        #expect(window.size == HTTP2FlowControlWindow.maxSize - 50)  // unchanged
+        #expect(window.shiftInitial(by: 50) == .applied)  // lands exactly on the cap
+        #expect(window.size == HTTP2FlowControlWindow.maxSize)
+    }
+
+    @Test("a zero SETTINGS shift applies (unlike WINDOW_UPDATE, §6.9.2 has no zero rule)")
+    func shiftInitialZeroApplies() {
+        var window = HTTP2FlowControlWindow(initialSize: 100)
+        #expect(window.shiftInitial(by: 0) == .applied)  // not .zeroIncrement
+        #expect(window.size == 100)
+    }
+
+    @Test("reserve never grants a negative or zero request")
+    func reserveIgnoresNonPositiveRequest() {
+        var window = HTTP2FlowControlWindow(initialSize: 1_000)
+        #expect(window.reserve(-5) == 0)
+        #expect(window.size == 1_000)  // untouched — must not credit the window
+        #expect(window.reserve(0) == 0)
+        #expect(window.size == 1_000)
+    }
 }

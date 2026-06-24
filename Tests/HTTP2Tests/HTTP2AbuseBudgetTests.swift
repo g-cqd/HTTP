@@ -68,4 +68,68 @@ extension HTTP2ConnectionTests {
         }
         #expect(throws: Never.self) { try connection.receive(second) }
     }
+
+    // MARK: Cap & window boundaries (mutation-resistance; see Tests/MUTATION-OPERATORS.md M1/M4)
+
+    /// Builds `count` open-then-reset stream pairs from `streamID`, advancing it past them.
+    ///
+    /// Prepends the preface + SETTINGS when `withPreface`; each reset charges one unit.
+    private func resetBurst(count: Int, from streamID: inout UInt32, withPreface: Bool) -> [UInt8] {
+        var wire: [UInt8] = withPreface ? HTTP2ConnectionPreface.client + settingsFrame() : []
+        for _ in 0 ..< count {
+            wire += openStream(streamID: streamID)
+            wire += rstStreamFrame(streamID: streamID)
+            streamID += 2
+        }
+        return wire
+    }
+
+    @Test("trips on exactly the (cap+1)-th reset, not before", .tags(.mutation))
+    func resetBudgetTripsAtCapPlusOne() throws {
+        var connection = HTTP2Connection(limits: HTTPLimits(maxStreamResetsPerInterval: 5))
+        _ = connection.outboundBytes()
+        var streamID: UInt32 = 1
+        // Exactly the cap (5) within one window — must not trip (kills a `< cap` mutation).
+        #expect(throws: Never.self) {
+            try connection.receive(resetBurst(count: 5, from: &streamID, withPreface: true))
+        }
+        // One more in the same window — must trip (kills a `cap + 1` off-by-one).
+        var thrown: HTTP2ErrorCode?
+        do { _ = try connection.receive(resetBurst(count: 1, from: &streamID, withPreface: false)) }
+        catch { thrown = error.code }
+        #expect(thrown == .enhanceYourCalm)
+    }
+
+    @Test("the budget does NOT decay before the window elapses (rate boundary)", .tags(.mutation))
+    func resetBudgetHoldsWithinWindow() throws {
+        let clock = TestClock()
+        let limits = HTTPLimits(maxStreamResetsPerInterval: 5, streamResetInterval: .seconds(1))
+        var connection = HTTP2Connection(limits: limits, now: clock.nowProvider)
+        _ = connection.outboundBytes()
+        var streamID: UInt32 = 1
+        #expect(throws: Never.self) {
+            try connection.receive(resetBurst(count: 5, from: &streamID, withPreface: true))
+        }
+        clock.advance(by: .milliseconds(999))  // just shy of the window → no decay
+        var thrown: HTTP2ErrorCode?
+        do { _ = try connection.receive(resetBurst(count: 1, from: &streamID, withPreface: false)) }
+        catch { thrown = error.code }
+        #expect(thrown == .enhanceYourCalm)
+    }
+
+    @Test("the budget decays once the full window elapses (rate boundary)", .tags(.mutation))
+    func resetBudgetDecaysAtWindowBoundary() throws {
+        let clock = TestClock()
+        let limits = HTTPLimits(maxStreamResetsPerInterval: 5, streamResetInterval: .seconds(1))
+        var connection = HTTP2Connection(limits: limits, now: clock.nowProvider)
+        _ = connection.outboundBytes()
+        var streamID: UInt32 = 1
+        #expect(throws: Never.self) {
+            try connection.receive(resetBurst(count: 5, from: &streamID, withPreface: true))
+        }
+        clock.advance(by: .seconds(1))  // exactly the window → decays (kills a `>` for `>=`)
+        #expect(throws: Never.self) {
+            try connection.receive(resetBurst(count: 1, from: &streamID, withPreface: false))
+        }
+    }
 }
