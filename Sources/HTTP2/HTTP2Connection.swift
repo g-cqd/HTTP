@@ -371,6 +371,11 @@ public struct HTTP2Connection {
         // the dynamic table stays in sync. RST_STREAM(REFUSED_STREAM) keeps the connection alive.
         guard streams.count < maxConcurrentStreams else {
             writer.writeRstStream(streamID, code: .refusedStream)
+            // A server-emitted REFUSED_STREAM is charged like any other engine reset: flooding new
+            // HEADERS past the concurrency cap would otherwise drive unbounded RST emission + HPACK
+            // decode work without tripping the Rapid-Reset / MadeYouReset budget (CVE-2023-44487 /
+            // CVE-2025-8671). HPACK stays in sync because the block was already decoded above.
+            try chargeStreamReset()
             return
         }
         let (request, connectProtocol) = try HTTP2RequestMapper.makeRequest(

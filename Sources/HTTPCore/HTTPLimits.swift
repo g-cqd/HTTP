@@ -71,6 +71,15 @@ public struct HTTPLimits: Sendable, Equatable {
     /// CVE-2023-44487).
     public var maxStreamResetsPerInterval: Int
 
+    /// Maximum cheap/abusive control-plane frames per ``streamResetInterval`` before `GOAWAY`.
+    ///
+    /// Counts the frames that are cheap to send but do no useful work — PING / SETTINGS (and their
+    /// ACKs), PRIORITY, zero-length non-final DATA, and WINDOW_UPDATE on a closed stream — so a flood
+    /// of them is a CPU-exhaustion DoS (CVE-2019-9513 PRIORITY, CVE-2019-9518 empty DATA). A completed
+    /// request drains the budget and it decays each ``streamResetInterval``; kept separate from
+    /// ``maxStreamResetsPerInterval`` so resets and control frames are bounded independently.
+    public var maxControlFramesPerInterval: Int
+
     // MARK: Timeouts (Slowloris / slow-read defenses)
 
     /// Maximum time to receive a complete header section (Slowloris; → `408`).
@@ -115,6 +124,7 @@ public struct HTTPLimits: Sendable, Equatable {
         headerTableSize: Int = 4 * 1_024,
         maxContinuationFrames: Int = 100,
         maxStreamResetsPerInterval: Int = 100,
+        maxControlFramesPerInterval: Int = 1_000,
         headerReadTimeout: Duration = .seconds(10),
         idleTimeout: Duration = .seconds(60),
         keepAliveTimeout: Duration = .seconds(15),
@@ -134,6 +144,7 @@ public struct HTTPLimits: Sendable, Equatable {
         self.headerTableSize = headerTableSize
         self.maxContinuationFrames = maxContinuationFrames
         self.maxStreamResetsPerInterval = maxStreamResetsPerInterval
+        self.maxControlFramesPerInterval = maxControlFramesPerInterval
         self.headerReadTimeout = headerReadTimeout
         self.idleTimeout = idleTimeout
         self.keepAliveTimeout = keepAliveTimeout
@@ -168,6 +179,7 @@ public struct HTTPLimits: Sendable, Equatable {
         maxConcurrentStreams: 100,
         maxContinuationFrames: 32,
         maxStreamResetsPerInterval: 50,
+        maxControlFramesPerInterval: 200,
         headerReadTimeout: .seconds(5),
         idleTimeout: .seconds(30),
         keepAliveTimeout: .seconds(5),

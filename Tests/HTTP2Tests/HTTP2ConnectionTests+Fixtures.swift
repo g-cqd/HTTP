@@ -168,6 +168,19 @@ extension HTTP2WireFixtures {
         return out
     }
 
+    /// A standalone PRIORITY frame (RFC 9113 §6.3): a 5-octet payload (31-bit stream dependency +
+    /// 8-bit weight) on `streamID`, depending on `dependsOn`.
+    func priorityFrame(streamID: UInt32, dependsOn: UInt32 = 0) -> [UInt8] {
+        var out: [UInt8] = []
+        HTTP2FrameHeader(payloadLength: 5, type: .priority, streamID: HTTP2StreamID(streamID))
+            .encode(into: &out)
+        out.append(contentsOf: [
+            UInt8((dependsOn >> 24) & 0xFF), UInt8((dependsOn >> 16) & 0xFF),
+            UInt8((dependsOn >> 8) & 0xFF), UInt8(dependsOn & 0xFF), 0x00
+        ])
+        return out
+    }
+
     /// Parses a response off the wire: HPACK-decodes the HEADERS block and concatenates DATA.
     func decodeResponse(
         _ bytes: [UInt8]

@@ -211,7 +211,7 @@ struct HTTP2ConnectionTests {
 
     @Test("a PING flood is ENHANCE_YOUR_CALM (§6.7, clock-free leaky bucket)")
     func pingFlood() {
-        var connection = HTTP2Connection(limits: HTTPLimits(maxStreamResetsPerInterval: 5))
+        var connection = HTTP2Connection(limits: HTTPLimits(maxControlFramesPerInterval: 5))
         _ = connection.outboundBytes()
         var wire = HTTP2ConnectionPreface.client
         wire += settingsFrame()

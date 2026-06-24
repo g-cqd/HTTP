@@ -54,6 +54,12 @@ public struct HTTP3Settings: Sendable, Equatable {
         guard !(0x02 ... 0x05).contains(identifier) else {
             throw .connection(.h3SettingsError, "reserved HTTP/2 setting identifier")
         }
+        // RFC 9114 §7.2.4 places no upper bound on these advisory values, so a peer may legitimately
+        // send up to the 62-bit varint maximum; `Int(clamping:)` saturates the (absurd) over-`Int.max`
+        // case instead of rejecting a spec-valid value. Safe in v1 because none of them sizes an
+        // allocation: the QPACK dynamic table is pinned off (we advertise capacity / blocked-streams 0),
+        // and `maxFieldSectionSize` only advises our own response-header size. FUTURE (v2 dynamic
+        // table): bound any table allocation by OUR advertised capacity, never the peer's value.
         switch HTTP3SettingsParameter(rawValue: identifier) {
             case .qpackMaxTableCapacity:
                 qpackMaxTableCapacity = Int(clamping: value)

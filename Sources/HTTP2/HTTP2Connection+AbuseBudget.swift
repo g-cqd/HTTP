@@ -12,13 +12,17 @@
 internal import HTTPCore
 
 extension HTTP2Connection {
-    /// Charges one ACK-generating control frame against the flood budget, failing closed if a peer
-    /// floods PING/SETTINGS without useful work in between (RFC 9113 §6.5 / §6.7).
+    /// Charges one cheap control-plane frame against the flood budget.
+    ///
+    /// Fails closed if a peer floods frames that are cheap to send but do no useful work — PING /
+    /// SETTINGS (and ACKs), PRIORITY, zero-length non-final DATA, WINDOW_UPDATE on a closed stream
+    /// (RFC 9113 §6.5 / §6.7; CVE-2019-9513 / CVE-2019-9518). Bounded by its own
+    /// ``HTTPLimits/maxControlFramesPerInterval`` knob.
     mutating func chargeControlFrame() throws(HTTP2Error) {
         decayBudgetsIfElapsed()
         controlFrameBudget += 1
-        guard controlFrameBudget <= limits.maxStreamResetsPerInterval else {
-            throw .connection(.enhanceYourCalm, "excessive PING/SETTINGS frames")
+        guard controlFrameBudget <= limits.maxControlFramesPerInterval else {
+            throw .connection(.enhanceYourCalm, "excessive cheap control-plane frames")
         }
     }
 

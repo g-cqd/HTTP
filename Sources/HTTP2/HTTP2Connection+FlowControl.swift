@@ -37,6 +37,11 @@ extension HTTP2Connection {
         guard length <= record.receiveWindow else {
             throw .stream(streamID, .flowControlError, "DATA exceeded the stream receive window")
         }
+        // CVE-2019-9518: a zero-length DATA frame that does not end the stream consumes no flow-control
+        // window and carries no body — charge the cheap-frame budget so a flood trips ENHANCE_YOUR_CALM.
+        if length == 0, !frame.header.flags.contains(.endStream) {
+            try chargeControlFrame()
+        }
         let body = try Self.dataBody(frame)
         let endStream = frame.header.flags.contains(.endStream)
         try record.stream.receiveData(endStream: endStream)
@@ -175,6 +180,9 @@ extension HTTP2Connection {
             guard frame.header.streamID <= lastPeerStreamID else {
                 throw .connection(.protocolError, "WINDOW_UPDATE on an idle stream")
             }
+            // A WINDOW_UPDATE on an already-closed stream is ignored (§6.9) — but charge it: a flood is
+            // cheap to send and otherwise unbudgeted.
+            try chargeControlFrame()
             return
         }
         switch record.sendWindow.increase(by: increment) {

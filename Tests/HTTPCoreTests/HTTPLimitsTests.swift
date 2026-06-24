@@ -23,6 +23,8 @@ struct HTTPLimitsTests {
         #expect(limits.maxFrameSize == 16 * 1_024)
         #expect(limits.headerTableSize == 4 * 1_024)
         #expect(limits.maxContinuationFrames == 100)
+        #expect(limits.maxStreamResetsPerInterval == 100)
+        #expect(limits.maxControlFramesPerInterval == 1_000)
         #expect(limits.headerReadTimeout == .seconds(10))
         #expect(limits.idleTimeout == .seconds(60))
         #expect(limits.keepAliveTimeout == .seconds(15))

@@ -10,7 +10,7 @@
 
 extension HTTP2Connection {
     /// Validates a PRIORITY frame (RFC 9113 §6.3); the deprecated priority data (§5.3.2) is not used.
-    func receivePriority(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
+    mutating func receivePriority(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
         guard frame.header.streamID != .connection else {
             throw .connection(.protocolError, "PRIORITY must not be on stream 0")
         }
@@ -25,6 +25,9 @@ extension HTTP2Connection {
         guard dependency != frame.header.streamID else {
             throw .stream(frame.header.streamID, .protocolError, "stream depends on itself")
         }
+        // A well-formed PRIORITY does no useful work; charge it so a flood trips ENHANCE_YOUR_CALM
+        // (CVE-2019-9513). A malformed one already failed above as a stream/connection error.
+        try chargeControlFrame()
     }
 
     /// Validates a received GOAWAY (RFC 9113 §6.8); a client GOAWAY is informational to a server.
@@ -44,7 +47,8 @@ extension HTTP2Connection {
             guard frame.payload.isEmpty else {
                 throw .connection(.frameSizeError, "SETTINGS ACK must be empty")
             }
-            return  // acknowledgement of our settings; nothing to apply
+            try chargeControlFrame()  // a SETTINGS-ACK flood is cheap to send — charge it
+            return  // acknowledgement of our settings; nothing else to apply
         }
         try chargeControlFrame()
         let previousInitialWindow = remoteSettings.initialWindowSize

@@ -132,4 +132,73 @@ extension HTTP2ConnectionTests {
             try connection.receive(resetBurst(count: 1, from: &streamID, withPreface: false))
         }
     }
+
+    // MARK: Server-emitted REFUSED_STREAM + cheap-frame floods (F-REFUSED / F-FRAMEFLOOD)
+
+    @Test("a flood of REFUSED_STREAM past the concurrency cap is charged (F-REFUSED)")
+    func refusedStreamFloodIsCharged() {
+        // One open slot + a tiny reset budget: each excess HEADERS is refused AND charged, so the
+        // flood trips ENHANCE_YOUR_CALM instead of driving unbounded RST + HPACK-decode work.
+        let limits = HTTPLimits(maxConcurrentStreams: 1, maxStreamResetsPerInterval: 5)
+        var connection = HTTP2Connection(limits: limits)
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += openStream(streamID: 1)  // occupies the single slot, stays open
+        var streamID: UInt32 = 3
+        for _ in 0 ..< 10 {  // ten excess streams — each refused and charged
+            wire += openStream(streamID: streamID)
+            streamID += 2
+        }
+        var thrown: HTTP2ErrorCode?
+        do { _ = try connection.receive(wire) }
+        catch { thrown = error.code }
+        #expect(thrown == .enhanceYourCalm)
+    }
+
+    @Test("a PRIORITY flood trips the control-frame budget (CVE-2019-9513)")
+    func priorityFloodIsCharged() {
+        var connection = HTTP2Connection(limits: HTTPLimits(maxControlFramesPerInterval: 5))
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        for index in 0 ..< 10 { wire += priorityFrame(streamID: UInt32(index) * 2 + 1) }
+        var thrown: HTTP2ErrorCode?
+        do { _ = try connection.receive(wire) }
+        catch { thrown = error.code }
+        #expect(thrown == .enhanceYourCalm)
+    }
+
+    @Test("a zero-length DATA flood trips the control-frame budget (CVE-2019-9518)")
+    func emptyDataFloodIsCharged() {
+        var connection = HTTP2Connection(limits: HTTPLimits(maxControlFramesPerInterval: 5))
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        wire += openStream(streamID: 1)  // a POST stream awaiting a body, stays open
+        for _ in 0 ..< 10 {  // ten empty, non-final DATA frames — no useful work
+            wire += dataFrame(streamID: 1, payload: [], endStream: false)
+        }
+        var thrown: HTTP2ErrorCode?
+        do { _ = try connection.receive(wire) }
+        catch { thrown = error.code }
+        #expect(thrown == .enhanceYourCalm)
+    }
+
+    @Test("the reset and control-frame budgets are independent knobs (F-BUDGETKNOB)")
+    func resetAndControlBudgetsAreIndependent() {
+        // A generous reset budget but a tiny control-frame budget: a PING flood must trip on the
+        // CONTROL budget even though the reset budget is nowhere near its cap. With the old shared knob
+        // this would not trip.
+        let limits = HTTPLimits(maxStreamResetsPerInterval: 1_000, maxControlFramesPerInterval: 5)
+        var connection = HTTP2Connection(limits: limits)
+        _ = connection.outboundBytes()
+        var wire = HTTP2ConnectionPreface.client
+        wire += settingsFrame()
+        for _ in 0 ..< 10 { wire += pingFrame() }
+        var thrown: HTTP2ErrorCode?
+        do { _ = try connection.receive(wire) }
+        catch { thrown = error.code }
+        #expect(thrown == .enhanceYourCalm)
+    }
 }
