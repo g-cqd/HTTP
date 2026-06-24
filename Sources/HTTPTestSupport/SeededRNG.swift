@@ -77,12 +77,12 @@ public struct Seed: Sendable, Hashable, RawRepresentable {
     public init(_ rawValue: UInt64) { self.rawValue = rawValue }
 
     /// A stable, process-independent seed derived from `name` (FNV-1a, no `Hasher` randomization).
-    public static func named(_ name: String) -> Seed {
+    public static func named(_ name: String) -> Self {
         var hash: UInt64 = 0xCBF2_9CE4_8422_2325  // FNV-1a 64 offset basis
         for byte in name.utf8 {
             hash ^= UInt64(byte)
             hash = hash &* 0x0000_0100_0000_01B3  // FNV-1a 64 prime
         }
-        return Seed(rawValue: hash)
+        return Self(rawValue: hash)
     }
 }

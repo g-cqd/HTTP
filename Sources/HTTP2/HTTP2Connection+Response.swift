@@ -11,7 +11,6 @@ internal import HPACK
 public import HTTPCore
 
 extension HTTP2Connection {
-
     /// Queues a response on `streamID`: a HEADERS frame and, if present, DATA frames (RFC 9113 §8.3.2).
     ///
     /// The header block is HPACK-encoded with `:status` first; the body is split into DATA frames no

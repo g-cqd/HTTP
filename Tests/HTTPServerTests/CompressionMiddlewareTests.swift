@@ -14,7 +14,6 @@ import Testing
 
 @Suite("Middleware — gzip compression")
 struct CompressionMiddlewareTests {
-
     @Test("compresses a large body when the client accepts gzip")
     func compresses() async {
         let body = Array(String(repeating: "swift http server ", count: 256).utf8)
@@ -39,7 +38,7 @@ struct CompressionMiddlewareTests {
 
     @Test("does not compress when the client omits Accept-Encoding")
     func skipsWithoutAcceptEncoding() async {
-        let body = Array(String(repeating: "x", count: 4096).utf8)
+        let body = Array(String(repeating: "x", count: 4_096).utf8)
         let response = await wrapped(body).respond(to: get(nil), body: [])
         #expect(response.head.headerFields[.contentEncoding] == nil)
         #expect(response.body == body)
@@ -53,9 +52,10 @@ struct CompressionMiddlewareTests {
 
     @Test("does not compress already-compressed media types")
     func skipsIncompressible() async {
-        let body = [UInt8](repeating: 7, count: 4096)
-        let response = await wrapped(body, contentType: "image/png").respond(
-            to: get("gzip"), body: [])
+        let body = [UInt8](repeating: 7, count: 4_096)
+        let response = await wrapped(body, contentType: "image/png")
+            .respond(
+                to: get("gzip"), body: [])
         #expect(response.head.headerFields[.contentEncoding] == nil)
     }
 
@@ -86,8 +86,8 @@ struct CompressionMiddlewareTests {
 
     /// Inflates a gzip member by stripping the 10-octet header and 8-octet trailer, then decoding the
     /// raw DEFLATE with the framework — the symmetric check of ``Gzip``.
-    private func gunzip(_ gzip: [UInt8]) throws -> [UInt8] {
-        let deflate = Array(gzip[10..<(gzip.count - 8)])
+    private func gunzip(_ gzip: [UInt8]) -> [UInt8] {
+        let deflate = Array(gzip[10 ..< (gzip.count - 8)])
         var destination = [UInt8](repeating: 0, count: 1 << 20)
         let written = deflate.withUnsafeBufferPointer { source in
             destination.withUnsafeMutableBufferPointer { destination -> Int in

@@ -20,7 +20,6 @@
 /// previously promise only in a comment. The cursor is still `Copyable`, so a parser can cheaply
 /// snapshot a position (copy the reader) and restore it for bounded look-ahead without recursion.
 public struct ByteReader: ~Escapable {
-
     @usableFromInline
     let bytes: RawSpan
 
@@ -136,7 +135,7 @@ public struct ByteReader: ~Escapable {
     @inlinable
     public mutating func readSlice(until delimiter: UInt8) -> Range<Int>? {
         guard let end = firstIndex(of: delimiter) else { return nil }
-        let slice = offset..<end
+        let slice = offset ..< end
         offset = end + 1  // advance just past the delimiter
         return slice
     }
@@ -151,7 +150,7 @@ public struct ByteReader: ~Escapable {
     public func slice(in range: Range<Int>) -> RawSpan {
         let lower = max(0, min(range.lowerBound, bytes.byteCount))
         let upper = max(lower, min(range.upperBound, bytes.byteCount))
-        return bytes.extracting(lower..<upper)
+        return bytes.extracting(lower ..< upper)
     }
 
     /// Decodes the bytes in `range` as UTF-8 into an owned `String`.

@@ -16,7 +16,6 @@ internal import Foundation
 
 /// Mints throwaway self-signed TLS identities for local development and tests (never for production).
 public enum DevTLSIdentity {
-
     /// A self-signed identity for `commonName`, advertising `applicationProtocols` over ALPN.
     ///
     /// Generates a fresh 2048-bit RSA key and a 1-year self-signed certificate (CN + `localhost` /
@@ -49,13 +48,13 @@ public enum DevTLSIdentity {
             "req", "-x509", "-newkey", "rsa:2048", "-sha256", "-nodes",
             "-keyout", key, "-out", certificate, "-days", "365",
             "-subj", "/CN=\(commonName)",
-            "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+            "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"
         ])
         // OpenSSL 3 defaults to AES-256 PKCS#12, which older `SecPKCS12Import` rejects; `-legacy`
         // restores the SHA1/3DES form it reads. LibreSSL (no `-legacy` flag) already emits that form.
         var export = [
             "pkcs12", "-export", "-inkey", key, "-in", certificate, "-out", bundle,
-            "-name", commonName, "-passout", "pass:\(passphrase)",
+            "-name", commonName, "-passout", "pass:\(passphrase)"
         ]
         if try isOpenSSL3OrNewer() { export.insert("-legacy", at: 2) }
         try run(export)
@@ -82,7 +81,7 @@ public enum DevTLSIdentity {
         try invoke(arguments, captureOutput: true)
     }
 
-    private static func invoke(_ arguments: [String], captureOutput: Bool) throws -> String {
+    private static func invoke(_ arguments: [String], captureOutput _: Bool) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["openssl"] + arguments
@@ -92,7 +91,8 @@ public enum DevTLSIdentity {
         process.standardError = errors
         do {
             try process.run()
-        } catch {
+        }
+        catch {
             throw TransportError.tlsConfigurationFailed("could not launch openssl: \(error)")
         }
         // Drain before waiting so a large write cannot deadlock against a full pipe buffer.

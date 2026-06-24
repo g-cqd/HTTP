@@ -12,7 +12,6 @@ import Testing
 
 @Suite("TestClock")
 struct TestClockTests {
-
     @Test
     func `now advances only when told`() {
         let clock = TestClock()
@@ -89,7 +88,7 @@ struct TestClockTests {
     func `a cancelled sleeper throws CancellationError and unregisters`() async throws {
         let clock = TestClock()
         let sleeper = Task {
-            try await clock.sleep(until: TestClock.Instant(offset: .seconds(1000)))
+            try await clock.sleep(until: TestClock.Instant(offset: .seconds(1_000)))
         }
         try await clock.waitForSleepers(atLeast: 1)
         sleeper.cancel()

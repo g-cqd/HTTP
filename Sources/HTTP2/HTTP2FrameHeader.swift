@@ -19,7 +19,6 @@ public import HTTPCore
 
 /// The fixed 9-octet HTTP/2 frame header (RFC 9113 §4.1).
 public struct HTTP2FrameHeader: Sendable, Equatable {
-
     /// The size of the encoded header in octets (RFC 9113 §4.1).
     public static let encodedLength = 9
 
@@ -52,11 +51,11 @@ public struct HTTP2FrameHeader: Sendable, Equatable {
     ///
     /// The reserved high bit of the stream identifier is masked off, as a receiver MUST ignore it
     /// (RFC 9113 §4.1).
-    public static func parse(_ reader: inout ByteReader) -> HTTP2FrameHeader? {
+    public static func parse(_ reader: inout ByteReader) -> Self? {
         guard reader.remaining >= encodedLength else { return nil }
         let start = reader.position
         reader.advance(by: encodedLength)
-        let octets = reader.slice(in: start..<(start + encodedLength))
+        let octets = reader.slice(in: start ..< (start + encodedLength))
 
         // Two unaligned big-endian loads instead of nine byte loads + shifts (the same
         // `UInt32(bigEndian: loadUnaligned)` idiom HTTP2Connection already uses): octets 0–3 carry the
@@ -67,7 +66,7 @@ public struct HTTP2FrameHeader: Sendable, Equatable {
             bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self))
         let streamRaw = UInt32(
             bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 5, as: UInt32.self))
-        return HTTP2FrameHeader(
+        return Self(
             payloadLength: Int(lengthAndType >> 8),
             type: HTTP2FrameType(rawValue: UInt8(truncatingIfNeeded: lengthAndType)),
             flags: HTTP2FrameFlags(rawValue: octets.unsafeLoad(fromByteOffset: 4, as: UInt8.self)),

@@ -15,7 +15,6 @@ import Testing
 
 @Suite("RFC 9114 §8 — HTTP/3 errors")
 struct HTTP3ErrorTests {
-
     @Test(
         "the §8.1 error codes hold their wire values",
         arguments: [
@@ -28,7 +27,7 @@ struct HTTP3ErrorTests {
             (code: .h3SettingsError, wire: 0x0109),
             (code: .h3MissingSettings, wire: 0x010A),
             (code: .h3MessageError, wire: 0x010E),
-            (code: .h3VersionFallback, wire: 0x0110),
+            (code: .h3VersionFallback, wire: 0x0110)
         ] as [(code: HTTP3ErrorCode, wire: UInt64)])
     func wireValues(_ testCase: (code: HTTP3ErrorCode, wire: UInt64)) {
         #expect(testCase.code.rawValue == testCase.wire)

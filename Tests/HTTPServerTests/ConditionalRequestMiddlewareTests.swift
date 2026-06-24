@@ -13,7 +13,6 @@ import Testing
 
 @Suite("Middleware — conditional requests (ETag / 304)")
 struct ConditionalRequestMiddlewareTests {
-
     private func body(_ text: String, status: HTTPStatus = .ok) -> any HTTPResponder {
         ClosureResponder { _, _ in
             ServerResponse(HTTPResponse(status: status), body: Array(text.utf8))
@@ -36,8 +35,9 @@ struct ConditionalRequestMiddlewareTests {
         let first = await body("cached payload").respond(to: get(), body: [])
         let etag = first.head.headerFields[.etag]
         #expect(etag != nil)
-        let second = await body("cached payload").respond(
-            to: get(ifNoneMatch: etag ?? ""), body: [])
+        let second = await body("cached payload")
+            .respond(
+                to: get(ifNoneMatch: etag ?? ""), body: [])
         #expect(second.head.status == .notModified)
         #expect(second.body.isEmpty)
         #expect(second.head.headerFields[.etag] == etag)
@@ -67,8 +67,9 @@ struct ConditionalRequestMiddlewareTests {
 
     @Test("a non-200 response is not tagged")
     func skipsErrors() async {
-        let response = await body("error", status: .internalServerError).respond(
-            to: get(), body: [])
+        let response = await body("error", status: .internalServerError)
+            .respond(
+                to: get(), body: [])
         #expect(response.head.headerFields[.etag] == nil)
     }
 

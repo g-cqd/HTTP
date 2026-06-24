@@ -22,7 +22,6 @@ import Testing
 
 @Suite("h2spec http2 §5 — Streams and Multiplexing")
 struct H2SpecStreamTests {
-
     // MARK: §5.1 Stream States — idle (frames before HEADERS are a connection PROTOCOL_ERROR)
 
     @Test(
@@ -31,7 +30,7 @@ struct H2SpecStreamTests {
             (label: "DATA", frame: H2Wire.data(streamID: 1, payload: [0x61], endStream: false)),
             (label: "RST_STREAM", frame: H2Wire.rstStream(streamID: 1)),
             (label: "WINDOW_UPDATE", frame: H2Wire.windowUpdate(streamID: 1, increment: 1)),
-            (label: "CONTINUATION", frame: H2Wire.continuation(streamID: 1)),
+            (label: "CONTINUATION", frame: H2Wire.continuation(streamID: 1))
         ])
     func idleStreamFrameIsProtocolError(_ testCase: (label: String, frame: [UInt8])) throws {
         var connection = try H2Wire.handshaked()

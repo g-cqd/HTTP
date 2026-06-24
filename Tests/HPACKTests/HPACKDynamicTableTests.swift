@@ -13,10 +13,9 @@ import Testing
 
 @Suite("RFC 7541 §4 — dynamic table")
 struct HPACKDynamicTableTests {
-
     @Test("insertion accounts size and addresses newest-first from index 62 (C.3.2)")
     func insertionAndIndexing() {
-        var table = HPACKDynamicTable(maxSize: 4096)
+        var table = HPACKDynamicTable(maxSize: 4_096)
         table.add(HPACKField(name: ":authority", value: "www.example.com"))  // size 57
         table.add(HPACKField(name: "cache-control", value: "no-cache"))  // size 53
 
@@ -29,7 +28,7 @@ struct HPACKDynamicTableTests {
 
     @Test("the combined index space falls through to the static table")
     func combinedIndexSpace() {
-        var table = HPACKDynamicTable(maxSize: 4096)
+        var table = HPACKDynamicTable(maxSize: 4_096)
         table.add(HPACKField(name: "cache-control", value: "no-cache"))
         // Index 2 resolves in the static table, 62 in the dynamic table, 64 is past the end.
         #expect(table.field(at: 2) == HPACKField(name: ":method", value: "GET"))
@@ -54,7 +53,7 @@ struct HPACKDynamicTableTests {
 
     @Test("shrinking the maximum size evicts to fit (§6.3)")
     func sizeUpdateEvicts() {
-        var table = HPACKDynamicTable(maxSize: 4096)
+        var table = HPACKDynamicTable(maxSize: 4_096)
         table.add(HPACKField(name: ":authority", value: "www.example.com"))  // 57
         table.add(HPACKField(name: "cache-control", value: "no-cache"))  // 53, total 110
 
@@ -66,7 +65,7 @@ struct HPACKDynamicTableTests {
 
     @Test("clearing the size to zero empties the table")
     func sizeUpdateToZero() {
-        var table = HPACKDynamicTable(maxSize: 4096)
+        var table = HPACKDynamicTable(maxSize: 4_096)
         table.add(HPACKField(name: "cache-control", value: "no-cache"))
         table.setMaxSize(0)
         #expect(table.count == 0)

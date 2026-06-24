@@ -61,7 +61,7 @@ func registerWebSocketBenchmarks() {
         let wire = maskedFragmentedMessage(parts: [
             Array("the quick brown ".utf8),
             Array("fox jumps over ".utf8),
-            Array("the lazy dog".utf8),
+            Array("the lazy dog".utf8)
         ])
         for _ in benchmark.scaledIterations {
             var connection = WebSocketConnection()
@@ -88,11 +88,13 @@ private func maskedBinaryFrame(opcode: UInt8 = 0x02, payload: [UInt8]) -> [UInt8
     let count = payload.count
     if count <= 125 {
         wire.append(0x80 | UInt8(count))  // MASK bit + inline 7-bit length
-    } else if count <= 0xFFFF {
+    }
+    else if count <= 0xFFFF {
         wire.append(0x80 | 126)  // MASK bit + 16-bit length marker
         wire.append(UInt8(truncatingIfNeeded: count >> 8))
         wire.append(UInt8(truncatingIfNeeded: count))
-    } else {
+    }
+    else {
         wire.append(0x80 | 127)  // MASK bit + 64-bit length marker
         for shift in stride(from: 56, through: 0, by: -8) {
             wire.append(UInt8(truncatingIfNeeded: count >> shift))
@@ -109,7 +111,7 @@ private func maskedBinaryFrame(opcode: UInt8 = 0x02, payload: [UInt8]) -> [UInt8
 /// assumed ≤ 125 octets.
 private func maskedFragmentedMessage(parts: [[UInt8]]) -> [UInt8] {
     let key: [UInt8] = [0x37, 0xFA, 0x21, 0x3D]
-    var wire = [UInt8]()
+    var wire: [UInt8] = []
     for (index, part) in parts.enumerated() {
         let isFinal = index == parts.count - 1
         let opcode: UInt8 = index == 0 ? 0x02 : 0x00  // binary, then continuation

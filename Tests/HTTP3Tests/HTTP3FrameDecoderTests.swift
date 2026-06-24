@@ -14,9 +14,8 @@ import Testing
 
 @Suite("RFC 9114 §7.1 — HTTP/3 frame decoder")
 struct HTTP3FrameDecoderTests {
-
     private func frame(type: UInt64, payload: [UInt8]) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         QUICVarint.encode(type, into: &out)
         QUICVarint.encode(UInt64(payload.count), into: &out)
         out.append(contentsOf: payload)
@@ -70,7 +69,7 @@ struct HTTP3FrameDecoderTests {
         arguments: [
             (label: "only the type octet", bytes: [0x01] as [UInt8]),
             (label: "type + length, no payload yet", bytes: [0x01, 0x03]),
-            (label: "type + length, partial payload", bytes: [0x01, 0x03, 0xAA]),
+            (label: "type + length, partial payload", bytes: [0x01, 0x03, 0xAA])
         ] as [(label: String, bytes: [UInt8])])
     func incomplete(_ testCase: (label: String, bytes: [UInt8])) throws {
         let result = try decodeAll(testCase.bytes)
@@ -80,7 +79,7 @@ struct HTTP3FrameDecoderTests {
 
     @Test("a payload larger than the bound is H3_EXCESSIVE_LOAD")
     func excessiveLoad() {
-        var bytes = [UInt8]()
+        var bytes: [UInt8] = []
         QUICVarint.encode(0x00, into: &bytes)  // DATA
         QUICVarint.encode(100_000, into: &bytes)  // declared length far over the bound
         #expect {

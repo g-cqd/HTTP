@@ -25,7 +25,6 @@ private func hf(_ name: String, _ value: String) -> HPACKField {
 
 @Suite("h2spec http2 §8 — HTTP Message Exchanges")
 struct H2SpecMessageTests {
-
     // MARK: §8.1 HTTP Request/Response Exchange
 
     @Test("8.1/1 — a second HEADERS frame without END_STREAM is a stream PROTOCOL_ERROR (§8.1)")
@@ -57,23 +56,23 @@ struct H2SpecMessageTests {
                 label: "unknown pseudo-header",
                 fields: [
                     hf(":method", "GET"), hf(":scheme", "https"), hf(":path", "/"),
-                    hf(":authority", "example.com"), hf(":unknown", "x"),
+                    hf(":authority", "example.com"), hf(":unknown", "x")
                 ]
             ),
             (
                 label: "response pseudo-header in a request",
                 fields: [
                     hf(":method", "GET"), hf(":scheme", "https"), hf(":path", "/"),
-                    hf(":status", "200"),
+                    hf(":status", "200")
                 ]
             ),
             (
                 label: "pseudo-header after a regular field",
                 fields: [
                     hf(":method", "GET"), hf(":scheme", "https"), hf(":path", "/"),
-                    hf("x", "1"), hf(":authority", "example.com"),
+                    hf("x", "1"), hf(":authority", "example.com")
                 ]
-            ),
+            )
         ])
     func malformedPseudoHeaderIsStreamError(
         _ testCase: (label: String, fields: [HPACKField])
@@ -108,7 +107,7 @@ struct H2SpecMessageTests {
                 label: "TE with a value other than trailers",
                 fields: H2Wire.requestFields(
                     extra: [hf("te", "gzip")])
-            ),
+            )
         ])
     func connectionSpecificFieldIsStreamError(
         _ testCase: (label: String, fields: [HPACKField])
@@ -139,30 +138,30 @@ struct H2SpecMessageTests {
                 label: "omit :path",
                 fields: [
                     hf(":method", "GET"), hf(":scheme", "https"),
-                    hf(":authority", "example.com"),
+                    hf(":authority", "example.com")
                 ]
             ),
             (
                 label: "duplicate :method",
                 fields: [
                     hf(":method", "GET"), hf(":method", "POST"), hf(":scheme", "https"),
-                    hf(":path", "/"), hf(":authority", "example.com"),
+                    hf(":path", "/"), hf(":authority", "example.com")
                 ]
             ),
             (
                 label: "duplicate :scheme",
                 fields: [
                     hf(":method", "GET"), hf(":scheme", "https"), hf(":scheme", "http"),
-                    hf(":path", "/"), hf(":authority", "example.com"),
+                    hf(":path", "/"), hf(":authority", "example.com")
                 ]
             ),
             (
                 label: "duplicate :path",
                 fields: [
                     hf(":method", "GET"), hf(":scheme", "https"), hf(":path", "/"),
-                    hf(":path", "/x"), hf(":authority", "example.com"),
+                    hf(":path", "/x"), hf(":authority", "example.com")
                 ]
-            ),
+            )
         ])
     func malformedRequestPseudoHeaderIsStreamError(
         _ testCase: (label: String, fields: [HPACKField])

@@ -17,7 +17,6 @@ internal import Synchronization
 /// A ``QUICStream`` backed by a modern Network `QUIC.Stream` (macOS 26+ backbone).
 @available(macOS 26, iOS 26, *)
 final class ModernQUICStream: QUICStream, @unchecked Sendable {
-
     let id: QUICStreamID
     let direction: QUICStreamDirection
     private let stream: Network.QUIC.Stream<Network.QUICStream>
@@ -39,7 +38,7 @@ final class ModernQUICStream: QUICStream, @unchecked Sendable {
     deinit { close() }
 
     func receive() async throws -> (bytes: [UInt8], fin: Bool)? {
-        if finished.withLock({ $0 }) { return nil }
+        if finished.withLock(\.self) { return nil }
         let message = try await stream.receive(atLeast: 1, atMost: 65_535)
         let fin = message.metadata.endOfStream
         if fin { finished.withLock { $0 = true } }

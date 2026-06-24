@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// The RFC 7541 Appendix A static table.
 public enum HPACKStaticTable {
-
     /// The number of entries in the static table (RFC 7541 Appendix A).
     public static let count = 61
 
@@ -77,7 +76,7 @@ public enum HPACKStaticTable {
         HPACKField(name: "user-agent"),
         HPACKField(name: "vary"),
         HPACKField(name: "via"),
-        HPACKField(name: "www-authenticate"),
+        HPACKField(name: "www-authenticate")
     ]
 
     /// Returns the static entry at HPACK index `index` (1...61), or `nil` if out of range.

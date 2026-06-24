@@ -13,15 +13,15 @@ import HTTPCore
 func registerHPACKBenchmarks() {
     Benchmark("hpack/Integer/encode") { benchmark in
         for _ in benchmark.scaledIterations {
-            var output = [UInt8]()
-            HPACKInteger.encode(1337, prefixBits: 5, into: &output)
+            var output: [UInt8] = []
+            HPACKInteger.encode(1_337, prefixBits: 5, into: &output)
             blackHole(output)
         }
     }
 
     Benchmark("hpack/Integer/decode") { benchmark in
-        var encoded = [UInt8]()
-        HPACKInteger.encode(1337, prefixBits: 5, into: &encoded)
+        var encoded: [UInt8] = []
+        HPACKInteger.encode(1_337, prefixBits: 5, into: &encoded)
         for _ in benchmark.scaledIterations {
             encoded.withUnsafeBytes { raw in
                 var reader = ByteReader(raw)
@@ -34,17 +34,17 @@ func registerHPACKBenchmarks() {
 
     Benchmark("hpack/headerBlock/encode") { benchmark in
         for _ in benchmark.scaledIterations {
-            var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+            var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
             blackHole(encoder.encode(hpackFields))
         }
     }
 
     Benchmark("hpack/headerBlock/decode") { benchmark in
-        var seed = HPACKEncoder(maxDynamicTableSize: 4096)
+        var seed = HPACKEncoder(maxDynamicTableSize: 4_096)
         let block = seed.encode(hpackFields)
         for _ in benchmark.scaledIterations {
             block.withUnsafeBytes { raw in
-                var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+                var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
                 blackHole(try? decoder.decode(raw.bytes))
             }
         }
@@ -53,7 +53,7 @@ func registerHPACKBenchmarks() {
     // RFC 7541 §2.3.2 — newest-first insertion into the dynamic table (the FIFO eviction store).
     Benchmark("hpack/DynamicTable/add") { benchmark in
         for _ in benchmark.scaledIterations {
-            var table = HPACKDynamicTable(maxSize: 4096)
+            var table = HPACKDynamicTable(maxSize: 4_096)
             for field in hpackFields { table.add(field) }
             blackHole(table)
         }
@@ -70,11 +70,11 @@ func registerHPACKBenchmarks() {
     // A realistic browser request on a *fresh* connection — the first request, decoded with a cold
     // dynamic table (literals + incremental indexing, one String per field). The cold-start cost.
     Benchmark("hpack/request/decode-cold") { benchmark in
-        var seed = HPACKEncoder(maxDynamicTableSize: 4096)
+        var seed = HPACKEncoder(maxDynamicTableSize: 4_096)
         let block = seed.encode(realisticRequestFields)
         for _ in benchmark.scaledIterations {
             block.withUnsafeBytes { raw in
-                var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+                var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
                 blackHole(try? decoder.decode(raw.bytes))
             }
         }
@@ -100,7 +100,7 @@ func registerHPACKBenchmarks() {
     // incremental indexing (Huffman-encode + a table insert per field).
     Benchmark("hpack/response/encode-cold") { benchmark in
         for _ in benchmark.scaledIterations {
-            var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+            var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
             blackHole(encoder.encode(realisticResponseFields))
         }
     }
@@ -120,7 +120,7 @@ func registerHPACKBenchmarks() {
 func registerHPACKStringBenchmarks() {
     Benchmark("hpack/String/encode") { benchmark in
         for _ in benchmark.scaledIterations {
-            var output = [UInt8]()
+            var output: [UInt8] = []
             HPACKString.encode(sampleFieldValue, into: &output)
             blackHole(output)
         }
@@ -131,7 +131,7 @@ func registerHPACKStringBenchmarks() {
     // on this branch; this benchmark guards against a fusion that would force it.
     Benchmark("hpack/String/encode-raw") { benchmark in
         for _ in benchmark.scaledIterations {
-            var output = [UInt8]()
+            var output: [UInt8] = []
             HPACKString.encode(rawWinsFieldValue, into: &output)
             blackHole(output)
         }
@@ -141,7 +141,7 @@ func registerHPACKStringBenchmarks() {
 /// The realistic request re-encoded against a primed table, so it is a block of indexed references
 /// (RFC 7541 §6.1) — the steady-state form a peer sends after the first request on a connection.
 private let indexedRequestBlock: [UInt8] = {
-    var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
     _ = encoder.encode(realisticRequestFields)  // first request: literals + incremental indexing
     return encoder.encode(realisticRequestFields)  // second request: all indexed references
 }()
@@ -149,8 +149,8 @@ private let indexedRequestBlock: [UInt8] = {
 /// A decoder whose dynamic table is already warmed by the first request, ready to resolve the
 /// indexed references in ``indexedRequestBlock`` (decoding those is read-only, so it stays warm).
 private let warmedRequestDecoder: HPACKDecoder = {
-    var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
-    var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+    var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
     let primer = encoder.encode(realisticRequestFields)
     _ = primer.withUnsafeBytes { raw in try? decoder.decode(raw.bytes) }
     return decoder
@@ -159,7 +159,7 @@ private let warmedRequestDecoder: HPACKDecoder = {
 /// An encoder whose dynamic table is already primed by the first response, so re-encoding the same
 /// response yields indexed references (RFC 7541 §6.1) — re-encoding does not mutate the table.
 private let warmedResponseEncoder: HPACKEncoder = {
-    var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
     _ = encoder.encode(realisticResponseFields)
     return encoder
 }()

@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// Adds a `Server` header (RFC 9110 §10.2.4) to responses that lack one.
 public struct ServerHeaderMiddleware: HTTPMiddleware {
-
     private let serverName: String
 
     /// Creates the middleware, advertising `serverName` (default `"HTTP"`).

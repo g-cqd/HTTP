@@ -16,7 +16,6 @@ internal import Synchronization
 
 /// A one-shot readiness multiplexer over `kqueue`/`kevent`.
 final class KqueueEventLoop: Sendable {
-
     /// Disambiguates the Darwin `kevent` *struct* from the `kevent()` *function* (same C name).
     private typealias KEvent = kevent
 
@@ -47,12 +46,12 @@ final class KqueueEventLoop: Sendable {
     private func scheduleNextPoll() {
         queue.async { [weak self] in
             guard let self else { return }
-            guard self.registry.withLock({ $0.isRunning }) else {
-                close(self.kq)
+            guard registry.withLock(\.isRunning) else {
+                close(kq)
                 return
             }
-            self.pollOnce()
-            self.scheduleNextPoll()
+            pollOnce()
+            scheduleNextPoll()
         }
     }
 
@@ -108,7 +107,7 @@ final class KqueueEventLoop: Sendable {
             kevent(kq, nil, 0, buffer.baseAddress, Int32(buffer.count), &timeout)
         }
         guard count > 0 else { return }  // 0 = timeout, < 0 = EINTR/error — the next poll retries
-        for index in 0..<Int(count) {
+        for index in 0 ..< Int(count) {
             dispatch(events[index])
         }
     }

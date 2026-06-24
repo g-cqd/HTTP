@@ -17,7 +17,6 @@ import Testing
 
 @Suite("RFC 9114 — HTTP/3 connection (control plane)")
 struct HTTP3ConnectionTests: HTTP3WireFixtures {
-
     private static let control = QUICStreamID(2)  // client-initiated unidirectional
     private static let qpackEncoder = QUICStreamID(6)
     private static let qpackDecoder = QUICStreamID(10)
@@ -32,10 +31,12 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
         }
         #expect(roles == [.control, .qpackEncoder, .qpackDecoder])
         // The control preamble opens with the §6.2 type byte 0x00 then a SETTINGS frame.
-        let controlPreamble = actions.compactMap { action -> [UInt8]? in
-            if case .openUniStream(.control, let preamble) = action { return preamble }
-            return nil
-        }.first
+        let controlPreamble =
+            actions.compactMap { action -> [UInt8]? in
+                if case .openUniStream(.control, let preamble) = action { return preamble }
+                return nil
+            }
+            .first
         #expect(controlPreamble?.first == 0x00)
     }
 
@@ -64,7 +65,7 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
             (label: "a second SETTINGS", second: HTTP3FrameType.settings, payload: [UInt8]()),
             (label: "a DATA frame", second: .data, payload: [0x01]),
             (label: "a HEADERS frame", second: .headers, payload: [0x01]),
-            (label: "a PUSH_PROMISE frame", second: .pushPromise, payload: [0x01]),
+            (label: "a PUSH_PROMISE frame", second: .pushPromise, payload: [0x01])
         ] as [(label: String, second: HTTP3FrameType, payload: [UInt8])])
     func unexpectedControlFrame(
         _ testCase: (label: String, second: HTTP3FrameType, payload: [UInt8])

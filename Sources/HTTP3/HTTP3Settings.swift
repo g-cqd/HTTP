@@ -14,7 +14,6 @@ internal import HTTPCore
 
 /// A defined HTTP/3 SETTINGS parameter identifier (RFC 9114 §7.2.4.2 / RFC 9204 §5 / RFC 9220).
 public enum HTTP3SettingsParameter: UInt64, Sendable, Equatable {
-
     /// `SETTINGS_QPACK_MAX_TABLE_CAPACITY` (0x01) — the QPACK dynamic table bound (RFC 9204 §5).
     case qpackMaxTableCapacity = 0x01
     /// `SETTINGS_MAX_FIELD_SECTION_SIZE` (0x06) — the advisory maximum decoded header-list size.
@@ -27,7 +26,6 @@ public enum HTTP3SettingsParameter: UInt64, Sendable, Equatable {
 
 /// The set of known HTTP/3 SETTINGS parameters, with the v1 defaults (RFC 9114 §7.2.4).
 public struct HTTP3Settings: Sendable, Equatable {
-
     /// QPACK dynamic table capacity in octets — 0 in v1 (the dynamic table is disabled, RFC 9204 §3.2.2).
     public var qpackMaxTableCapacity = 0
     /// QPACK blocked-streams bound — 0 in v1 (no blocked streams without a dynamic table, RFC 9204 §5).
@@ -63,29 +61,29 @@ public struct HTTP3Settings: Sendable, Equatable {
 
     /// Validates and stores one parameter; reserved HTTP/2 ids fail, unknown ids are ignored (§7.2.4.1).
     private mutating func applyParameter(identifier: UInt64, value: UInt64) throws(HTTP3Error) {
-        guard !(0x02...0x05).contains(identifier) else {
+        guard !(0x02 ... 0x05).contains(identifier) else {
             throw .connection(.h3SettingsError, "reserved HTTP/2 setting identifier")
         }
         switch HTTP3SettingsParameter(rawValue: identifier) {
-        case .qpackMaxTableCapacity:
-            qpackMaxTableCapacity = Int(clamping: value)
-        case .maxFieldSectionSize:
-            maxFieldSectionSize = Int(clamping: value)
-        case .qpackBlockedStreams:
-            qpackBlockedStreams = Int(clamping: value)
-        case .enableConnectProtocol:
-            guard value <= 1 else {
-                throw .connection(.h3SettingsError, "ENABLE_CONNECT_PROTOCOL must be 0 or 1")
-            }
-            enableConnectProtocol = value == 1
-        case nil:
-            break  // unknown identifier — ignore (§7.2.4.1)
+            case .qpackMaxTableCapacity:
+                qpackMaxTableCapacity = Int(clamping: value)
+            case .maxFieldSectionSize:
+                maxFieldSectionSize = Int(clamping: value)
+            case .qpackBlockedStreams:
+                qpackBlockedStreams = Int(clamping: value)
+            case .enableConnectProtocol:
+                guard value <= 1 else {
+                    throw .connection(.h3SettingsError, "ENABLE_CONNECT_PROTOCOL must be 0 or 1")
+                }
+                enableConnectProtocol = value == 1
+            case nil:
+                break  // unknown identifier — ignore (§7.2.4.1)
         }
     }
 
     /// Serializes these settings into a SETTINGS frame payload (RFC 9114 §7.2.4).
     public func encodePayload() -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         append(.qpackMaxTableCapacity, UInt64(qpackMaxTableCapacity), to: &output)
         append(.qpackBlockedStreams, UInt64(qpackBlockedStreams), to: &output)
         if let maxFieldSectionSize {

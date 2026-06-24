@@ -13,7 +13,6 @@ public import HTTPTransport
 
 /// An in-memory ``TransportConnection`` whose `receive` blocks until cancelled.
 public actor HangingConnection: TransportConnection {
-
     /// The connection's stable identifier.
     public nonisolated let id: TransportConnectionID
 
@@ -41,14 +40,14 @@ public actor HangingConnection: TransportConnection {
     }
 
     /// Records the admission decision (admitted), then blocks until the task is cancelled.
-    public func receive(maxLength: Int) async throws -> [UInt8]? {
+    public func receive(maxLength _: Int) async throws -> [UInt8]? {
         recordDecision()
         try await gate.waitUntilOpen()  // never opened → suspends until cancelled
         return nil
     }
 
     /// Discards sent bytes.
-    public func send(_ bytes: [UInt8]) async throws {}
+    public func send(_: [UInt8]) async {}
 
     /// Marks the connection closed, recording the admission decision (rejected) if not already made.
     public func close() async {

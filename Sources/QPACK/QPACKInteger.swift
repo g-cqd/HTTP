@@ -18,7 +18,6 @@ public import HTTPCore
 
 /// The RFC 9204 §4.1.1 prefix-integer codec (the RFC 7541 §5.1 representation).
 public enum QPACKInteger {
-
     /// The largest integer the decoder accepts before reporting overflow (RFC 7541 §5.1).
     ///
     /// QPACK integers index the static table or size strings, so an unbounded value is a

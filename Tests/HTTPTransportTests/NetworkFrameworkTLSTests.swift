@@ -17,7 +17,6 @@ import Testing
 
 @Suite("Network.framework backbone — TLS + ALPN")
 struct NetworkFrameworkTLSTests {
-
     @Test("a dev self-signed identity imports through SecPKCS12Import (PKCS#12 round-trip)")
     func devIdentityImports() throws {
         let tls = try SharedDevTLSIdentity.value()
@@ -35,7 +34,7 @@ struct NetworkFrameworkTLSTests {
         // internal/MAC error (the flake this guards against) — here it is deterministic.
         let count = 32
         let succeeded = await withTaskGroup(of: Bool.self) { group in
-            for _ in 0..<count {
+            for _ in 0 ..< count {
                 group.addTask {
                     let identity = try? NetworkFrameworkTLS.identity(
                         pkcs12: tls.pkcs12, passphrase: tls.passphrase)

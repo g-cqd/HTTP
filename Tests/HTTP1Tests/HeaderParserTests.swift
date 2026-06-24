@@ -12,7 +12,6 @@ import Testing
 
 @Suite("RFC 9112 §5 — header-field parsing")
 struct HeaderParserTests {
-
     /// Parses the header section of `string` through a `ByteReader` borrowing its bytes (zero-copy).
     private func parseHeaders(_ string: String, limits: HTTPLimits = .default) throws -> HTTPFields
     {

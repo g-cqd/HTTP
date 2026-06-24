@@ -12,7 +12,6 @@ public import HTTPCore
 /// Stamps security response headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
 /// and optionally `Strict-Transport-Security` / `Content-Security-Policy`).
 public struct SecurityHeadersMiddleware: HTTPMiddleware {
-
     private let contentTypeOptions: Bool
     private let frameOptions: String?
     private let referrerPolicy: String?

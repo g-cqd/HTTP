@@ -12,10 +12,8 @@ public import HTTPCore
 
 /// Pulls complete HTTP/2 frames from an accumulating byte buffer (RFC 9113 §4).
 public struct HTTP2FrameDecoder {
-
     /// One fully received frame: its header and the payload octets.
     public struct Frame: Sendable, Equatable {
-
         /// The frame header (RFC 9113 §4.1).
         public let header: HTTP2FrameHeader
 
@@ -52,7 +50,7 @@ public struct HTTP2FrameDecoder {
         reader.advance(by: HTTP2FrameHeader.encodedLength)
         let start = reader.position
         reader.advance(by: header.payloadLength)
-        let payload = reader.slice(in: start..<(start + header.payloadLength))
+        let payload = reader.slice(in: start ..< (start + header.payloadLength))
             .withUnsafeBytes { Array($0) }
         return Frame(header: header, payload: payload)
     }

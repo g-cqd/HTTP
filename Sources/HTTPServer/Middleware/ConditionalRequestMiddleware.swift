@@ -14,7 +14,6 @@ public import HTTPCore
 
 /// Adds `ETag` validators and answers `If-None-Match` with `304 Not Modified` (RFC 9110 §13).
 public struct ConditionalRequestMiddleware: HTTPMiddleware {
-
     /// Creates the middleware.
     public init() {}
 

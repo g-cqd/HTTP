@@ -12,7 +12,6 @@ import Testing
 
 @Suite("QUICStreamID — RFC 9000 §2.1 classification")
 struct QUICStreamIDTests {
-
     @Test(
         "the two low bits select initiator and directionality (RFC 9000 §2.1)",
         arguments: [
@@ -22,7 +21,7 @@ struct QUICStreamIDTests {
             (raw: 3, kind: .serverUnidirectional, client: false, uni: true),
             // The classification depends only on the low two bits, not the magnitude.
             (raw: 4, kind: .clientBidirectional, client: true, uni: false),
-            (raw: 7, kind: .serverUnidirectional, client: false, uni: true),
+            (raw: 7, kind: .serverUnidirectional, client: false, uni: true)
         ] as [(raw: UInt64, kind: QUICStreamID.Kind, client: Bool, uni: Bool)])
     func classification(_ testCase: (raw: UInt64, kind: QUICStreamID.Kind, client: Bool, uni: Bool))
     {

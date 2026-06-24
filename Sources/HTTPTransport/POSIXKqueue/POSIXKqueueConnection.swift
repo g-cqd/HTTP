@@ -20,7 +20,6 @@ internal import Synchronization
 /// The descriptor and `Atomic` close flag are the only state; close is idempotent and serialized on
 /// the event loop. Task cancellation closes the descriptor to unblock a pending read.
 public final class POSIXKqueueConnection: TransportConnection {
-
     /// The connection's stable identifier.
     public let id: TransportConnectionID
 
@@ -113,12 +112,14 @@ public final class POSIXKqueueConnection: TransportConnection {
                 }
             }
             once.resume(returning: bytes)  // nil == EOF (a zero-length read)
-        } catch is WouldBlockOnRead {
+        }
+        catch is WouldBlockOnRead {
             eventLoop.waitReadable(descriptor) {
                 readAvailable(
                     descriptor: descriptor, maxLength: maxLength, eventLoop: eventLoop, into: once)
             }
-        } catch {
+        }
+        catch {
             once.resume(throwing: error)
         }
     }
@@ -134,27 +135,31 @@ public final class POSIXKqueueConnection: TransportConnection {
                     descriptor, raw.baseAddress?.advanced(by: offset), raw.count - offset)
                 if written > 0 {
                     offset += written
-                } else if written < 0, errno == EINTR {
+                }
+                else if written < 0, errno == EINTR {
                     continue  // interrupted by a signal before any byte — retry (audit T-F3)
-                } else if written < 0, errno == EWOULDBLOCK || errno == EAGAIN {
+                }
+                else if written < 0, errno == EWOULDBLOCK || errno == EAGAIN {
                     return .wouldBlock(offset: offset)
-                } else {
+                }
+                else {
                     return .failed(errno: errno)
                 }
             }
             return .done
         }
         switch outcome {
-        case .done:
-            once.resume(returning: ())
-        case .failed(let code):
-            once.resume(throwing: TransportError.ioFailed("write errno \(code)"))
-        case .wouldBlock(let remaining):
-            eventLoop.waitWritable(descriptor) {
-                writeRemaining(
-                    bytes: bytes, offset: remaining, descriptor: descriptor, eventLoop: eventLoop,
-                    once: once)
-            }
+            case .done:
+                once.resume(returning: ())
+            case .failed(let code):
+                once.resume(throwing: TransportError.ioFailed("write errno \(code)"))
+            case .wouldBlock(let remaining):
+                eventLoop.waitWritable(descriptor) {
+                    writeRemaining(
+                        bytes: bytes, offset: remaining, descriptor: descriptor,
+                        eventLoop: eventLoop,
+                        once: once)
+                }
         }
     }
 }

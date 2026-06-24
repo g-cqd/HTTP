@@ -14,7 +14,6 @@ import Testing
 
 @Suite("Middleware — composition + built-ins")
 struct HTTPMiddlewareTests {
-
     private let ok = ClosureResponder { _, _ in
         var fields = HTTPFields()
         _ = fields.append("text/plain", for: .contentType)
@@ -88,7 +87,7 @@ struct HTTPMiddlewareTests {
 private final class Recorder: Sendable {
     private let storage = Mutex<[String]>([])
     func add(_ entry: String) { storage.withLock { $0.append(entry) } }
-    var entries: [String] { storage.withLock { $0 } }
+    var entries: [String] { storage.withLock(\.self) }
 }
 
 /// A middleware that records its name on the way in and out, around `next`.
@@ -114,7 +113,7 @@ private struct Tag: HTTPMiddleware {
 /// A middleware that short-circuits the chain with `403 Forbidden`.
 private struct Blocker: HTTPMiddleware {
     func respond(
-        to request: HTTPRequest, body: [UInt8], next: any HTTPResponder
+        to _: HTTPRequest, body _: [UInt8], next _: any HTTPResponder
     ) async
         -> ServerResponse
     {

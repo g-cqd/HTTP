@@ -19,7 +19,6 @@ public import HTTPCore
 
 /// Creates the ``QUICServerTransport`` backbone appropriate to the running OS (RFC 9114 over QUIC).
 public enum QUICTransportFactory {
-
     /// The QUIC backbone for `configuration`, chosen by OS version.
     ///
     /// On macOS 26+ / iOS 26+ this is where the modern `NetworkConnection<QUIC>` backbone is selected;

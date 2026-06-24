@@ -20,7 +20,6 @@ internal import Synchronization
 /// Mutable state lives in a `Mutex` and the connection counter in an `Atomic`, so the type is
 /// `Sendable`. Accept readiness runs on `acceptQueue`; connection I/O runs on the shared `ioQueue`.
 public final class POSIXDispatchTransport: ServerTransport {
-
     /// The backbone this transport implements.
     public let backbone: TransportBackbone = .posixDispatch
 
@@ -47,7 +46,7 @@ public final class POSIXDispatchTransport: ServerTransport {
 
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
-        state.withLock { $0.boundPort }
+        state.withLock(\.boundPort)
     }
 
     /// Binds a non-blocking TCP socket and begins accepting via a read source.
@@ -101,7 +100,7 @@ public final class POSIXDispatchTransport: ServerTransport {
         listenFD: Int32,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        while state.withLock({ $0.isRunning }) {
+        while state.withLock(\.isRunning) {
             var address = sockaddr_in()
             var length = socklen_t(MemoryLayout<sockaddr_in>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in

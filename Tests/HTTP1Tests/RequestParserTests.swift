@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 9112 — full request parsing & smuggling defenses")
 struct RequestParserTests {
-
     private func parse(_ string: String, limits: HTTPLimits = .default) throws -> ParsedRequest {
         let bytes = Array(string.utf8)
         return try bytes.withUnsafeBytes { raw -> ParsedRequest in

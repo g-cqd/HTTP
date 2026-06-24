@@ -13,7 +13,6 @@ public import HTTPCore
 
 /// A stateful HPACK decoder (RFC 7541 §6); the dynamic table persists across header blocks.
 public struct HPACKDecoder {
-
     /// The dynamic table, shared across every block this decoder processes.
     public private(set) var dynamicTable: HPACKDynamicTable
 
@@ -35,19 +34,22 @@ public struct HPACKDecoder {
     /// bomb defense) and fails closed on any malformed representation.
     public mutating func decode(_ block: RawSpan) throws(HPACKError) -> [HPACKField] {
         var reader = ByteReader(block)
-        var fields = [HPACKField]()
+        var fields: [HPACKField] = []
         var decodedSize = 0
         while let first = reader.peek() {
             if first & 0x80 != 0 {
                 fields.append(try decodeIndexed(&reader))
-            } else if first & 0x40 != 0 {
+            }
+            else if first & 0x40 != 0 {
                 fields.append(try decodeLiteral(&reader, prefixBits: 6, addToTable: true))
-            } else if first & 0x20 != 0 {
+            }
+            else if first & 0x20 != 0 {
                 // A dynamic table size update MUST precede any field in the block (RFC 7541 §4.2).
                 guard fields.isEmpty else { throw .invalidTableSizeUpdate }
                 try decodeSizeUpdate(&reader)
                 continue
-            } else {
+            }
+            else {
                 fields.append(try decodeLiteral(&reader, prefixBits: 4, addToTable: false))
             }
             // Bound the running decoded list size before accepting the field (§4.1 sizing).
@@ -80,7 +82,8 @@ public struct HPACKDecoder {
         let name: String
         if nameIndex == 0 {
             name = try HPACKString.decodeString(&reader, maxEncodedLength: limits.maxFieldSize)
-        } else {
+        }
+        else {
             guard let entry = dynamicTable.field(at: nameIndex) else { throw .invalidIndex }
             name = entry.name
         }

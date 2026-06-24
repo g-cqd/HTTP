@@ -26,13 +26,15 @@ public func expectThrows<T, E: Error>(
         Issue.record(
             "expected to throw \(E.self), but returned normally", sourceLocation: sourceLocation)
         return nil
-    } catch let error as E {
+    }
+    catch let error as E {
         if predicate(error) { return error }
         Issue.record(
             "threw \(error) but its payload was rejected by the predicate",
             sourceLocation: sourceLocation)
         return error
-    } catch {
+    }
+    catch {
         Issue.record("threw \(error) — not the expected \(E.self)", sourceLocation: sourceLocation)
         return nil
     }
@@ -50,13 +52,15 @@ public func expectThrows<T, E: Error>(
         Issue.record(
             "expected to throw \(E.self), but returned normally", sourceLocation: sourceLocation)
         return nil
-    } catch let error as E {
+    }
+    catch let error as E {
         if predicate(error) { return error }
         Issue.record(
             "threw \(error) but its payload was rejected by the predicate",
             sourceLocation: sourceLocation)
         return error
-    } catch {
+    }
+    catch {
         Issue.record("threw \(error) — not the expected \(E.self)", sourceLocation: sourceLocation)
         return nil
     }
@@ -77,7 +81,8 @@ public func expectRoundTripIdentity<V: Equatable>(
                 "round trip changed the value: \(value) → \(result)", sourceLocation: sourceLocation
             )
         }
-    } catch {
+    }
+    catch {
         Issue.record("round trip threw: \(error)", sourceLocation: sourceLocation)
     }
 }

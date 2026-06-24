@@ -16,10 +16,9 @@ import QPACK
 protocol HTTP3WireFixtures {}
 
 extension HTTP3WireFixtures {
-
     /// A single QUIC variable-length integer, as a byte sequence.
     func varint(_ value: UInt64) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         QUICVarint.encode(value, into: &out)
         return out
     }
@@ -31,7 +30,7 @@ extension HTTP3WireFixtures {
 
     /// A SETTINGS payload from (identifier, value) pairs.
     func settingsPayload(_ pairs: [(UInt64, UInt64)]) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         for (identifier, value) in pairs {
             QUICVarint.encode(identifier, into: &out)
             QUICVarint.encode(value, into: &out)
@@ -61,7 +60,7 @@ extension HTTP3WireFixtures {
             HeaderField(name: ":method", value: method),
             HeaderField(name: ":scheme", value: scheme),
             HeaderField(name: ":authority", value: authority),
-            HeaderField(name: ":path", value: path),
+            HeaderField(name: ":path", value: path)
         ]
         fields.append(contentsOf: extra)
         return QPACKEncoder().encode(fields)
@@ -97,21 +96,21 @@ extension HTTP3WireFixtures {
     /// Decodes a server response off the wire: the `:status` and the concatenated DATA.
     func decodeResponse(_ bytes: [UInt8]) throws -> (status: String?, body: [UInt8]) {
         var status: String?
-        var body = [UInt8]()
+        var body: [UInt8] = []
         try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
             let frames = HTTP3FrameDecoder(maxFrameSize: 1 << 20)
             while let next = try frames.nextFrame(&reader) {
                 switch next.type {
-                case .headers:
-                    let fields = try next.payload.withUnsafeBytes {
-                        try QPACKDecoder().decode($0.bytes)
-                    }
-                    for field in fields where field.name == ":status" { status = field.value }
-                case .data:
-                    body.append(contentsOf: next.payload)
-                default:
-                    break
+                    case .headers:
+                        let fields = try next.payload.withUnsafeBytes {
+                            try QPACKDecoder().decode($0.bytes)
+                        }
+                        for field in fields where field.name == ":status" { status = field.value }
+                    case .data:
+                        body.append(contentsOf: next.payload)
+                    default:
+                        break
                 }
             }
         }
@@ -128,7 +127,8 @@ extension HTTP3WireFixtures {
         do {
             _ = try connection.receive(stream, bytes, fin: fin)
             return nil
-        } catch {
+        }
+        catch {
             return (error as? HTTP3Error)?.code
         }
     }

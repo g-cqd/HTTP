@@ -11,10 +11,9 @@ internal import HTTPCore
 
 /// Serializes outbound HTTP/3 frames (RFC 9114 §7.1).
 enum HTTP3FrameWriter {
-
     /// Encodes a complete frame (Type, Length, payload) into a new buffer.
     static func frame(_ type: HTTP3FrameType, payload: [UInt8]) -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         QUICVarint.encode(type.rawValue, into: &output)
         QUICVarint.encode(UInt64(payload.count), into: &output)
         output.append(contentsOf: payload)

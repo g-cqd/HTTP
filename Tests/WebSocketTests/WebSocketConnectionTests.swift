@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 6455 §5/§6 — connection engine")
 struct WebSocketConnectionTests {
-
     // MARK: Messages
 
     @Test("decodes a complete masked text message")
@@ -71,7 +70,7 @@ struct WebSocketConnectionTests {
     @Test("close() never puts a non-wire code (1005) on the wire (RFC 6455 §7.4.1)")
     func closeReplacesNonWireCode() throws {
         var connection = WebSocketConnection()
-        connection.close(WebSocketCloseCode(rawValue: 1005))  // 1005 MUST NOT appear on the wire
+        connection.close(WebSocketCloseCode(rawValue: 1_005))  // 1005 MUST NOT appear on the wire
         let close = try #require(
             serverFrames(connection.outboundBytes()).first { $0.opcode == .close })
         let code = UInt16(close.payload[0]) << 8 | UInt16(close.payload[1])
@@ -103,7 +102,8 @@ struct WebSocketConnectionTests {
     func unmaskedFrameRejected() throws {
         var connection = WebSocketConnection()
         var thrown: WebSocketError?
-        do { _ = try connection.receive([0x81, 0x02, 0x48, 0x69]) } catch { thrown = error }
+        do { _ = try connection.receive([0x81, 0x02, 0x48, 0x69]) }
+        catch { thrown = error }
         #expect(thrown == .maskingRequired)
         #expect(try closeCode(connection.outboundBytes()) == WebSocketCloseCode.protocolError)
     }
@@ -112,7 +112,8 @@ struct WebSocketConnectionTests {
     func unexpectedContinuationRejected() {
         var connection = WebSocketConnection()
         var thrown: WebSocketError?
-        do { _ = try connection.receive(clientFrame(.continuation, [0x00])) } catch {
+        do { _ = try connection.receive(clientFrame(.continuation, [0x00])) }
+        catch {
             thrown = error
         }
         #expect(thrown == .unexpectedContinuation)
@@ -124,7 +125,8 @@ struct WebSocketConnectionTests {
         var wire = clientFrame(.text, [0x41], fin: false)  // open a fragment
         wire += clientFrame(.text, [0x42], fin: true)  // new data frame — illegal
         var thrown: WebSocketError?
-        do { _ = try connection.receive(wire) } catch { thrown = error }
+        do { _ = try connection.receive(wire) }
+        catch { thrown = error }
         #expect(thrown == .interleavedDataFrame)
     }
 
@@ -132,7 +134,8 @@ struct WebSocketConnectionTests {
     func invalidUTF8Rejected() throws {
         var connection = WebSocketConnection()
         var thrown: WebSocketError?
-        do { _ = try connection.receive(clientFrame(.text, [0xFF, 0xFE])) } catch { thrown = error }
+        do { _ = try connection.receive(clientFrame(.text, [0xFF, 0xFE])) }
+        catch { thrown = error }
         #expect(thrown == .invalidTextEncoding)
         #expect(try closeCode(connection.outboundBytes()) == WebSocketCloseCode.invalidPayloadData)
     }
@@ -144,7 +147,8 @@ struct WebSocketConnectionTests {
         // Close code 1005 must not appear on the wire (RFC 6455 §7.4.1).
         do {
             _ = try connection.receive(clientFrame(.close, [0x03, 0xED]))
-        } catch {
+        }
+        catch {
             thrown = error
         }
         #expect(thrown == .invalidCloseCode)
@@ -170,7 +174,7 @@ struct WebSocketConnectionTests {
         let decoder = WebSocketFrameDecoder()
         return try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
-            var frames = [WebSocketFrame]()
+            var frames: [WebSocketFrame] = []
             while let frame = try decoder.nextFrame(&reader) { frames.append(frame) }
             return frames
         }

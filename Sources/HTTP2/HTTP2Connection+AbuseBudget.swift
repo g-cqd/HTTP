@@ -12,7 +12,6 @@
 internal import HTTPCore
 
 extension HTTP2Connection {
-
     /// Charges one ACK-generating control frame against the flood budget, failing closed if a peer
     /// floods PING/SETTINGS without useful work in between (RFC 9113 §6.5 / §6.7).
     mutating func chargeControlFrame() throws(HTTP2Error) {

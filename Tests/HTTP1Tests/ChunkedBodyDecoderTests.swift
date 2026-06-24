@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 9112 §7.1 — resumable chunked decoder")
 struct ChunkedBodyDecoderTests {
-
     /// Feeds `wire` one octet at a time, resuming the decoder after each, and returns the decoded body.
     /// `consumed` only ever advances (the decoder never re-reads a consumed octet), which is what keeps
     /// the cost O(n) rather than O(n²) across reads.
@@ -22,8 +21,8 @@ struct ChunkedBodyDecoderTests {
         _ wire: [UInt8], limits: HTTPLimits = .default
     ) throws -> [UInt8] {
         var state = ChunkedBodyDecoder.State()
-        var body = [UInt8]()
-        var buffer = [UInt8]()
+        var body: [UInt8] = []
+        var buffer: [UInt8] = []
         var consumed = 0
         for byte in wire {
             buffer.append(byte)
@@ -49,7 +48,7 @@ struct ChunkedBodyDecoderTests {
 
     @Test("resumes mid-chunk so a large chunk in many reads is decoded once (audit H1-F1)")
     func resumesMidChunk() throws {
-        let payload = String(repeating: "A", count: 1000)
+        let payload = String(repeating: "A", count: 1_000)
         let wire = Array("3e8\r\n\(payload)\r\n0\r\n\r\n".utf8)  // 0x3e8 == 1000
         #expect(try decodeOneByteAtATime(wire) == Array(payload.utf8))
     }
@@ -80,7 +79,7 @@ struct ChunkedBodyDecoderTests {
             // Obsolete line folding — a trailer line that begins with whitespace.
             ("0\r\n folded\r\n\r\n", .obsoleteLineFolding),
             // A field-value carrying a control octet (NUL).
-            ("0\r\nX-T: a\u{00}b\r\n\r\n", .invalidFieldValue),
+            ("0\r\nX-T: a\u{00}b\r\n\r\n", .invalidFieldValue)
         ])
     func rejectsMalformedTrailer(_ testCase: (wire: String, error: HTTP1ParseError)) {
         #expect(throws: testCase.error) { _ = try decodeWhole(testCase.wire) }

@@ -10,7 +10,6 @@
 
 /// Field-block extraction from a HEADERS frame payload (RFC 9113 §6.2).
 public enum HTTP2HeadersFrame {
-
     private static let priorityFieldLength = 5
 
     /// Returns the field block fragment of a HEADERS `payload`, given its `flags` (RFC 9113 §6.2).
@@ -41,7 +40,7 @@ public enum HTTP2HeadersFrame {
             }
             start += priorityFieldLength
         }
-        return payload[start..<end]
+        return payload[start ..< end]
     }
 
     /// The stream dependency declared in a HEADERS frame's deprecated priority section (RFC 9113

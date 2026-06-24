@@ -10,7 +10,6 @@
 /// `HTTP-version = "HTTP" "/" DIGIT "." DIGIT` — the major and minor numbers are single decimal
 /// digits. HTTP/2 and HTTP/3 carry no version token, so this type is specific to HTTP/1.x.
 public struct HTTPVersion: Sendable, Hashable {
-
     /// The major version number (a single digit, e.g. `1`).
     public let major: Int
 
@@ -47,14 +46,13 @@ public struct HTTPVersion: Sendable, Hashable {
     }
 
     /// `HTTP/1.0` (RFC 9112).
-    public static let http10 = HTTPVersion(major: 1, minor: 0)
+    public static let http10 = Self(major: 1, minor: 0)
 
     /// `HTTP/1.1` (RFC 9112).
-    public static let http11 = HTTPVersion(major: 1, minor: 1)
+    public static let http11 = Self(major: 1, minor: 1)
 }
 
 extension HTTPVersion: CustomStringConvertible {
-
     /// The wire form, e.g. `"HTTP/1.1"`.
     public var description: String {
         "HTTP/\(major).\(minor)"

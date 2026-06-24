@@ -8,7 +8,6 @@
 
 /// A WebSocket Close status code (RFC 6455 §7.4).
 public struct WebSocketCloseCode: Sendable, Equatable, Hashable {
-
     /// The numeric status code.
     public let rawValue: UInt16
 
@@ -18,28 +17,28 @@ public struct WebSocketCloseCode: Sendable, Equatable, Hashable {
     }
 
     /// `1000` — a normal closure (RFC 6455 §7.4.1).
-    public static let normalClosure = WebSocketCloseCode(rawValue: 1000)
+    public static let normalClosure = Self(rawValue: 1_000)
 
     /// `1001` — the endpoint is going away (RFC 6455 §7.4.1).
-    public static let goingAway = WebSocketCloseCode(rawValue: 1001)
+    public static let goingAway = Self(rawValue: 1_001)
 
     /// `1002` — a protocol error (RFC 6455 §7.4.1).
-    public static let protocolError = WebSocketCloseCode(rawValue: 1002)
+    public static let protocolError = Self(rawValue: 1_002)
 
     /// `1003` — the endpoint received data it cannot accept (RFC 6455 §7.4.1).
-    public static let unsupportedData = WebSocketCloseCode(rawValue: 1003)
+    public static let unsupportedData = Self(rawValue: 1_003)
 
     /// `1007` — a message was not consistent with its type, e.g. non-UTF-8 text (RFC 6455 §7.4.1).
-    public static let invalidPayloadData = WebSocketCloseCode(rawValue: 1007)
+    public static let invalidPayloadData = Self(rawValue: 1_007)
 
     /// `1008` — the message violated a policy (RFC 6455 §7.4.1).
-    public static let policyViolation = WebSocketCloseCode(rawValue: 1008)
+    public static let policyViolation = Self(rawValue: 1_008)
 
     /// `1009` — the message was too big to process (RFC 6455 §7.4.1).
-    public static let messageTooBig = WebSocketCloseCode(rawValue: 1009)
+    public static let messageTooBig = Self(rawValue: 1_009)
 
     /// `1011` — the server hit an unexpected condition (RFC 6455 §7.4.1).
-    public static let internalError = WebSocketCloseCode(rawValue: 1011)
+    public static let internalError = Self(rawValue: 1_011)
 
     /// Whether this code may legitimately appear in a Close frame on the wire (RFC 6455 §7.4.1).
     ///
@@ -48,8 +47,8 @@ public struct WebSocketCloseCode: Sendable, Equatable, Hashable {
     /// and the undefined 1004 — MUST NOT be sent and are rejected when received.
     public var isValidOnWire: Bool {
         switch rawValue {
-        case 1000...1003, 1007...1011, 3000...4999: true
-        default: false
+            case 1_000 ... 1_003, 1_007 ... 1_011, 3_000 ... 4_999: true
+            default: false
         }
     }
 }

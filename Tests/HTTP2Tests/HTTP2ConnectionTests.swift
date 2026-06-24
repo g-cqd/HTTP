@@ -16,7 +16,6 @@ import Testing
 
 @Suite("RFC 9113 — connection engine")
 struct HTTP2ConnectionTests {
-
     // MARK: Handshake + request decoding
 
     @Test("performs the handshake and decodes a GET request")
@@ -57,7 +56,7 @@ struct HTTP2ConnectionTests {
                 HPACKField(name: ":method", value: "POST"),
                 HPACKField(name: ":scheme", value: "https"),
                 HPACKField(name: ":path", value: "/submit"),
-                HPACKField(name: ":authority", value: "example.com"),
+                HPACKField(name: ":authority", value: "example.com")
             ], endStream: false)
         wire += dataFrame(streamID: 1, payload: Array("hello world".utf8), endStream: true)
 
@@ -127,7 +126,8 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(bad)
-        } catch {
+        }
+        catch {
             thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
         }
         #expect(thrown == .protocolError)
@@ -145,7 +145,8 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(wire)
-        } catch {
+        }
+        catch {
             thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
         }
         #expect(thrown == .protocolError)
@@ -158,7 +159,7 @@ struct HTTP2ConnectionTests {
         var wire = HTTP2ConnectionPreface.client
         wire += settingsFrame()
         var streamID: UInt32 = 1
-        for _ in 0..<10 {  // open a stream then immediately reset it, ten times
+        for _ in 0 ..< 10 {  // open a stream then immediately reset it, ten times
             wire += openStream(streamID: streamID)
             wire += rstStreamFrame(streamID: streamID)
             streamID += 2
@@ -166,7 +167,8 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(wire)
-        } catch {
+        }
+        catch {
             thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
         }
         #expect(thrown == .enhanceYourCalm)
@@ -206,17 +208,18 @@ struct HTTP2ConnectionTests {
     }
 
     @Test("a PING flood is ENHANCE_YOUR_CALM (§6.7, clock-free leaky bucket)")
-    func pingFlood() throws {
+    func pingFlood() {
         var connection = HTTP2Connection(limits: HTTPLimits(maxStreamResetsPerInterval: 5))
         _ = connection.outboundBytes()
         var wire = HTTP2ConnectionPreface.client
         wire += settingsFrame()
-        for _ in 0..<10 { wire += pingFrame() }  // ten PINGs, no useful work — a flood
+        for _ in 0 ..< 10 { wire += pingFrame() }  // ten PINGs, no useful work — a flood
 
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(wire)
-        } catch {
+        }
+        catch {
             thrown = error.code
         }
         #expect(thrown == .enhanceYourCalm)
@@ -265,7 +268,7 @@ struct HTTP2ConnectionTests {
         // so another suite's allocation can land in any one measurement window. Such noise only ever
         // ADDS, so the minimum over several re-prepared trials is the true cost — zero for the swap.
         var measurements: [Int] = []
-        for _ in 0..<16 {
+        for _ in 0 ..< 16 {
             _ = try connection.receive(settingsFrame())  // re-queue a SETTINGS ACK to drain
             if let allocations = mallocDelta({ _ = connection.outboundBytes() }) {
                 measurements.append(allocations)
@@ -320,7 +323,8 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(windowUpdateFrame(streamID: 0, increment: 0))
-        } catch {
+        }
+        catch {
             thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
         }
         #expect(thrown == .protocolError)
@@ -369,7 +373,7 @@ struct HTTP2ConnectionTests {
         var total = 0
         while total < 100_000 {
             let last = total + chunk.count >= 100_000
-            let payload = last ? Array(chunk[0..<(100_000 - total)]) : chunk
+            let payload = last ? Array(chunk[0 ..< (100_000 - total)]) : chunk
             events += try connection.receive(
                 dataFrame(streamID: 1, payload: payload, endStream: last))
             windowUpdateTotal += try sumWindowUpdates(connection.outboundBytes())
@@ -397,7 +401,8 @@ struct HTTP2ConnectionTests {
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(wire)
-        } catch {
+        }
+        catch {
             thrown = error.code
         }
         #expect(thrown == .protocolError)

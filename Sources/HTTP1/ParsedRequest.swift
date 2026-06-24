@@ -10,7 +10,6 @@ public import HTTPCore
 
 /// A fully parsed HTTP/1.1 request: a version-independent ``HTTPRequest`` and its decoded body.
 public struct ParsedRequest: Sendable, Equatable {
-
     /// The request message (method, authority, path, header fields).
     public let request: HTTPRequest
 

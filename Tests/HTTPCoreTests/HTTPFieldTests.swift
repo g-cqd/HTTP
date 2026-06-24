@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §5 — HTTPField")
 struct HTTPFieldTests {
-
     @Test("constructs a field with a name and a legal value")
     func constructsField() {
         let field = HTTPField(name: .contentType, value: "text/html; charset=utf-8")

@@ -13,7 +13,6 @@
 /// traffic fails closed (with the correct protocol error) instead of exhausting memory or CPU. Each
 /// limit is annotated with the attack it mitigates.
 public struct HTTPLimits: Sendable, Equatable {
-
     // MARK: Message size limits
 
     /// Maximum request-line / `:path` length before responding `414` (RFC 9112 §3; buffer abuse).
@@ -89,24 +88,24 @@ public struct HTTPLimits: Sendable, Equatable {
 
     /// Creates a set of limits; every parameter defaults to its documented safe value.
     public init(
-        maxRequestLineLength: Int = 8 * 1024,
-        maxFieldSize: Int = 16 * 1024,
-        maxHeaderListSize: Int = 64 * 1024,
+        maxRequestLineLength: Int = 8 * 1_024,
+        maxFieldSize: Int = 16 * 1_024,
+        maxHeaderListSize: Int = 64 * 1_024,
         maxFieldCount: Int = 100,
         maxBodySize: Int = 1 << 30,  // 1 GiB
         maxDecompressedBodySize: Int = 1 << 30,
         maxDecompressionRatio: Int = 10,
-        maxConcurrentStreams: Int = 100,
-        maxFrameSize: Int = 16 * 1024,
-        headerTableSize: Int = 4 * 1024,
+        maxConcurrentStreams: Int = 1_048_576,
+        maxFrameSize: Int = 16 * 1_024,
+        headerTableSize: Int = 4 * 1_024,
         maxContinuationFrames: Int = 100,
         maxStreamResetsPerInterval: Int = 100,
         headerReadTimeout: Duration = .seconds(10),
         idleTimeout: Duration = .seconds(60),
         keepAliveTimeout: Duration = .seconds(15),
         streamResetInterval: Duration = .seconds(1),
-        maxConnectionsPerClient: Int = 20,
-        maxConnections: Int = 1024
+        maxConnectionsPerClient: Int = 1_048_576,
+        maxConnections: Int = 1_048_576
     ) {
         self.maxRequestLineLength = maxRequestLineLength
         self.maxFieldSize = maxFieldSize
@@ -129,5 +128,5 @@ public struct HTTPLimits: Sendable, Equatable {
     }
 
     /// The default, safe-by-default limits.
-    public static let `default` = HTTPLimits()
+    public static let `default` = Self()
 }

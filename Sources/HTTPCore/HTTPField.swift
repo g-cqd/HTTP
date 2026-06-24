@@ -11,7 +11,6 @@
 /// `HTTPField` can never carry a value containing CR, LF, or NUL — the bytes that enable header
 /// injection / response splitting.
 public struct HTTPField: Sendable, Hashable {
-
     /// The field name (case-insensitive).
     public let name: HTTPFieldName
 

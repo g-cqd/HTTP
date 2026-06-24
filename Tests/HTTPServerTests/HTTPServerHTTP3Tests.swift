@@ -21,7 +21,6 @@ import Testing
 
 @Suite("HTTP/3 server — loopback")
 struct HTTPServerHTTP3Tests {
-
     @Test(
         "an HTTP/3 GET over the legacy QUIC backbone returns the response", .timeLimit(.minutes(1)))
     func http3GetLegacy() async throws {
@@ -83,12 +82,13 @@ struct HTTPServerHTTP3Tests {
         defer { connection.cancel() }
         try await ready(connection)
 
-        let section = QPACKEncoder().encode([
-            HeaderField(name: ":method", value: "GET"),
-            HeaderField(name: ":scheme", value: "https"),
-            HeaderField(name: ":authority", value: "127.0.0.1"),
-            HeaderField(name: ":path", value: path),
-        ])
+        let section = QPACKEncoder()
+            .encode([
+                HeaderField(name: ":method", value: "GET"),
+                HeaderField(name: ":scheme", value: "https"),
+                HeaderField(name: ":authority", value: "127.0.0.1"),
+                HeaderField(name: ":path", value: path)
+            ])
         try await sendComplete(Self.frame(0x01, section), on: connection)  // HEADERS + FIN
         let response = try await receiveAll(from: connection)
         return try Self.decode(response)
@@ -108,7 +108,7 @@ struct HTTPServerHTTP3Tests {
     }
 
     private static func frame(_ type: UInt64, _ payload: [UInt8]) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         QUICVarint.encode(type, into: &out)
         QUICVarint.encode(UInt64(payload.count), into: &out)
         out.append(contentsOf: payload)
@@ -117,21 +117,21 @@ struct HTTPServerHTTP3Tests {
 
     private static func decode(_ bytes: [UInt8]) throws -> (status: String?, body: [UInt8]) {
         var status: String?
-        var body = [UInt8]()
+        var body: [UInt8] = []
         try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
             let frames = HTTP3FrameDecoder(maxFrameSize: 1 << 20)
             while let next = try frames.nextFrame(&reader) {
                 switch next.type {
-                case .headers:
-                    let fields = try next.payload.withUnsafeBytes {
-                        try QPACKDecoder().decode($0.bytes)
-                    }
-                    for field in fields where field.name == ":status" { status = field.value }
-                case .data:
-                    body.append(contentsOf: next.payload)
-                default:
-                    break
+                    case .headers:
+                        let fields = try next.payload.withUnsafeBytes {
+                            try QPACKDecoder().decode($0.bytes)
+                        }
+                        for field in fields where field.name == ":status" { status = field.value }
+                    case .data:
+                        body.append(contentsOf: next.payload)
+                    default:
+                        break
                 }
             }
         }
@@ -145,9 +145,10 @@ struct HTTPServerHTTP3Tests {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.stateUpdateHandler = { state in
                 switch state {
-                case .ready where resumed.take(): continuation.resume()
-                case .failed(let error) where resumed.take(): continuation.resume(throwing: error)
-                default: break
+                    case .ready where resumed.take(): continuation.resume()
+                    case .failed(let error) where resumed.take():
+                        continuation.resume(throwing: error)
+                    default: break
                 }
             }
             connection.start(queue: queue)
@@ -162,7 +163,8 @@ struct HTTPServerHTTP3Tests {
                 completion: .contentProcessed { error in
                     if let error {
                         continuation.resume(throwing: error)
-                    } else {
+                    }
+                    else {
                         continuation.resume()
                     }
                 })
@@ -170,7 +172,7 @@ struct HTTPServerHTTP3Tests {
     }
 
     private func receiveAll(from connection: NWConnection) async throws -> [UInt8] {
-        var all = [UInt8]()
+        var all: [UInt8] = []
         while true {
             let chunk = try await receiveChunk(connection)
             all.append(contentsOf: chunk.bytes)
@@ -186,7 +188,8 @@ struct HTTPServerHTTP3Tests {
                 data, _, isComplete, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else {
+                }
+                else {
                     continuation.resume(returning: ([UInt8](data ?? Data()), isComplete))
                 }
             }

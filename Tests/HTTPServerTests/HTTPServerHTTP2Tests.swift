@@ -17,29 +17,29 @@ import Testing
 
 @Suite("HTTPServer — HTTP/2 (h2c) dispatch")
 struct HTTPServerHTTP2Tests {
-
     @Test("serves an HTTP/2 prior-knowledge request end-to-end")
     func servesHTTP2Request() async throws {
         let responder = ClosureResponder { request, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array("h2 from \(request.path)".utf8))
         }
 
-        var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+        var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
         let block = encoder.encode([
             HPACKField(name: ":method", value: "GET"),
             HPACKField(name: ":scheme", value: "http"),
             HPACKField(name: ":path", value: "/hi"),
-            HPACKField(name: ":authority", value: "x"),
+            HPACKField(name: ":authority", value: "x")
         ])
         var wire = HTTP2ConnectionPreface.client
-        var settings = [UInt8]()
+        var settings: [UInt8] = []
         HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection)
             .encode(into: &settings)
         wire += settings
         HTTP2FrameHeader(
             payloadLength: block.count, type: .headers, flags: [.endHeaders, .endStream],
             streamID: HTTP2StreamID(1)
-        ).encode(into: &wire)
+        )
+        .encode(into: &wire)
         wire += block
 
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: wire)
@@ -80,25 +80,26 @@ struct HTTPServerHTTP2Tests {
     }
 
     private func decodeHTTP2Response(_ bytes: [UInt8]) throws -> (status: String?, body: [UInt8]) {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         var status: String?
-        var body = [UInt8]()
+        var body: [UInt8] = []
         try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
             let frames = HTTP2FrameDecoder()
             while let frame = try frames.nextFrame(&reader) {
                 switch frame.header.type {
-                case .headers:
-                    let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
-                        frame.payload, flags: frame.header.flags)
-                    let fields = try Array(fragment).withUnsafeBytes {
-                        try decoder.decode($0.bytes)
-                    }
-                    for field in fields where field.name == ":status" { status = field.value }
-                case .data:
-                    body.append(contentsOf: frame.payload)
-                default:
-                    break
+                    case .headers:
+                        let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
+                            frame.payload, flags: frame.header.flags)
+                        let fields = try Array(fragment)
+                            .withUnsafeBytes {
+                                try decoder.decode($0.bytes)
+                            }
+                        for field in fields where field.name == ":status" { status = field.value }
+                    case .data:
+                        body.append(contentsOf: frame.payload)
+                    default:
+                        break
                 }
             }
         }

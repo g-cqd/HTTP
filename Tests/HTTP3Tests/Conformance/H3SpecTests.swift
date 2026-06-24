@@ -18,7 +18,6 @@ import Testing
 
 @Suite("HTTP/3 conformance (h3spec + RFC 9114/9204)")
 struct H3SpecTests: HTTP3WireFixtures {
-
     // MARK: Live guards (the scaffold is real, not vacuous)
 
     @Test("the conformance catalog is well-formed")
@@ -35,10 +34,10 @@ struct H3SpecTests: HTTP3WireFixtures {
         // The Swift engine implements the HTTP/3 + QPACK layers; QUIC transport/TLS are platform-enforced.
         for check in checks {
             switch check.layer {
-            case .http3, .qpack:
-                #expect(check.status == .supported, "\(check.title) should be engine-supported")
-            case .quicTransport, .quicTLS:
-                #expect(check.status == .platform, "\(check.title) is platform-enforced")
+                case .http3, .qpack:
+                    #expect(check.status == .supported, "\(check.title) should be engine-supported")
+                case .quicTransport, .quicTLS:
+                    #expect(check.status == .platform, "\(check.title) is platform-enforced")
             }
         }
     }
@@ -70,26 +69,28 @@ struct H3SpecTests: HTTP3WireFixtures {
         arguments: H3Conformance.checks)
     func endpointClosesWithMandatedError(_ check: H3Check) {
         switch check.status {
-        case .platform:
-            // RFC 9000 transport / RFC 9001 TLS — enforced by Apple's QUIC stack, not the engine.
-            return
-        case .pending:
-            Issue.record("a catalog check is unexpectedly pending: \(check.section) \(check.title)")
-        case .supported:
-            guard let expected = expectedWireCode(check.expect) else {
-                Issue.record("no wire code parsed from expect: \(check.expect)")
+            case .platform:
+                // RFC 9000 transport / RFC 9001 TLS — enforced by Apple's QUIC stack, not the engine.
                 return
-            }
-            guard let observed = drive(check) else {
-                Issue.record("\(check.section) \(check.title): the engine produced no error code")
-                return
-            }
-            #expect(
-                isAcceptable(observed, expected: expected),
-                """
-                \(check.section) \(check.title): expected \(check.expect), \
-                got 0x\(String(observed, radix: 16))
-                """)
+            case .pending:
+                Issue.record(
+                    "a catalog check is unexpectedly pending: \(check.section) \(check.title)")
+            case .supported:
+                guard let expected = expectedWireCode(check.expect) else {
+                    Issue.record("no wire code parsed from expect: \(check.expect)")
+                    return
+                }
+                guard let observed = drive(check) else {
+                    Issue.record(
+                        "\(check.section) \(check.title): the engine produced no error code")
+                    return
+                }
+                #expect(
+                    isAcceptable(observed, expected: expected),
+                    """
+                    \(check.section) \(check.title): expected \(check.expect), \
+                    got 0x\(String(observed, radix: 16))
+                    """)
         }
     }
 }

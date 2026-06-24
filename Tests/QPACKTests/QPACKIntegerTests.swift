@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 9204 §4.1.1 — QPACK prefix integers")
 struct QPACKIntegerTests {
-
     private func decode(_ bytes: [UInt8], prefixBits: Int) -> QPACKInteger.Outcome {
         bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
@@ -26,11 +25,11 @@ struct QPACKIntegerTests {
         "RFC 7541 Appendix C.1 worked examples encode to the exact octets",
         arguments: [
             (value: 10, prefixBits: 5, bytes: [0x0A] as [UInt8]),  // C.1.1
-            (value: 1337, prefixBits: 5, bytes: [0x1F, 0x9A, 0x0A]),  // C.1.2
-            (value: 42, prefixBits: 8, bytes: [0x2A]),  // C.1.3
+            (value: 1_337, prefixBits: 5, bytes: [0x1F, 0x9A, 0x0A]),  // C.1.2
+            (value: 42, prefixBits: 8, bytes: [0x2A])  // C.1.3
         ] as [(value: Int, prefixBits: Int, bytes: [UInt8])])
     func appendixC1(_ testCase: (value: Int, prefixBits: Int, bytes: [UInt8])) {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         QPACKInteger.encode(testCase.value, prefixBits: testCase.prefixBits, into: &out)
         #expect(out == testCase.bytes)
         #expect(decode(testCase.bytes, prefixBits: testCase.prefixBits) == .value(testCase.value))
@@ -41,7 +40,7 @@ struct QPACKIntegerTests {
         arguments: [0, 1, 30, 31, 127, 128, 16_383, 1_000_000, QPACKInteger.maxValue])
     func roundTrip(_ value: Int) {
         for prefixBits in [3, 4, 5, 6, 7, 8] {
-            var out = [UInt8]()
+            var out: [UInt8] = []
             QPACKInteger.encode(value, prefixBits: prefixBits, firstByte: 0, into: &out)
             #expect(decode(out, prefixBits: prefixBits) == .value(value))
         }

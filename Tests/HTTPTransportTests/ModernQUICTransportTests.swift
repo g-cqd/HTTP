@@ -19,7 +19,6 @@ import Testing
 
 @Suite("Modern QUIC transport — loopback")
 struct ModernQUICTransportTests {
-
     @Test(
         "a QUIC stream round-trips through the modern backbone over loopback",
         .timeLimit(.minutes(1)))
@@ -88,9 +87,10 @@ struct ModernQUICTransportTests {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.stateUpdateHandler = { state in
                 switch state {
-                case .ready where resumed.take(): continuation.resume()
-                case .failed(let error) where resumed.take(): continuation.resume(throwing: error)
-                default: break
+                    case .ready where resumed.take(): continuation.resume()
+                    case .failed(let error) where resumed.take():
+                        continuation.resume(throwing: error)
+                    default: break
                 }
             }
             connection.start(queue: queue)
@@ -105,7 +105,8 @@ struct ModernQUICTransportTests {
                 completion: .contentProcessed { error in
                     if let error {
                         continuation.resume(throwing: error)
-                    } else {
+                    }
+                    else {
                         continuation.resume()
                     }
                 })
@@ -118,7 +119,8 @@ struct ModernQUICTransportTests {
                 data, _, _, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else {
+                }
+                else {
                     continuation.resume(returning: [UInt8](data ?? Data()))
                 }
             }

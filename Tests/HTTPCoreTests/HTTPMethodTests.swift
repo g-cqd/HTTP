@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §9 — HTTPMethod")
 struct HTTPMethodTests {
-
     @Test("registered constants are upper-case tokens")
     func registeredConstants() {
         #expect(HTTPMethod.get.rawValue == "GET")
@@ -40,7 +39,7 @@ struct HTTPMethodTests {
         "classifies safe methods (RFC 9110 §9.2.1)",
         arguments: [
             (HTTPMethod.get, true), (.head, true), (.options, true), (.trace, true),
-            (.post, false), (.put, false), (.delete, false), (.patch, false), (.connect, false),
+            (.post, false), (.put, false), (.delete, false), (.patch, false), (.connect, false)
         ]
     )
     func safe(_ method: HTTPMethod, _ expected: Bool) {
@@ -52,7 +51,7 @@ struct HTTPMethodTests {
         arguments: [
             (HTTPMethod.get, true), (.head, true), (.options, true), (.trace, true),
             (.put, true), (.delete, true),
-            (.post, false), (.patch, false), (.connect, false),
+            (.post, false), (.patch, false), (.connect, false)
         ]
     )
     func idempotent(_ method: HTTPMethod, _ expected: Bool) {

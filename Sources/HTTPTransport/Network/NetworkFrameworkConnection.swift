@@ -15,7 +15,6 @@ internal import Network
 /// adds no mutable Swift state of its own, so it is safe to share across tasks — hence
 /// `@unchecked Sendable`. The connection's callback I/O is bridged to `async` with continuations.
 public final class NetworkFrameworkConnection: TransportConnection, @unchecked Sendable {
-
     /// The connection's stable identifier.
     public let id: TransportConnectionID
 
@@ -47,11 +46,14 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
                     data, _, isComplete, error in
                     if let error {
                         continuation.resume(throwing: error)
-                    } else if let data, !data.isEmpty {
+                    }
+                    else if let data, !data.isEmpty {
                         continuation.resume(returning: [UInt8](data))
-                    } else if isComplete {
+                    }
+                    else if isComplete {
                         continuation.resume(returning: nil)  // peer half-closed
-                    } else {
+                    }
+                    else {
                         continuation.resume(returning: [])
                     }
                 }
@@ -71,7 +73,8 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
                     completion: .contentProcessed { error in
                         if let error {
                             continuation.resume(throwing: error)
-                        } else {
+                        }
+                        else {
                             continuation.resume()
                         }
                     })

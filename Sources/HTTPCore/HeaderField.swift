@@ -16,7 +16,6 @@
 /// keeps fields as plain strings and the HTTP/2 and HTTP/3 layers map them onto
 /// ``HTTPRequest``/``HTTPResponse`` pseudo-headers and ``HTTPFields``.
 public struct HeaderField: Sendable, Equatable, Hashable {
-
     /// The field name (lower-case on the wire; may be a pseudo-header such as `":method"`).
     public let name: String
 

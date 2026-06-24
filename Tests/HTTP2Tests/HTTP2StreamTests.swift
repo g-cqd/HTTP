@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 9113 §5.1 — stream state machine")
 struct HTTP2StreamTests {
-
     private func stream() -> HTTP2Stream { HTTP2Stream(id: HTTP2StreamID(1)) }
 
     @Test("idle → open on HEADERS without END_STREAM")
@@ -74,9 +73,11 @@ struct HTTP2StreamTests {
         do {
             try body()
             return nil
-        } catch let error as HTTP2Error {
+        }
+        catch let error as HTTP2Error {
             return error.code
-        } catch {
+        }
+        catch {
             return nil
         }
     }

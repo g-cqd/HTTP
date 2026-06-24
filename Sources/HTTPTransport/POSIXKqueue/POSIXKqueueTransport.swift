@@ -19,7 +19,6 @@ internal import Synchronization
 /// Mutable state lives in a `Mutex` and the connection counter in an `Atomic`, so the type is
 /// `Sendable`. Accept and per-connection readiness both run on the shared ``KqueueEventLoop``.
 public final class POSIXKqueueTransport: ServerTransport {
-
     /// The backbone this transport implements.
     public let backbone: TransportBackbone = .posixKqueue
 
@@ -44,7 +43,7 @@ public final class POSIXKqueueTransport: ServerTransport {
 
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
-        state.withLock { $0.boundPort }
+        state.withLock(\.boundPort)
     }
 
     /// Binds a non-blocking TCP socket and begins accepting via the kqueue loop.
@@ -98,8 +97,9 @@ public final class POSIXKqueueTransport: ServerTransport {
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
         eventLoop.waitReadable(listenFD) { [weak self] in
-            self?.acceptPending(
-                listenFD: listenFD, eventLoop: eventLoop, continuation: continuation)
+            self?
+                .acceptPending(
+                    listenFD: listenFD, eventLoop: eventLoop, continuation: continuation)
         }
     }
 
@@ -108,7 +108,7 @@ public final class POSIXKqueueTransport: ServerTransport {
         eventLoop: KqueueEventLoop,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        guard state.withLock({ $0.isRunning }) else { return }
+        guard state.withLock(\.isRunning) else { return }
         while true {
             var address = sockaddr_in()
             var length = socklen_t(MemoryLayout<sockaddr_in>.size)

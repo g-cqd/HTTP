@@ -20,7 +20,6 @@ internal import Synchronization
 /// The modern Network.framework QUIC server backbone (`NetworkListener<QUIC>`, macOS 26+).
 @available(macOS 26, iOS 26, *)
 public final class ModernQUICTransport: QUICServerTransport {
-
     private let configuration: TransportConfiguration
     private let limits: HTTPLimits
     private let listenerBox = Mutex<Network.NetworkListener<Network.QUIC>?>(nil)
@@ -46,12 +45,12 @@ public final class ModernQUICTransport: QUICServerTransport {
             pkcs12: tls.pkcs12, passphrase: tls.passphrase)
         let alpn = tls.applicationProtocols
         let maxBidirectional = limits.maxConcurrentStreams
-        let listener = try Network.NetworkListener(using: {
+        let listener = try Network.NetworkListener {
             Network.QUIC(alpn: alpn)
                 .tls.localIdentity(identity)
                 .initialMaxBidirectionalStreams(maxBidirectional)
                 .initialMaxUnidirectionalStreams(16)
-        })
+        }
         listenerBox.withLock { $0 = listener }
 
         let (stream, continuation) = AsyncStream<any QUICConnection>.makeStream()
@@ -77,12 +76,12 @@ public final class ModernQUICTransport: QUICServerTransport {
     /// Stops accepting: cancels the listener's run task, which unwinds it (the modern API has no
     /// `cancel()`; teardown is via structured task cancellation).
     public func shutdown() async {
-        runTask.withLock { $0 }?.cancel()
+        runTask.withLock(\.self)?.cancel()
     }
 
     /// Polls until the listener has bound its port (so ``boundPort`` is valid before returning).
-    private func waitUntilBound() async throws {
-        for _ in 0..<1_000 where boundPort == 0 {
+    private func waitUntilBound() async {
+        for _ in 0 ..< 1_000 where boundPort == 0 {
             try? await Task.sleep(for: .milliseconds(5))
         }
     }

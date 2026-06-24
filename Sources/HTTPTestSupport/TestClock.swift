@@ -27,17 +27,17 @@ public final class TestClock: Clock, Sendable {
         public init(offset: Duration = .zero) { self.offset = offset }
 
         /// The instant `duration` after this one.
-        public func advanced(by duration: Duration) -> Instant {
-            Instant(offset: offset + duration)
+        public func advanced(by duration: Duration) -> Self {
+            Self(offset: offset + duration)
         }
 
         /// The signed `Duration` from this instant to `other`.
-        public func duration(to other: Instant) -> Duration {
+        public func duration(to other: Self) -> Duration {
             other.offset - offset
         }
 
         /// Orders two instants by their elapsed offset.
-        public static func < (lhs: Instant, rhs: Instant) -> Bool {
+        public static func < (lhs: Self, rhs: Self) -> Bool {
             lhs.offset < rhs.offset
         }
     }
@@ -58,7 +58,7 @@ public final class TestClock: Clock, Sendable {
     }
 
     /// The current instant — advances only when a test calls ``advance(by:)``.
-    public var now: Instant { state.withLock { $0.now } }
+    public var now: Instant { state.withLock(\.now) }
 
     /// The clock's minimum resolution (zero — it is purely logical).
     public var minimumResolution: Duration { .zero }
@@ -66,7 +66,7 @@ public final class TestClock: Clock, Sendable {
     /// How many tasks are currently parked in `sleep`.
     ///
     /// Lets a test assert state without advancing.
-    public var sleeperCount: Int { state.withLock { $0.sleepers.count } }
+    public var sleeperCount: Int { state.withLock(\.sleepers.count) }
 
     /// This clock's elapsed time as monotonic nanoseconds — the unit the ``MonotonicNowProvider``
     /// seam measures against.
@@ -77,7 +77,7 @@ public final class TestClock: Clock, Sendable {
     public var nowProvider: MonotonicNowProvider { { [self] in monotonicNanoseconds } }
 
     /// Suspends until time is advanced to or past `deadline`, honoring cancellation.
-    public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
+    public func sleep(until deadline: Instant, tolerance _: Duration? = nil) async throws {
         try Task.checkCancellation()
         let id = state.withLock { $0.sleepers.makeID() }
         enum Action { case resumeNow, cancelled, suspended }
@@ -94,9 +94,9 @@ public final class TestClock: Clock, Sendable {
                 }
                 for (waiter, _) in resumals.1 { waiter.resume() }
                 switch resumals.0 {
-                case .resumeNow: continuation.resume()
-                case .cancelled: continuation.resume(throwing: CancellationError())
-                case .suspended: break
+                    case .resumeNow: continuation.resume()
+                    case .cancelled: continuation.resume(throwing: CancellationError())
+                    case .suspended: break
                 }
             }
         } onCancel: {
@@ -122,9 +122,9 @@ public final class TestClock: Clock, Sendable {
                     return .suspended
                 }
                 switch action {
-                case .ready: continuation.resume()
-                case .cancelled: continuation.resume(throwing: CancellationError())
-                case .suspended: break
+                    case .ready: continuation.resume()
+                    case .cancelled: continuation.resume(throwing: CancellationError())
+                    case .suspended: break
                 }
             }
         } onCancel: {
@@ -153,7 +153,7 @@ public final class TestClock: Clock, Sendable {
     /// Wakes every parked sleeper by advancing to the furthest pending deadline — the "drain
     /// everything" step at the end of a deterministic time test.
     public func runToLastSleeper() {
-        let furthest = state.withLock { $0.sleepers.maxKey }
+        let furthest = state.withLock(\.sleepers.maxKey)
         if let furthest { advance(to: furthest) }
     }
 }

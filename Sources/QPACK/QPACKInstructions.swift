@@ -21,7 +21,6 @@ public import HTTPCore
 
 /// Parsers and (stub) generators for the QPACK encoder/decoder instruction streams (RFC 9204 §4.3/§4.4).
 public enum QPACKInstructions {
-
     // MARK: Generators (stubs — nothing is owed at capacity 0)
 
     /// The encoder-stream instructions this endpoint owes — always empty (RFC 9204 §4.3).
@@ -48,11 +47,14 @@ public enum QPACKInstructions {
         while let first = reader.peek() {
             if first & 0x80 != 0 {
                 throw .encoderStreamError("insert with name reference (dynamic table disabled)")
-            } else if first & 0x40 != 0 {
+            }
+            if first & 0x40 != 0 {
                 throw .encoderStreamError("insert with literal name (dynamic table disabled)")
-            } else if first & 0x20 != 0 {
+            }
+            if first & 0x20 != 0 {
                 guard try consumeSetCapacity(&reader, maxCapacity: maxCapacity) else { return }
-            } else {
+            }
+            else {
                 throw .encoderStreamError("duplicate (dynamic table disabled)")
             }
         }
@@ -68,10 +70,12 @@ public enum QPACKInstructions {
             if first & 0x80 != 0 {
                 // §4.4.1 Section Acknowledgment — refers to a stream whose sections are all RIC 0.
                 throw .decoderStreamError("Section Acknowledgment for a zero-insert stream")
-            } else if first & 0x40 != 0 {
+            }
+            if first & 0x40 != 0 {
                 // §4.4.2 Stream Cancellation — consumed and ignored (no dynamic-table state).
                 guard try consumeStreamCancellation(&reader) else { return }
-            } else {
+            }
+            else {
                 // §4.4.3 Insert Count Increment — always a violation here (no inserts were sent).
                 guard try consumeInsertCountIncrement(&reader) else { return }
             }
@@ -86,16 +90,16 @@ public enum QPACKInstructions {
     ) throws(QPACKError) -> Bool {
         var probe = reader
         switch QPACKInteger.decode(&probe, prefixBits: 5) {
-        case .value(let capacity):
-            guard capacity <= maxCapacity else {
-                throw .encoderStreamError("Set Dynamic Table Capacity exceeds the limit")
-            }
-            reader.advance(by: probe.position - reader.position)
-            return true
-        case .incomplete:
-            return false
-        case .overflow:
-            throw .encoderStreamError("invalid Set Dynamic Table Capacity")
+            case .value(let capacity):
+                guard capacity <= maxCapacity else {
+                    throw .encoderStreamError("Set Dynamic Table Capacity exceeds the limit")
+                }
+                reader.advance(by: probe.position - reader.position)
+                return true
+            case .incomplete:
+                return false
+            case .overflow:
+                throw .encoderStreamError("invalid Set Dynamic Table Capacity")
         }
     }
 
@@ -105,13 +109,13 @@ public enum QPACKInstructions {
     ) throws(QPACKError) -> Bool {
         var probe = reader
         switch QPACKInteger.decode(&probe, prefixBits: 6) {
-        case .value:
-            reader.advance(by: probe.position - reader.position)
-            return true
-        case .incomplete:
-            return false
-        case .overflow:
-            throw .decoderStreamError("invalid Stream Cancellation")
+            case .value:
+                reader.advance(by: probe.position - reader.position)
+                return true
+            case .incomplete:
+                return false
+            case .overflow:
+                throw .decoderStreamError("invalid Stream Cancellation")
         }
     }
 
@@ -121,15 +125,15 @@ public enum QPACKInstructions {
     ) throws(QPACKError) -> Bool {
         var probe = reader
         switch QPACKInteger.decode(&probe, prefixBits: 6) {
-        case .value(let increment):
-            throw .decoderStreamError(
-                increment == 0
-                    ? "Insert Count Increment of 0"
-                    : "Insert Count Increment beyond what the encoder sent")
-        case .incomplete:
-            return false
-        case .overflow:
-            throw .decoderStreamError("invalid Insert Count Increment")
+            case .value(let increment):
+                throw .decoderStreamError(
+                    increment == 0
+                        ? "Insert Count Increment of 0"
+                        : "Insert Count Increment beyond what the encoder sent")
+            case .incomplete:
+                return false
+            case .overflow:
+                throw .decoderStreamError("invalid Insert Count Increment")
         }
     }
 }

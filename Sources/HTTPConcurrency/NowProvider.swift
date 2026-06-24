@@ -9,9 +9,9 @@
 //
 
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #elseif canImport(Glibc)
-import Glibc
+    import Glibc
 #endif
 
 /// A monotonic timestamp in nanoseconds — the unit elapsed-time/rate logic measures against, as

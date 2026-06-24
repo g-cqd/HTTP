@@ -12,7 +12,6 @@
 /// allocates less than a dictionary, while preserving the on-the-wire order that RFC 9110 §5.3
 /// makes significant for repeated field names.
 public struct HTTPFields: Sendable, Equatable {
-
     @usableFromInline
     var storage: [HTTPField]
 
@@ -36,7 +35,8 @@ public struct HTTPFields: Sendable, Equatable {
         for field in storage where field.name == name {
             if combined == nil {
                 combined = field.value  // single match (the common case): returned as-is, no copy
-            } else {
+            }
+            else {
                 // Grow one buffer in place instead of building O(n²) intermediate concatenations.
                 combined?.append(", ")
                 combined?.append(field.value)
@@ -90,7 +90,8 @@ public struct HTTPFields: Sendable, Equatable {
         if let firstIndex = storage.firstIndex(where: { $0.name == name }) {
             storage.removeAll { $0.name == name }
             storage.insert(field, at: firstIndex)
-        } else {
+        }
+        else {
             storage.append(field)
         }
         return true
@@ -103,7 +104,6 @@ public struct HTTPFields: Sendable, Equatable {
 }
 
 extension HTTPFields: RandomAccessCollection {
-
     // `Element` (HTTPField) and `Index` (Int) are inferred from the members below.
 
     /// The position of the first field (RFC 9110 §5.3 order is preserved).
@@ -123,7 +123,6 @@ extension HTTPFields: RandomAccessCollection {
 }
 
 extension HTTPFields {
-
     /// An empty field collection — a readable alias for `HTTPFields()`.
     public static var empty: HTTPFields { HTTPFields() }
 }

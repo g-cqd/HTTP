@@ -13,17 +13,16 @@ public import HTTPCore
 
 /// Gzip-compresses eligible responses when the client accepts it (RFC 9110 §8.4.1).
 public struct CompressionMiddleware: HTTPMiddleware {
-
     private let minimumSize: Int
 
     /// Media-type fragments whose payloads are already compressed — gzip would only add overhead.
     private static let incompressible = [
-        "image/", "video/", "audio/", "zip", "gzip", "brotli", "compress",
+        "image/", "video/", "audio/", "zip", "gzip", "brotli", "compress"
     ]
 
     /// Creates the middleware; responses below `minimumSize` octets are not compressed (default 1 KiB,
     /// since tiny bodies cost more in framing overhead than they save).
-    public init(minimumSize: Int = 1024) {
+    public init(minimumSize: Int = 1_024) {
         self.minimumSize = minimumSize
     }
 

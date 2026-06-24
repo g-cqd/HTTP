@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §3 — HTTPRequest")
 struct HTTPRequestTests {
-
     @Test("stores its components")
     func storesComponents() {
         let request = HTTPRequest(
@@ -49,7 +48,6 @@ struct HTTPRequestTests {
 
 @Suite("RFC 9110 §3/§15 — HTTPResponse")
 struct HTTPResponseTests {
-
     @Test("stores its status and fields")
     func storesStatusAndFields() {
         var fields = HTTPFields()

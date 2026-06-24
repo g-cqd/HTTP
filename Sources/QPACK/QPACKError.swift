@@ -11,7 +11,6 @@
 
 /// A QPACK error with its RFC 9204 §6 wire code and a human-readable diagnostic.
 public struct QPACKError: Error, Sendable, Equatable {
-
     /// A QPACK error code (RFC 9204 §6); the raw value is the wire code.
     public enum Code: UInt32, Sendable, Equatable {
         /// `QPACK_DECOMPRESSION_FAILED` (0x0200) — a field section could not be decoded.
@@ -35,17 +34,17 @@ public struct QPACKError: Error, Sendable, Equatable {
     }
 
     /// A field-section decoding failure: `QPACK_DECOMPRESSION_FAILED` (RFC 9204 §6).
-    public static func decompressionFailed(_ reason: String = "") -> QPACKError {
-        QPACKError(code: .decompressionFailed, reason: reason)
+    public static func decompressionFailed(_ reason: String = "") -> Self {
+        Self(code: .decompressionFailed, reason: reason)
     }
 
     /// A malformed encoder-stream instruction: `QPACK_ENCODER_STREAM_ERROR` (RFC 9204 §6).
-    public static func encoderStreamError(_ reason: String = "") -> QPACKError {
-        QPACKError(code: .encoderStreamError, reason: reason)
+    public static func encoderStreamError(_ reason: String = "") -> Self {
+        Self(code: .encoderStreamError, reason: reason)
     }
 
     /// A malformed decoder-stream instruction: `QPACK_DECODER_STREAM_ERROR` (RFC 9204 §6).
-    public static func decoderStreamError(_ reason: String = "") -> QPACKError {
-        QPACKError(code: .decoderStreamError, reason: reason)
+    public static func decoderStreamError(_ reason: String = "") -> Self {
+        Self(code: .decoderStreamError, reason: reason)
     }
 }

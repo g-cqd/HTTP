@@ -20,7 +20,6 @@ internal import Synchronization
 
 /// Safe Swift wrappers over the Security/Network C TLS APIs used by the Network backbone.
 enum NetworkFrameworkTLS {
-
     /// Serializes `SecPKCS12Import`, which is not thread-safe: concurrent calls intermittently fail
     /// with an internal/MAC error (`errSecPkcs12VerifyFailure`).
     ///
@@ -91,8 +90,8 @@ enum NetworkFrameworkTLS {
     /// Maps a backbone-agnostic ``TLSVersion`` to the Security framework's `tls_protocol_version_t`.
     private static func protocolVersion(_ version: TLSVersion) -> tls_protocol_version_t {
         switch version {
-        case .tlsV12: .TLSv12
-        case .tlsV13: .TLSv13
+            case .tlsV12: .TLSv12
+            case .tlsV13: .TLSv13
         }
     }
 

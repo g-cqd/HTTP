@@ -12,7 +12,6 @@
 
 /// The lifecycle state of an HTTP/2 stream (RFC 9113 §5.1; push/reserved states omitted).
 public enum HTTP2StreamState: Sendable, Equatable {
-
     /// No frames exchanged yet.
     case idle
     /// Both peers may send (the request is in flight).
@@ -27,7 +26,6 @@ public enum HTTP2StreamState: Sendable, Equatable {
 
 /// A server-side HTTP/2 stream and its RFC 9113 §5.1 state transitions.
 public struct HTTP2Stream: Sendable, Equatable {
-
     /// The stream identifier (RFC 9113 §5.1.1).
     public let id: HTTP2StreamID
 
@@ -43,60 +41,60 @@ public struct HTTP2Stream: Sendable, Equatable {
     /// Applies a received HEADERS frame (request headers, or trailers) — RFC 9113 §5.1.
     public mutating func receiveHeaders(endStream: Bool) throws(HTTP2Error) {
         switch state {
-        case .idle:
-            state = endStream ? .halfClosedRemote : .open
-        case .open:
-            // A second HEADERS without END_STREAM is a malformed message — a *stream* error, not a
-            // connection error (RFC 9113 §8.1); it must not tear down well-behaved sibling streams.
-            guard endStream else {
-                throw .stream(id, .protocolError, "trailers must set END_STREAM")
-            }
-            state = .halfClosedRemote
-        case .halfClosedLocal:
-            guard endStream else {
-                throw .stream(id, .protocolError, "trailers must set END_STREAM")
-            }
-            state = .closed
-        case .halfClosedRemote, .closed:
-            throw .stream(id, .streamClosed, "HEADERS on a closed stream")
+            case .idle:
+                state = endStream ? .halfClosedRemote : .open
+            case .open:
+                // A second HEADERS without END_STREAM is a malformed message — a *stream* error, not a
+                // connection error (RFC 9113 §8.1); it must not tear down well-behaved sibling streams.
+                guard endStream else {
+                    throw .stream(id, .protocolError, "trailers must set END_STREAM")
+                }
+                state = .halfClosedRemote
+            case .halfClosedLocal:
+                guard endStream else {
+                    throw .stream(id, .protocolError, "trailers must set END_STREAM")
+                }
+                state = .closed
+            case .halfClosedRemote, .closed:
+                throw .stream(id, .streamClosed, "HEADERS on a closed stream")
         }
     }
 
     /// Applies a received DATA frame (request body) — RFC 9113 §5.1.
     public mutating func receiveData(endStream: Bool) throws(HTTP2Error) {
         switch state {
-        case .idle:
-            throw .connection(.protocolError, "DATA before HEADERS")
-        case .open:
-            state = endStream ? .halfClosedRemote : .open
-        case .halfClosedLocal:
-            state = endStream ? .closed : .halfClosedLocal
-        case .halfClosedRemote, .closed:
-            throw .stream(id, .streamClosed, "DATA on a closed stream")
+            case .idle:
+                throw .connection(.protocolError, "DATA before HEADERS")
+            case .open:
+                state = endStream ? .halfClosedRemote : .open
+            case .halfClosedLocal:
+                state = endStream ? .closed : .halfClosedLocal
+            case .halfClosedRemote, .closed:
+                throw .stream(id, .streamClosed, "DATA on a closed stream")
         }
     }
 
     /// Applies a sent HEADERS frame (response headers) — RFC 9113 §5.1.
     public mutating func sendHeaders(endStream: Bool) throws(HTTP2Error) {
         switch state {
-        case .open:
-            state = endStream ? .halfClosedLocal : .open
-        case .halfClosedRemote:
-            state = endStream ? .closed : .halfClosedRemote
-        case .idle, .halfClosedLocal, .closed:
-            throw .stream(id, .internalError, "cannot send HEADERS in this state")
+            case .open:
+                state = endStream ? .halfClosedLocal : .open
+            case .halfClosedRemote:
+                state = endStream ? .closed : .halfClosedRemote
+            case .idle, .halfClosedLocal, .closed:
+                throw .stream(id, .internalError, "cannot send HEADERS in this state")
         }
     }
 
     /// Applies a sent DATA frame (response body) — RFC 9113 §5.1.
     public mutating func sendData(endStream: Bool) throws(HTTP2Error) {
         switch state {
-        case .open:
-            state = endStream ? .halfClosedLocal : .open
-        case .halfClosedRemote:
-            state = endStream ? .closed : .halfClosedRemote
-        case .idle, .halfClosedLocal, .closed:
-            throw .stream(id, .internalError, "cannot send DATA in this state")
+            case .open:
+                state = endStream ? .halfClosedLocal : .open
+            case .halfClosedRemote:
+                state = endStream ? .closed : .halfClosedRemote
+            case .idle, .halfClosedLocal, .closed:
+                throw .stream(id, .internalError, "cannot send DATA in this state")
         }
     }
 

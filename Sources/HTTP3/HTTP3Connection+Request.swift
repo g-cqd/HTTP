@@ -16,7 +16,6 @@ internal import HTTPCore
 internal import QPACK
 
 extension HTTP3Connection {
-
     /// Processes buffered request-stream bytes: drain frames, then surface the request once FIN closes
     /// the send side.
     mutating func processRequestStream(
@@ -40,14 +39,14 @@ extension HTTP3Connection {
                 .h3FrameUnexpected, "a reserved HTTP/2 frame type on a request stream")
         }
         switch frame.type {
-        case .headers:
-            try handleRequestHeaders(streamID, frame.payload)
-        case .data:
-            try handleRequestData(streamID, frame.payload)
-        case .settings, .goAway, .maxPushID, .cancelPush, .pushPromise:
-            throw .connection(.h3FrameUnexpected, "a control frame on a request stream")
-        default:
-            break  // unknown / grease frame types are ignored (RFC 9114 §9)
+            case .headers:
+                try handleRequestHeaders(streamID, frame.payload)
+            case .data:
+                try handleRequestData(streamID, frame.payload)
+            case .settings, .goAway, .maxPushID, .cancelPush, .pushPromise:
+                throw .connection(.h3FrameUnexpected, "a control frame on a request stream")
+            default:
+                break  // unknown / grease frame types are ignored (RFC 9114 §9)
         }
     }
 
@@ -116,14 +115,15 @@ extension HTTP3Connection {
         streamID: QUICStreamID
     ) throws(HTTP3Error) {
         switch request.headerFields.contentLength {
-        case .absent:
-            return
-        case .invalid:
-            throw .stream(streamID, .h3MessageError, "invalid content-length")
-        case .length(let declared):
-            guard declared == bodyCount else {
-                throw .stream(streamID, .h3MessageError, "content-length does not match the body")
-            }
+            case .absent:
+                return
+            case .invalid:
+                throw .stream(streamID, .h3MessageError, "invalid content-length")
+            case .length(let declared):
+                guard declared == bodyCount else {
+                    throw .stream(
+                        streamID, .h3MessageError, "content-length does not match the body")
+                }
         }
     }
 
@@ -134,8 +134,8 @@ extension HTTP3Connection {
             Result { () throws(QPACKError) in try decoder.decode(raw.bytes) }
         }
         switch result {
-        case .success(let fields): return fields
-        case .failure(let error): throw .connection(qpack: error.code, error.reason)
+            case .success(let fields): return fields
+            case .failure(let error): throw .connection(qpack: error.code, error.reason)
         }
     }
 }

@@ -10,7 +10,6 @@ public import HTTPCore
 
 /// Parses the HTTP/1.1 request-line (RFC 9112 §3).
 public enum RequestLineParser {
-
     private static let space: UInt8 = 0x20
     private static let carriageReturn: UInt8 = 0x0D
     private static let lineFeed: UInt8 = 0x0A

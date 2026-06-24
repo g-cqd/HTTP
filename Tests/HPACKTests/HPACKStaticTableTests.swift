@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 7541 Appendix A — static table")
 struct HPACKStaticTableTests {
-
     @Test("has exactly 61 entries")
     func entryCount() {
         #expect(HPACKStaticTable.count == 61)
@@ -29,7 +28,7 @@ struct HPACKStaticTableTests {
             (8, HPACKField(name: ":status", value: "200")),
             (16, HPACKField(name: "accept-encoding", value: "gzip, deflate")),
             (32, HPACKField(name: "cookie")),
-            (61, HPACKField(name: "www-authenticate")),
+            (61, HPACKField(name: "www-authenticate"))
         ])
     func indexedEntries(index: Int, expected: HPACKField) {
         #expect(HPACKStaticTable.field(at: index) == expected)

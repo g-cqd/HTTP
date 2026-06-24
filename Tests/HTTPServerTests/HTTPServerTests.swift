@@ -15,7 +15,6 @@ import Testing
 
 @Suite("HTTPServer — request/response pipeline")
 struct HTTPServerTests {
-
     private func serve(
         request: String,
         responder: any HTTPResponder
@@ -178,10 +177,11 @@ struct HTTPServerTests {
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let peer = TransportAddress(host: "203.0.113.7", port: 0)
         let probe = AsyncEventProbe<TransportConnectionID>()
-        let connections = (1...3).map {
-            HangingConnection(
-                id: TransportConnectionID(UInt64($0)), peer: peer, admissionProbe: probe)
-        }
+        let connections = (1 ... 3)
+            .map {
+                HangingConnection(
+                    id: TransportConnectionID(UInt64($0)), peer: peer, admissionProbe: probe)
+            }
         let server = HTTPServer(
             transport: FakeTransport(connections: connections), responder: responder, limits: limits
         )
@@ -208,12 +208,13 @@ struct HTTPServerTests {
         let limits = HTTPLimits(maxConnectionsPerClient: 100, maxConnections: 2)
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let probe = AsyncEventProbe<TransportConnectionID>()
-        let connections = (1...3).map {
-            HangingConnection(
-                id: TransportConnectionID(UInt64($0)),
-                peer: TransportAddress(host: "198.51.100.\($0)", port: 0),
-                admissionProbe: probe)
-        }
+        let connections = (1 ... 3)
+            .map {
+                HangingConnection(
+                    id: TransportConnectionID(UInt64($0)),
+                    peer: TransportAddress(host: "198.51.100.\($0)", port: 0),
+                    admissionProbe: probe)
+            }
         let server = HTTPServer(
             transport: FakeTransport(connections: connections), responder: responder, limits: limits
         )
@@ -234,9 +235,9 @@ struct HTTPServerTests {
         // Small limits keep the test fast: the cap is 1 KiB + 4 KiB. The peer streams 16 KiB of
         // header bytes with no terminating CRLF CRLF — the parser's size limits cannot run without
         // a terminator, so the server must cap the buffer and fail closed with 431.
-        let limits = HTTPLimits(maxRequestLineLength: 1024, maxHeaderListSize: 4 * 1024)
+        let limits = HTTPLimits(maxRequestLineLength: 1_024, maxHeaderListSize: 4 * 1_024)
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
-        let flood = "GET / HTTP/1.1\r\nX-Pad: " + String(repeating: "A", count: 16 * 1024)
+        let flood = "GET / HTTP/1.1\r\nX-Pad: " + String(repeating: "A", count: 16 * 1_024)
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array(flood.utf8))
         let server = HTTPServer(transport: FakeTransport(), responder: responder, limits: limits)
         await server.serve(connection)

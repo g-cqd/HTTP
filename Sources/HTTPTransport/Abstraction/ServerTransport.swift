@@ -12,7 +12,6 @@
 /// Implementations bridge their native accept loop to an `AsyncStream`, which lets the server fan
 /// connections out across cores with a task group.
 public protocol ServerTransport: Sendable {
-
     /// Which backbone this instance is (for diagnostics and selection round-tripping).
     var backbone: TransportBackbone { get }
 

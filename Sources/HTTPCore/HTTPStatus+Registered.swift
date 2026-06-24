@@ -7,7 +7,6 @@
 //
 
 extension HTTPStatus {
-
     // MARK: 1xx Informational
 
     /// `100 Continue` (RFC 9110 §15.2.1).

@@ -12,7 +12,6 @@
 /// version. An HTTP/1.1 parser fills `authority` from the `Host` header; HTTP/2 and HTTP/3 fill it
 /// from `:authority`.
 public struct HTTPRequest: Sendable, Equatable {
-
     /// The request method (RFC 9110 §9).
     public var method: HTTPMethod
 

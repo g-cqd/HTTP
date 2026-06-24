@@ -13,10 +13,8 @@ internal import HTTPCore
 
 /// A sans-I/O WebSocket server connection (RFC 6455): feed octets, drain octets, collect events.
 public struct WebSocketConnection {
-
     /// A high-level event surfaced to the connection driver.
     public enum Event: Sendable, Equatable {
-
         /// A complete message arrived (all fragments reassembled) — text or binary (RFC 6455 §5.6).
         case message(opcode: WebSocketOpcode, payload: [UInt8])
 
@@ -33,12 +31,12 @@ public struct WebSocketConnection {
     private let decoder: WebSocketFrameDecoder
     private let encoder = WebSocketFrameEncoder()
     private let maxMessageSize: Int
-    private var inbound = [UInt8]()
-    private var output = [UInt8]()
+    private var inbound: [UInt8] = []
+    private var output: [UInt8] = []
     private var closeSent = false
     /// The opcode of the message currently being reassembled, or nil when none is open (RFC 6455 §5.4).
     private var fragmentOpcode: WebSocketOpcode?
-    private var fragments = [UInt8]()
+    private var fragments: [UInt8] = []
 
     /// Creates a server connection: it requires masked client frames (§5.1) and bounds a single frame
     /// to `maxFrameSize` and a reassembled message to `maxMessageSize` (resource-exhaustion guards).
@@ -61,10 +59,11 @@ public struct WebSocketConnection {
     {
         do {
             inbound.append(contentsOf: bytes)
-            var events = [Event]()
+            var events: [Event] = []
             for frame in try drainFrames() { try process(frame, into: &events) }
             return events
-        } catch {
+        }
+        catch {
             queueClose(error.closeCode)
             throw error
         }
@@ -113,7 +112,8 @@ public struct WebSocketConnection {
     ) throws(WebSocketError) {
         if frame.opcode.isControl {
             try processControl(frame, into: &events)
-        } else {
+        }
+        else {
             try processData(frame, into: &events)
         }
     }
@@ -123,19 +123,19 @@ public struct WebSocketConnection {
         into events: inout [Event]
     ) throws(WebSocketError) {
         switch frame.opcode {
-        case .ping:
-            // §5.5.2 — MUST reply with a Pong. After a Close is received we have already echoed a
-            // Close (setting closeSent), so `queue` here suppresses the Pong — the §5.5.2 exception.
-            queue(WebSocketFrame(opcode: .pong, payload: frame.payload))
-            events.append(.ping(frame.payload))
-        case .pong:
-            events.append(.pong(frame.payload))
-        case .close:
-            let (code, reason) = try Self.parseClose(frame.payload)
-            if !closeSent { queueClose(code ?? .normalClosure) }  // §5.5.1 — echo a Close
-            events.append(.close(code: code, reason: reason))
-        default:
-            break  // unreachable: a defined control opcode is ping/pong/close
+            case .ping:
+                // §5.5.2 — MUST reply with a Pong. After a Close is received we have already echoed a
+                // Close (setting closeSent), so `queue` here suppresses the Pong — the §5.5.2 exception.
+                queue(WebSocketFrame(opcode: .pong, payload: frame.payload))
+                events.append(.ping(frame.payload))
+            case .pong:
+                events.append(.pong(frame.payload))
+            case .close:
+                let (code, reason) = try Self.parseClose(frame.payload)
+                if !closeSent { queueClose(code ?? .normalClosure) }  // §5.5.1 — echo a Close
+                events.append(.close(code: code, reason: reason))
+            default:
+                break  // unreachable: a defined control opcode is ping/pong/close
         }
     }
 
@@ -156,7 +156,8 @@ public struct WebSocketConnection {
         guard fragmentOpcode == nil else { throw .interleavedDataFrame }  // §5.4
         if frame.isFinal {
             try emitMessage(opcode: frame.opcode, payload: frame.payload, into: &events)
-        } else {
+        }
+        else {
             fragmentOpcode = frame.opcode
             try appendFragment(frame.payload)  // open a fragmented message
         }
@@ -254,15 +255,15 @@ public struct WebSocketConnection {
         forLead lead: UInt8
     ) -> (length: Int, secondLow: UInt8, secondHigh: UInt8)? {
         switch lead {
-        case 0xC2...0xDF: (2, 0x80, 0xBF)
-        case 0xE0: (3, 0xA0, 0xBF)  // reject overlong
-        case 0xE1...0xEC: (3, 0x80, 0xBF)
-        case 0xED: (3, 0x80, 0x9F)  // reject surrogates
-        case 0xEE...0xEF: (3, 0x80, 0xBF)
-        case 0xF0: (4, 0x90, 0xBF)  // reject overlong
-        case 0xF1...0xF3: (4, 0x80, 0xBF)
-        case 0xF4: (4, 0x80, 0x8F)  // reject > U+10FFFF
-        default: nil
+            case 0xC2 ... 0xDF: (2, 0x80, 0xBF)
+            case 0xE0: (3, 0xA0, 0xBF)  // reject overlong
+            case 0xE1 ... 0xEC: (3, 0x80, 0xBF)
+            case 0xED: (3, 0x80, 0x9F)  // reject surrogates
+            case 0xEE ... 0xEF: (3, 0x80, 0xBF)
+            case 0xF0: (4, 0x90, 0xBF)  // reject overlong
+            case 0xF1 ... 0xF3: (4, 0x80, 0xBF)
+            case 0xF4: (4, 0x80, 0x8F)  // reject > U+10FFFF
+            default: nil
         }
     }
 
@@ -279,11 +280,11 @@ public struct WebSocketConnection {
                 }
             }
         switch decoded {
-        case .success(let value):
-            inbound.removeFirst(value.consumed)
-            return value.frames
-        case .failure(let error):
-            throw error
+            case .success(let value):
+                inbound.removeFirst(value.consumed)
+                return value.frames
+            case .failure(let error):
+                throw error
         }
     }
 }

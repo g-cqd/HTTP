@@ -14,7 +14,6 @@ public import HTTPCore
 
 /// The RFC 9204 Appendix A static table — 99 entries, 0-based.
 public enum QPACKStaticTable {
-
     /// The number of entries in the static table (RFC 9204 Appendix A).
     public static let count = 99
 
@@ -123,7 +122,7 @@ public enum QPACKStaticTable {
         HeaderField(name: "user-agent"),
         HeaderField(name: "x-forwarded-for"),
         HeaderField(name: "x-frame-options", value: "deny"),
-        HeaderField(name: "x-frame-options", value: "sameorigin"),
+        HeaderField(name: "x-frame-options", value: "sameorigin")
     ]
 
     /// Returns the static entry at QPACK index `index` (0...98), or `nil` if out of range.

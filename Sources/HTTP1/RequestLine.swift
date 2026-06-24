@@ -9,7 +9,6 @@ public import HTTPCore
 
 /// A parsed HTTP/1.1 request-line: `method SP request-target SP HTTP-version` (RFC 9112 §3).
 public struct RequestLine: Sendable, Equatable {
-
     /// The request method (RFC 9110 §9).
     public let method: HTTPMethod
 

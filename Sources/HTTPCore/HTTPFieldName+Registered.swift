@@ -7,7 +7,6 @@
 //
 
 extension HTTPFieldName {
-
     // MARK: Message routing & framing
 
     /// `Host` (RFC 9110 §7.2).

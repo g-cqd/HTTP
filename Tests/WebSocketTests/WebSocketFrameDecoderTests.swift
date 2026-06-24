@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 6455 §5.2 — frame decoder")
 struct WebSocketFrameDecoderTests {
-
     // MARK: Decoding
 
     @Test("decodes an unmasked text frame")
@@ -120,7 +119,7 @@ struct WebSocketFrameDecoderTests {
         let decoder = WebSocketFrameDecoder()
         return try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
-            var frames = [WebSocketFrame]()
+            var frames: [WebSocketFrame] = []
             while let frame = try decoder.nextFrame(&reader) { frames.append(frame) }
             return frames
         }

@@ -16,7 +16,6 @@ import Testing
 
 @Suite("h2spec http2 §6.1–6.4 — Frame Definitions (DATA/HEADERS/PRIORITY/RST_STREAM)")
 struct H2SpecFrameDefinitionTests {
-
     // MARK: §6.1 DATA
 
     @Test("6.1/1 — a DATA frame with stream identifier 0x0 is a PROTOCOL_ERROR (§6.1)")

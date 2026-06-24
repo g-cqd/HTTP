@@ -19,7 +19,6 @@ internal import Synchronization
 
 /// The legacy Network.framework QUIC server backbone (`NWListener` + `NWConnectionGroup`).
 public final class LegacyQUICTransport: QUICServerTransport {
-
     private let configuration: TransportConfiguration
     private let limits: HTTPLimits
     private let queue = DispatchQueue(label: "http.transport.quic.legacy")
@@ -96,7 +95,8 @@ public final class LegacyQUICTransport: QUICServerTransport {
         let port = NWEndpoint.Port(rawValue: configuration.port) ?? .any
         do {
             return try NWListener(using: parameters, on: port)
-        } catch {
+        }
+        catch {
             throw TransportError.bindFailed("\(error)")
         }
     }
@@ -120,20 +120,20 @@ public final class LegacyQUICTransport: QUICServerTransport {
     ) {
         state.withLock { current in
             switch newState {
-            case .ready:
-                current.isReady = true
-                current.readyContinuation?.resume()
-                current.readyContinuation = nil
-            case .failed(let error):
-                let failure = TransportError.bindFailed("\(error)")
-                current.failure = failure
-                current.readyContinuation?.resume(throwing: failure)
-                current.readyContinuation = nil
-                continuation.finish()
-            case .cancelled:
-                continuation.finish()
-            default:
-                break
+                case .ready:
+                    current.isReady = true
+                    current.readyContinuation?.resume()
+                    current.readyContinuation = nil
+                case .failed(let error):
+                    let failure = TransportError.bindFailed("\(error)")
+                    current.failure = failure
+                    current.readyContinuation?.resume(throwing: failure)
+                    current.readyContinuation = nil
+                    continuation.finish()
+                case .cancelled:
+                    continuation.finish()
+                default:
+                    break
             }
         }
     }
@@ -144,9 +144,11 @@ public final class LegacyQUICTransport: QUICServerTransport {
             state.withLock { current in
                 if current.isReady {
                     continuation.resume()
-                } else if let failure = current.failure {
+                }
+                else if let failure = current.failure {
                     continuation.resume(throwing: failure)
-                } else {
+                }
+                else {
                     current.readyContinuation = continuation
                 }
             }

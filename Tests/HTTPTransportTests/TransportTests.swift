@@ -11,7 +11,6 @@ import Testing
 
 @Suite("Transport abstraction & backbone selection")
 struct TransportTests {
-
     @Test("the factory wires each real backbone flag to its implementation")
     func factorySelectsBackbone() {
         for backbone in TransportBackbone.allCases where backbone != .fake {
@@ -24,7 +23,7 @@ struct TransportTests {
     func fakeTransportYieldsConnections() async throws {
         let transport = FakeTransport(connections: [
             FakeConnection(id: TransportConnectionID(1)),
-            FakeConnection(id: TransportConnectionID(2)),
+            FakeConnection(id: TransportConnectionID(2))
         ])
         var ids: [TransportConnectionID] = []
         for await connection in try await transport.start() {

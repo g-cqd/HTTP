@@ -18,10 +18,8 @@ public import HTTPCore
 
 /// Pulls complete HTTP/3 frames from one stream's accumulating byte buffer (RFC 9114 §7.1).
 public struct HTTP3FrameDecoder {
-
     /// One fully received frame: its type and payload octets.
     public struct Frame: Sendable, Equatable {
-
         /// The frame type (RFC 9114 §7.2).
         public let type: HTTP3FrameType
 
@@ -61,9 +59,10 @@ public struct HTTP3FrameDecoder {
         reader.advance(by: probe.position - reader.position)  // consume the type + length varints
         let start = reader.position
         reader.advance(by: payloadLength)
-        let payload = reader.slice(in: start..<(start + payloadLength)).withUnsafeBytes {
-            Array($0)
-        }
+        let payload = reader.slice(in: start ..< (start + payloadLength))
+            .withUnsafeBytes {
+                Array($0)
+            }
         return Frame(type: HTTP3FrameType(rawValue: rawType), payload: payload)
     }
 }

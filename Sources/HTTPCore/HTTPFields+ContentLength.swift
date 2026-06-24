@@ -6,7 +6,6 @@
 //
 
 extension HTTPFields {
-
     /// The result of interpreting the `Content-Length` field(s) of a message (RFC 9110 §8.6).
     public enum ContentLength: Sendable, Equatable {
         /// No `Content-Length` field is present.
@@ -35,7 +34,7 @@ extension HTTPFields {
             // Tokenize on commas with index slicing (Substring views) — no `[Substring]` from `split`.
             while true {
                 let comma = utf8[start...].firstIndex(of: 0x2C)  // ","
-                let token = utf8[start..<(comma ?? utf8.endIndex)]
+                let token = utf8[start ..< (comma ?? utf8.endIndex)]
                 guard let parsed = Self.parseContentLengthToken(token) else { return .invalid }
                 if let resolvedValue = resolved, resolvedValue != parsed { return .invalid }
                 resolved = parsed

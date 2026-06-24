@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §8.6 — Content-Length")
 struct ContentLengthTests {
-
     private func fields(contentLength values: String...) -> HTTPFields {
         var fields = HTTPFields()
         for value in values {

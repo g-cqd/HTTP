@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 9114 §6.2 — HTTP/3 stream roles")
 struct HTTP3StreamRoleTests {
-
     @Test(
         "the §6.2 stream-type byte maps to a role",
         arguments: [
@@ -23,7 +22,7 @@ struct HTTP3StreamRoleTests {
             (type: 0x02, role: .qpackEncoder),
             (type: 0x03, role: .qpackDecoder),
             (type: 0x05, role: .reserved(0x05)),
-            (type: 0x21, role: .reserved(0x21)),
+            (type: 0x21, role: .reserved(0x21))
         ] as [(type: UInt64, role: HTTP3StreamRole)])
     func classification(_ testCase: (type: UInt64, role: HTTP3StreamRole)) {
         #expect(HTTP3StreamRole(streamType: testCase.type) == testCase.role)

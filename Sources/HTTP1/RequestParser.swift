@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// How a request body is delimited on the wire (RFC 9112 §6).
 public enum BodyFraming: Sendable, Equatable {
-
     /// No body (no `Content-Length`, no `Transfer-Encoding`).
     case none
 
@@ -27,7 +26,6 @@ public enum BodyFraming: Sendable, Equatable {
 /// It deliberately excludes the body, so a server can frame the body incrementally as it arrives
 /// without re-parsing the request-line and header section on every chunk.
 public struct RequestHead: Sendable, Equatable {
-
     /// The request message (method, authority, path, header fields).
     public let request: HTTPRequest
 
@@ -47,7 +45,6 @@ public struct RequestHead: Sendable, Equatable {
 
 /// Parses a complete HTTP/1.1 request message (RFC 9112).
 public enum RequestParser {
-
     private static let chunkedToken: [UInt8] = Array("chunked".utf8)
 
     /// Parses request-line, header section, and body from `reader`, returning the assembled
@@ -108,13 +105,13 @@ public enum RequestParser {
             return .chunked
         }
         switch headerFields.contentLength {
-        case .absent:
-            return .none
-        case .invalid:
-            throw .invalidContentLength
-        case .length(let length):
-            guard length <= limits.maxBodySize else { throw .bodyTooLarge }
-            return .contentLength(length)
+            case .absent:
+                return .none
+            case .invalid:
+                throw .invalidContentLength
+            case .length(let length):
+                guard length <= limits.maxBodySize else { throw .bodyTooLarge }
+                return .contentLength(length)
         }
     }
 
@@ -125,15 +122,15 @@ public enum RequestParser {
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> [UInt8] {
         switch framing {
-        case .none:
-            return []
-        case .contentLength(let length):
-            guard reader.remaining >= length else { throw .incompleteBody }
-            let start = reader.position
-            reader.advance(by: length)
-            return reader.slice(in: start..<(start + length)).withUnsafeBytes { Array($0) }
-        case .chunked:
-            return try ChunkedDecoder.decode(&reader, limits: limits)
+            case .none:
+                return []
+            case .contentLength(let length):
+                guard reader.remaining >= length else { throw .incompleteBody }
+                let start = reader.position
+                reader.advance(by: length)
+                return reader.slice(in: start ..< (start + length)).withUnsafeBytes { Array($0) }
+            case .chunked:
+                return try ChunkedDecoder.decode(&reader, limits: limits)
         }
     }
 

@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §15 — HTTPStatus")
 struct HTTPStatusTests {
-
     @Test("registered constants carry their numeric codes")
     func registeredConstants() {
         #expect(HTTPStatus.continue.code == 100)
@@ -38,14 +37,14 @@ struct HTTPStatusTests {
             (499, .clientError),
             (500, .serverError),
             (503, .serverError),
-            (599, .serverError),
+            (599, .serverError)
         ]
     )
     func classifies(_ code: Int, _ expected: HTTPStatus.Kind) {
         #expect(HTTPStatus(code: code)?.kind == expected)
     }
 
-    @Test("rejects codes outside 100...599", arguments: [-1, 0, 1, 99, 600, 700, 999, 1000])
+    @Test("rejects codes outside 100...599", arguments: [-1, 0, 1, 99, 600, 700, 999, 1_000])
     func rejectsInvalidCodes(_ code: Int) {
         #expect(HTTPStatus(code: code) == nil)
     }

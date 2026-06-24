@@ -12,7 +12,6 @@ public import HTTPCore
 
 /// A frame an application asks the connection to send in response to an event (RFC 6455 §5).
 public enum WebSocketAction: Sendable, Equatable {
-
     /// Send a text message (RFC 6455 §5.6).
     case sendText(String)
 
@@ -28,7 +27,6 @@ public enum WebSocketAction: Sendable, Equatable {
 
 /// Application logic for an upgraded WebSocket connection (RFC 6455 §5 / §6).
 public protocol WebSocketHandler: Sendable {
-
     /// Whether to upgrade `request` to WebSocket (e.g. gate by path); defaults to accepting any valid
     /// upgrade request (RFC 6455 §4).
     func shouldUpgrade(_ request: HTTPRequest) -> Bool
@@ -47,20 +45,18 @@ public protocol WebSocketHandler: Sendable {
 }
 
 extension WebSocketHandler {
-
     /// By default any request that already passed the handshake is upgraded.
-    public func shouldUpgrade(_ request: HTTPRequest) -> Bool { true }
+    public func shouldUpgrade(_: HTTPRequest) -> Bool { true }
 
     /// By default every origin is accepted.
     ///
     /// Override to defend credentialed endpoints against cross-site WebSocket hijacking
     /// (RFC 6455 §10.2).
-    public func isOriginAllowed(_ origin: String?) -> Bool { true }
+    public func isOriginAllowed(_: String?) -> Bool { true }
 }
 
 /// A ``WebSocketHandler`` backed by closures.
 public struct ClosureWebSocketHandler: WebSocketHandler {
-
     private let upgrade: @Sendable (HTTPRequest) -> Bool
     private let originAllowed: @Sendable (String?) -> Bool
     private let onEvent: @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
@@ -91,14 +87,13 @@ public struct ClosureWebSocketHandler: WebSocketHandler {
 }
 
 extension WebSocketConnection {
-
     /// Applies an application `action`, queuing the corresponding frame (RFC 6455 §5).
     public mutating func apply(_ action: WebSocketAction) {
         switch action {
-        case .sendText(let text): send(text: text)
-        case .sendBinary(let bytes): send(binary: bytes)
-        case .sendPing(let payload): sendPing(payload)
-        case .close(let code, let reason): close(code, reason: reason)
+            case .sendText(let text): send(text: text)
+            case .sendBinary(let bytes): send(binary: bytes)
+            case .sendPing(let payload): sendPing(payload)
+            case .close(let code, let reason): close(code, reason: reason)
         }
     }
 }

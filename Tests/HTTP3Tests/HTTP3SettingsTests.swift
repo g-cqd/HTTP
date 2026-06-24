@@ -14,9 +14,8 @@ import Testing
 
 @Suite("RFC 9114 §7.2.4 — HTTP/3 SETTINGS")
 struct HTTP3SettingsTests {
-
     private func payload(_ pairs: [(UInt64, UInt64)]) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         for (identifier, value) in pairs {
             QUICVarint.encode(identifier, into: &out)
             QUICVarint.encode(value, into: &out)
@@ -30,7 +29,8 @@ struct HTTP3SettingsTests {
             do {
                 try settings.apply(raw.bytes)
                 return (settings, nil)
-            } catch {
+            }
+            catch {
                 return (nil, error as? HTTP3Error)
             }
         }

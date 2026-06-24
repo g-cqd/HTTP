@@ -10,7 +10,6 @@
 /// The parser uses typed `throws(HTTP1ParseError)` so callers handle every case exhaustively and
 /// can map each to the correct protocol response (e.g. `400`, `414`, `431`, `505`).
 public enum HTTP1ParseError: Error, Sendable, Equatable {
-
     /// The request-line did not match `method SP request-target SP HTTP-version CRLF` (RFC 9112 §3).
     case malformedRequestLine
 

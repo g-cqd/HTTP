@@ -24,7 +24,6 @@ import Foundation
 
 /// A minimal fork/exec prefork supervisor for the POSIX backbones.
 enum Prefork {
-
     /// The requested worker count (`HTTPD_WORKERS`), if this process should become a prefork master.
     static var workerCount: Int? {
         guard let raw = ProcessInfo.processInfo.environment["HTTPD_WORKERS"],
@@ -49,7 +48,7 @@ enum Prefork {
 
         var spawnedAt: [pid_t: UInt64] = [:]
         var consecutiveFastDeaths = 0
-        for _ in 0..<workers {
+        for _ in 0 ..< workers {
             let pid = spawnWorker()
             spawnedAt[pid] = DispatchTime.now().uptimeNanoseconds
         }
@@ -67,7 +66,8 @@ enum Prefork {
                 consecutiveFastDeaths += 1
                 let backoffMillis = min(100 << min(consecutiveFastDeaths, 6), 5_000)  // cap 5s
                 usleep(UInt32(backoffMillis) * 1_000)
-            } else {
+            }
+            else {
                 consecutiveFastDeaths = 0
             }
             let pid = spawnWorker()

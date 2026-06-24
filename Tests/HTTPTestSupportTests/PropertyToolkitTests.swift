@@ -15,13 +15,12 @@ private enum SampleError: Error, Equatable { case bad(Int) }
 
 @Suite("Property toolkit")
 struct PropertyToolkitTests {
-
     @Test
     func `SeededRNG reproduces the same stream for a fixed seed`() {
         var a = SeededRNG(seed: 42)
         var b = SeededRNG(seed: 42)
-        let streamA = (0..<8).map { _ in a.next() }
-        let streamB = (0..<8).map { _ in b.next() }
+        let streamA = (0 ..< 8).map { _ in a.next() }
+        let streamB = (0 ..< 8).map { _ in b.next() }
         #expect(streamA == streamB)
     }
 
@@ -74,15 +73,15 @@ struct PropertyToolkitTests {
 
     @Test
     func `expectRoundTripIdentity accepts an identity round trip`() {
-        expectRoundTripIdentity(Array("ping".utf8)) { $0 }  // records no issue
+        expectRoundTripIdentity(\.self)  // records no issue
     }
 
     @Test
     func `mallocDelta measures a growing buffer where counting is available`() {
         guard allocationCountingAvailable else { return }
-        var sink = [UInt8]()
+        var sink: [UInt8] = []
         sink.append(0)  // warm up the first buffer
-        let count = mallocDelta { for _ in 0..<2000 { sink.append(0) } }
+        let count = mallocDelta { for _ in 0 ..< 2_000 { sink.append(0) } }
         #expect((count ?? 0) >= 1)  // geometric growth reallocates at least once
     }
 }

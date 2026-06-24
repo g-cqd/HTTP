@@ -30,17 +30,16 @@ private func decodeChunked(_ bytes: [UInt8]) {
 
 @Suite("Fuzzing — parsers never trap, only return or throw", .tags(.fuzz))
 struct FuzzTests {
-
-    private let iterations = 4000
+    private let iterations = 4_000
 
     @Test
     func `RequestParser tolerates arbitrary random bytes`() {
         var rng = SeededRNG(named: "http1.request-parser.random")
-        for _ in 0..<iterations {
+        for _ in 0 ..< iterations {
             let length = rng.below(301)
-            var bytes = [UInt8]()
+            var bytes: [UInt8] = []
             bytes.reserveCapacity(length)
-            for _ in 0..<length { bytes.append(rng.byte()) }
+            for _ in 0 ..< length { bytes.append(rng.byte()) }
             parseRequest(bytes)
         }
     }

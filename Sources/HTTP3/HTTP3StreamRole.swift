@@ -12,7 +12,6 @@
 
 /// The role of a stream within an HTTP/3 connection (RFC 9114 §6).
 public enum HTTP3StreamRole: Sendable, Equatable, Hashable {
-
     /// A client-initiated bidirectional request stream (RFC 9114 §6.1) — carries HEADERS/DATA.
     case request
     /// The control stream (unidirectional Stream Type 0x00, RFC 9114 §6.2.1) — SETTINGS, GOAWAY, …
@@ -30,12 +29,12 @@ public enum HTTP3StreamRole: Sendable, Equatable, Hashable {
     /// stream (which carries no Stream Type prefix).
     public var streamType: UInt64? {
         switch self {
-        case .request: nil
-        case .control: 0x00
-        case .push: 0x01
-        case .qpackEncoder: 0x02
-        case .qpackDecoder: 0x03
-        case .reserved(let type): type
+            case .request: nil
+            case .control: 0x00
+            case .push: 0x01
+            case .qpackEncoder: 0x02
+            case .qpackDecoder: 0x03
+            case .reserved(let type): type
         }
     }
 
@@ -43,11 +42,11 @@ public enum HTTP3StreamRole: Sendable, Equatable, Hashable {
     /// ``reserved(_:)``.
     public init(streamType: UInt64) {
         switch streamType {
-        case 0x00: self = .control
-        case 0x01: self = .push
-        case 0x02: self = .qpackEncoder
-        case 0x03: self = .qpackDecoder
-        default: self = .reserved(streamType)
+            case 0x00: self = .control
+            case 0x01: self = .push
+            case 0x02: self = .qpackEncoder
+            case 0x03: self = .qpackDecoder
+            default: self = .reserved(streamType)
         }
     }
 
@@ -55,8 +54,8 @@ public enum HTTP3StreamRole: Sendable, Equatable, Hashable {
     /// and QPACK streams; their closure is H3_CLOSED_CRITICAL_STREAM).
     public var isCritical: Bool {
         switch self {
-        case .control, .qpackEncoder, .qpackDecoder: true
-        case .request, .push, .reserved: false
+            case .control, .qpackEncoder, .qpackDecoder: true
+            case .request, .push, .reserved: false
         }
     }
 }

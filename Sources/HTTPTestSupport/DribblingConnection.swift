@@ -10,7 +10,6 @@ public import HTTPTransport
 
 /// An in-memory ``TransportConnection`` that delivers its inbound bytes `chunkSize` at a time.
 public actor DribblingConnection: TransportConnection {
-
     /// The connection's stable identifier.
     public nonisolated let id: TransportConnectionID
 
@@ -35,7 +34,7 @@ public actor DribblingConnection: TransportConnection {
     }
 
     /// Delivers the next `chunkSize` (capped by `maxLength`) inbound bytes, or `nil` at EOF.
-    public func receive(maxLength: Int) async throws -> [UInt8]? {
+    public func receive(maxLength: Int) async -> [UInt8]? {
         guard !inbound.isEmpty else { return nil }
         let count = min(chunkSize, min(maxLength, inbound.count))
         defer { inbound = inbound.dropFirst(count) }
@@ -43,7 +42,7 @@ public actor DribblingConnection: TransportConnection {
     }
 
     /// Records `bytes` as sent to the peer.
-    public func send(_ bytes: [UInt8]) async throws {
+    public func send(_ bytes: [UInt8]) async {
         output.append(contentsOf: bytes)
     }
 

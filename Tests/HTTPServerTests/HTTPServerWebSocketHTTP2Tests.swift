@@ -18,7 +18,6 @@ import WebSocket
 
 @Suite("HTTPServer — WebSocket over HTTP/2 (RFC 8441)")
 struct HTTPServerWebSocketHTTP2Tests {
-
     @Test("Extended CONNECT upgrades to WebSocket and echoes a text frame")
     func webSocketOverHTTP2() async throws {
         let echo = ClosureWebSocketHandler { event in
@@ -51,32 +50,34 @@ struct HTTPServerWebSocketHTTP2Tests {
     // MARK: Wire builders
 
     private func settingsFrame() -> [UInt8] {
-        var out = [UInt8]()
-        HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection).encode(
-            into: &out)
+        var out: [UInt8] = []
+        HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection)
+            .encode(
+                into: &out)
         return out
     }
 
     private func extendedConnect(streamID: UInt32) -> [UInt8] {
-        var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+        var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
         let block = encoder.encode([
             HPACKField(name: ":method", value: "CONNECT"),
             HPACKField(name: ":protocol", value: "websocket"),
             HPACKField(name: ":scheme", value: "https"),
             HPACKField(name: ":path", value: "/chat"),
-            HPACKField(name: ":authority", value: "example.com"),
+            HPACKField(name: ":authority", value: "example.com")
         ])
-        var out = [UInt8]()
+        var out: [UInt8] = []
         HTTP2FrameHeader(
             payloadLength: block.count, type: .headers, flags: [.endHeaders],
             streamID: HTTP2StreamID(streamID)
-        ).encode(into: &out)
+        )
+        .encode(into: &out)
         out += block
         return out
     }
 
     private func dataFrame(streamID: UInt32, payload: [UInt8]) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         HTTP2FrameHeader(
             payloadLength: payload.count, type: .data, streamID: HTTP2StreamID(streamID)
         )
@@ -100,7 +101,7 @@ struct HTTPServerWebSocketHTTP2Tests {
         try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
             let frames = HTTP2FrameDecoder()
-            var decoded = [HTTP2FrameDecoder.Frame]()
+            var decoded: [HTTP2FrameDecoder.Frame] = []
             while let frame = try frames.nextFrame(&reader) { decoded.append(frame) }
             return decoded
         }
@@ -111,7 +112,7 @@ struct HTTPServerWebSocketHTTP2Tests {
     ) throws
         -> String?
     {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         var status: String?
         for frame in frames where frame.header.type == .headers {
             let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
@@ -125,8 +126,8 @@ struct HTTPServerWebSocketHTTP2Tests {
 
     private func containsSubsequence(_ haystack: [UInt8], _ needle: [UInt8]) -> Bool {
         guard needle.count <= haystack.count, !needle.isEmpty else { return false }
-        for start in 0...(haystack.count - needle.count)
-        where Array(haystack[start..<start + needle.count]) == needle {
+        for start in 0 ... (haystack.count - needle.count)
+        where Array(haystack[start ..< start + needle.count]) == needle {
             return true
         }
         return false

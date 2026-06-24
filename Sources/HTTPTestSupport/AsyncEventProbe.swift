@@ -57,10 +57,10 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
     }
 
     /// All events recorded so far — the introspection native `Confirmation` lacks.
-    public var events: [Event] { state.withLock { $0.events } }
+    public var events: [Event] { state.withLock(\.events) }
 
     /// The number of events recorded so far.
-    public var count: Int { state.withLock { $0.events.count } }
+    public var count: Int { state.withLock(\.events.count) }
 
     /// Records an event, waking every waiter whose threshold is now met (with a snapshot of the
     /// events at that moment).
@@ -120,9 +120,9 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
                     return .suspended
                 }
                 switch action {
-                case .ready(let events): continuation.resume(returning: events)
-                case .cancelled: continuation.resume(throwing: CancellationError())
-                case .suspended: break
+                    case .ready(let events): continuation.resume(returning: events)
+                    case .cancelled: continuation.resume(throwing: CancellationError())
+                    case .suspended: break
                 }
             }
         } onCancel: {

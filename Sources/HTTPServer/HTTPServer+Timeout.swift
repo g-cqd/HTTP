@@ -11,7 +11,7 @@
 //
 
 internal import HTTPCore
-public import HTTPTransport
+internal import HTTPTransport
 internal import Synchronization
 
 /// A per-connection deadline shared between the serve loop and its single watchdog task.
@@ -19,7 +19,6 @@ internal import Synchronization
 /// `Instant` is the server clock's instant type. All access is serialized by a `Mutex`, so the loop
 /// (arming/disarming on its task) and the watchdog (reading on another) never race.
 final class IdleDeadline<Instant: Comparable & Sendable>: Sendable {
-
     private struct State {
         var target: Instant?  // when the current receive must finish; nil between reads
         var lapsed = false  // the watchdog fired: the read ended on a timeout, not a peer EOF
@@ -36,15 +35,14 @@ final class IdleDeadline<Instant: Comparable & Sendable>: Sendable {
     /// Records that the deadline lapsed (the serve loop reads this to report a clean idle close).
     func markLapsed() { state.withLock { $0.lapsed = true } }
 
-    var target: Instant? { state.withLock { $0.target } }
+    var target: Instant? { state.withLock(\.target) }
 
     /// Whether the read ended on a deadline lapse (so the read loop reports a clean idle close, not a
     /// truncation error).
-    var hasLapsed: Bool { state.withLock { $0.lapsed } }
+    var hasLapsed: Bool { state.withLock(\.lapsed) }
 }
 
 extension HTTPServer {
-
     /// Serves one connection with a single background idle watchdog.
     ///
     /// `body` (the whole serve loop) and the watchdog race in one task group; whichever finishes first
@@ -53,7 +51,7 @@ extension HTTPServer {
     /// the connection's cancellation handler — exactly the mechanism the per-read `withTimeout` used,
     /// but with one task group + one timer per *connection* instead of per *read*.
     func withIdleWatchdog(
-        _ connection: any TransportConnection,
+        _: any TransportConnection,
         _ body: @escaping @Sendable (IdleDeadline<C.Instant>) async -> Void
     ) async {
         let deadline = IdleDeadline<C.Instant>()
@@ -79,7 +77,8 @@ extension HTTPServer {
                     return
                 }
                 try? await clock.sleep(until: target, tolerance: nil)
-            } else {
+            }
+            else {
                 // Between reads the deadline is briefly nil; nap the SHORTEST read-deadline knob (not
                 // just keepAliveTimeout) and re-check, so a header-phase deadline (headerReadTimeout)
                 // armed during the nap is still enforced near its intended bound, not up to 15s late.

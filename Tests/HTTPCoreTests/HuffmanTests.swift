@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 7541 §5.2 — Huffman coding")
 struct HuffmanTests {
-
     /// RFC 7541 Appendix C worked examples: a string and its exact Huffman-coded octets.
     static let vectors: [(string: String, encoded: [UInt8])] = [
         (
@@ -29,16 +28,16 @@ struct HuffmanTests {
             "Mon, 21 Oct 2013 20:13:21 GMT",
             [
                 0xd0, 0x7a, 0xbe, 0x94, 0x10, 0x54, 0xd4, 0x44, 0xa8, 0x20, 0x05, 0x95, 0x04, 0x0b,
-                0x81, 0x66, 0xe0, 0x82, 0xa6, 0x2d, 0x1b, 0xff,
+                0x81, 0x66, 0xe0, 0x82, 0xa6, 0x2d, 0x1b, 0xff
             ]
         ),
         (
             "https://www.example.com",
             [
                 0x9d, 0x29, 0xad, 0x17, 0x18, 0x63, 0xc7, 0x8f, 0x0b, 0x97, 0xc8, 0xe9, 0xae, 0x82,
-                0xae, 0x43, 0xd3,
+                0xae, 0x43, 0xd3
             ]
-        ),
+        )
     ]
 
     private func decode(_ bytes: [UInt8]) throws -> [UInt8] {
@@ -66,14 +65,14 @@ struct HuffmanTests {
 
     @Test("round-trips every single byte value 0...255")
     func roundTripsAllBytes() throws {
-        for value in UInt8.min...UInt8.max {
+        for value in UInt8.min ... UInt8.max {
             #expect(try decode(Huffman.encode([value])) == [value])
         }
     }
 
     @Test("round-trips a mixed buffer of every byte value")
     func roundTripsMixedBuffer() throws {
-        let original = Array(UInt8.min...UInt8.max) + Array("Hello, 世界! 🌍".utf8)
+        let original = Array(UInt8.min ... UInt8.max) + Array("Hello, 世界! 🌍".utf8)
         #expect(try decode(Huffman.encode(original)) == original)
     }
 

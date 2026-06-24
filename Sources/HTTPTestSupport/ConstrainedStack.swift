@@ -17,7 +17,7 @@ internal import Foundation
 /// total (catch its own errors); only an unrecoverable overflow should fail to return. No recursion
 /// here — the depth lives entirely in `body`.
 public func runOnConstrainedStack<R: Sendable>(
-    stackSize: Int = 512 * 1024,
+    stackSize: Int = 512 * 1_024,
     name: String = "HTTPTestSupport.constrained-stack",
     _ body: @escaping @Sendable () -> R
 ) -> R {
@@ -36,7 +36,7 @@ public func runOnConstrainedStack<R: Sendable>(
 
 /// The `Void` specialization: runs `body` on the pinned stack and blocks until it returns.
 public func runOnConstrainedStack(
-    stackSize: Int = 512 * 1024,
+    stackSize: Int = 512 * 1_024,
     name: String = "HTTPTestSupport.constrained-stack",
     _ body: @escaping @Sendable () -> Void
 ) {
@@ -78,7 +78,7 @@ public struct DepthSweep: Sendable {
     public init(depths: [Int]) { self.depths = depths }
 
     /// A sweep straddling each cap in `caps`, from shallow up to `maxDepth` (sorted, de-duplicated).
-    public static func around(_ caps: [Int], upTo maxDepth: Int = 3000) -> DepthSweep {
+    public static func around(_ caps: [Int], upTo maxDepth: Int = 3_000) -> Self {
         var set = Set<Int>([1, 8, 16, 32])
         for cap in caps where cap > 0 {
             set.insert(cap - 1)
@@ -88,11 +88,11 @@ public struct DepthSweep: Sendable {
         set.insert(maxDepth / 3)
         set.insert(maxDepth)
         let depths = set.filter { $0 >= 1 && $0 <= maxDepth }.sorted()
-        return DepthSweep(depths: depths)
+        return Self(depths: depths)
     }
 
     /// A variadic convenience over ``around(_:upTo:)``.
-    public static func around(_ caps: Int..., upTo maxDepth: Int = 3000) -> DepthSweep {
+    public static func around(_ caps: Int..., upTo maxDepth: Int = 3_000) -> Self {
         around(caps, upTo: maxDepth)
     }
 
@@ -101,7 +101,7 @@ public struct DepthSweep: Sendable {
     /// `body` is expected to be total — it should evaluate the depth-`n` shape and record any
     /// unexpected outcome itself; reaching the end of the sweep proves none overflowed.
     public func run(
-        stackSize: Int = 512 * 1024,
+        stackSize: Int = 512 * 1_024,
         name: String = "HTTPTestSupport.depth-sweep",
         _ body: @escaping @Sendable (Int) -> Void
     ) {

@@ -12,7 +12,6 @@ import Testing
 
 @Suite("RFC 9112 §3.1/§5 — response serialization")
 struct ResponseSerializerTests {
-
     private func serialize(_ response: HTTPResponse, body: String = "") -> String {
         let bytes = ResponseSerializer.serialize(response, body: Array(body.utf8))
         return String(decoding: bytes, as: UTF8.self)

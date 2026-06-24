@@ -19,10 +19,8 @@ public import HTTPCore
 
 /// A sans-I/O HTTP/2 server connection (RFC 9113): feed it octets, drain octets, collect events.
 public struct HTTP2Connection {
-
     /// A high-level event surfaced to the connection driver.
     public enum Event: Sendable, Equatable {
-
         /// A complete request arrived on a stream (all HEADERS and body received).
         case request(streamID: HTTP2StreamID, request: HTTPRequest, body: [UInt8])
 
@@ -71,7 +69,7 @@ public struct HTTP2Connection {
     }
 
     private var phase = Phase.awaitingPreface
-    private var inbound = [UInt8]()
+    private var inbound: [UInt8] = []
     var writer = HTTP2FrameWriter()
     private var decoder: HPACKDecoder
     var encoder: HPACKEncoder
@@ -101,7 +99,7 @@ public struct HTTP2Connection {
     /// is a connection PROTOCOL_ERROR (§5.1.1). Bounded by the concurrency cap so it cannot grow
     /// without limit (audit F1).
     private var closedStreams = Set<HTTP2StreamID>()
-    private var closedStreamOrder = [HTTP2StreamID]()
+    private var closedStreamOrder: [HTTP2StreamID] = []
     // The abuse-budget state below is internal (not private) so the charge/decay helpers can live in
     // HTTP2Connection+AbuseBudget.swift.
     var activeStreamResets = 0
@@ -173,12 +171,13 @@ public struct HTTP2Connection {
             if phase == .awaitingPreface {
                 guard try consumePreface() else { return [] }
             }
-            var events = [Event]()
+            var events: [Event] = []
             for frame in try drainFrames() {
                 try process(frame, into: &events)
             }
             return events
-        } catch {
+        }
+        catch {
             // A connection-scoped error is fatal: queue GOAWAY naming the last processed stream and
             // the cause (RFC 9113 §6.8) so the driver can flush it before closing.
             if error.isConnectionError {
@@ -216,11 +215,11 @@ public struct HTTP2Connection {
                 }
             }
         switch decoded {
-        case .success(let value):
-            inbound.removeFirst(value.consumed)
-            return value.frames
-        case .failure(let error):
-            throw error
+            case .success(let value):
+                inbound.removeFirst(value.consumed)
+                return value.frames
+            case .failure(let error):
+                throw error
         }
     }
 
@@ -244,7 +243,8 @@ public struct HTTP2Connection {
         }
         do {
             try dispatch(frame, into: &events)
-        } catch {
+        }
+        catch {
             // A stream-scoped error resets just that stream and the connection continues (RFC 9113
             // §5.4.2); a connection-scoped error propagates to GOAWAY + close (§5.4.1).
             guard let streamID = error.streamID else { throw error }
@@ -263,18 +263,19 @@ public struct HTTP2Connection {
         into events: inout [Event]
     ) throws(HTTP2Error) {
         switch frame.header.type {
-        case .headers: try receiveHeaders(frame, into: &events)
-        case .continuation: try receiveContinuation(frame, into: &events)
-        case .data: try receiveData(frame, into: &events)
-        case .settings: try applySettings(frame)
-        case .ping: try receivePing(frame)
-        case .rstStream: try receiveReset(frame, into: &events)
-        case .windowUpdate: try receiveWindowUpdate(frame)
-        case .priority: try receivePriority(frame)
-        case .goAway: try receiveGoAway(frame)
-        case .pushPromise:
-            throw .connection(.protocolError, "a client must not send PUSH_PROMISE (RFC 9113 §8.4)")
-        default: break  // unknown frame types MUST be ignored (RFC 9113 §4.1)
+            case .headers: try receiveHeaders(frame, into: &events)
+            case .continuation: try receiveContinuation(frame, into: &events)
+            case .data: try receiveData(frame, into: &events)
+            case .settings: try applySettings(frame)
+            case .ping: try receivePing(frame)
+            case .rstStream: try receiveReset(frame, into: &events)
+            case .windowUpdate: try receiveWindowUpdate(frame)
+            case .priority: try receivePriority(frame)
+            case .goAway: try receiveGoAway(frame)
+            case .pushPromise:
+                throw .connection(
+                    .protocolError, "a client must not send PUSH_PROMISE (RFC 9113 §8.4)")
+            default: break  // unknown frame types MUST be ignored (RFC 9113 §4.1)
         }
     }
 
@@ -453,7 +454,8 @@ public struct HTTP2Connection {
             // without END_STREAM is a §8.1 stream PROTOCOL_ERROR — both take precedence over the field
             // checks below, so the §5.1 error code is reported for a closed stream.
             try record.stream.receiveHeaders(endStream: endStream)
-        } catch {
+        }
+        catch {
             streams[streamID] = record
             throw error
         }
@@ -528,15 +530,15 @@ public struct HTTP2Connection {
     /// malformed request (RFC 9113 §8.1.1) and a stream error.
     private func validateContentLength(_ record: StreamRecord) throws(HTTP2Error) {
         switch record.request.headerFields.contentLength {
-        case .absent:
-            return
-        case .invalid:
-            throw .stream(record.stream.id, .protocolError, "invalid content-length")
-        case .length(let declared):
-            guard declared == record.body.count else {
-                throw .stream(
-                    record.stream.id, .protocolError, "content-length does not match body")
-            }
+            case .absent:
+                return
+            case .invalid:
+                throw .stream(record.stream.id, .protocolError, "invalid content-length")
+            case .length(let declared):
+                guard declared == record.body.count else {
+                    throw .stream(
+                        record.stream.id, .protocolError, "content-length does not match body")
+                }
         }
     }
 
@@ -545,8 +547,8 @@ public struct HTTP2Connection {
             Result { () throws(HPACKError) in try decoder.decode(raw.bytes) }
         }
         switch decoded {
-        case .success(let fields): return fields
-        case .failure: throw .connection(.compressionError, "HPACK decoding failed")
+            case .success(let fields): return fields
+            case .failure: throw .connection(.compressionError, "HPACK decoding failed")
         }
     }
 }

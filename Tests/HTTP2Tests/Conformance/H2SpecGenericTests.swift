@@ -17,7 +17,6 @@ import Testing
 
 @Suite("h2spec generic §1–4 — frames & message exchanges accepted")
 struct H2SpecGenericTests {
-
     // MARK: §1 Starting HTTP/2
 
     @Test("generic 1/1 — accepts the client connection preface")
@@ -38,7 +37,7 @@ struct H2SpecGenericTests {
             (
                 label: "exclusive",
                 frame: H2Wire.priority(streamID: 1, dependency: 0, exclusive: true)
-            ),
+            )
         ])
     func priorityFrameAccepted(_ testCase: (label: String, frame: [UInt8])) throws {
         var connection = try H2Wire.handshaked()
@@ -56,7 +55,7 @@ struct H2SpecGenericTests {
             (
                 label: "WINDOW_UPDATE stream 0",
                 frame: H2Wire.windowUpdate(streamID: 0, increment: 1)
-            ),
+            )
         ])
     func controlFrameAccepted(_ testCase: (label: String, frame: [UInt8])) throws {
         var connection = try H2Wire.handshaked()
@@ -70,7 +69,7 @@ struct H2SpecGenericTests {
         arguments: [
             (label: "WINDOW_UPDATE", frame: H2Wire.windowUpdate(streamID: 1, increment: 1)),
             (label: "PRIORITY", frame: H2Wire.priority(streamID: 1, dependency: 0)),
-            (label: "RST_STREAM", frame: H2Wire.rstStream(streamID: 1)),
+            (label: "RST_STREAM", frame: H2Wire.rstStream(streamID: 1))
         ])
     func frameAcceptedOnHalfClosedRemoteStream(_ testCase: (label: String, frame: [UInt8])) throws {
         var connection = try H2Wire.handshaked()
@@ -88,7 +87,7 @@ struct H2SpecGenericTests {
             (
                 label: "WINDOW_UPDATE stream 1",
                 frame: H2Wire.windowUpdate(streamID: 1, increment: 1)
-            ),
+            )
         ])
     func frameAcceptedOnOpenStream(_ testCase: (label: String, frame: [UInt8])) throws {
         var connection = try H2Wire.handshaked()
@@ -154,7 +153,7 @@ struct H2SpecGenericTests {
                 frame: H2Wire.headers(
                     streamID: 1, fields: H2Wire.requestFields(),
                     priority: (exclusive: false, dependency: 0, weight: 0))
-            ),
+            )
         ])
     func acceptsHeadersFrame(_ testCase: (label: String, frame: [UInt8])) throws {
         var connection = try H2Wire.handshaked()

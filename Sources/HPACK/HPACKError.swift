@@ -9,7 +9,6 @@
 
 /// An HPACK encoding or decoding error (RFC 7541).
 public enum HPACKError: Error, Sendable, Equatable {
-
     /// The octet stream ended in the middle of a prefix integer (RFC 7541 §5.1).
     case truncatedInteger
 

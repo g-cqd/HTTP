@@ -26,7 +26,6 @@ internal import SystemPackage
 /// I/O is serialized on a per-connection queue (targeting a shared pool); an `Atomic` flag makes
 /// `close` idempotent. All stored state is `Sendable`, so the type needs no `@unchecked`.
 public final class SwiftSystemConnection: TransportConnection {
-
     /// The connection's stable identifier.
     public let id: TransportConnectionID
 
@@ -65,7 +64,8 @@ public final class SwiftSystemConnection: TransportConnection {
                             try descriptor.read(into: $0)
                         }
                         continuation.resume(returning: bytes)
-                    } catch {
+                    }
+                    catch {
                         continuation.resume(throwing: error)
                     }
                 }
@@ -86,7 +86,8 @@ public final class SwiftSystemConnection: TransportConnection {
                     do {
                         try Self.writeAll(bytes, to: descriptor)
                         continuation.resume()
-                    } catch {
+                    }
+                    catch {
                         continuation.resume(throwing: error)
                     }
                 }
@@ -124,7 +125,7 @@ public final class SwiftSystemConnection: TransportConnection {
             let span = raw.bytes  // RawSpan view of the payload (zero-copy)
             var start = 0
             while start < span.byteCount {
-                let chunk = span.extracting(start..<span.byteCount)
+                let chunk = span.extracting(start ..< span.byteCount)
                 start += try chunk.withUnsafeBytes { try descriptor.write($0) }
             }
         }

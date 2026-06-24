@@ -12,7 +12,6 @@ import Testing
 
 @Suite("AsyncGate")
 struct AsyncGateTests {
-
     @Test
     func `an initially-open gate lets the first waiter through without suspending`() async throws {
         let gate = AsyncGate(initiallyOpen: true)

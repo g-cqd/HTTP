@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 9204 Appendix A — QPACK static table")
 struct QPACKStaticTableTests {
-
     @Test("the static table has exactly 99 entries")
     func count() {
         #expect(QPACKStaticTable.count == 99)
@@ -37,7 +36,7 @@ struct QPACKStaticTableTests {
                 index: 73,
                 expected: HeaderField(name: "access-control-allow-credentials", value: "FALSE")
             ),
-            (index: 98, expected: HeaderField(name: "x-frame-options", value: "sameorigin")),
+            (index: 98, expected: HeaderField(name: "x-frame-options", value: "sameorigin"))
         ] as [(index: Int, expected: HeaderField)])
     func indexedEntries(_ testCase: (index: Int, expected: HeaderField)) {
         #expect(QPACKStaticTable.field(at: testCase.index) == testCase.expected)

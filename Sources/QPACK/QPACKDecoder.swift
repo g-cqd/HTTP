@@ -18,7 +18,6 @@ public import HTTPCore
 
 /// A QPACK field-section decoder with the dynamic table disabled (RFC 9204 §4.5, capacity 0).
 public struct QPACKDecoder {
-
     private let limits: HTTPLimits
 
     /// Creates a decoder enforcing `limits` (the decompression-bomb bounds).
@@ -33,7 +32,7 @@ public struct QPACKDecoder {
     public func decode(_ block: RawSpan) throws(QPACKError) -> [HeaderField] {
         var reader = ByteReader(block)
         try decodePrefix(&reader)
-        var fields = [HeaderField]()
+        var fields: [HeaderField] = []
         var decodedSize = 0
         while let first = reader.peek() {
             let field = try decodeRepresentation(&reader, first: first)
@@ -57,22 +56,23 @@ public struct QPACKDecoder {
     /// references absent dynamic entries — both are decoding failures (RFC 9204 §2.1.1 / §4.5.1).
     private func decodePrefix(_ reader: inout ByteReader) throws(QPACKError) {
         switch QPACKInteger.decode(&reader, prefixBits: 8) {
-        case .value(0):
-            break  // Required Insert Count 0 — static-table-only, as required at capacity 0
-        case .value:
-            throw .decompressionFailed("non-zero Required Insert Count requires the dynamic table")
-        case .incomplete, .overflow:
-            throw .decompressionFailed("invalid Required Insert Count")
+            case .value(0):
+                break  // Required Insert Count 0 — static-table-only, as required at capacity 0
+            case .value:
+                throw .decompressionFailed(
+                    "non-zero Required Insert Count requires the dynamic table")
+            case .incomplete, .overflow:
+                throw .decompressionFailed("invalid Required Insert Count")
         }
         guard let signByte = reader.peek() else { throw .decompressionFailed("truncated Base") }
         let signNegative = signByte & 0x80 != 0
         switch QPACKInteger.decode(&reader, prefixBits: 7) {
-        case .value(0) where !signNegative:
-            break  // Base 0
-        case .value:
-            throw .decompressionFailed("non-zero Base requires the dynamic table")
-        case .incomplete, .overflow:
-            throw .decompressionFailed("invalid Base")
+            case .value(0) where !signNegative:
+                break  // Base 0
+            case .value:
+                throw .decompressionFailed("non-zero Base requires the dynamic table")
+            case .incomplete, .overflow:
+                throw .decompressionFailed("invalid Base")
         }
     }
 
@@ -82,9 +82,11 @@ public struct QPACKDecoder {
     ) throws(QPACKError) -> HeaderField {
         if first & 0x80 != 0 {
             return try decodeIndexed(&reader, first: first)  // §4.5.2: 1Txxxxxx
-        } else if first & 0x40 != 0 {
+        }
+        if first & 0x40 != 0 {
             return try decodeLiteralWithNameReference(&reader, first: first)  // §4.5.4: 01NTxxxx
-        } else if first & 0x20 != 0 {
+        }
+        if first & 0x20 != 0 {
             return try decodeLiteralWithLiteralName(&reader)  // §4.5.6: 001NHxxx
         }
         // §4.5.3 post-base indexed (0001) and §4.5.5 post-base name reference (0000) both reference
@@ -138,8 +140,8 @@ public struct QPACKDecoder {
         _ reader: inout ByteReader, prefixBits: Int, what: String
     ) throws(QPACKError) -> Int {
         switch QPACKInteger.decode(&reader, prefixBits: prefixBits) {
-        case .value(let value): return value
-        case .incomplete, .overflow: throw .decompressionFailed("invalid \(what)")
+            case .value(let value): return value
+            case .incomplete, .overflow: throw .decompressionFailed("invalid \(what)")
         }
     }
 }

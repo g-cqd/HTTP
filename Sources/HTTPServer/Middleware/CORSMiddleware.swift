@@ -12,10 +12,8 @@ public import HTTPCore
 
 /// Applies CORS headers and answers CORS preflights (WHATWG Fetch / RFC 6454).
 public struct CORSMiddleware: HTTPMiddleware {
-
     /// Which origins are permitted to read responses cross-origin.
     public enum AllowedOrigin: Sendable {
-
         /// Any origin (`Access-Control-Allow-Origin: *`); echoes the request origin when credentials
         /// are allowed, since `*` is invalid with credentials (Fetch §3.2.5).
         case any
@@ -80,8 +78,8 @@ public struct CORSMiddleware: HTTPMiddleware {
 
     private func allowOrigin(for origin: String?) -> String {
         switch allowedOrigin {
-        case .exact(let value): value
-        case .any: allowCredentials ? (origin ?? "*") : "*"
+            case .exact(let value): value
+            case .any: allowCredentials ? (origin ?? "*") : "*"
         }
     }
 }

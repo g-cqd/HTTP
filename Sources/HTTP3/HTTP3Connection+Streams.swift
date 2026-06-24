@@ -14,7 +14,6 @@ internal import HTTPCore
 internal import QPACK
 
 extension HTTP3Connection {
-
     // MARK: Unidirectional stream classification (RFC 9114 §6.2)
 
     /// Reads the §6.2 Stream Type from a freshly opened unidirectional stream and assigns its role,
@@ -45,28 +44,28 @@ extension HTTP3Connection {
         state: inout StreamState
     ) throws(HTTP3Error) {
         switch role {
-        case .control:
-            guard peerControlStream == nil else {
-                throw .connection(.h3StreamCreationError, "a second control stream")
-            }
-            peerControlStream = streamID
-            state.kind = .control
-        case .qpackEncoder:
-            guard peerQpackEncoderStream == nil else {
-                throw .connection(.h3StreamCreationError, "a second QPACK encoder stream")
-            }
-            peerQpackEncoderStream = streamID
-            state.kind = .qpackEncoder
-        case .qpackDecoder:
-            guard peerQpackDecoderStream == nil else {
-                throw .connection(.h3StreamCreationError, "a second QPACK decoder stream")
-            }
-            peerQpackDecoderStream = streamID
-            state.kind = .qpackDecoder
-        case .push:
-            throw .connection(.h3StreamCreationError, "a server must not receive a push stream")
-        case .request, .reserved:
-            state.kind = .reserved  // unknown / reserved types are tolerated; data discarded
+            case .control:
+                guard peerControlStream == nil else {
+                    throw .connection(.h3StreamCreationError, "a second control stream")
+                }
+                peerControlStream = streamID
+                state.kind = .control
+            case .qpackEncoder:
+                guard peerQpackEncoderStream == nil else {
+                    throw .connection(.h3StreamCreationError, "a second QPACK encoder stream")
+                }
+                peerQpackEncoderStream = streamID
+                state.kind = .qpackEncoder
+            case .qpackDecoder:
+                guard peerQpackDecoderStream == nil else {
+                    throw .connection(.h3StreamCreationError, "a second QPACK decoder stream")
+                }
+                peerQpackDecoderStream = streamID
+                state.kind = .qpackDecoder
+            case .push:
+                throw .connection(.h3StreamCreationError, "a server must not receive a push stream")
+            case .request, .reserved:
+                state.kind = .reserved  // unknown / reserved types are tolerated; data discarded
         }
     }
 
@@ -104,18 +103,18 @@ extension HTTP3Connection {
             throw .connection(.h3FrameUnexpected, "a reserved HTTP/2 frame type")
         }
         switch frame.type {
-        case .settings:
-            throw .connection(.h3FrameUnexpected, "a second SETTINGS frame")
-        case .data, .headers, .pushPromise:
-            throw .connection(.h3FrameUnexpected, "a request frame on the control stream")
-        case .goAway:
-            try handleGoAway(frame.payload, into: &events)
-        case .cancelPush:
-            try handleCancelPush(frame.payload)
-        case .maxPushID:
-            try handleMaxPushID(frame.payload)
-        default:
-            break  // unknown / grease frame types are ignored (RFC 9114 §9)
+            case .settings:
+                throw .connection(.h3FrameUnexpected, "a second SETTINGS frame")
+            case .data, .headers, .pushPromise:
+                throw .connection(.h3FrameUnexpected, "a request frame on the control stream")
+            case .goAway:
+                try handleGoAway(frame.payload, into: &events)
+            case .cancelPush:
+                try handleCancelPush(frame.payload)
+            case .maxPushID:
+                try handleMaxPushID(frame.payload)
+            default:
+                break  // unknown / grease frame types are ignored (RFC 9114 §9)
         }
     }
 
@@ -183,18 +182,19 @@ extension HTTP3Connection {
                 var reader = ByteReader(raw)
                 if isEncoder {
                     try QPACKInstructions.parseEncoderStream(&reader, maxCapacity: maxCapacity)
-                } else {
+                }
+                else {
                     try QPACKInstructions.parseDecoderStream(&reader)
                 }
                 return reader.position
             }
         }
         switch result {
-        case .success(let consumed):
-            state.buffer.removeFirst(consumed)
-            streams[streamID] = state
-        case .failure(let error):
-            throw .connection(qpack: error.code, error.reason)
+            case .success(let consumed):
+                state.buffer.removeFirst(consumed)
+                streams[streamID] = state
+            case .failure(let error):
+                throw .connection(qpack: error.code, error.reason)
         }
     }
 
@@ -215,12 +215,12 @@ extension HTTP3Connection {
                 }
             }
         switch result {
-        case .success(let value):
-            state.buffer.removeFirst(value.consumed)
-            streams[streamID] = state
-            return value.frames
-        case .failure(let error):
-            throw error
+            case .success(let value):
+                state.buffer.removeFirst(value.consumed)
+                streams[streamID] = state
+                return value.frames
+            case .failure(let error):
+                throw error
         }
     }
 

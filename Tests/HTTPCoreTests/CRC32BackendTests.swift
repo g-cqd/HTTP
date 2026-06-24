@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 1952 §8 — CRC-32 backends agree")
 struct CRC32BackendTests {
-
     private static let backends: [CRC32.Backend] = [.fastest, .sliceBy8, .zlib, .arm, .x86]
 
     /// The reference value: a non-contiguous sequence routes through the byte-at-a-time fallback loop.
@@ -42,8 +41,8 @@ struct CRC32BackendTests {
             seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
             return UInt8(truncatingIfNeeded: seed >> 56)
         }
-        var buffer = [UInt8]()
-        for size in 0...600 {
+        var buffer: [UInt8] = []
+        for size in 0 ... 600 {
             let expected = reference(buffer)
             for backend in Self.backends {
                 #expect(

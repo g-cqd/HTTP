@@ -12,7 +12,6 @@ public import HTTPCore
 internal import QPACK
 
 extension HTTP3Connection {
-
     /// Queues a response on `streamID`: a QPACK HEADERS frame, an optional DATA frame, and FIN
     /// (RFC 9114 §4.1).
     ///

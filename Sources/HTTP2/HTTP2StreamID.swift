@@ -9,7 +9,6 @@
 
 /// An HTTP/2 stream identifier (RFC 9113 §5.1.1): a 31-bit value with the reserved bit cleared.
 public struct HTTP2StreamID: Sendable, Equatable, Hashable, Comparable, RawRepresentable {
-
     /// The 31-bit identifier value.
     public let rawValue: UInt32
 
@@ -24,7 +23,7 @@ public struct HTTP2StreamID: Sendable, Equatable, Hashable, Comparable, RawRepre
     }
 
     /// The connection control stream, stream 0 (RFC 9113 §5.1.1).
-    public static let connection = HTTP2StreamID(0)
+    public static let connection = Self(0)
 
     /// Whether this is a client-initiated stream — a non-zero odd identifier (RFC 9113 §5.1.1).
     public var isClientInitiated: Bool {
@@ -37,7 +36,7 @@ public struct HTTP2StreamID: Sendable, Equatable, Hashable, Comparable, RawRepre
     }
 
     /// Orders stream identifiers by their numeric value.
-    public static func < (lhs: HTTP2StreamID, rhs: HTTP2StreamID) -> Bool {
+    public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
 }

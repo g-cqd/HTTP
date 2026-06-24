@@ -11,7 +11,6 @@ internal import Foundation
 
 /// A seeded byte-mutation engine: overwrite / bit-flip / truncate / extend.
 public struct ByteMutator: Sendable {
-
     /// The four mutation shapes a corrupt blob takes.
     public enum Edit: Sendable, Hashable, CaseIterable {
         case overwrite
@@ -32,10 +31,10 @@ public struct ByteMutator: Sendable {
         /// A compact repro description (e.g. `set@12=0xff`).
         public var description: String {
             switch kind {
-            case .overwrite: "set@\(offset ?? -1)=0x\(String(value ?? 0, radix: 16))"
-            case .bitFlip: "flip@\(offset ?? -1)"
-            case .truncate: "truncate"
-            case .extend: "extend"
+                case .overwrite: "set@\(offset ?? -1)=0x\(String(value ?? 0, radix: 16))"
+                case .bitFlip: "flip@\(offset ?? -1)"
+                case .truncate: "truncate"
+                case .extend: "extend"
             }
         }
     }
@@ -72,25 +71,25 @@ public struct ByteMutator: Sendable {
         var applied: [Mutation] = []
         applied.reserveCapacity(count)
         let truncateFloor = region?.lowerBound ?? 1
-        for _ in 0..<count {
+        for _ in 0 ..< count {
             let kind = allowedEdits[rng.below(allowedEdits.count)]
             switch kind {
-            case .overwrite where !bytes.isEmpty:
-                let index = pickIndex(bytes.count, &rng)
-                let value = rng.byte()
-                bytes[index] = value
-                applied.append(Mutation(kind: .overwrite, offset: index, value: value))
-            case .bitFlip where !bytes.isEmpty:
-                let index = pickIndex(bytes.count, &rng)
-                bytes[index] ^= UInt8(1 << rng.below(8))
-                applied.append(Mutation(kind: .bitFlip, offset: index, value: nil))
-            case .truncate where bytes.count > truncateFloor:
-                bytes.removeLast(1 + rng.below(bytes.count - truncateFloor))
-                applied.append(Mutation(kind: .truncate, offset: nil, value: nil))
-            default:
-                let extra = 1 + rng.below(maxExtend)
-                for _ in 0..<extra { bytes.append(rng.byte()) }
-                applied.append(Mutation(kind: .extend, offset: nil, value: nil))
+                case .overwrite where !bytes.isEmpty:
+                    let index = pickIndex(bytes.count, &rng)
+                    let value = rng.byte()
+                    bytes[index] = value
+                    applied.append(Mutation(kind: .overwrite, offset: index, value: value))
+                case .bitFlip where !bytes.isEmpty:
+                    let index = pickIndex(bytes.count, &rng)
+                    bytes[index] ^= UInt8(1 << rng.below(8))
+                    applied.append(Mutation(kind: .bitFlip, offset: index, value: nil))
+                case .truncate where bytes.count > truncateFloor:
+                    bytes.removeLast(1 + rng.below(bytes.count - truncateFloor))
+                    applied.append(Mutation(kind: .truncate, offset: nil, value: nil))
+                default:
+                    let extra = 1 + rng.below(maxExtend)
+                    for _ in 0 ..< extra { bytes.append(rng.byte()) }
+                    applied.append(Mutation(kind: .extend, offset: nil, value: nil))
             }
         }
         return applied
@@ -129,7 +128,7 @@ public let defaultFuzzTraceEnv = "HTTP_FUZZ_TRACE"
 public func fuzzNeverTraps(
     seed: Seed,
     iterations: Int,
-    edits: ClosedRange<Int> = 1...8,
+    edits: ClosedRange<Int> = 1 ... 8,
     mutator: ByteMutator = ByteMutator(),
     traceEnv: String = defaultFuzzTraceEnv,
     corpus: () -> [UInt8],
@@ -139,7 +138,7 @@ public func fuzzNeverTraps(
     let base = corpus()
     var rng = SeededRNG(seed: seed)
     var totalEdits = 0
-    for iteration in 0..<iterations {
+    for iteration in 0 ..< iterations {
         var blob = base
         let count = rng.int(in: edits)
         let applied = mutator.apply(count, to: &blob, using: &rng)

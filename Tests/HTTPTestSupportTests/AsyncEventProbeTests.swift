@@ -12,12 +12,11 @@ import Testing
 
 @Suite("AsyncEventProbe")
 struct AsyncEventProbeTests {
-
     @Test
     func `wait returns the recorded events once the threshold is met`() async throws {
         let probe = AsyncEventProbe<Int>()
         let recorder = Task {
-            for i in 1...3 { probe.record(i) }
+            for i in 1 ... 3 { probe.record(i) }
         }
         let events = try await probe.wait(forAtLeast: 3)
         #expect(events.count >= 3)

@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// Pulls complete WebSocket frames from an accumulating byte buffer (RFC 6455 §5.2).
 public struct WebSocketFrameDecoder {
-
     /// The largest payload accepted, in octets — a resource-exhaustion guard (default 1 MiB).
     private let maxPayloadLength: Int
 
@@ -53,7 +52,7 @@ public struct WebSocketFrameDecoder {
         guard payloadLength <= maxPayloadLength else { throw .payloadTooLong }
 
         let maskKey = isMasked ? Self.readMaskKey(from: &probe) : nil
-        if isMasked && maskKey == nil { return nil }  // key still arriving
+        if isMasked, maskKey == nil { return nil }  // key still arriving
         guard probe.remaining >= payloadLength else { return nil }  // payload still arriving
 
         // Commit: advance the real cursor past the header (the octets the probe consumed) and payload.
@@ -61,11 +60,12 @@ public struct WebSocketFrameDecoder {
         reader.advance(by: headerLength)
         let start = reader.position
         reader.advance(by: payloadLength)
-        let payload = reader.slice(in: start..<(start + payloadLength)).withUnsafeBytes {
-            source in
-            if let maskKey { return Self.unmaskedCopy(of: source, with: maskKey) }
-            return Array(source)
-        }
+        let payload = reader.slice(in: start ..< (start + payloadLength))
+            .withUnsafeBytes {
+                source in
+                if let maskKey { return Self.unmaskedCopy(of: source, with: maskKey) }
+                return Array(source)
+            }
         return WebSocketFrame(isFinal: isFinal, opcode: opcode, payload: payload)
     }
 
@@ -78,22 +78,22 @@ public struct WebSocketFrameDecoder {
         from probe: inout ByteReader
     ) throws(WebSocketError) -> Int? {
         switch length7 {
-        case 126:
-            guard let high = probe.readByte(), let low = probe.readByte() else { return nil }
-            let value = Int(high) << 8 | Int(low)
-            guard value > 125 else { throw .nonMinimalLength }  // would fit the 7-bit form
-            return value
-        case 127:
-            var value: UInt64 = 0
-            for _ in 0..<8 {
-                guard let byte = probe.readByte() else { return nil }
-                value = value << 8 | UInt64(byte)
-            }
-            guard value & 0x8000_0000_0000_0000 == 0 else { throw .lengthHighBitSet }
-            guard value > 0xFFFF else { throw .nonMinimalLength }  // would fit the 16-bit form
-            return Int(value)
-        default:
-            return Int(length7)
+            case 126:
+                guard let high = probe.readByte(), let low = probe.readByte() else { return nil }
+                let value = Int(high) << 8 | Int(low)
+                guard value > 125 else { throw .nonMinimalLength }  // would fit the 7-bit form
+                return value
+            case 127:
+                var value: UInt64 = 0
+                for _ in 0 ..< 8 {
+                    guard let byte = probe.readByte() else { return nil }
+                    value = value << 8 | UInt64(byte)
+                }
+                guard value & 0x8000_0000_0000_0000 == 0 else { throw .lengthHighBitSet }
+                guard value > 0xFFFF else { throw .nonMinimalLength }  // would fit the 16-bit form
+                return Int(value)
+            default:
+                return Int(length7)
         }
     }
 
@@ -132,10 +132,10 @@ public struct WebSocketFrameDecoder {
             while index < count {
                 let keyByte: UInt8
                 switch index & 0x3 {
-                case 0: keyByte = key.0
-                case 1: keyByte = key.1
-                case 2: keyByte = key.2
-                default: keyByte = key.3
+                    case 0: keyByte = key.0
+                    case 1: keyByte = key.1
+                    case 2: keyByte = key.2
+                    default: keyByte = key.3
                 }
                 destination[index] = source[index] ^ keyByte
                 index += 1

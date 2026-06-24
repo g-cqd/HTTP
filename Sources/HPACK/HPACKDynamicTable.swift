@@ -12,7 +12,6 @@ public import HTTPCore
 
 /// The RFC 7541 §2.3.2 dynamic table (with the combined §2.3.3 index lookup).
 public struct HPACKDynamicTable: Sendable, Equatable {
-
     /// Entries newest-first: `entries[0]` is the most recently added (HPACK index 62).
     private var entries: [HPACKField] = []
 

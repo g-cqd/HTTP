@@ -11,7 +11,6 @@ import Testing
 
 @Suite("ByteReader — zero-copy cursor")
 struct ByteReaderTests {
-
     /// Runs `body` with a `ByteReader` that borrows the UTF-8 bytes of `string`.
     private func withReader(over string: String, _ body: (inout ByteReader) -> Void) {
         let bytes = Array(string.utf8)
@@ -74,10 +73,10 @@ struct ByteReaderTests {
     func readSliceUntilDelimiter() {
         withReader(over: "GET /path\r\n") { reader in
             let method = reader.readSlice(until: UInt8(ascii: " "))
-            #expect(method == 0..<3)  // "GET"
+            #expect(method == 0 ..< 3)  // "GET"
             #expect(reader.position == 4)  // past the space
             let target = reader.readSlice(until: UInt8(ascii: "\r"))
-            #expect(target == 4..<9)  // "/path"
+            #expect(target == 4 ..< 9)  // "/path"
         }
     }
 
@@ -93,8 +92,8 @@ struct ByteReaderTests {
     @Test("string(in:) materializes an owned String once, without moving the cursor")
     func stringMaterializesRange() {
         withReader(over: "GET /path") { reader in
-            #expect(reader.string(in: 0..<3) == "GET")
-            #expect(reader.string(in: 4..<9) == "/path")
+            #expect(reader.string(in: 0 ..< 3) == "GET")
+            #expect(reader.string(in: 4 ..< 9) == "/path")
             #expect(reader.position == 0)  // materialization is non-mutating
         }
     }
@@ -102,7 +101,7 @@ struct ByteReaderTests {
     @Test("slice(in:) returns a borrowed, copy-free RawSpan over the range")
     func sliceReturnsBorrowedSpan() {
         withReader(over: "GET /path") { reader in
-            let span = reader.slice(in: 0..<3)  // "GET"
+            let span = reader.slice(in: 0 ..< 3)  // "GET"
             #expect(span.byteCount == 3)
             #expect(span.unsafeLoad(fromByteOffset: 0, as: UInt8.self) == UInt8(ascii: "G"))
             #expect(span.unsafeLoad(fromByteOffset: 2, as: UInt8.self) == UInt8(ascii: "T"))
@@ -112,9 +111,9 @@ struct ByteReaderTests {
     @Test("slice(in:) clamps an out-of-range request instead of trapping")
     func sliceClampsOutOfRange() {
         withReader(over: "AB") { reader in
-            #expect(reader.slice(in: 0..<99).byteCount == 2)
-            #expect(reader.slice(in: -5..<1).byteCount == 1)
-            #expect(reader.slice(in: 5..<9).byteCount == 0)
+            #expect(reader.slice(in: 0 ..< 99).byteCount == 2)
+            #expect(reader.slice(in: -5 ..< 1).byteCount == 1)
+            #expect(reader.slice(in: 5 ..< 9).byteCount == 0)
         }
     }
 }

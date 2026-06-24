@@ -14,7 +14,6 @@ internal import Synchronization
 
 /// A process-wide, lazily-minted self-signed dev TLS identity for tests.
 public enum SharedDevTLSIdentity {
-
     private static let cache = Mutex<TransportTLS?>(nil)
 
     /// The shared dev identity, minting it on first use and returning the cached value thereafter.

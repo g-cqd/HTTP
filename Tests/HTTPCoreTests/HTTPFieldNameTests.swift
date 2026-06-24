@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §5.1 — HTTPFieldName")
 struct HTTPFieldNameTests {
-
     @Test("canonical form is ASCII lower-case (HTTP/2 & HTTP/3 wire form)")
     func canonicalIsLowercased() {
         #expect(HTTPFieldName("Content-Type")?.canonicalName == "content-type")

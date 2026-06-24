@@ -17,9 +17,8 @@ import WebSocket
 
 @Suite("HTTPServer — WebSocket (RFC 6455) integration")
 struct HTTPServerWebSocketTests {
-
     @Test("upgrades an HTTP/1.1 request and echoes a text message end-to-end")
-    func upgradesAndEchoes() async throws {
+    func upgradesAndEchoes() async {
         let echo = ClosureWebSocketHandler { event in
             guard case .message(let opcode, let payload) = event, opcode == .text else { return [] }
             return [.sendText(String(decoding: payload, as: UTF8.self))]
@@ -42,9 +41,9 @@ struct HTTPServerWebSocketTests {
     }
 
     @Test("rejects a malformed upgrade with 426 and does not echo (RFC 6455 §4.4)")
-    func rejectsBadVersion() async throws {
+    func rejectsBadVersion() async {
         let echo = ClosureWebSocketHandler { _ in [] }
-        var wire = [UInt8]()
+        var wire: [UInt8] = []
         wire += Array("GET /chat HTTP/1.1\r\n".utf8)
         wire += Array("Host: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n".utf8)
         wire += Array("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n".utf8)
@@ -59,7 +58,7 @@ struct HTTPServerWebSocketTests {
     }
 
     @Test("rejects a cross-site Origin with 403 and does not upgrade (CSWSH, RFC 6455 §10.2)")
-    func rejectsDisallowedOrigin() async throws {
+    func rejectsDisallowedOrigin() async {
         let handler = ClosureWebSocketHandler(
             isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] })
         let connection = FakeConnection(
@@ -74,7 +73,7 @@ struct HTTPServerWebSocketTests {
     }
 
     @Test("accepts an allowlisted Origin and upgrades (RFC 6455 §4.2)")
-    func acceptsAllowlistedOrigin() async throws {
+    func acceptsAllowlistedOrigin() async {
         let handler = ClosureWebSocketHandler(
             isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] })
         let connection = FakeConnection(
@@ -90,7 +89,7 @@ struct HTTPServerWebSocketTests {
     // MARK: Fixtures
 
     private func upgradeRequest(origin: String? = nil) -> [UInt8] {
-        var wire = [UInt8]()
+        var wire: [UInt8] = []
         wire += Array("GET /chat HTTP/1.1\r\n".utf8)
         wire += Array("Host: example.com\r\n".utf8)
         wire += Array("Upgrade: websocket\r\n".utf8)
@@ -113,8 +112,8 @@ struct HTTPServerWebSocketTests {
 
     private func containsSubsequence(_ haystack: [UInt8], _ needle: [UInt8]) -> Bool {
         guard needle.count <= haystack.count else { return false }
-        for start in 0...(haystack.count - needle.count)
-        where Array(haystack[start..<start + needle.count]) == needle {
+        for start in 0 ... (haystack.count - needle.count)
+        where Array(haystack[start ..< start + needle.count]) == needle {
             return true
         }
         return false
@@ -123,7 +122,7 @@ struct HTTPServerWebSocketTests {
 
 /// A responder that always 404s — the WebSocket path never reaches it, so it is just a placeholder.
 private struct NotFound: HTTPResponder {
-    func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
+    func respond(to _: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
         ServerResponse(HTTPResponse(status: .notFound))
     }
 }

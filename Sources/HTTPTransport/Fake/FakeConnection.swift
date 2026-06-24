@@ -8,7 +8,6 @@
 
 /// An in-memory ``TransportConnection`` for deterministic tests.
 public actor FakeConnection: TransportConnection {
-
     /// The connection's stable identifier.
     public nonisolated let id: TransportConnectionID
 
@@ -36,7 +35,7 @@ public actor FakeConnection: TransportConnection {
     }
 
     /// Delivers the next buffered inbound chunk (up to `maxLength`), or `nil` at EOF.
-    public func receive(maxLength: Int) async throws -> [UInt8]? {
+    public func receive(maxLength: Int) async -> [UInt8]? {
         guard !inbound.isEmpty else { return nil }
         let count = min(maxLength, inbound.count)
         defer { inbound = inbound.dropFirst(count) }

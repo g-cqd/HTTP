@@ -17,7 +17,6 @@ internal import Synchronization
 
 /// A ``QUICConnection`` backed by a Network.framework `NWConnectionGroup` (legacy backbone).
 final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
-
     let peer: TransportAddress
     let negotiatedApplicationProtocol: String?
 
@@ -42,8 +41,8 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
         }
         group.stateUpdateHandler = { [weak self] state in
             switch state {
-            case .cancelled, .failed: self?.continuation.finish()
-            default: break
+                case .cancelled, .failed: self?.continuation.finish()
+                default: break
             }
         }
     }
@@ -71,7 +70,7 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
         return stream
     }
 
-    func close(errorCode: UInt64) async {
+    func close(errorCode _: UInt64) async {
         group.cancel()
     }
 
@@ -81,17 +80,18 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
         streamConnection.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             switch state {
-            case .ready:
-                streamConnection.stateUpdateHandler = nil
-                if let stream = Self.wrap(streamConnection) {
-                    self.continuation.yield(stream)
-                } else {
-                    streamConnection.cancel()
-                }
-            case .failed, .cancelled:
-                streamConnection.stateUpdateHandler = nil
-            default:
-                break
+                case .ready:
+                    streamConnection.stateUpdateHandler = nil
+                    if let stream = Self.wrap(streamConnection) {
+                        continuation.yield(stream)
+                    }
+                    else {
+                        streamConnection.cancel()
+                    }
+                case .failed, .cancelled:
+                    streamConnection.stateUpdateHandler = nil
+                default:
+                    break
             }
         }
         streamConnection.start(queue: queue)
@@ -117,16 +117,16 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.stateUpdateHandler = { state in
                 switch state {
-                case .ready:
-                    guard resumed.takeFirst() else { return }
-                    connection.stateUpdateHandler = nil
-                    continuation.resume()
-                case .failed(let error):
-                    guard resumed.takeFirst() else { return }
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(throwing: error)
-                default:
-                    break
+                    case .ready:
+                        guard resumed.takeFirst() else { return }
+                        connection.stateUpdateHandler = nil
+                        continuation.resume()
+                    case .failed(let error):
+                        guard resumed.takeFirst() else { return }
+                        connection.stateUpdateHandler = nil
+                        continuation.resume(throwing: error)
+                    default:
+                        break
                 }
             }
             connection.start(queue: queue)

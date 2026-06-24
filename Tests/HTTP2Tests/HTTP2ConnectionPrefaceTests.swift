@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 9113 §3.4 — connection preface")
 struct HTTP2ConnectionPrefaceTests {
-
     private func consume(_ bytes: [UInt8]) throws -> (HTTP2ConnectionPreface.MatchResult, Int) {
         try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
@@ -26,9 +25,11 @@ struct HTTP2ConnectionPrefaceTests {
         do {
             _ = try consume(bytes)
             return nil
-        } catch let error as HTTP2Error {
+        }
+        catch let error as HTTP2Error {
             return error.code
-        } catch {
+        }
+        catch {
             return nil
         }
     }

@@ -8,7 +8,6 @@
 
 /// An HTTP/2 error code (RFC 9113 §7).
 public enum HTTP2ErrorCode: UInt32, Sendable, Equatable, Hashable {
-
     /// Graceful shutdown (§7).
     case noError = 0x0
     /// A protocol error not covered by a more specific code (§7).
@@ -40,6 +39,6 @@ public enum HTTP2ErrorCode: UInt32, Sendable, Equatable, Hashable {
 
     /// Maps a wire value to a code, treating unknown values as INTERNAL_ERROR (RFC 9113 §7).
     public init(code: UInt32) {
-        self = HTTP2ErrorCode(rawValue: code) ?? .internalError
+        self = Self(rawValue: code) ?? .internalError
     }
 }

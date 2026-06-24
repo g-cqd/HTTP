@@ -9,10 +9,9 @@
 
 /// Formats HTTP dates in the IMF-fixdate form (RFC 9110 §5.6.7).
 public enum HTTPDate {
-
     private static let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private static let months = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
     ]
 
     /// The IMF-fixdate string for `secondsSinceEpoch` (RFC 9110 §5.6.7), always in GMT.
@@ -21,8 +20,8 @@ public enum HTTPDate {
         let secondOfDay = secondsSinceEpoch - days * 86_400
         let (year, month, day) = civil(fromDays: days)
         let weekday = ((days % 7) + 4 + 7) % 7  // 1970-01-01 was a Thursday (index 4)
-        let hour = secondOfDay / 3600
-        let minute = (secondOfDay % 3600) / 60
+        let hour = secondOfDay / 3_600
+        let minute = (secondOfDay % 3_600) / 60
         let second = secondOfDay % 60
         return
             "\(weekdays[weekday]), \(pad(day)) \(months[month - 1]) \(year) "
@@ -36,7 +35,7 @@ public enum HTTPDate {
         let era = (shifted >= 0 ? shifted : shifted - 146_096) / 146_097
         let dayOfEra = shifted - era * 146_097  // [0, 146096]
         let yearOfEra =
-            (dayOfEra - dayOfEra / 1460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365  // [0, 399]
+            (dayOfEra - dayOfEra / 1_460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365  // [0, 399]
         let year = yearOfEra + era * 400
         let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100)  // [0, 365]
         let monthPrime = (5 * dayOfYear + 2) / 153  // [0, 11]

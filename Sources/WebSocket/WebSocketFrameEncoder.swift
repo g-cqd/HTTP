@@ -9,13 +9,12 @@
 
 /// Serializes ``WebSocketFrame`` values to the wire, unmasked (RFC 6455 §5.1 / §5.2).
 public struct WebSocketFrameEncoder {
-
     /// Creates a frame encoder.
     public init() {}
 
     /// Encodes `frame` to its on-the-wire octets (RFC 6455 §5.2), unmasked.
     public func encode(_ frame: WebSocketFrame) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         // 2–10 header octets plus the payload, in a single allocation.
         out.reserveCapacity(10 + frame.payload.count)
         out.append((frame.isFinal ? 0x80 : 0) | frame.opcode.rawValue)
@@ -28,11 +27,13 @@ public struct WebSocketFrameEncoder {
     private static func appendLength(_ length: Int, into out: inout [UInt8]) {
         if length <= 125 {
             out.append(UInt8(length))
-        } else if length <= 0xFFFF {
+        }
+        else if length <= 0xFFFF {
             out.append(126)
             out.append(UInt8(truncatingIfNeeded: length >> 8))
             out.append(UInt8(truncatingIfNeeded: length))
-        } else {
+        }
+        else {
             out.append(127)
             for shift in stride(from: 56, through: 0, by: -8) {
                 out.append(UInt8(truncatingIfNeeded: length >> shift))

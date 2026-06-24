@@ -12,7 +12,6 @@ internal import HPACK
 internal import HTTPCore
 
 extension HTTP2Connection {
-
     /// Accepts an Extended CONNECT tunnel on `streamID` (RFC 8441 §5): a `200` response with no
     /// END_STREAM, leaving the stream open as a bidirectional byte tunnel.
     public mutating func acceptTunnel(_ streamID: HTTP2StreamID) throws(HTTP2Error) {

@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 9204 §4.5 — QPACK field-section encoder (static-only)")
 struct QPACKEncoderTests {
-
     private func roundTrip(_ fields: [HeaderField]) throws -> [HeaderField] {
         let block = QPACKEncoder().encode(fields)
         let result: Result<[HeaderField], QPACKError> = block.withUnsafeBytes { raw in
@@ -51,12 +50,12 @@ struct QPACKEncoderTests {
                 HeaderField(name: ":method", value: "GET"),
                 HeaderField(name: ":scheme", value: "https"),
                 HeaderField(name: ":path", value: "/index.html"),
-                HeaderField(name: ":authority", value: "www.example.com"),
+                HeaderField(name: ":authority", value: "www.example.com")
             ],
             // A field whose name is unknown forces the literal-name representation (§4.5.6).
             [HeaderField(name: "x-custom-header", value: "custom value with spaces")],
             // A known name with a novel value forces a static name reference (§4.5.4).
-            [HeaderField(name: "date", value: "Mon, 21 Oct 2013 20:13:21 GMT")],
+            [HeaderField(name: "date", value: "Mon, 21 Oct 2013 20:13:21 GMT")]
         ] as [[HeaderField]])
     func roundTrips(_ fields: [HeaderField]) throws {
         #expect(try roundTrip(fields) == fields)

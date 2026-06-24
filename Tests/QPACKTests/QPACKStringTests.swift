@@ -14,13 +14,12 @@ import Testing
 
 @Suite("RFC 9204 §4.1.2 — QPACK string literals")
 struct QPACKStringTests {
-
     private func decode(_ bytes: [UInt8], prefixBits: Int) throws -> String {
         let result: Result<String, QPACKError> = bytes.withUnsafeBytes { raw in
             Result { () throws(QPACKError) in
                 var reader = ByteReader(raw)
                 return try QPACKString.decodeString(
-                    &reader, prefixBits: prefixBits, maxEncodedLength: 4096)
+                    &reader, prefixBits: prefixBits, maxEncodedLength: 4_096)
             }
         }
         return try result.get()
@@ -37,11 +36,11 @@ struct QPACKStringTests {
         "round-trips raw and Huffman across both prefix widths",
         arguments: [
             "", "/", "www.example.com", "custom-key", "custom-value",
-            "no-cache", "Mozilla/5.0 (compatible)",
+            "no-cache", "Mozilla/5.0 (compatible)"
         ])
     func roundTrip(_ value: String) throws {
         for prefixBits in [3, 7] {
-            var out = [UInt8]()
+            var out: [UInt8] = []
             QPACKString.encode(Array(value.utf8), prefixBits: prefixBits, firstByte: 0, into: &out)
             #expect(try decode(out, prefixBits: prefixBits) == value)
         }
@@ -50,7 +49,7 @@ struct QPACKStringTests {
     @Test("the Huffman form is chosen only when it is shorter (§4.1.2)")
     func huffmanWhenShorter() throws {
         // "www.example.com" compresses under Huffman; the H flag (bit 7) must be set.
-        var out = [UInt8]()
+        var out: [UInt8] = []
         QPACKString.encode(Array("www.example.com".utf8), prefixBits: 7, firstByte: 0, into: &out)
         #expect(out[0] & 0x80 != 0)
         #expect(try decode(out, prefixBits: 7) == "www.example.com")

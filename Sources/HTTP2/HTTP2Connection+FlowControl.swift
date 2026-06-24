@@ -12,7 +12,6 @@
 internal import HTTPCore
 
 extension HTTP2Connection {
-
     mutating func receiveData(
         _ frame: HTTP2FrameDecoder.Frame,
         into events: inout [Event]
@@ -69,7 +68,7 @@ extension HTTP2Connection {
         guard let padLength = frame.payload.first, Int(padLength) < frame.payload.count else {
             throw .connection(.protocolError, "DATA pad length exceeds the payload")
         }
-        return frame.payload[1..<(frame.payload.count - Int(padLength))]
+        return frame.payload[1 ..< (frame.payload.count - Int(padLength))]
     }
 
     /// Debits the connection and stream receive windows by `length`, replenishing each with a
@@ -116,7 +115,7 @@ extension HTTP2Connection {
             let isLast = end == record.pending.count
             writer.writeData(
                 streamID: streamID, endStream: isLast && record.pendingEndStream,
-                record.pending[record.pendingOffset..<end])
+                record.pending[record.pendingOffset ..< end])
             record.pendingOffset = end
             _ = connectionSendWindow.reserve(chunk)
             _ = record.sendWindow.reserve(chunk)
@@ -156,11 +155,11 @@ extension HTTP2Connection {
                 & 0x7FFF_FFFF)
         guard frame.header.streamID != .connection else {
             switch connectionSendWindow.increase(by: increment) {
-            case .applied: flushAll()
-            case .zeroIncrement:
-                throw .connection(.protocolError, "WINDOW_UPDATE increment must be non-zero")
-            case .overflow:
-                throw .connection(.flowControlError, "connection send window exceeded 2^31-1")
+                case .applied: flushAll()
+                case .zeroIncrement:
+                    throw .connection(.protocolError, "WINDOW_UPDATE increment must be non-zero")
+                case .overflow:
+                    throw .connection(.flowControlError, "connection send window exceeded 2^31-1")
             }
             return
         }
@@ -173,16 +172,17 @@ extension HTTP2Connection {
             return
         }
         switch record.sendWindow.increase(by: increment) {
-        case .applied:
-            flushStream(frame.header.streamID, &record)
-        case .zeroIncrement:
-            streams[frame.header.streamID] = record
-            throw .stream(
-                frame.header.streamID, .protocolError, "WINDOW_UPDATE increment must be non-zero")
-        case .overflow:
-            streams[frame.header.streamID] = record
-            throw .stream(
-                frame.header.streamID, .flowControlError, "stream send window exceeded 2^31-1")
+            case .applied:
+                flushStream(frame.header.streamID, &record)
+            case .zeroIncrement:
+                streams[frame.header.streamID] = record
+                throw .stream(
+                    frame.header.streamID, .protocolError,
+                    "WINDOW_UPDATE increment must be non-zero")
+            case .overflow:
+                streams[frame.header.streamID] = record
+                throw .stream(
+                    frame.header.streamID, .flowControlError, "stream send window exceeded 2^31-1")
         }
     }
 
@@ -192,11 +192,11 @@ extension HTTP2Connection {
         for streamID in Array(streams.keys) {
             guard var record = streams.removeValue(forKey: streamID) else { continue }
             switch record.sendWindow.shiftInitial(by: delta) {
-            case .applied, .zeroIncrement:
-                flushStream(streamID, &record)
-            case .overflow:
-                streams[streamID] = record
-                throw .connection(.flowControlError, "stream send window exceeded 2^31-1")
+                case .applied, .zeroIncrement:
+                    flushStream(streamID, &record)
+                case .overflow:
+                    streams[streamID] = record
+                    throw .connection(.flowControlError, "stream send window exceeded 2^31-1")
             }
         }
     }

@@ -33,14 +33,14 @@ let strictSwiftSettings: [SwiftSetting] = [
     // Lifetime dependencies (`@_lifetime`): let the zero-copy `ByteReader` borrow a `RawSpan`
     // (`~Escapable`) with a *compiler-checked* lifetime instead of an unchecked unsafe pointer.
     // This is a first-class `SwiftSetting`, not `.unsafeFlags`, so it stays reuse-safe downstream.
-    .enableExperimentalFeature("Lifetimes"),
+    .enableExperimentalFeature("Lifetimes")
 ]
 
 let package = Package(
     name: "HTTP",
     platforms: [
         .macOS(.v15),  // floor per CLAUDE.md; Synchronization (Mutex/Atomic) needs macOS 15+
-        .iOS(.v18),  // floor per CLAUDE.md
+        .iOS(.v18)  // floor per CLAUDE.md
     ],
     products: [
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
@@ -53,7 +53,7 @@ let package = Package(
         .library(name: "WebSocket", targets: ["WebSocket"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
-        .executable(name: "httpd-example", targets: ["httpd-example"]),
+        .executable(name: "httpd-example", targets: ["httpd-example"])
     ],
     dependencies: [
         // apple/swift-system — typed, SwiftNIO-free wrappers over POSIX file/socket descriptors,
@@ -63,7 +63,7 @@ let package = Package(
         // deterministic `TestClock` / `AsyncEventProbe`). Linked ONLY by the test-only
         // `HTTPTestSupport` target, so it never enters a downstream consumer's resolved graph. Empty
         // transitive dependency graph; allowed by CLAUDE.md (apple/*).
-        .package(url: "https://github.com/apple/swift-collections.git", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.6.0")
     ],
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
@@ -109,7 +109,7 @@ let package = Package(
                 "HTTPConcurrency",
                 "HTTPTransport",
                 "CHTTPTestMalloc",
-                .product(name: "HeapModule", package: "swift-collections"),
+                .product(name: "HeapModule", package: "swift-collections")
             ]
         ),
         .testTarget(
@@ -198,7 +198,7 @@ let package = Package(
             dependencies: [
                 "HTTPCore",
                 "HTTPConcurrency",
-                .product(name: "SystemPackage", package: "swift-system"),
+                .product(name: "SystemPackage", package: "swift-system")
             ]
         ),
         .testTarget(
@@ -212,14 +212,14 @@ let package = Package(
             name: "HTTPServer",
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
-                "HTTPConcurrency",
+                "HTTPConcurrency"
             ]
         ),
         .testTarget(
             name: "HTTPServerTests",
             dependencies: [
                 "HTTPServer", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket", "HTTPTransport",
-                "HTTPTestSupport",
+                "HTTPTestSupport"
             ]
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
@@ -228,7 +228,7 @@ let package = Package(
         .executableTarget(
             name: "httpd-example",
             dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport", "WebSocket"]
-        ),
+        )
     ]
 )
 
@@ -237,9 +237,7 @@ let package = Package(
 // var so downstream consumers' builds stay green.
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
-for target in package.targets {
-    // The C shims (`CHTTPTestMalloc`, `CCRC32`) have no Swift sources — Swift settings don't apply.
-    guard !["CHTTPTestMalloc", "CCRC32"].contains(target.name) else { continue }
+for target in package.targets where !["CHTTPTestMalloc", "CCRC32"].contains(target.name) {
     var settings = (target.swiftSettings ?? []) + strictSwiftSettings
     if treatWarningsAsErrors {
         settings.append(.treatAllWarnings(as: .error))

@@ -18,7 +18,6 @@ import Testing
 
 @Suite("h2spec http2 §6.9/6.10 — Flow Control & CONTINUATION")
 struct H2SpecFlowControlTests {
-
     // MARK: §6.9 WINDOW_UPDATE
 
     @Test("6.9/1 — a WINDOW_UPDATE with a 0 increment on the connection is a PROTOCOL_ERROR (§6.9)")

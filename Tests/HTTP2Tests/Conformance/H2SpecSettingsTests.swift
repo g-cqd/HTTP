@@ -15,7 +15,6 @@ import Testing
 
 @Suite("h2spec http2 §6.5/6.7/6.8/7 — SETTINGS · PING · GOAWAY · Error Codes")
 struct H2SpecSettingsTests {
-
     // MARK: §6.5 SETTINGS
 
     @Test("6.5/1 — a SETTINGS frame with ACK flag and a payload is a FRAME_SIZE_ERROR (§6.5)")
@@ -58,7 +57,7 @@ struct H2SpecSettingsTests {
                 code: .flowControlError
             ),
             (label: "MAX_FRAME_SIZE < 2^14", id: 0x05, value: 16_383, code: .protocolError),
-            (label: "MAX_FRAME_SIZE > 2^24-1", id: 0x05, value: 16_777_216, code: .protocolError),
+            (label: "MAX_FRAME_SIZE > 2^24-1", id: 0x05, value: 16_777_216, code: .protocolError)
         ])
     func invalidSettingsValueIsConnectionError(
         _ testCase: (label: String, id: UInt16, value: UInt32, code: HTTP2ErrorCode)

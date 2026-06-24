@@ -13,11 +13,11 @@ import Testing
 
 @Suite("RFC 6455 §5.2 — frame encoder")
 struct WebSocketFrameEncoderTests {
-
     @Test("a server frame is emitted unmasked (RFC 6455 §5.1)")
     func serverFramesAreUnmasked() {
-        let wire = WebSocketFrameEncoder().encode(
-            WebSocketFrame(opcode: .text, payload: Array("hi".utf8)))
+        let wire = WebSocketFrameEncoder()
+            .encode(
+                WebSocketFrame(opcode: .text, payload: Array("hi".utf8)))
         #expect(wire[0] == 0x81)  // FIN | text
         #expect(wire[1] & 0x80 == 0)  // MASK bit clear
         #expect(wire[1] == 0x02)  // length 2
@@ -28,7 +28,7 @@ struct WebSocketFrameEncoderTests {
         arguments: [0, 1, 125, 126, 200, 0xFFFF, 0x1_0000])
     func roundTrips(payloadLength: Int) throws {
         let frame = WebSocketFrame(
-            opcode: .binary, payload: (0..<payloadLength).map { UInt8($0 & 0xFF) })
+            opcode: .binary, payload: (0 ..< payloadLength).map { UInt8($0 & 0xFF) })
         let wire = WebSocketFrameEncoder().encode(frame)
 
         let decoded = try wire.withUnsafeBytes { raw -> WebSocketFrame? in

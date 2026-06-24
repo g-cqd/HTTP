@@ -26,7 +26,6 @@ import WebSocket
 
 @main
 struct HTTPDExample {
-
     static func main() async {
         // Prefork: HTTPD_WORKERS=N makes this the supervisor (it forks N fresh worker processes and
         // never returns); each worker re-enters here with HTTPD_WORKER set and serves with
@@ -50,7 +49,7 @@ struct HTTPDExample {
                 DateHeaderMiddleware(),
                 SecurityHeadersMiddleware(),
                 CORSMiddleware(),
-                ConditionalRequestMiddleware(),  // ETag on the raw body, If-None-Match → 304
+                ConditionalRequestMiddleware()  // ETag on the raw body, If-None-Match → 304
             ],
             terminatingAt: makeResponder())
         // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
@@ -68,12 +67,14 @@ struct HTTPDExample {
 
         if Prefork.isWorker {
             print("httpd-example: worker \(getpid()) serving on \(port) via \(backbone.rawValue)")
-        } else if tls == nil {
+        }
+        else if tls == nil {
             print(
                 "httpd-example: serving HTTP/1.1 + HTTP/2 (h2c) on http://127.0.0.1:\(port) "
                     + "via \(backbone.rawValue)")
             print("httpd-example: try  curl -v --http2-prior-knowledge http://127.0.0.1:\(port)/")
-        } else {
+        }
+        else {
             print(
                 "httpd-example: serving HTTP/1.1 + HTTP/2 + HTTP/3 over TLS (ALPN + Alt-Svc) on "
                     + "https://127.0.0.1:\(port) via \(backbone.rawValue)")
@@ -81,7 +82,8 @@ struct HTTPDExample {
         }
         do {
             try await server.run()
-        } catch {
+        }
+        catch {
             print("httpd-example: stopped — \(error)")
         }
     }
@@ -94,17 +96,19 @@ struct HTTPDExample {
             // (RFC 9110 §9.3.2).
             let method: HTTPMethod = request.method == .head ? .get : request.method
             switch (method, request.path) {
-            case (.get, "/"):
-                return text(.ok, "Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 server.\n")
-            case (.get, "/health"):
-                return text(.ok, "OK\n")
-            case (.get, "/large"):
-                // A large, compressible body to exercise the gzip middleware (curl --compressed).
-                return text(.ok, String(repeating: "from-scratch swift http server. ", count: 256))
-            case (.post, "/echo"):
-                return ServerResponse(HTTPResponse(status: .ok), body: body)  // echo the body
-            default:
-                return text(.notFound, "Not Found\n")
+                case (.get, "/"):
+                    return text(
+                        .ok, "Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 server.\n")
+                case (.get, "/health"):
+                    return text(.ok, "OK\n")
+                case (.get, "/large"):
+                    // A large, compressible body to exercise the gzip middleware (curl --compressed).
+                    return text(
+                        .ok, String(repeating: "from-scratch swift http server. ", count: 256))
+                case (.post, "/echo"):
+                    return ServerResponse(HTTPResponse(status: .ok), body: body)  // echo the body
+                default:
+                    return text(.notFound, "Not Found\n")
             }
         }
     }
@@ -115,12 +119,12 @@ struct HTTPDExample {
             shouldUpgrade: { $0.path == "/ws" },
             handle: { event in
                 switch event {
-                case .message(let opcode, let payload):
-                    return opcode == .text
-                        ? [.sendText(String(decoding: payload, as: UTF8.self))]
-                        : [.sendBinary(payload)]
-                default:
-                    return []  // Ping is auto-answered by the engine; Pong/Close need no reply
+                    case .message(let opcode, let payload):
+                        return opcode == .text
+                            ? [.sendText(String(decoding: payload, as: UTF8.self))]
+                            : [.sendBinary(payload)]
+                    default:
+                        return []  // Ping is auto-answered by the engine; Pong/Close need no reply
                 }
             })
     }
@@ -153,7 +157,7 @@ struct HTTPDExample {
     private static func parsePort() -> UInt16 {
         let arguments = CommandLine.arguments
         if arguments.count > 1, let port = UInt16(arguments[1]) { return port }
-        return 8080
+        return 8_080
     }
 
     private static func parseBackbone() -> TransportBackbone {
@@ -179,7 +183,8 @@ struct HTTPDExample {
         guard CommandLine.arguments.contains("tls") else { return nil }
         do {
             return try DevTLSIdentity.selfSigned()
-        } catch {
+        }
+        catch {
             print("httpd-example: TLS disabled — \(error)")
             return nil
         }

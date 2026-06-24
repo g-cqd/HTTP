@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 9113 §4 — frame decoder")
 struct HTTP2FrameDecoderTests {
-
     private func decode(
         _ bytes: [UInt8], maxFrameSize: Int = 16_384
     ) throws
@@ -22,7 +21,7 @@ struct HTTP2FrameDecoderTests {
         let decoder = HTTP2FrameDecoder(maxFrameSize: maxFrameSize)
         return try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
-            var frames = [HTTP2FrameDecoder.Frame]()
+            var frames: [HTTP2FrameDecoder.Frame] = []
             while let frame = try decoder.nextFrame(&reader) { frames.append(frame) }
             return frames
         }
@@ -32,9 +31,11 @@ struct HTTP2FrameDecoderTests {
         do {
             _ = try decode(bytes, maxFrameSize: maxFrameSize)
             return nil
-        } catch let error as HTTP2Error {
+        }
+        catch let error as HTTP2Error {
             return error.code
-        } catch {
+        }
+        catch {
             return nil
         }
     }

@@ -13,7 +13,6 @@ public import HTTPCore
 
 /// The server half of the RFC 6455 §4 opening handshake (request validation + the 101 response).
 public enum WebSocketHandshake {
-
     /// The §1.3 globally-unique identifier concatenated with the client key to derive the accept hash.
     private static let guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 

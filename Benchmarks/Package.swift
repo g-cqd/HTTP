@@ -22,7 +22,7 @@ let package = Package(
     platforms: [.macOS("15.6")],
     dependencies: [
         .package(name: "HTTP", path: ".."),
-        .package(url: "https://github.com/ordo-one/benchmark", from: "1.33.0"),
+        .package(url: "https://github.com/ordo-one/benchmark", from: "1.33.0")
     ],
     targets: [
         .executableTarget(
@@ -34,7 +34,7 @@ let package = Package(
                 .product(name: "HTTP2", package: "HTTP"),
                 .product(name: "WebSocket", package: "HTTP"),
                 .product(name: "HTTPTransport", package: "HTTP"),
-                .product(name: "Benchmark", package: "benchmark"),
+                .product(name: "Benchmark", package: "benchmark")
             ],
             path: "Benchmarks/HTTPBenchmarks",
             // Benchmarks drive `Network`/`NWConnection` clients; Swift 5 mode keeps the harness free of

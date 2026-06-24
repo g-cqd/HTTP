@@ -11,7 +11,6 @@
 
 /// A server-side QUIC transport: binds a UDP port and yields inbound QUIC connections (RFC 9000).
 public protocol QUICServerTransport: Sendable {
-
     /// The actual bound UDP port (meaningful after ``start()``; resolves an ephemeral `0` request).
     var boundPort: UInt16 { get }
 

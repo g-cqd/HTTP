@@ -11,7 +11,6 @@
 
 /// Assembles a HEADERS + CONTINUATION sequence into one header block (RFC 9113 §6.10).
 public struct HTTP2HeaderBlockAccumulator {
-
     private struct Pending {
         let streamID: HTTP2StreamID
         var fragment: [UInt8]
@@ -30,7 +29,6 @@ public struct HTTP2HeaderBlockAccumulator {
 
     /// The result of feeding one HEADERS or CONTINUATION frame.
     public enum Outcome: Sendable, Equatable {
-
         /// END_HEADERS was set; the complete header block is ready for HPACK decoding.
         case complete(HTTP2StreamID, [UInt8])
 

@@ -16,7 +16,6 @@ import Testing
 
 @Suite("RFC 9114 §4 — HTTP/3 request streams")
 struct HTTP3RequestStreamTests: HTTP3WireFixtures {
-
     private static let stream = QUICStreamID(0)  // client-initiated bidirectional request stream
 
     @Test("a GET maps to a request event (RFC 9114 §4.3)")
@@ -75,14 +74,14 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
                     HeaderField(name: ":method", value: "GET"),
                     HeaderField(name: ":method", value: "GET"),
                     HeaderField(name: ":scheme", value: "https"),
-                    HeaderField(name: ":path", value: "/"),
+                    HeaderField(name: ":path", value: "/")
                 ]
             ),
             (
                 label: "a mandatory pseudo-header absent (§4.3.1)",
                 fields: [
                     HeaderField(name: ":method", value: "GET"),
-                    HeaderField(name: ":scheme", value: "https"),
+                    HeaderField(name: ":scheme", value: "https")
                 ]
             ),
             (
@@ -91,7 +90,7 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
                     HeaderField(name: ":method", value: "GET"),
                     HeaderField(name: ":scheme", value: "https"),
                     HeaderField(name: ":path", value: "/"),
-                    HeaderField(name: ":unknown", value: "x"),
+                    HeaderField(name: ":unknown", value: "x")
                 ]
             ),
             (
@@ -101,7 +100,7 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
                     HeaderField(name: ":scheme", value: "https"),
                     HeaderField(name: ":path", value: "/"),
                     HeaderField(name: "x-test", value: "1"),
-                    HeaderField(name: ":authority", value: "example.com"),
+                    HeaderField(name: ":authority", value: "example.com")
                 ]
             ),
             (
@@ -110,7 +109,7 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
                     HeaderField(name: ":method", value: "GET"),
                     HeaderField(name: ":scheme", value: "https"),
                     HeaderField(name: ":path", value: "/"),
-                    HeaderField(name: "connection", value: "keep-alive"),
+                    HeaderField(name: "connection", value: "keep-alive")
                 ]
             ),
             (
@@ -119,9 +118,9 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
                     HeaderField(name: ":method", value: "GET"),
                     HeaderField(name: ":scheme", value: "https"),
                     HeaderField(name: ":path", value: "/"),
-                    HeaderField(name: "te", value: "gzip"),
+                    HeaderField(name: "te", value: "gzip")
                 ]
-            ),
+            )
         ] as [(label: String, fields: [HeaderField])])
     func malformedMessage(_ testCase: (label: String, fields: [HeaderField])) throws {
         var connection = HTTP3Connection()
@@ -187,14 +186,14 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
         arguments: [
             (name: ":path", value: "/a\r\nb"),
             (name: ":authority", value: "example.com\r\nx-evil: 1"),
-            (name: ":scheme", value: "ht\r\ntps"),
+            (name: ":scheme", value: "ht\r\ntps")
         ])
     func controlByteInPseudoHeaderIsMalformed(probe: (name: String, value: String)) throws {
         var fields = [
             HeaderField(name: ":method", value: "GET"),
             HeaderField(name: ":scheme", value: "https"),
             HeaderField(name: ":authority", value: "example.com"),
-            HeaderField(name: ":path", value: "/"),
+            HeaderField(name: ":path", value: "/")
         ]
         fields.removeAll { $0.name == probe.name }
         fields.append(HeaderField(name: probe.name, value: probe.value))
@@ -208,7 +207,7 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
         let fields = [
             HeaderField(name: ":method", value: "CONNECT"),
             HeaderField(name: ":authority", value: "example.com:443"),
-            HeaderField(name: ":path", value: "/"),
+            HeaderField(name: ":path", value: "/")
         ]
         var connection = HTTP3Connection()
         _ = try connection.receive(Self.stream, requestStream(fieldSection(fields)), fin: true)

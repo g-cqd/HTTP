@@ -17,7 +17,6 @@ internal import HTTPTransport
 internal import Synchronization
 
 extension HTTPServer {
-
     /// Serializes the non-`Sendable` ``HTTP3Connection`` engine across a connection's concurrent streams.
     private actor Engine {
         private var connection: HTTP3Connection
@@ -114,7 +113,7 @@ extension HTTPServer {
     /// Adds the `Alt-Svc` HTTP/3 advertisement (RFC 7838) to an h1/h2 response, when a QUIC listener
     /// is running, so clients can discover and upgrade to HTTP/3 on the same authority.
     func withAltSvc(_ response: HTTPResponse) -> HTTPResponse {
-        guard let value = altSvc.withLock({ $0 }) else { return response }
+        guard let value = altSvc.withLock(\.self) else { return response }
         var advertised = response
         // Use the registered constant (no per-response token re-validation / canonicalName build).
         advertised.headerFields.append(value, for: .altSvc)
@@ -127,14 +126,14 @@ extension HTTPServer {
     ) async {
         for action in actions {
             switch action {
-            case .send(.id(let id), let bytes, let fin) where id == stream.id:
-                try? await stream.send(bytes, fin: fin)
-            case .resetStream(let id, let code) where id == stream.id:
-                stream.reset(errorCode: code)
-            case .closeConnection(let code):
-                await quic.close(errorCode: code)
-            default:
-                break  // openUniStream is handled at startup; other-id sends do not occur in v1
+                case .send(.id(let id), let bytes, let fin) where id == stream.id:
+                    try? await stream.send(bytes, fin: fin)
+                case .resetStream(let id, let code) where id == stream.id:
+                    stream.reset(errorCode: code)
+                case .closeConnection(let code):
+                    await quic.close(errorCode: code)
+                default:
+                    break  // openUniStream is handled at startup; other-id sends do not occur in v1
             }
         }
     }

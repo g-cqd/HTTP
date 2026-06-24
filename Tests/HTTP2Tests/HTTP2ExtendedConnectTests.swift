@@ -15,21 +15,21 @@ import Testing
 
 @Suite("RFC 8441 — Extended CONNECT tunnel")
 struct HTTP2ExtendedConnectTests: HTTP2WireFixtures {
-
     @Test("the server advertises SETTINGS_ENABLE_CONNECT_PROTOCOL when enabled (§3)")
     func advertisesConnectProtocol() throws {
         var settings = HTTP2Settings()
         settings.enableConnectProtocol = true
         var connection = HTTP2Connection(localSettings: settings)
         var advertised = HTTP2Settings()
-        try connection.outboundBytes().withUnsafeBytes { raw in
-            var reader = ByteReader(raw)
-            let frames = HTTP2FrameDecoder()
-            while let frame = try frames.nextFrame(&reader) {
-                guard frame.header.type == .settings else { continue }
-                try frame.payload.withUnsafeBytes { try advertised.apply($0.bytes) }
+        try connection.outboundBytes()
+            .withUnsafeBytes { raw in
+                var reader = ByteReader(raw)
+                let frames = HTTP2FrameDecoder()
+                while let frame = try frames.nextFrame(&reader) {
+                    guard frame.header.type == .settings else { continue }
+                    try frame.payload.withUnsafeBytes { try advertised.apply($0.bytes) }
+                }
             }
-        }
         #expect(advertised.enableConnectProtocol)
     }
 

@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §5.6.7 — IMF-fixdate")
 struct HTTPDateTests {
-
     @Test("the Unix epoch is Thursday, 01 Jan 1970")
     func epoch() {
         #expect(HTTPDate.imfFixdate(0) == "Thu, 01 Jan 1970 00:00:00 GMT")

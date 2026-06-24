@@ -11,7 +11,6 @@
 
 /// The RFC 9000 §16 variable-length integer codec.
 public enum QUICVarint {
-
     /// The largest value representable — a 62-bit unsigned integer (RFC 9000 §16).
     public static let maxValue: UInt64 = (1 << 62) - 1
 
@@ -25,10 +24,10 @@ public enum QUICVarint {
     /// The minimal number of octets needed to encode `value` (RFC 9000 §16).
     public static func encodedLength(of value: UInt64) -> Int {
         switch value {
-        case 0...63: 1
-        case 64...16_383: 2
-        case 16_384...1_073_741_823: 4
-        default: 8
+            case 0 ... 63: 1
+            case 64 ... 16_383: 2
+            case 16_384 ... 1_073_741_823: 4
+            default: 8
         }
     }
 
@@ -38,25 +37,25 @@ public enum QUICVarint {
     /// out-of-range input can never corrupt the length prefix (fail closed rather than emit garbage).
     public static func encode(_ value: UInt64, into output: inout [UInt8]) {
         switch value {
-        case 0...63:
-            output.append(UInt8(value))
-        case 64...16_383:
-            output.append(UInt8(0x40 | (value >> 8)))
-            output.append(UInt8(value & 0xFF))
-        case 16_384...1_073_741_823:
-            output.append(UInt8(0x80 | (value >> 24)))
-            output.append(UInt8((value >> 16) & 0xFF))
-            output.append(UInt8((value >> 8) & 0xFF))
-            output.append(UInt8(value & 0xFF))
-        default:
-            output.append(UInt8(0xC0 | ((value >> 56) & 0x3F)))
-            output.append(UInt8((value >> 48) & 0xFF))
-            output.append(UInt8((value >> 40) & 0xFF))
-            output.append(UInt8((value >> 32) & 0xFF))
-            output.append(UInt8((value >> 24) & 0xFF))
-            output.append(UInt8((value >> 16) & 0xFF))
-            output.append(UInt8((value >> 8) & 0xFF))
-            output.append(UInt8(value & 0xFF))
+            case 0 ... 63:
+                output.append(UInt8(value))
+            case 64 ... 16_383:
+                output.append(UInt8(0x40 | (value >> 8)))
+                output.append(UInt8(value & 0xFF))
+            case 16_384 ... 1_073_741_823:
+                output.append(UInt8(0x80 | (value >> 24)))
+                output.append(UInt8((value >> 16) & 0xFF))
+                output.append(UInt8((value >> 8) & 0xFF))
+                output.append(UInt8(value & 0xFF))
+            default:
+                output.append(UInt8(0xC0 | ((value >> 56) & 0x3F)))
+                output.append(UInt8((value >> 48) & 0xFF))
+                output.append(UInt8((value >> 40) & 0xFF))
+                output.append(UInt8((value >> 32) & 0xFF))
+                output.append(UInt8((value >> 24) & 0xFF))
+                output.append(UInt8((value >> 16) & 0xFF))
+                output.append(UInt8((value >> 8) & 0xFF))
+                output.append(UInt8(value & 0xFF))
         }
     }
 
@@ -71,7 +70,7 @@ public enum QUICVarint {
         guard reader.remaining >= length else { return nil }
         var value = UInt64(first & 0x3F)
         reader.advance()
-        for _ in 1..<length {
+        for _ in 1 ..< length {
             guard let byte = reader.readByte() else { return nil }  // guarded by `remaining` above
             value = (value << 8) | UInt64(byte)
         }

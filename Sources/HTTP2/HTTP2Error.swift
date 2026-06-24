@@ -10,7 +10,6 @@
 
 /// An HTTP/2 error, scoped to the connection or to a single stream (RFC 9113 §5.4).
 public struct HTTP2Error: Error, Sendable, Equatable {
-
     /// The error code reported to the peer (RFC 9113 §7).
     public let code: HTTP2ErrorCode
 
@@ -31,8 +30,8 @@ public struct HTTP2Error: Error, Sendable, Equatable {
     public var isConnectionError: Bool { streamID == nil }
 
     /// A connection error: GOAWAY with `code`, then close (RFC 9113 §5.4.1).
-    public static func connection(_ code: HTTP2ErrorCode, _ reason: String = "") -> HTTP2Error {
-        HTTP2Error(code: code, streamID: nil, reason: reason)
+    public static func connection(_ code: HTTP2ErrorCode, _ reason: String = "") -> Self {
+        Self(code: code, streamID: nil, reason: reason)
     }
 
     /// A stream error on `streamID`: RST_STREAM with `code` (RFC 9113 §5.4.2).
@@ -40,7 +39,7 @@ public struct HTTP2Error: Error, Sendable, Equatable {
         _ streamID: HTTP2StreamID,
         _ code: HTTP2ErrorCode,
         _ reason: String = ""
-    ) -> HTTP2Error {
-        HTTP2Error(code: code, streamID: streamID, reason: reason)
+    ) -> Self {
+        Self(code: code, streamID: streamID, reason: reason)
     }
 }

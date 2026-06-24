@@ -18,7 +18,6 @@ internal import Synchronization
 /// `NWConnection`'s `send`/`receive`/`cancel` are documented thread-safe and this wrapper adds only a
 /// small `Mutex`-guarded "finished" latch, so it is safe to share — hence `@unchecked Sendable`.
 final class LegacyQUICStream: QUICStream, @unchecked Sendable {
-
     let id: QUICStreamID
     let direction: QUICStreamDirection
     private let connection: NWConnection
@@ -32,7 +31,7 @@ final class LegacyQUICStream: QUICStream, @unchecked Sendable {
     }
 
     func receive() async throws -> (bytes: [UInt8], fin: Bool)? {
-        if finished.withLock({ $0 }) { return nil }
+        if finished.withLock(\.self) { return nil }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 connection.receive(minimumIncompleteLength: 1, maximumLength: 65_535) {
@@ -64,14 +63,15 @@ final class LegacyQUICStream: QUICStream, @unchecked Sendable {
                 completion: .contentProcessed { error in
                     if let error {
                         continuation.resume(throwing: error)
-                    } else {
+                    }
+                    else {
                         continuation.resume()
                     }
                 })
         }
     }
 
-    func reset(errorCode: UInt64) {
+    func reset(errorCode _: UInt64) {
         // The legacy NWConnection stream API has no per-stream error code; cancelling sends RESET_STREAM.
         connection.cancel()
     }

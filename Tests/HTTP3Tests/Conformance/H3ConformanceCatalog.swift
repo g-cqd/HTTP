@@ -65,7 +65,6 @@ struct H3Check: Sendable {
 
 /// The HTTP/3 + QPACK conformance catalog and the RFC error-code registries.
 enum H3Conformance {
-
     /// Every staged check: the 49 active h3spec cases plus the RFC 9114/9204 MUST-gaps h3spec omits.
     ///
     /// As of M7 the status is stamped by layer: the HTTP/3 (RFC 9114) and QPACK (RFC 9204) rows are
@@ -78,8 +77,8 @@ enum H3Conformance {
     private static func stamped(_ check: H3Check) -> H3Check {
         var stamped = check
         switch check.layer {
-        case .http3, .qpack: stamped.status = .supported
-        case .quicTransport, .quicTLS: stamped.status = .platform
+            case .http3, .qpack: stamped.status = .supported
+            case .quicTransport, .quicTLS: stamped.status = .platform
         }
         return stamped
     }
@@ -167,7 +166,7 @@ enum H3Conformance {
             "NEW_CONNECTION_ID with a zero-length connection ID", "FRAME_ENCODING_ERROR"),
         H3Check(
             .h3spec, .quicTransport, "§19.20",
-            "HANDSHAKE_DONE received by a server", "PROTOCOL_VIOLATION"),
+            "HANDSHAKE_DONE received by a server", "PROTOCOL_VIOLATION")
     ]
 
     // MARK: h3spec — QUIC-TLS (RFC 9001), 7 checks
@@ -193,7 +192,7 @@ enum H3Conformance {
             "EndOfEarlyData received", "TLS unexpected_message"),
         H3Check(
             .h3spec, .quicTLS, "§8.3",
-            "CRYPTO in a 0-RTT packet (requires a 0-RTT ticket)", "PROTOCOL_VIOLATION"),
+            "CRYPTO in a 0-RTT packet (requires a 0-RTT ticket)", "PROTOCOL_VIOLATION")
     ]
 
     // MARK: h3spec — HTTP/3 (RFC 9114), 11 checks
@@ -231,7 +230,7 @@ enum H3Conformance {
             "an HTTP/2-only setting identifier is present", "H3_SETTINGS_ERROR (0x0109)"),
         H3Check(
             .h3spec, .http3, "§7.2.5",
-            "CANCEL_PUSH received on a request stream", "H3_FRAME_UNEXPECTED (0x0105)"),
+            "CANCEL_PUSH received on a request stream", "H3_FRAME_UNEXPECTED (0x0105)")
     ]
 
     // MARK: h3spec — QPACK (RFC 9204), 4 checks
@@ -249,7 +248,7 @@ enum H3Conformance {
             "a critical (encoder) stream is closed", "H3_CLOSED_CRITICAL_STREAM (0x0104)"),
         H3Check(
             .h3spec, .qpack, "§4.4.3",
-            "an Insert Count Increment of 0", "QPACK_DECODER_STREAM_ERROR (0x0202)"),
+            "an Insert Count Increment of 0", "QPACK_DECODER_STREAM_ERROR (0x0202)")
     ]
 
     // MARK: RFC 9114 / 9204 MUSTs h3spec does not cover (coverage gaps to add for M7)
@@ -325,7 +324,7 @@ enum H3Conformance {
         H3Check(
             .rfc9204, .qpack, "§4.4.3",
             "an Insert Count Increment beyond what the encoder sent",
-            "QPACK_DECODER_STREAM_ERROR (0x0202)"),
+            "QPACK_DECODER_STREAM_ERROR (0x0202)")
     ]
 
     // MARK: RFC error-code registries (locked by H3SpecTests so the wire values cannot drift)
@@ -339,12 +338,12 @@ enum H3Conformance {
         ("H3_ID_ERROR", 0x0108), ("H3_SETTINGS_ERROR", 0x0109), ("H3_MISSING_SETTINGS", 0x010a),
         ("H3_REQUEST_REJECTED", 0x010b), ("H3_REQUEST_CANCELLED", 0x010c),
         ("H3_REQUEST_INCOMPLETE", 0x010d), ("H3_MESSAGE_ERROR", 0x010e),
-        ("H3_CONNECT_ERROR", 0x010f), ("H3_VERSION_FALLBACK", 0x0110),
+        ("H3_CONNECT_ERROR", 0x010f), ("H3_VERSION_FALLBACK", 0x0110)
     ]
 
     /// RFC 9204 §6 — QPACK error codes.
     static let qpackErrorCodes: [(name: String, code: UInt32)] = [
         ("QPACK_DECOMPRESSION_FAILED", 0x0200), ("QPACK_ENCODER_STREAM_ERROR", 0x0201),
-        ("QPACK_DECODER_STREAM_ERROR", 0x0202),
+        ("QPACK_DECODER_STREAM_ERROR", 0x0202)
     ]
 }

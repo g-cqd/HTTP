@@ -16,7 +16,6 @@ internal import HTTPTransport
 internal import WebSocket
 
 extension HTTPServer {
-
     /// Whether `request` offers the `websocket` token in its `Upgrade` header (RFC 6455 §4.2.1).
     ///
     /// A routing pre-check only — ``WebSocketHandshake`` performs the strict §4.2.1 validation.
@@ -50,7 +49,8 @@ extension HTTPServer {
         let accepted: HTTPResponse
         do {
             accepted = try WebSocketHandshake.response(to: request)
-        } catch {
+        }
+        catch {
             let rejection = ResponseSerializer.serialize(
                 HTTPResponse(status: error.rejectionStatus))
             try? await connection.send(rejection)
@@ -78,7 +78,8 @@ extension HTTPServer {
                 for event in try engine.receive(inbound) {
                     for action in await handler.handle(event) { engine.apply(action) }
                 }
-            } catch {
+            }
+            catch {
                 // The engine queued a Close with the mapped code; flush it below, then stop.
                 failed = true
             }
@@ -108,28 +109,29 @@ extension HTTPServer {
     ) async {
         guard let handler = webSocketHandler else { return }
         switch event {
-        case .extendedConnect(let streamID, let request, let proto):
-            // Same CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the
-            // tunnel, treated like a declined upgrade.
-            guard proto == "websocket", handler.shouldUpgrade(request),
-                handler.isOriginAllowed(request.headerFields[.origin])
-            else { return }
-            try? engine.acceptTunnel(streamID)  // 200, no END_STREAM (RFC 8441 §5)
-            webSockets[streamID] = WebSocketConnection(maxMessageSize: limits.maxBodySize)
-        case .tunnelData(let streamID, let bytes):
-            guard var socket = webSockets[streamID] else { return }
-            await driveTunnel(
-                &socket, bytes: bytes, streamID: streamID, engine: &engine, handler: handler)
-            if socket.isClosing {
-                try? engine.closeTunnel(streamID)
+            case .extendedConnect(let streamID, let request, let proto):
+                // Same CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the
+                // tunnel, treated like a declined upgrade.
+                guard proto == "websocket", handler.shouldUpgrade(request),
+                    handler.isOriginAllowed(request.headerFields[.origin])
+                else { return }
+                try? engine.acceptTunnel(streamID)  // 200, no END_STREAM (RFC 8441 §5)
+                webSockets[streamID] = WebSocketConnection(maxMessageSize: limits.maxBodySize)
+            case .tunnelData(let streamID, let bytes):
+                guard var socket = webSockets[streamID] else { return }
+                await driveTunnel(
+                    &socket, bytes: bytes, streamID: streamID, engine: &engine, handler: handler)
+                if socket.isClosing {
+                    try? engine.closeTunnel(streamID)
+                    webSockets[streamID] = nil
+                }
+                else {
+                    webSockets[streamID] = socket
+                }
+            case .tunnelClosed(let streamID), .streamReset(let streamID, _):
                 webSockets[streamID] = nil
-            } else {
-                webSockets[streamID] = socket
-            }
-        case .tunnelClosed(let streamID), .streamReset(let streamID, _):
-            webSockets[streamID] = nil
-        default:
-            break
+            default:
+                break
         }
     }
 

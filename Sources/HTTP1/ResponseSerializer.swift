@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// Serializes an ``HTTPResponse`` into HTTP/1.1 wire bytes (RFC 9112).
 public enum ResponseSerializer {
-
     private static let statusLinePrefix: [UInt8] = Array("HTTP/1.1 ".utf8)
     private static let crlf: [UInt8] = [0x0D, 0x0A]
     private static let space: UInt8 = 0x20
@@ -29,7 +28,7 @@ public enum ResponseSerializer {
         405: "Method Not Allowed", 408: "Request Timeout", 413: "Content Too Large",
         414: "URI Too Long", 429: "Too Many Requests", 431: "Request Header Fields Too Large",
         500: "Internal Server Error", 501: "Not Implemented", 502: "Bad Gateway",
-        503: "Service Unavailable", 505: "HTTP Version Not Supported",
+        503: "Service Unavailable", 505: "HTTP Version Not Supported"
     ]
 
     /// Serializes `response` and `body` into a complete HTTP/1.1 response message.
@@ -42,7 +41,7 @@ public enum ResponseSerializer {
         body: [UInt8] = [],
         omitBody: Bool = false
     ) -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         output.reserveCapacity(64 + (omitBody ? 0 : body.count))
 
         // Status-line: HTTP-version SP status-code SP [ reason-phrase ] CRLF (RFC 9112 §3.1).
@@ -77,7 +76,7 @@ public enum ResponseSerializer {
     /// Whether `status` forbids a response body: 1xx Informational, 204 No Content, 304 Not Modified
     /// (RFC 9110 §6.4.1) — none may carry Content-Length.
     private static func forbidsContent(_ status: HTTPStatus) -> Bool {
-        (100..<200).contains(status.code) || status.code == 204 || status.code == 304
+        (100 ..< 200).contains(status.code) || status.code == 204 || status.code == 304
     }
 
     /// Appends a status code's three decimal digits (the code is an invariant `100...599`).

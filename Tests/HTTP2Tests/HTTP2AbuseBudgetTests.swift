@@ -18,7 +18,6 @@ import Testing
 @testable import HTTP2
 
 extension HTTP2ConnectionTests {
-
     @Test("server-emitted RST_STREAM counts toward the budget (MadeYouReset, CVE-2025-8671)")
     func madeYouReset() {
         var connection = HTTP2Connection(limits: HTTPLimits(maxStreamResetsPerInterval: 5))
@@ -29,14 +28,15 @@ extension HTTP2ConnectionTests {
         // Ten self-dependent HEADERS: each is a §5.3.1 violation that makes the *server* emit
         // RST_STREAM. The client never sends a single RST_STREAM, yet the budget must still trip —
         // otherwise the Rapid-Reset defense is bypassed (MadeYouReset).
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             wire += selfDependentHeadersFrame(streamID: streamID)
             streamID += 2
         }
         var thrown: HTTP2ErrorCode?
         do {
             _ = try connection.receive(wire)
-        } catch {
+        }
+        catch {
             thrown = error.code
         }
         #expect(thrown == .enhanceYourCalm)
@@ -51,7 +51,7 @@ extension HTTP2ConnectionTests {
         var first = HTTP2ConnectionPreface.client
         first += settingsFrame()
         var streamID: UInt32 = 1
-        for _ in 0..<5 {  // exactly at the cap within the first window — no trip
+        for _ in 0 ..< 5 {  // exactly at the cap within the first window — no trip
             first += openStream(streamID: streamID)
             first += rstStreamFrame(streamID: streamID)
             streamID += 2
@@ -60,8 +60,8 @@ extension HTTP2ConnectionTests {
 
         clock.advance(by: .seconds(2))  // past the rolling window → the budget resets
 
-        var second = [UInt8]()
-        for _ in 0..<5 {  // five more resets — allowed only because the window decayed
+        var second: [UInt8] = []
+        for _ in 0 ..< 5 {  // five more resets — allowed only because the window decayed
             second += openStream(streamID: streamID)
             second += rstStreamFrame(streamID: streamID)
             streamID += 2

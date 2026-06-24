@@ -12,7 +12,6 @@ import Testing
 
 @Suite("RFC 9112 §3 — request-line parsing")
 struct RequestLineParserTests {
-
     /// Parses `string` through a `ByteReader` borrowing its UTF-8 bytes (zero-copy).
     private func parseLine(_ string: String) throws -> RequestLine {
         let bytes = Array(string.utf8)
@@ -44,7 +43,7 @@ struct RequestLineParserTests {
             "",  // empty
             "GET /path",  // no SP-version / CRLF
             "GET /path HTTP/1.1",  // missing CRLF terminator
-            "GET /path BANANA\r\n",  // unrecognized version token
+            "GET /path BANANA\r\n"  // unrecognized version token
         ]
     )
     func rejectsMalformed(_ input: String) {
@@ -70,7 +69,7 @@ struct RequestLineParserTests {
         arguments: [
             "GET /a\u{01}b HTTP/1.1\r\n",  // C0 control
             "GET /a\rb HTTP/1.1\r\n",  // bare CR embedded in the target
-            "GET /a\u{7F}b HTTP/1.1\r\n",  // DEL
+            "GET /a\u{7F}b HTTP/1.1\r\n"  // DEL
         ]
     )
     func rejectsControlInTarget(_ input: String) {

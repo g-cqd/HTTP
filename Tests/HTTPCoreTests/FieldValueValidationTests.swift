@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §5.5 — field-value legality")
 struct FieldValueValidationTests {
-
     @Test("accepts the empty value (*field-content)")
     func acceptsEmpty() {
         #expect(FieldValidation.isValidFieldValue([UInt8]()))
@@ -40,7 +39,7 @@ struct FieldValueValidationTests {
             [UInt8](("value\r\nInjected: x".utf8)),  // CRLF injection
             [UInt8](("value\rmore".utf8)),  // bare CR
             [UInt8](("value\nmore".utf8)),  // bare LF
-            [0x76, 0x00, 0x61],  // embedded NUL
+            [0x76, 0x00, 0x61]  // embedded NUL
         ] as [[UInt8]]
     )
     func rejectsCRLFNUL(_ bytes: [UInt8]) {
@@ -72,8 +71,8 @@ struct FieldValueValidationTests {
     @Test("SWAR contiguous validation matches the per-octet classifier for all 256 bytes × offsets")
     func swarMatchesScalarForEveryByte() {
         let filler: UInt8 = 0x61  // 'a', a valid VCHAR
-        for value in UInt8.min...UInt8.max {
-            for prefix in 0...17 {  // span the lanes + word/tail boundary
+        for value in UInt8.min ... UInt8.max {
+            for prefix in 0 ... 17 {  // span the lanes + word/tail boundary
                 var bytes = [UInt8](repeating: filler, count: prefix)
                 bytes.append(value)
                 bytes.append(contentsOf: [UInt8](repeating: filler, count: 3))

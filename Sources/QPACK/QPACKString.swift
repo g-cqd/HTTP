@@ -14,7 +14,6 @@ public import HTTPCore
 /// The RFC 9204 §4.1.2 string-literal codec (the RFC 7541 §5.2 representation, parameterized by prefix
 /// width).
 public enum QPACKString {
-
     /// Encodes `bytes` as a string literal, using the Huffman form only when it is shorter (§4.1.2).
     ///
     /// `firstByte` supplies the representation's fixed high bits (above the `H` flag); the codec sets
@@ -31,7 +30,8 @@ public enum QPACKString {
             QPACKInteger.encode(
                 huffmanLength, prefixBits: prefixBits, firstByte: flagged, into: &output)
             Huffman.encode(bytes, into: &output)
-        } else {
+        }
+        else {
             QPACKInteger.encode(
                 bytes.count, prefixBits: prefixBits, firstByte: firstByte, into: &output)
             output.append(contentsOf: bytes)
@@ -52,16 +52,17 @@ public enum QPACKString {
         let huffmanCoded = (first >> UInt8(prefixBits)) & 1 == 1
         let length: Int
         switch QPACKInteger.decode(&reader, prefixBits: prefixBits) {
-        case .value(let value): length = value
-        case .incomplete, .overflow: throw .decompressionFailed("invalid string length")
+            case .value(let value): length = value
+            case .incomplete, .overflow: throw .decompressionFailed("invalid string length")
         }
         guard length <= maxEncodedLength else { throw .decompressionFailed("string too long") }
         guard reader.remaining >= length else { throw .decompressionFailed("truncated string") }
         let start = reader.position
         reader.advance(by: length)
-        let payload = reader.slice(in: start..<(start + length))
+        let payload = reader.slice(in: start ..< (start + length))
         if huffmanCoded {
-            do { return try Huffman.decodeString(payload) } catch {
+            do { return try Huffman.decodeString(payload) }
+            catch {
                 throw .decompressionFailed("invalid Huffman")
             }
         }

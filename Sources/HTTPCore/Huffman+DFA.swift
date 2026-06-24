@@ -9,7 +9,6 @@
 //
 
 extension Huffman {
-
     /// One nibble transition: the resulting state, an optionally-emitted symbol, and status flags.
     @usableFromInline
     struct NibbleTransition: Sendable {
@@ -19,11 +18,14 @@ extension Huffman {
     }
 
     /// This nibble completed a literal symbol (``NibbleTransition/symbol`` is valid).
-    @usableFromInline static let emitFlag: UInt8 = 1
+    @usableFromInline
+    static let emitFlag: UInt8 = 1
     /// This nibble entered the EOS code — it MUST NOT appear in the input (RFC 7541 §5.2).
-    @usableFromInline static let eosFlag: UInt8 = 2
+    @usableFromInline
+    static let eosFlag: UInt8 = 2
     /// This nibble left the code tree — an undecodable bit sequence (RFC 7541 §5.2).
-    @usableFromInline static let invalidFlag: UInt8 = 4
+    @usableFromInline
+    static let invalidFlag: UInt8 = 4
 
     /// The generated nibble decoder: the transition table plus the per-state padding-validity vector.
     @usableFromInline
@@ -69,8 +71,8 @@ extension Huffman {
         let stateCount = children.count
         var transitions = [NibbleTransition](
             repeating: NibbleTransition(nextState: 0, symbol: 0, flags: 0), count: stateCount * 16)
-        for state in 0..<stateCount where symbol[state] == nil {  // leaves are never start states
-            for nibble in 0..<16 {
+        for state in 0 ..< stateCount where symbol[state] == nil {  // leaves are never start states
+            for nibble in 0 ..< 16 {
                 var node = state
                 var emitted: Int?
                 var flags: UInt8 = 0
@@ -98,7 +100,7 @@ extension Huffman {
         }
 
         // 3. A decode may legally end only at the root or on a ≤ 7-bit all-ones EOS prefix (§5.2).
-        let paddingValid = (0..<stateCount).map { allOnes[$0] && depth[$0] <= 7 }
+        let paddingValid = (0 ..< stateCount).map { allOnes[$0] && depth[$0] <= 7 }
         return NibbleDFA(transitions: transitions, paddingValid: paddingValid)
     }
 }

@@ -14,15 +14,14 @@ import Testing
 
 @Suite("RFC 7541 §6 — HPACK decoder")
 struct HPACKDecoderTests {
-
     /// Parses a whitespace-grouped hex string (as the RFC prints wire dumps) into octets.
     private func hex(_ string: String) -> [UInt8] {
         let digits = Array(string.filter { !$0.isWhitespace })
-        var bytes = [UInt8]()
+        var bytes: [UInt8] = []
         bytes.reserveCapacity(digits.count / 2)
         var index = 0
         while index + 1 < digits.count {
-            if let byte = UInt8(String(digits[index...(index + 1)]), radix: 16) {
+            if let byte = UInt8(String(digits[index ... (index + 1)]), radix: 16) {
                 bytes.append(byte)
             }
             index += 2
@@ -38,15 +37,15 @@ struct HPACKDecoderTests {
     func tooManyFieldsIsRejected() {
         // Four indexed `:method GET` references (0x82) against a 3-field cap — each is one octet, so
         // the byte budget never trips; only the count limit catches it (RFC 9113 §8.2.3).
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096, limits: HTTPLimits(maxFieldCount: 3))
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096, limits: HTTPLimits(maxFieldCount: 3))
         #expect(throws: HPACKError.tooManyFields) {
-            _ = try self.decode(&decoder, [0x82, 0x82, 0x82, 0x82])
+            _ = try decode(&decoder, [0x82, 0x82, 0x82, 0x82])
         }
     }
 
     @Test("a block at exactly maxFieldCount still decodes (boundary)")
     func atMaxFieldCountDecodes() throws {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096, limits: HTTPLimits(maxFieldCount: 3))
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096, limits: HTTPLimits(maxFieldCount: 3))
         #expect(try decode(&decoder, [0x82, 0x82, 0x82]).count == 3)
     }
 
@@ -54,31 +53,31 @@ struct HPACKDecoderTests {
     private let request1 = [
         HPACKField(name: ":method", value: "GET"), HPACKField(name: ":scheme", value: "http"),
         HPACKField(name: ":path", value: "/"),
-        HPACKField(name: ":authority", value: "www.example.com"),
+        HPACKField(name: ":authority", value: "www.example.com")
     ]
     private let request2 = [
         HPACKField(name: ":method", value: "GET"), HPACKField(name: ":scheme", value: "http"),
         HPACKField(name: ":path", value: "/"),
         HPACKField(name: ":authority", value: "www.example.com"),
-        HPACKField(name: "cache-control", value: "no-cache"),
+        HPACKField(name: "cache-control", value: "no-cache")
     ]
     private let request3 = [
         HPACKField(name: ":method", value: "GET"), HPACKField(name: ":scheme", value: "https"),
         HPACKField(name: ":path", value: "/index.html"),
         HPACKField(name: ":authority", value: "www.example.com"),
-        HPACKField(name: "custom-key", value: "custom-value"),
+        HPACKField(name: "custom-key", value: "custom-value")
     ]
     private let response1 = [
         HPACKField(name: ":status", value: "302"),
         HPACKField(name: "cache-control", value: "private"),
         HPACKField(name: "date", value: "Mon, 21 Oct 2013 20:13:21 GMT"),
-        HPACKField(name: "location", value: "https://www.example.com"),
+        HPACKField(name: "location", value: "https://www.example.com")
     ]
     private let response2 = [
         HPACKField(name: ":status", value: "307"),
         HPACKField(name: "cache-control", value: "private"),
         HPACKField(name: "date", value: "Mon, 21 Oct 2013 20:13:21 GMT"),
-        HPACKField(name: "location", value: "https://www.example.com"),
+        HPACKField(name: "location", value: "https://www.example.com")
     ]
     private let response3 = [
         HPACKField(name: ":status", value: "200"),
@@ -87,14 +86,14 @@ struct HPACKDecoderTests {
         HPACKField(name: "location", value: "https://www.example.com"),
         HPACKField(name: "content-encoding", value: "gzip"),
         HPACKField(
-            name: "set-cookie", value: "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1"),
+            name: "set-cookie", value: "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1")
     ]
 
     // MARK: C.3 — requests, no Huffman
 
     @Test("C.3 — three requests without Huffman, dynamic table evolving")
     func requestsWithoutHuffman() throws {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         #expect(
             try decode(&decoder, hex("8286 8441 0f77 7777 2e65 7861 6d70 6c65 2e63 6f6d"))
                 == request1)
@@ -113,7 +112,7 @@ struct HPACKDecoderTests {
 
     @Test("C.4 — three requests with Huffman, dynamic table evolving")
     func requestsWithHuffman() throws {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         #expect(try decode(&decoder, hex("8286 8441 8cf1 e3c2 e5f2 3a6b a0ab 90f4 ff")) == request1)
         #expect(decoder.dynamicTable.size == 57)
         #expect(try decode(&decoder, hex("8286 84be 5886 a8eb 1064 9cbf")) == request2)
@@ -178,13 +177,13 @@ struct HPACKDecoderTests {
 
     @Test("an indexed field with index 0 is a decoding error (§6.1)")
     func indexZeroIsInvalid() {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         #expect(throws: HPACKError.invalidIndex) { try decode(&decoder, [0x80]) }
     }
 
     @Test("an index past the table is a decoding error (§2.3.3)")
     func indexOutOfRangeIsInvalid() {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         // 0xBF is an indexed field at index 63 — past the static table, with the dynamic table empty.
         #expect(throws: HPACKError.invalidIndex) { try decode(&decoder, [0xBF]) }
     }
@@ -200,7 +199,7 @@ struct HPACKDecoderTests {
 
     @Test("a valid size update shrinks the dynamic table (§6.3)")
     func validSizeUpdate() throws {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         #expect(try decode(&decoder, [0x20]).isEmpty)  // 0x20 = size update to 0
         #expect(decoder.dynamicTable.maxSize == 0)
     }

@@ -14,10 +14,9 @@ internal import HTTPCore
 
 /// Maps a decoded QPACK field list onto an ``HTTPRequest`` (RFC 9114 §4.3).
 enum HTTP3RequestMapper {
-
     /// Connection-specific fields that MUST NOT appear in an HTTP/3 request (RFC 9114 §4.2).
     private static let forbiddenFields: Set<String> = [
-        "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade",
+        "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade"
     ]
 
     /// Builds an ``HTTPRequest`` from `fields`, validating the §4.3 / §4.2 rules for `streamID`, and
@@ -42,7 +41,8 @@ enum HTTP3RequestMapper {
                 try assignPseudo(
                     field, method: &method, scheme: &scheme, authority: &authority,
                     path: &path, connectProtocol: &connectProtocol, streamID: streamID)
-            } else {
+            }
+            else {
                 sawRegularField = true
                 try appendRegular(field, to: &headerFields, streamID: streamID)
             }
@@ -65,7 +65,8 @@ enum HTTP3RequestMapper {
             guard scheme == nil, path == nil else {
                 throw malformed(streamID, "CONNECT must omit :scheme and :path")
             }
-        } else {
+        }
+        else {
             guard scheme != nil, let path, !path.isEmpty else {
                 throw malformed(streamID, "missing or empty :scheme or :path")
             }
@@ -91,21 +92,21 @@ enum HTTP3RequestMapper {
         streamID: QUICStreamID
     ) throws(HTTP3Error) {
         switch field.name {
-        // `:method` is token-validated downstream by `HTTPMethod(rawValue:)`, which rejects controls.
-        case ":method": try setOnce(&method, to: field.value, named: ":method", streamID)
-        case ":scheme":
-            try rejectControls(in: field.value, named: ":scheme", streamID)
-            try setOnce(&scheme, to: field.value, named: ":scheme", streamID)
-        case ":authority":
-            try rejectControls(in: field.value, named: ":authority", streamID)
-            try setOnce(&authority, to: field.value, named: ":authority", streamID)
-        case ":path":
-            try rejectControls(in: field.value, named: ":path", streamID)
-            try setOnce(&path, to: field.value, named: ":path", streamID)
-        case ":protocol":
-            try rejectControls(in: field.value, named: ":protocol", streamID)
-            try setOnce(&connectProtocol, to: field.value, named: ":protocol", streamID)
-        default: throw malformed(streamID, "unknown request pseudo-header \(field.name)")
+            // `:method` is token-validated downstream by `HTTPMethod(rawValue:)`, which rejects controls.
+            case ":method": try setOnce(&method, to: field.value, named: ":method", streamID)
+            case ":scheme":
+                try rejectControls(in: field.value, named: ":scheme", streamID)
+                try setOnce(&scheme, to: field.value, named: ":scheme", streamID)
+            case ":authority":
+                try rejectControls(in: field.value, named: ":authority", streamID)
+                try setOnce(&authority, to: field.value, named: ":authority", streamID)
+            case ":path":
+                try rejectControls(in: field.value, named: ":path", streamID)
+                try setOnce(&path, to: field.value, named: ":path", streamID)
+            case ":protocol":
+                try rejectControls(in: field.value, named: ":protocol", streamID)
+                try setOnce(&connectProtocol, to: field.value, named: ":protocol", streamID)
+            default: throw malformed(streamID, "unknown request pseudo-header \(field.name)")
         }
     }
 

@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// Adds a `Date` header (RFC 9110 §6.6.1) to responses that lack one.
 public struct DateHeaderMiddleware: HTTPMiddleware {
-
     private let now: @Sendable () -> Int
 
     /// Creates the middleware reading the system wall clock.

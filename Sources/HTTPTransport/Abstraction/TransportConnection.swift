@@ -8,7 +8,6 @@
 
 /// A stable per-connection identifier (for logging and per-client limits).
 public struct TransportConnectionID: Hashable, Sendable {
-
     /// The underlying identifier value.
     public let rawValue: UInt64
 
@@ -20,7 +19,6 @@ public struct TransportConnectionID: Hashable, Sendable {
 
 /// A peer network address.
 public struct TransportAddress: Hashable, Sendable {
-
     /// The host (IP literal or name).
     public let host: String
 
@@ -40,7 +38,6 @@ public struct TransportAddress: Hashable, Sendable {
 /// or Dispatch readiness — to these async methods. Conformers are `Sendable` and honor task
 /// cancellation; bytes cross the boundary as owned buffers that the parser wraps in a `ByteReader`.
 public protocol TransportConnection: Sendable {
-
     /// A stable identifier for this connection.
     var id: TransportConnectionID { get }
 
@@ -65,7 +62,6 @@ public protocol TransportConnection: Sendable {
 }
 
 extension TransportConnection {
-
     /// Cleartext and pre-handshake connections negotiate no application protocol; TLS backbones
     /// override this once ALPN (RFC 7301) resolves.
     public var negotiatedApplicationProtocol: String? { nil }

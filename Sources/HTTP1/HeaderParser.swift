@@ -12,7 +12,6 @@ public import HTTPCore
 
 /// Parses the HTTP/1.1 header section (RFC 9112 §5).
 public enum HeaderParser {
-
     private static let colon: UInt8 = 0x3A
     private static let space: UInt8 = 0x20
     private static let htab: UInt8 = 0x09
@@ -86,10 +85,10 @@ public enum HeaderParser {
         }
 
         // Validate the name bytes before materializing: an invalid name never allocates a `String`.
-        let fieldName = line.extracting(0..<colonIndex)
+        let fieldName = line.extracting(0 ..< colonIndex)
             .withUnsafeBytes { HTTPFieldName(validating: $0) }
         guard let fieldName else { throw .invalidFieldName }
-        let value = line.extracting(valueStart..<valueEnd)
+        let value = line.extracting(valueStart ..< valueEnd)
             .withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
         guard let field = HTTPField(name: fieldName, value: value) else { throw .invalidFieldValue }
         return field

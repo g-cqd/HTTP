@@ -13,7 +13,6 @@ internal import CCRC32
 
 /// The CRC-32 checksum used by gzip (RFC 1952 §8).
 public enum CRC32 {
-
     /// A CRC-32 implementation.
     ///
     /// Every backend produces the identical checksum (RFC 1952 §8) — they differ only in speed, and
@@ -57,21 +56,22 @@ public enum CRC32 {
     ) -> UInt32 {
         guard let base = buffer.baseAddress, !buffer.isEmpty else { return 0 }  // CRC-32 of "" is 0
         switch backend {
-        case .fastest: return ccrc32(base, buffer.count)
-        case .sliceBy1: return ccrc32_slice1(base, buffer.count)
-        case .sliceBy8: return ccrc32_slice8(base, buffer.count)
-        case .zlib: return ccrc32_zlib(base, buffer.count)
-        case .arm: return ccrc32_arm(base, buffer.count)
-        case .x86: return ccrc32_x86(base, buffer.count)
+            case .fastest: return ccrc32(base, buffer.count)
+            case .sliceBy1: return ccrc32_slice1(base, buffer.count)
+            case .sliceBy8: return ccrc32_slice8(base, buffer.count)
+            case .zlib: return ccrc32_zlib(base, buffer.count)
+            case .arm: return ccrc32_arm(base, buffer.count)
+            case .x86: return ccrc32_x86(base, buffer.count)
         }
     }
 
     /// The per-octet table for the non-contiguous fallback (reflected polynomial `0xEDB88320`).
-    private static let referenceTable: [UInt32] = (0..<256).map { index in
-        var crc = UInt32(index)
-        for _ in 0..<8 {
-            crc = (crc & 1) != 0 ? (0xEDB8_8320 ^ (crc >> 1)) : (crc >> 1)
+    private static let referenceTable: [UInt32] = (0 ..< 256)
+        .map { index in
+            var crc = UInt32(index)
+            for _ in 0 ..< 8 {
+                crc = (crc & 1) != 0 ? (0xEDB8_8320 ^ (crc >> 1)) : (crc >> 1)
+            }
+            return crc
         }
-        return crc
-    }
 }

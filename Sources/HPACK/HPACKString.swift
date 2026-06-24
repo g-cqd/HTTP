@@ -12,7 +12,6 @@ public import HTTPCore
 
 /// The RFC 7541 §5.2 string-literal codec.
 public enum HPACKString {
-
     private static let huffmanFlag: UInt8 = 0x80
 
     /// Encodes `bytes` as a string literal, using the Huffman form only when it is shorter (§5.2).
@@ -29,7 +28,8 @@ public enum HPACKString {
         if huffmanLength < bytes.count {
             HPACKInteger.encode(huffmanLength, prefixBits: 7, firstByte: huffmanFlag, into: &output)
             Huffman.encode(bytes, into: &output)
-        } else {
+        }
+        else {
             HPACKInteger.encode(bytes.count, prefixBits: 7, firstByte: 0, into: &output)
             output.append(contentsOf: bytes)
         }
@@ -46,7 +46,8 @@ public enum HPACKString {
         let (huffmanCoded, range) = try parseHeader(&reader, maxEncodedLength: maxEncodedLength)
         let payload = reader.slice(in: range)
         if huffmanCoded {
-            do { return try Huffman.decode(payload) } catch { throw .invalidHuffman }
+            do { return try Huffman.decode(payload) }
+            catch { throw .invalidHuffman }
         }
         return payload.withUnsafeBytes { Array($0) }
     }
@@ -62,7 +63,8 @@ public enum HPACKString {
         let (huffmanCoded, range) = try parseHeader(&reader, maxEncodedLength: maxEncodedLength)
         let payload = reader.slice(in: range)
         if huffmanCoded {
-            do { return try Huffman.decodeString(payload) } catch { throw .invalidHuffman }
+            do { return try Huffman.decodeString(payload) }
+            catch { throw .invalidHuffman }
         }
         return payload.withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
     }
@@ -81,6 +83,6 @@ public enum HPACKString {
         guard reader.remaining >= length else { throw .truncatedString }
         let start = reader.position
         reader.advance(by: length)
-        return (huffmanCoded, start..<(start + length))
+        return (huffmanCoded, start ..< (start + length))
     }
 }

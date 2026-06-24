@@ -16,12 +16,11 @@ import Testing
 @testable import HTTP2
 
 extension H2Wire {
-
     // MARK: Frame inspection
 
     /// Every complete frame in `bytes` (stops at the first incomplete/invalid tail).
     static func frames(in bytes: [UInt8]) -> [HTTP2FrameDecoder.Frame] {
-        var out = [HTTP2FrameDecoder.Frame]()
+        var out: [HTTP2FrameDecoder.Frame] = []
         bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
             let decoder = HTTP2FrameDecoder()
@@ -49,8 +48,8 @@ extension H2Wire {
     ) -> (lastStreamID: HTTP2StreamID, code: HTTP2ErrorCode)? {
         for frame in frames(in: bytes) where frame.header.type == .goAway {
             guard frame.payload.count >= 8 else { continue }
-            let last = u32(Array(frame.payload[0..<4]))
-            let code = u32(Array(frame.payload[4..<8]))
+            let last = u32(Array(frame.payload[0 ..< 4]))
+            let code = u32(Array(frame.payload[4 ..< 8]))
             return (HTTP2StreamID(rawValue: last), HTTP2ErrorCode(code: code))
         }
         return nil
@@ -79,7 +78,7 @@ extension H2Wire {
 
     /// The concatenated DATA payload written, and whether any frame carried END_STREAM (§6.1).
     static func dataPayload(in bytes: [UInt8]) -> (bytes: [UInt8], endStream: Bool) {
-        var data = [UInt8]()
+        var data: [UInt8] = []
         var endStream = false
         for frame in frames(in: bytes) where frame.header.type == .data {
             data += frame.payload
@@ -90,7 +89,7 @@ extension H2Wire {
 
     /// The `:status` of the first response HEADERS block written, if any (§8.3.2).
     static func responseStatus(in bytes: [UInt8]) -> String? {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4096)
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
         for frame in frames(in: bytes) where frame.header.type == .headers {
             guard
                 let fragment = try? HTTP2HeadersFrame.fieldBlockFragment(
@@ -128,7 +127,8 @@ extension H2Wire {
             #expect(
                 !containsGoAway(in: out), "frame was rejected with GOAWAY",
                 sourceLocation: sourceLocation)
-        } catch {
+        }
+        catch {
             Issue.record(
                 "expected the frame to be accepted, but a connection error \(error.code) was thrown",
                 sourceLocation: sourceLocation)
@@ -150,7 +150,8 @@ extension H2Wire {
             }
             #expect(request != nil, "expected a request event", sourceLocation: sourceLocation)
             return request
-        } catch {
+        }
+        catch {
             Issue.record(
                 "expected a request, but a connection error \(error.code) was thrown",
                 sourceLocation: sourceLocation)
@@ -171,7 +172,8 @@ extension H2Wire {
             Issue.record(
                 "expected connection error \(code), but receive did not throw",
                 sourceLocation: sourceLocation)
-        } catch {
+        }
+        catch {
             #expect(
                 error.isConnectionError, "expected a connection-scoped error, got a stream error",
                 sourceLocation: sourceLocation)
@@ -196,7 +198,8 @@ extension H2Wire {
     ) {
         do {
             _ = try connection.receive(bytes)
-        } catch {
+        }
+        catch {
             Issue.record(
                 "expected a stream error on \(streamID), but a connection error \(error.code) was thrown",
                 sourceLocation: sourceLocation)

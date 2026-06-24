@@ -12,7 +12,6 @@ public import HTTPCore
 
 /// Decodes the HTTP/1.1 chunked transfer-coding in a single pass (RFC 9112 §7.1).
 public enum ChunkedDecoder {
-
     /// Decodes the chunked body at `reader` (size CRLF data CRLF … last-chunk trailers CRLF), advancing
     /// past it, and returns the assembled body — or throws an ``HTTP1ParseError``.
     public static func decode(
@@ -20,7 +19,7 @@ public enum ChunkedDecoder {
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> [UInt8] {
         var state = ChunkedBodyDecoder.State()
-        var body = [UInt8]()
+        var body: [UInt8] = []
         let complete = try ChunkedBodyDecoder.advance(
             &reader, state: &state, into: &body, limits: limits)
         guard complete else { throw .incompleteBody }

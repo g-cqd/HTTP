@@ -13,7 +13,6 @@ public import HTTPCore
 
 /// A stateful HPACK encoder (RFC 7541 §6); its dynamic table mirrors the peer decoder's.
 public struct HPACKEncoder {
-
     /// The dynamic table, evolving in lock-step with the decoder across header blocks.
     public private(set) var dynamicTable: HPACKDynamicTable
 
@@ -24,7 +23,7 @@ public struct HPACKEncoder {
 
     /// Encodes `fields` into a single HPACK header block (RFC 7541 §6).
     public mutating func encode(_ fields: [HPACKField]) -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         for field in fields {
             encode(field, into: &output)
         }
@@ -40,7 +39,8 @@ public struct HPACKEncoder {
         // §6.2.1 — literal with incremental indexing, reusing a name reference when one exists.
         if let nameIndex = nameIndex(of: field.name) {
             HPACKInteger.encode(nameIndex, prefixBits: 6, firstByte: 0x40, into: &output)
-        } else {
+        }
+        else {
             HPACKInteger.encode(0, prefixBits: 6, firstByte: 0x40, into: &output)
             HPACKString.encode(field.name.utf8, into: &output)
         }

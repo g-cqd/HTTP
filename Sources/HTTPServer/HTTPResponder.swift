@@ -10,7 +10,6 @@ public import HTTPCore
 
 /// A response to send back: the status/header message (RFC 9110 §3) and its body bytes.
 public struct ServerResponse: Sendable, Equatable {
-
     /// The response head (status + header fields).
     public var head: HTTPResponse
 
@@ -28,14 +27,12 @@ public struct ServerResponse: Sendable, Equatable {
 ///
 /// The unit of application logic the server runs; the routing DSL will conform to it later.
 public protocol HTTPResponder: Sendable {
-
     /// Responds to `request` (with its decoded `body`).
     func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse
 }
 
 /// An ``HTTPResponder`` backed by a closure.
 public struct ClosureResponder: HTTPResponder {
-
     private let handler: @Sendable (HTTPRequest, [UInt8]) async -> ServerResponse
 
     /// Creates a responder from a request-handling closure.

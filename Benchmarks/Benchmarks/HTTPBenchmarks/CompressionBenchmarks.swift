@@ -13,10 +13,10 @@ import HTTPCore
 
 func registerCompressionBenchmarks() {
     let sizes: [(label: String, body: [UInt8])] = [
-        ("1KiB", crcBody1KiB), ("16KiB", crcBody16KiB), ("256KiB", crcBody256KiB),
+        ("1KiB", crcBody1KiB), ("16KiB", crcBody16KiB), ("256KiB", crcBody256KiB)
     ]
     let backends: [(label: String, backend: CRC32.Backend)] = [
-        ("slice1", .sliceBy1), ("slice8", .sliceBy8), ("zlib", .zlib), ("arm", .arm),
+        ("slice1", .sliceBy1), ("slice8", .sliceBy8), ("zlib", .zlib), ("arm", .arm)
     ]
     for size in sizes {
         for backend in backends {

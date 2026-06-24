@@ -12,7 +12,6 @@ import Testing
 
 @Suite("RFC 9112 §7.1 — chunked transfer-coding")
 struct ChunkedDecoderTests {
-
     private func decode(_ string: String, limits: HTTPLimits = .default) throws -> [UInt8] {
         let bytes = Array(string.utf8)
         return try bytes.withUnsafeBytes { raw -> [UInt8] in

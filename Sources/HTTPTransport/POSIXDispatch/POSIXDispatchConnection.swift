@@ -24,7 +24,6 @@ internal import Synchronization
 /// The `Atomic` close flag and the `Mutex`-guarded waiter make the type genuinely `Sendable`. Task
 /// cancellation closes the descriptor, which unblocks (and fails) any parked read/write.
 public final class POSIXDispatchConnection: TransportConnection {
-
     /// The connection's stable identifier.
     public let id: TransportConnectionID
 
@@ -80,9 +79,11 @@ public final class POSIXDispatchConnection: TransportConnection {
                             let bytes = try Self.readAvailable(fd, maxLength)
                             clearWaiter(source)
                             once.resume(returning: bytes)
-                        } catch is WouldBlock {
+                        }
+                        catch is WouldBlock {
                             // Spurious readiness — leave the source armed; it fires again.
-                        } catch {
+                        }
+                        catch {
                             clearWaiter(source)
                             once.resume(throwing: error)
                         }
@@ -154,24 +155,24 @@ public final class POSIXDispatchConnection: TransportConnection {
             return .done
         }
         switch outcome {
-        case .done:
-            clearWaiter(nil)
-            once.resume(returning: ())
-        case .failed(let code):
-            clearWaiter(nil)
-            once.resume(throwing: TransportError.ioFailed("write errno \(code)"))
-        case .wouldBlock(let next):
-            let source = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: queue)
-            waiter.withLock {
-                $0 = Waiter(source: source) {
-                    once.resume(throwing: TransportError.ioFailed("connection closed"))
+            case .done:
+                clearWaiter(nil)
+                once.resume(returning: ())
+            case .failed(let code):
+                clearWaiter(nil)
+                once.resume(throwing: TransportError.ioFailed("write errno \(code)"))
+            case .wouldBlock(let next):
+                let source = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: queue)
+                waiter.withLock {
+                    $0 = Waiter(source: source) {
+                        once.resume(throwing: TransportError.ioFailed("connection closed"))
+                    }
                 }
-            }
-            source.setEventHandler { [self] in
-                source.cancel()  // one-shot; writeFrom re-arms if it blocks again
-                writeFrom(next, fd: fd, bytes: bytes, once: once)
-            }
-            source.resume()
+                source.setEventHandler { [self] in
+                    source.cancel()  // one-shot; writeFrom re-arms if it blocks again
+                    writeFrom(next, fd: fd, bytes: bytes, once: once)
+                }
+                source.resume()
         }
     }
 

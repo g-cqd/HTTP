@@ -7,7 +7,6 @@
 
 /// Selects which transport implementation to wire (chosen at composition time).
 public enum TransportBackbone: String, Sendable, CaseIterable {
-
     /// Apple Network.framework (`NWListener` / `NWConnection`) — TLS, ALPN, and QUIC.
     case networkFramework
 
@@ -26,7 +25,6 @@ public enum TransportBackbone: String, Sendable, CaseIterable {
 
 /// Configuration for binding a ``ServerTransport``.
 public struct TransportConfiguration: Sendable {
-
     /// The host / interface to bind (default loopback).
     public var host: String
 
@@ -71,7 +69,6 @@ public struct TransportConfiguration: Sendable {
 /// turns this into a `sec_identity_t` and `NWProtocolTLS.Options`. Advertising `"h2"` is what lets a
 /// client negotiate HTTP/2 over TLS (RFC 9113 §3.3); cleartext backbones ignore this.
 public struct TransportTLS: Sendable {
-
     /// A PKCS#12 (RFC 7292) blob holding the server certificate chain and its private key.
     public var pkcs12: [UInt8]
 
@@ -122,7 +119,6 @@ public enum TLSVersion: Sendable, Equatable {
 
 /// Errors raised by a transport backbone.
 public enum TransportError: Error, Sendable, Equatable {
-
     /// This backbone is not yet implemented.
     case notImplemented(TransportBackbone)
 

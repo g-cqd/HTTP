@@ -11,7 +11,6 @@
 
 /// One QUIC connection: a multiplexed set of streams to a single peer (RFC 9000).
 public protocol QUICConnection: Sendable {
-
     /// The peer's network address (for logging and per-client limits).
     var peer: TransportAddress { get }
 

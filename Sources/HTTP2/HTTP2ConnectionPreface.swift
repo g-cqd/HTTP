@@ -11,13 +11,11 @@ public import HTTPCore
 
 /// The RFC 9113 §3.4 client connection preface (the 24-octet magic that opens every connection).
 public enum HTTP2ConnectionPreface {
-
     /// The fixed 24-octet client preface (RFC 9113 §3.4).
     public static let client = Array("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".utf8)
 
     /// The outcome of matching the preface against the bytes received so far.
     public enum MatchResult: Sendable, Equatable {
-
         /// The full 24-octet preface was present and consumed.
         case matched
 

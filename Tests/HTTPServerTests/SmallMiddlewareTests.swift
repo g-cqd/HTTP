@@ -12,12 +12,11 @@ import Testing
 
 @Suite("Middleware — Date, security headers, body limit")
 struct SmallMiddlewareTests {
-
     private let ok = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
 
     @Test("DateHeaderMiddleware stamps the injected time as an IMF-fixdate")
     func dateHeader() async {
-        let response = await ok.wrapped(by: DateHeaderMiddleware(now: { 784_111_777 }))
+        let response = await ok.wrapped(by: DateHeaderMiddleware { 784_111_777 })
             .respond(to: request(), body: [])
         #expect(response.head.headerFields[.date] == "Sun, 06 Nov 1994 08:49:37 GMT")
     }

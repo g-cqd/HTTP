@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §5.3 — HTTPFields")
 struct HTTPFieldsTests {
-
     private func field(_ name: HTTPFieldName, _ value: String) -> HTTPField {
         guard let field = HTTPField(name: name, value: value) else {
             Issue.record("test fixture produced an invalid field")

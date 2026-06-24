@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 7541 §5.1 — prefix integers")
 struct HPACKIntegerTests {
-
     private func decode(_ bytes: [UInt8], prefixBits: Int) throws -> Int {
         try bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
@@ -22,7 +21,7 @@ struct HPACKIntegerTests {
     }
 
     private func encode(_ value: Int, prefixBits: Int) -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         HPACKInteger.encode(value, prefixBits: prefixBits, into: &output)
         return output
     }
@@ -36,7 +35,7 @@ struct HPACKIntegerTests {
 
     @Test("C.1.2 — encodes 1337 in a 5-bit prefix with two continuation octets")
     func encodesExampleC12() {
-        #expect(encode(1337, prefixBits: 5) == [0x1F, 0x9A, 0x0A])
+        #expect(encode(1_337, prefixBits: 5) == [0x1F, 0x9A, 0x0A])
     }
 
     @Test("C.1.3 — encodes 42 starting at an octet boundary (8-bit prefix)")
@@ -47,7 +46,7 @@ struct HPACKIntegerTests {
     @Test("C.1 — decodes each worked example back to its value")
     func decodesExamples() throws {
         #expect(try decode([0x0A], prefixBits: 5) == 10)
-        #expect(try decode([0x1F, 0x9A, 0x0A], prefixBits: 5) == 1337)
+        #expect(try decode([0x1F, 0x9A, 0x0A], prefixBits: 5) == 1_337)
         #expect(try decode([0x2A], prefixBits: 8) == 42)
     }
 
@@ -56,9 +55,9 @@ struct HPACKIntegerTests {
     @Test(
         "round-trips across prefixes and boundary values",
         arguments: [
-            (0, 5), (1, 5), (30, 5), (31, 5), (32, 5), (1337, 5),
+            (0, 5), (1, 5), (30, 5), (31, 5), (32, 5), (1_337, 5),
             (0, 1), (1, 1), (127, 7), (128, 7), (254, 8), (255, 8), (256, 8),
-            (HPACKInteger.maxValue, 5), (HPACKInteger.maxValue, 8),
+            (HPACKInteger.maxValue, 5), (HPACKInteger.maxValue, 8)
         ])
     func roundTrips(value: Int, prefixBits: Int) throws {
         #expect(try decode(encode(value, prefixBits: prefixBits), prefixBits: prefixBits) == value)

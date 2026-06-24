@@ -16,7 +16,6 @@ import HTTPCore
 
 /// Builders that assemble RFC 9113 wire frames for the h2spec conformance suites.
 enum H2Wire {
-
     // MARK: Handshake
 
     /// The client connection preface (RFC 9113 §3.4).
@@ -47,11 +46,12 @@ enum H2Wire {
         streamID: UInt32 = 0,
         payload: [UInt8] = []
     ) -> [UInt8] {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         HTTP2FrameHeader(
             payloadLength: payload.count, type: type, flags: flags,
             streamID: HTTP2StreamID(streamID)
-        ).encode(into: &out)
+        )
+        .encode(into: &out)
         out += payload
         return out
     }
@@ -63,7 +63,7 @@ enum H2Wire {
         _ params: [(id: UInt16, value: UInt32)] = [],
         ack: Bool = false
     ) -> [UInt8] {
-        var payload = [UInt8]()
+        var payload: [UInt8] = []
         for parameter in params {
             payload += be16(parameter.id)
             payload += be32(parameter.value)
@@ -75,7 +75,7 @@ enum H2Wire {
 
     /// HPACK-encodes `fields` into a field block fragment (a fresh encoder per call).
     static func headerBlock(_ fields: [HPACKField]) -> [UInt8] {
-        var encoder = HPACKEncoder(maxDynamicTableSize: 4096)
+        var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
         return encoder.encode(fields)
     }
 
@@ -94,7 +94,7 @@ enum H2Wire {
         var flags: HTTP2FrameFlags = []
         if endStream { flags.insert(.endStream) }
         if endHeaders { flags.insert(.endHeaders) }
-        var payload = [UInt8]()
+        var payload: [UInt8] = []
         if let padding {
             flags.insert(.padded)
             payload.append(UInt8(padding))
@@ -121,7 +121,7 @@ enum H2Wire {
     ) -> [HPACKField] {
         var fields = [
             HPACKField(name: ":method", value: method),
-            HPACKField(name: ":scheme", value: scheme),
+            HPACKField(name: ":scheme", value: scheme)
         ]
         if let authority { fields.append(HPACKField(name: ":authority", value: authority)) }
         fields.append(HPACKField(name: ":path", value: path))
@@ -225,7 +225,7 @@ enum H2Wire {
     private static func be32(_ value: UInt32) -> [UInt8] {
         [
             UInt8((value >> 24) & 0xFF), UInt8((value >> 16) & 0xFF),
-            UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF)
         ]
     }
 }

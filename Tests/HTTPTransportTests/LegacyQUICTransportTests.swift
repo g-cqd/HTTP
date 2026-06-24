@@ -19,7 +19,6 @@ import Testing
 
 @Suite("Legacy QUIC transport — loopback")
 struct LegacyQUICTransportTests {
-
     @Test(
         "a QUIC stream round-trips through the abstraction over loopback", .timeLimit(.minutes(1)))
     func loopbackEcho() async throws {
@@ -87,9 +86,10 @@ struct LegacyQUICTransportTests {
             let resumed = OnceLatch()
             connection.stateUpdateHandler = { state in
                 switch state {
-                case .ready where resumed.take(): continuation.resume()
-                case .failed(let error) where resumed.take(): continuation.resume(throwing: error)
-                default: break
+                    case .ready where resumed.take(): continuation.resume()
+                    case .failed(let error) where resumed.take():
+                        continuation.resume(throwing: error)
+                    default: break
                 }
             }
             connection.start(queue: queue)
@@ -104,7 +104,8 @@ struct LegacyQUICTransportTests {
                 completion: .contentProcessed { error in
                     if let error {
                         continuation.resume(throwing: error)
-                    } else {
+                    }
+                    else {
                         continuation.resume()
                     }
                 })
@@ -117,7 +118,8 @@ struct LegacyQUICTransportTests {
                 data, _, _, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else {
+                }
+                else {
                     continuation.resume(returning: [UInt8](data ?? Data()))
                 }
             }

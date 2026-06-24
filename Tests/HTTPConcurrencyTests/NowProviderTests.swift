@@ -11,12 +11,11 @@ import Testing
 
 @Suite("NowProvider")
 struct NowProviderTests {
-
     static let cases: [(Duration, Int64)] = [
         (.seconds(1), 1_000_000_000),
         (.milliseconds(500), 500_000_000),
         (.zero, 0),
-        (.nanoseconds(7), 7),
+        (.nanoseconds(7), 7)
     ]
 
     @Test(arguments: cases)

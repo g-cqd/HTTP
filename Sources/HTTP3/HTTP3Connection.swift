@@ -21,7 +21,6 @@ internal import QPACK
 /// A sans-I/O HTTP/3 server connection (RFC 9114): feed it per-stream octets, drain actions, collect
 /// events.
 public struct HTTP3Connection {
-
     /// A high-level event surfaced to the connection driver.
     public enum Event: Sendable, Equatable {
         /// A complete request arrived on a request stream (HEADERS and any DATA received, RFC 9114 §4).
@@ -164,7 +163,7 @@ public struct HTTP3Connection {
 
     /// Drains the queued outbound actions for the driver to perform.
     public mutating func outbound() -> [Action] {
-        var drained = [Action]()
+        var drained: [Action] = []
         swap(&drained, &actions)
         return drained
     }
@@ -179,10 +178,11 @@ public struct HTTP3Connection {
         _ bytes: [UInt8],
         fin: Bool
     ) throws(HTTP3Error) -> [Event] {
-        var events = [Event]()
+        var events: [Event] = []
         do {
             try process(streamID, bytes, fin: fin, into: &events)
-        } catch {
+        }
+        catch {
             guard error.isConnectionError else {
                 if let streamID = error.streamID {
                     actions.append(.resetStream(streamID: streamID, errorCode: error.code))
@@ -201,7 +201,7 @@ public struct HTTP3Connection {
     ///
     /// Drops the stream and charges the Rapid Reset analog: too many resets of active streams trip
     /// H3_EXCESSIVE_LOAD, queuing CONNECTION_CLOSE for the driver (RFC 9114 §8.1).
-    public mutating func resetStream(_ streamID: QUICStreamID, errorCode: UInt64) -> [Event] {
+    public mutating func resetStream(_ streamID: QUICStreamID, errorCode _: UInt64) -> [Event] {
         if let state = streams.removeValue(forKey: streamID), state.kind == .request {
             chargeStreamReset()
         }
@@ -250,12 +250,12 @@ public struct HTTP3Connection {
     ) throws(HTTP3Error) {
         guard let kind = streams[streamID]?.kind else { return }
         switch kind {
-        case .unclassifiedUni: try classifyUniStream(streamID, into: &events)
-        case .control: try processControlStream(streamID, into: &events)
-        case .qpackEncoder: try processQpackEncoderStream(streamID)
-        case .qpackDecoder: try processQpackDecoderStream(streamID)
-        case .reserved: streams[streamID]?.buffer.removeAll(keepingCapacity: false)  // §6.2 discard
-        case .request: try processRequestStream(streamID, into: &events)
+            case .unclassifiedUni: try classifyUniStream(streamID, into: &events)
+            case .control: try processControlStream(streamID, into: &events)
+            case .qpackEncoder: try processQpackEncoderStream(streamID)
+            case .qpackDecoder: try processQpackDecoderStream(streamID)
+            case .reserved: streams[streamID]?.buffer.removeAll(keepingCapacity: false)  // §6.2 discard
+            case .request: try processRequestStream(streamID, into: &events)
         }
     }
 }

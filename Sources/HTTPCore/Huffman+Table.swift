@@ -8,7 +8,6 @@
 //
 
 extension Huffman {
-
     /// RFC 7541 Appendix B — the Huffman code for each symbol `0...256` (256 is `EOS`),
     /// right-aligned to its bit length.
     ///
@@ -51,7 +50,7 @@ extension Huffman {
         0x007ffff3, 0x003fffea, 0x003fffeb, 0x01ffffee, 0x01ffffef, 0x00fffff4, 0x00fffff5,
         0x03ffffea, 0x007ffff4, 0x03ffffeb, 0x07ffffe6, 0x03ffffec, 0x03ffffed, 0x07ffffe7,
         0x07ffffe8, 0x07ffffe9, 0x07ffffea, 0x07ffffeb, 0x0ffffffe, 0x07ffffec, 0x07ffffed,
-        0x07ffffee, 0x07ffffef, 0x07fffff0, 0x03ffffee, 0x3fffffff,
+        0x07ffffee, 0x07ffffef, 0x07fffff0, 0x03ffffee, 0x3fffffff
     ]
 
     /// RFC 7541 Appendix B — the bit length of each symbol's code (`5...30`).
@@ -69,6 +68,6 @@ extension Huffman {
         22, 23, 22, 22, 23, 26, 26, 20, 19, 22, 23, 22, 25, 26, 26, 26, 27, 27, 26,
         24, 25, 19, 21, 26, 27, 27, 26, 27, 24, 21, 21, 26, 26, 28, 27, 27, 27, 20,
         24, 20, 21, 22, 21, 21, 23, 22, 22, 25, 25, 24, 24, 26, 23, 26, 27, 26, 26,
-        27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26, 30,
+        27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26, 30
     ]
 }

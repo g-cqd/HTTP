@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 9113 §4.1 — frame header")
 struct HTTP2FrameHeaderTests {
-
     private func parse(_ bytes: [UInt8]) -> HTTP2FrameHeader? {
         bytes.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
@@ -22,7 +21,7 @@ struct HTTP2FrameHeaderTests {
     }
 
     private func encode(_ header: HTTP2FrameHeader) -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         header.encode(into: &output)
         return output
     }
@@ -70,7 +69,7 @@ struct HTTP2FrameHeaderTests {
     @Test("round-trips through encode then parse")
     func roundTrips() {
         let original = HTTP2FrameHeader(
-            payloadLength: 1337, type: .data, flags: [.endStream, .padded],
+            payloadLength: 1_337, type: .data, flags: [.endStream, .padded],
             streamID: HTTP2StreamID(42))
         #expect(parse(encode(original)) == original)
         #expect(encode(original).count == HTTP2FrameHeader.encodedLength)

@@ -8,7 +8,6 @@
 
 /// A WebSocket framing or connection violation (RFC 6455 §5 / §6), with its Close code (§7.4.1).
 public enum WebSocketError: Error, Sendable, Equatable {
-
     /// A reserved bit (RSV1–RSV3) was set without a negotiated extension (RFC 6455 §5.2).
     case reservedBitsSet
 
@@ -54,9 +53,9 @@ public enum WebSocketError: Error, Sendable, Equatable {
     /// The Close status code to report for this violation before closing (RFC 6455 §7.4.1).
     public var closeCode: WebSocketCloseCode {
         switch self {
-        case .payloadTooLong, .messageTooLarge: .messageTooBig  // 1009
-        case .invalidTextEncoding: .invalidPayloadData  // 1007
-        default: .protocolError  // 1002
+            case .payloadTooLong, .messageTooLarge: .messageTooBig  // 1009
+            case .invalidTextEncoding: .invalidPayloadData  // 1007
+            default: .protocolError  // 1002
         }
     }
 }

@@ -17,10 +17,9 @@ import Testing
 
 @Suite("Transport backbone conformance — every socket backbone, the same battery")
 struct BackboneConformanceTests {
-
     /// Every real socket backbone (the fake binds no port; the QUIC backbones are a separate protocol).
     static let socketBackbones: [TransportBackbone] = [
-        .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem,
+        .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem
     ]
 
     private func makeTransport(_ backbone: TransportBackbone) -> any ServerTransport {

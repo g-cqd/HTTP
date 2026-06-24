@@ -8,7 +8,6 @@
 
 /// A WebSocket frame opcode (RFC 6455 §5.2).
 public struct WebSocketOpcode: Sendable, Equatable, Hashable {
-
     /// The 4-bit opcode value.
     public let rawValue: UInt8
 
@@ -18,22 +17,22 @@ public struct WebSocketOpcode: Sendable, Equatable, Hashable {
     }
 
     /// A continuation of a fragmented message (RFC 6455 §5.4).
-    public static let continuation = WebSocketOpcode(rawValue: 0x0)
+    public static let continuation = Self(rawValue: 0x0)
 
     /// A text (UTF-8) data frame (RFC 6455 §5.6).
-    public static let text = WebSocketOpcode(rawValue: 0x1)
+    public static let text = Self(rawValue: 0x1)
 
     /// A binary data frame (RFC 6455 §5.6).
-    public static let binary = WebSocketOpcode(rawValue: 0x2)
+    public static let binary = Self(rawValue: 0x2)
 
     /// A Close control frame (RFC 6455 §5.5.1).
-    public static let close = WebSocketOpcode(rawValue: 0x8)
+    public static let close = Self(rawValue: 0x8)
 
     /// A Ping control frame (RFC 6455 §5.5.2).
-    public static let ping = WebSocketOpcode(rawValue: 0x9)
+    public static let ping = Self(rawValue: 0x9)
 
     /// A Pong control frame (RFC 6455 §5.5.3).
-    public static let pong = WebSocketOpcode(rawValue: 0xA)
+    public static let pong = Self(rawValue: 0xA)
 
     /// Whether this is a control frame: opcodes `0x8`–`0xF` (RFC 6455 §5.5).
     ///
@@ -46,8 +45,8 @@ public struct WebSocketOpcode: Sendable, Equatable, Hashable {
     /// Whether this opcode is one the protocol defines (RFC 6455 §11.8); the rest are reserved.
     public var isDefined: Bool {
         switch rawValue {
-        case 0x0, 0x1, 0x2, 0x8, 0x9, 0xA: true
-        default: false
+            case 0x0, 0x1, 0x2, 0x8, 0x9, 0xA: true
+            default: false
         }
     }
 }

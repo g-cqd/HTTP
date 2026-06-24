@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 6455 §4 — opening handshake")
 struct WebSocketHandshakeTests {
-
     @Test("derives Sec-WebSocket-Accept from the RFC 6455 §1.3 example key")
     func acceptMatchesRFCVector() {
         // RFC 6455 §1.3: key "dGhlIHNhbXBsZSBub25jZQ==" → "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=".

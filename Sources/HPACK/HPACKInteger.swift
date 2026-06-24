@@ -12,7 +12,6 @@ public import HTTPCore
 
 /// The RFC 7541 §5.1 prefix-integer codec.
 public enum HPACKInteger {
-
     /// The largest integer the decoder accepts before failing closed.
     ///
     /// HPACK integers index tables or size strings, so an unbounded value is a resource-exhaustion

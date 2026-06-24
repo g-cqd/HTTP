@@ -16,7 +16,6 @@ import Testing
 
 @Suite("RFC 9204 §4.3/§4.4 — QPACK instruction streams")
 struct QPACKInstructionsTests {
-
     private func parseEncoder(
         _ bytes: [UInt8], maxCapacity: Int = 0
     ) -> (error: QPACKError?, consumed: Int) {
@@ -25,7 +24,8 @@ struct QPACKInstructionsTests {
             do {
                 try QPACKInstructions.parseEncoderStream(&reader, maxCapacity: maxCapacity)
                 return (nil, reader.position)
-            } catch {
+            }
+            catch {
                 return (error as? QPACKError, reader.position)
             }
         }
@@ -37,7 +37,8 @@ struct QPACKInstructionsTests {
             do {
                 try QPACKInstructions.parseDecoderStream(&reader)
                 return (nil, reader.position)
-            } catch {
+            }
+            catch {
                 return (error as? QPACKError, reader.position)
             }
         }
@@ -49,7 +50,7 @@ struct QPACKInstructionsTests {
             (label: "Set Dynamic Table Capacity above the limit (5)", bytes: [0x25] as [UInt8]),
             (label: "insert with name reference (0x80)", bytes: [0x80]),
             (label: "insert with literal name (0x40)", bytes: [0x40]),
-            (label: "duplicate (0x00)", bytes: [0x00]),
+            (label: "duplicate (0x00)", bytes: [0x00])
         ] as [(label: String, bytes: [UInt8])])
     func encoderStreamViolations(_ testCase: (label: String, bytes: [UInt8])) {
         #expect(parseEncoder(testCase.bytes).error?.code == .encoderStreamError)
@@ -82,7 +83,7 @@ struct QPACKInstructionsTests {
         arguments: [
             (label: "Section Acknowledgment (0x81)", bytes: [0x81] as [UInt8]),
             (label: "Insert Count Increment of 0 (0x00)", bytes: [0x00]),
-            (label: "Insert Count Increment beyond what was sent (5)", bytes: [0x05]),
+            (label: "Insert Count Increment beyond what was sent (5)", bytes: [0x05])
         ] as [(label: String, bytes: [UInt8])])
     func decoderStreamViolations(_ testCase: (label: String, bytes: [UInt8])) {
         #expect(parseDecoder(testCase.bytes).error?.code == .decoderStreamError)

@@ -7,7 +7,6 @@
 
 /// An in-memory ``ServerTransport`` that yields a fixed set of connections (no sockets).
 public final class FakeTransport: ServerTransport {
-
     /// The backbone identity (``TransportBackbone/fake``).
     public let backbone: TransportBackbone = .fake
 
@@ -22,7 +21,7 @@ public final class FakeTransport: ServerTransport {
     }
 
     /// Yields the seeded connections in order, then finishes the stream.
-    public func start() async throws -> AsyncStream<any TransportConnection> {
+    public func start() async -> AsyncStream<any TransportConnection> {
         let connections = self.connections
         return AsyncStream { continuation in
             for connection in connections {

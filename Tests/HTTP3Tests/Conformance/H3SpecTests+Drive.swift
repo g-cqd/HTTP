@@ -15,7 +15,6 @@ import HTTPCore
 @testable import HTTP3
 
 extension H3SpecTests {
-
     /// Runs the injection for `check` and returns the error code the engine answered with, or nil.
     func drive(_ check: H3Check) -> UInt64? {
         guard let injection = injections[check.title] else { return nil }
@@ -38,7 +37,7 @@ extension H3SpecTests {
         guard let open = expect.firstIndex(of: "(") else { return nil }
         let after = expect.index(after: open)
         guard let close = expect[after...].firstIndex(of: ")") else { return nil }
-        let inside = expect[after..<close]
+        let inside = expect[after ..< close]
         guard inside.hasPrefix("0x") else { return nil }
         return UInt64(inside.dropFirst(2), radix: 16)
     }
@@ -63,7 +62,7 @@ extension H3SpecTests {
             HeaderField(name: ":method", value: "GET"),
             HeaderField(name: ":scheme", value: "https"),
             HeaderField(name: ":authority", value: "example.com"),
-            HeaderField(name: ":path", value: "/"),
+            HeaderField(name: ":path", value: "/")
         ]
         return http3RequestInjections(request: request, base: base)
             .merging(
@@ -95,7 +94,7 @@ extension H3SpecTests {
                     HeaderField(name: ":method", value: "GET"),
                     HeaderField(name: ":method", value: "GET"),
                     HeaderField(name: ":scheme", value: "https"),
-                    HeaderField(name: ":path", value: "/"),
+                    HeaderField(name: ":path", value: "/")
                 ]
                 _ = try? connection.receive(
                     request, self.requestStream(self.fieldSection(fields)), fin: true)
@@ -103,7 +102,7 @@ extension H3SpecTests {
             "a mandatory pseudo-header field is absent": { connection in
                 let fields = [
                     HeaderField(name: ":method", value: "GET"),
-                    HeaderField(name: ":scheme", value: "https"),
+                    HeaderField(name: ":scheme", value: "https")
                 ]
                 _ = try? connection.receive(
                     request, self.requestStream(self.fieldSection(fields)), fin: true)
@@ -121,7 +120,7 @@ extension H3SpecTests {
                     HeaderField(name: ":scheme", value: "https"),
                     HeaderField(name: ":path", value: "/"),
                     HeaderField(name: "x-test", value: "1"),
-                    HeaderField(name: ":authority", value: "example.com"),
+                    HeaderField(name: ":authority", value: "example.com")
                 ]
                 _ = try? connection.receive(
                     request, self.requestStream(self.fieldSection(fields)), fin: true)
@@ -162,7 +161,7 @@ extension H3SpecTests {
             "CANCEL_PUSH received on a request stream": { connection in
                 _ = try? connection.receive(
                     request, self.frame(.cancelPush, self.varint(0)), fin: false)
-            },
+            }
         ]
     }
 
@@ -233,7 +232,7 @@ extension H3SpecTests {
             },
             "a server receives a client-initiated push stream": { connection in
                 _ = try? connection.receive(push, [0x01], fin: false)
-            },
+            }
         ]
     }
 
@@ -274,7 +273,7 @@ extension H3SpecTests {
             "a second QPACK encoder or decoder stream": { connection in
                 _ = try? connection.receive(encoder, [0x02], fin: false)
                 _ = try? connection.receive(secondUni, [0x02], fin: false)
-            },
+            }
         ]
     }
 }

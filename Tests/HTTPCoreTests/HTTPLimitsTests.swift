@@ -11,18 +11,17 @@ import Testing
 
 @Suite("HTTPLimits — failsafe defaults")
 struct HTTPLimitsTests {
-
     @Test("default limits match the documented safe values")
     func documentedDefaults() {
         let limits = HTTPLimits.default
-        #expect(limits.maxRequestLineLength == 8 * 1024)
-        #expect(limits.maxFieldSize == 16 * 1024)
-        #expect(limits.maxHeaderListSize == 64 * 1024)
+        #expect(limits.maxRequestLineLength == 8 * 1_024)
+        #expect(limits.maxFieldSize == 16 * 1_024)
+        #expect(limits.maxHeaderListSize == 64 * 1_024)
         #expect(limits.maxFieldCount == 100)
         #expect(limits.maxBodySize == 1 << 30)
         #expect(limits.maxConcurrentStreams == 100)
-        #expect(limits.maxFrameSize == 16 * 1024)
-        #expect(limits.headerTableSize == 4 * 1024)
+        #expect(limits.maxFrameSize == 16 * 1_024)
+        #expect(limits.headerTableSize == 4 * 1_024)
         #expect(limits.maxContinuationFrames == 100)
         #expect(limits.headerReadTimeout == .seconds(10))
         #expect(limits.idleTimeout == .seconds(60))
@@ -36,8 +35,8 @@ struct HTTPLimitsTests {
         limits.maxConcurrentStreams = 250
         #expect(limits.maxConcurrentStreams == 250)
 
-        let custom = HTTPLimits(maxBodySize: 4096)
-        #expect(custom.maxBodySize == 4096)
+        let custom = HTTPLimits(maxBodySize: 4_096)
+        #expect(custom.maxBodySize == 4_096)
         #expect(custom.maxConcurrentStreams == 100)
     }
 }

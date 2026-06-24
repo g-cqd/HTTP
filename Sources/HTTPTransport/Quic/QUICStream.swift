@@ -21,7 +21,6 @@ public enum QUICStreamDirection: Sendable, Equatable {
 
 /// One QUIC stream: an ordered byte stream with an explicit end-of-stream (RFC 9000 §2).
 public protocol QUICStream: Sendable {
-
     /// The QUIC stream identifier (RFC 9000 §2.1).
     var id: QUICStreamID { get }
 

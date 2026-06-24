@@ -12,7 +12,6 @@
 /// be illegal on the wire. Common methods are available as constants (e.g. ``get``); any other
 /// valid token (such as `PROPFIND`) can be created with ``init(rawValue:)``.
 public struct HTTPMethod: Sendable, Hashable, RawRepresentable {
-
     /// The method token, guaranteed to satisfy the RFC 9110 §5.6.2 `token` grammar.
     public let rawValue: String
 
@@ -30,7 +29,6 @@ public struct HTTPMethod: Sendable, Hashable, RawRepresentable {
 }
 
 extension HTTPMethod {
-
     /// `GET` (RFC 9110 §9.3.1).
     public static let get = HTTPMethod(unchecked: "GET")
     /// `HEAD` (RFC 9110 §9.3.2).
@@ -52,15 +50,14 @@ extension HTTPMethod {
 }
 
 extension HTTPMethod {
-
     /// Whether the method is "safe" — essentially read-only semantics (RFC 9110 §9.2.1).
     ///
     /// The registered safe methods are `GET`, `HEAD`, `OPTIONS`, and `TRACE`. Unknown/custom
     /// methods are treated as unsafe (the conservative default).
     public var isSafe: Bool {
         switch self {
-        case .get, .head, .options, .trace: true
-        default: false
+            case .get, .head, .options, .trace: true
+            default: false
         }
     }
 
@@ -70,8 +67,8 @@ extension HTTPMethod {
     /// custom methods are treated as non-idempotent (the conservative default).
     public var isIdempotent: Bool {
         switch self {
-        case .put, .delete: true
-        default: isSafe
+            case .put, .delete: true
+            default: isSafe
         }
     }
 }

@@ -21,7 +21,6 @@ import Testing
 /// Indices stay < 15 and string lengths < 128, so every prefix integer fits in its first octet — no
 /// continuation bytes are needed, keeping the hand-encoding auditable.
 private enum H2HPACK {
-
     /// RFC 7541 §5.2 — a string literal, raw (`H`=0) or Huffman-coded (`H`=1).
     static func string(_ value: String, huffman: Bool) -> [UInt8] {
         let bytes = Array(value.utf8)
@@ -135,13 +134,12 @@ private let hpackRepresentations: [(label: String, block: [UInt8])] = {
         (
             label: "multiple dynamic table size updates",
             block: H2HPACK.sizeUpdate(0) + H2HPACK.sizeUpdate(10) + H2HPACK.base
-        ),
+        )
     ]
 }()
 
 @Suite("h2spec generic §5 — HPACK representations accepted")
 struct H2SpecGenericHPACKTests {
-
     @Test(
         "generic 5 — the engine accepts each HPACK field representation (RFC 7541 §6)",
         arguments: hpackRepresentations)

@@ -17,7 +17,6 @@ internal import Synchronization
 /// A ``QUICConnection`` backed by a modern `NetworkConnection<QUIC>` (macOS 26+ backbone).
 @available(macOS 26, iOS 26, *)
 final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
-
     let peer: TransportAddress
     let negotiatedApplicationProtocol: String?
 
@@ -54,13 +53,13 @@ final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
     func openStream(direction: QUICStreamDirection) async throws -> any QUICStream {
         let networkStream = try await connection.openStream(
             directionality: direction == .unidirectional ? .unidirectional : .bidirectional)
-        return ModernQUICStream(stream: networkStream, onClose: {})
+        return ModernQUICStream(stream: networkStream) {}
     }
 
-    func close(errorCode: UInt64) async {
+    func close(errorCode _: UInt64) async {
         // The modern API has no per-connection cancel; cancelling the inbound task unwinds
         // `inboundStreams` (structured concurrency), which tears the QUIC connection down.
-        inboundTask.withLock { $0 }?.cancel()
+        inboundTask.withLock(\.self)?.cancel()
     }
 
     /// Drives `inboundStreams`, parking each handler on a continuation the wrapped stream resumes when
@@ -69,7 +68,7 @@ final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
         try? await connection.inboundStreams { networkStream in
             await withCheckedContinuation { (resume: CheckedContinuation<Void, Never>) in
                 self.continuation.yield(
-                    ModernQUICStream(stream: networkStream, onClose: { resume.resume() }))
+                    ModernQUICStream(stream: networkStream) { resume.resume() })
             }
         }
         continuation.finish()

@@ -17,7 +17,6 @@ public import HTTPCore
 
 /// A resumable decoder for the HTTP/1.1 chunked transfer-coding (RFC 9112 §7.1).
 public enum ChunkedBodyDecoder {
-
     /// The carried position of a chunked decode between feeds (a value type; the decoded body is held
     /// by the caller and passed `inout`, so it grows in place without a copy-on-write copy per feed).
     public struct State: Equatable, Sendable {
@@ -74,20 +73,21 @@ public enum ChunkedBodyDecoder {
         _ reader: inout ByteReader, state: inout State, into body: inout [UInt8], limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
         switch state.phase {
-        case .complete:
-            return true
-        case .size:
-            return try stepSize(&reader, state: &state, bodyCount: body.count, limits: limits)
-        case .data(let remaining):
-            let took = copyData(&reader, remaining: remaining, into: &body)
-            state.phase = took < remaining ? .data(remaining: remaining - took) : .dataTerminator
-            return took == remaining
-        case .dataTerminator:
-            guard try consumeCRLF(&reader) else { return false }
-            state.phase = .size
-            return true
-        case .trailers:
-            return try stepTrailers(&reader, state: &state, limits: limits)
+            case .complete:
+                return true
+            case .size:
+                return try stepSize(&reader, state: &state, bodyCount: body.count, limits: limits)
+            case .data(let remaining):
+                let took = copyData(&reader, remaining: remaining, into: &body)
+                state.phase =
+                    took < remaining ? .data(remaining: remaining - took) : .dataTerminator
+                return took == remaining
+            case .dataTerminator:
+                guard try consumeCRLF(&reader) else { return false }
+                state.phase = .size
+                return true
+            case .trailers:
+                return try stepTrailers(&reader, state: &state, limits: limits)
         }
     }
 
@@ -95,12 +95,12 @@ public enum ChunkedBodyDecoder {
         _ reader: inout ByteReader, state: inout State, bodyCount: Int, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
         switch try readLine(&reader) {
-        case .needMore:
-            return false
-        case .line(let range):
-            try beginChunk(
-                reader.slice(in: range), state: &state, bodyCount: bodyCount, limits: limits)
-            return true
+            case .needMore:
+                return false
+            case .line(let range):
+                try beginChunk(
+                    reader.slice(in: range), state: &state, bodyCount: bodyCount, limits: limits)
+                return true
         }
     }
 
@@ -108,11 +108,11 @@ public enum ChunkedBodyDecoder {
         _ reader: inout ByteReader, state: inout State, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
         switch try consumeTrailer(&reader, state: &state, limits: limits) {
-        case .needMore: return false
-        case .consumed: return true
-        case .complete:
-            state.phase = .complete
-            return true
+            case .needMore: return false
+            case .consumed: return true
+            case .complete:
+                state.phase = .complete
+                return true
         }
     }
 
@@ -132,7 +132,7 @@ public enum ChunkedBodyDecoder {
         let lfIndex = crIndex + 1
         guard lfIndex < reader.count else { return .needMore }  // CR present, LF not yet
         guard reader.peek(ahead: lfIndex - reader.position) == lf else { throw .malformedChunk }
-        let range = reader.position..<crIndex
+        let range = reader.position ..< crIndex
         reader.advance(by: lfIndex + 1 - reader.position)
         return .line(range)
     }
@@ -173,7 +173,8 @@ public enum ChunkedBodyDecoder {
         }
         if size == 0 {
             state.phase = .trailers
-        } else {
+        }
+        else {
             // Compare without computing `bodyCount + size`, which would trap on a hostile near-Int.max
             // chunk size; `bodyCount <= maxBodySize` holds by construction (RFC 9112 §7.1).
             guard size <= limits.maxBodySize - bodyCount else { throw .bodyTooLarge }
@@ -188,7 +189,7 @@ public enum ChunkedBodyDecoder {
         let take = min(remaining, reader.remaining)
         guard take > 0 else { return 0 }
         let start = reader.position
-        reader.slice(in: start..<(start + take)).withUnsafeBytes { body.append(contentsOf: $0) }
+        reader.slice(in: start ..< (start + take)).withUnsafeBytes { body.append(contentsOf: $0) }
         reader.advance(by: take)
         return take
     }
@@ -208,16 +209,16 @@ public enum ChunkedBodyDecoder {
         _ reader: inout ByteReader, state: inout State, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> TrailerStep {
         switch try readLine(&reader) {
-        case .needMore:
-            return .needMore
-        case .line(let range):
-            if range.isEmpty { return .complete }  // the terminating empty line ends the trailers
-            try validateTrailer(reader.slice(in: range))
-            state.trailerBytes += range.count + 2
-            guard state.trailerBytes <= limits.maxHeaderListSize else {
-                throw .headerSectionTooLarge
-            }
-            return .consumed
+            case .needMore:
+                return .needMore
+            case .line(let range):
+                if range.isEmpty { return .complete }  // the terminating empty line ends the trailers
+                try validateTrailer(reader.slice(in: range))
+                state.trailerBytes += range.count + 2
+                guard state.trailerBytes <= limits.maxHeaderListSize else {
+                    throw .headerSectionTooLarge
+                }
+                return .consumed
         }
     }
 
@@ -257,10 +258,10 @@ public enum ChunkedBodyDecoder {
     /// The value of a single hexadecimal digit, or `nil` if `byte` is not a HEXDIG.
     private static func hexValue(_ byte: UInt8) -> Int? {
         switch byte {
-        case 0x30...0x39: Int(byte - 0x30)  // 0-9
-        case 0x41...0x46: Int(byte - 0x41 + 10)  // A-F
-        case 0x61...0x66: Int(byte - 0x61 + 10)  // a-f
-        default: nil
+            case 0x30 ... 0x39: Int(byte - 0x30)  // 0-9
+            case 0x41 ... 0x46: Int(byte - 0x41 + 10)  // A-F
+            case 0x61 ... 0x66: Int(byte - 0x61 + 10)  // a-f
+            default: nil
         }
     }
 }

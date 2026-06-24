@@ -35,7 +35,7 @@ public final class AsyncGate: Sendable {
     }
 
     /// Tasks currently suspended on the gate — the async analogue of ``TestClock/sleeperCount``.
-    public var waiterCount: Int { state.withLock { $0.waiters.count } }
+    public var waiterCount: Int { state.withLock(\.waiters.count) }
 
     /// Suspends until the gate is opened, or consumes a banked permit and proceeds at once.
     ///
@@ -60,9 +60,9 @@ public final class AsyncGate: Sendable {
                 }
                 for (waiter, _) in resumals.1 { waiter.resume() }
                 switch resumals.0 {
-                case .proceed: continuation.resume()
-                case .cancelled: continuation.resume(throwing: CancellationError())
-                case .suspended: break
+                    case .proceed: continuation.resume()
+                    case .cancelled: continuation.resume(throwing: CancellationError())
+                    case .suspended: break
                 }
             }
         } onCancel: {
@@ -86,9 +86,9 @@ public final class AsyncGate: Sendable {
                     return .suspended
                 }
                 switch action {
-                case .ready: continuation.resume()
-                case .cancelled: continuation.resume(throwing: CancellationError())
-                case .suspended: break
+                    case .ready: continuation.resume()
+                    case .cancelled: continuation.resume(throwing: CancellationError())
+                    case .suspended: break
                 }
             }
         } onCancel: {

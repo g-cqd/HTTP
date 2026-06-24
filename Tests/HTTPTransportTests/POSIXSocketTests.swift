@@ -15,7 +15,6 @@ import Testing
 
 @Suite("T-F1 — SO_NOSIGPIPE: a write to a closed peer returns EPIPE, never SIGPIPE")
 struct POSIXSocketTests {
-
     @Test("setNoSIGPIPE: write() to a closed peer returns EPIPE, never SIGPIPE")
     func writeAfterPeerCloseReturnsEPIPE() {
         var fds = [Int32](repeating: 0, count: 2)
@@ -27,9 +26,9 @@ struct POSIXSocketTests {
 
         // Without SO_NOSIGPIPE this loop would deliver SIGPIPE and terminate the test process; with
         // it, the kernel reports EPIPE on the write that first notices the peer is gone.
-        let payload = [UInt8](repeating: 0x41, count: 4096)
+        let payload = [UInt8](repeating: 0x41, count: 4_096)
         var sawEPIPE = false
-        for _ in 0..<256 {
+        for _ in 0 ..< 256 {
             let written = payload.withUnsafeBytes { write(fds[0], $0.baseAddress, $0.count) }
             if written < 0 {
                 #expect(errno == EPIPE)

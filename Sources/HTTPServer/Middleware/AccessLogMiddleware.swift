@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// Records one access-log line per request — `METHOD path -> status` — through an injected sink.
 public struct AccessLogMiddleware: HTTPMiddleware {
-
     private let sink: @Sendable (String) -> Void
 
     /// Creates the middleware, sending each formatted line to `sink` (e.g. `{ print($0) }`).

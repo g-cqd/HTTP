@@ -15,7 +15,6 @@ internal import Synchronization
 /// limits). The ids only need to be *distinct* — not gap-free or globally ordered, and an id implies
 /// no cross-thread happens-before — so the counter uses relaxed atomics.
 struct ConnectionIDAllocator: ~Copyable, Sendable {
-
     private let counter = Atomic<UInt64>(0)
 
     /// Creates an allocator whose first ``next()`` returns id `1`.

@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 9110 §5.6.2 — token validation")
 struct FieldValidationTests {
-
     @Test("accepts a typical lowercase field-name")
     func acceptsTypicalFieldName() {
         #expect(FieldValidation.isToken(Array("content-type".utf8)))
@@ -38,7 +37,7 @@ struct FieldValidationTests {
             "na\u{00}me",  // NUL
             "(comment)",  // "(" / ")" separators
             "name=value",  // "=" separator
-            "naïve",  // non-ASCII (> 0x7F)
+            "naïve"  // non-ASCII (> 0x7F)
         ]
     )
     func rejectsInvalid(_ value: String) {
@@ -48,16 +47,15 @@ struct FieldValidationTests {
 
 @Suite("RFC 9112 §3.2 / RFC 9113 §8.3.1 — request-target / pseudo-header validation")
 struct RequestTargetValidationTests {
-
     /// The SWAR fast path MUST agree with the scalar predicate for every byte at every position and
     /// length — this is a security validator (injection defense), so a single divergence is a hole.
     @Test("SWAR agrees with the scalar predicate for all 256 bytes across word/tail boundaries")
     func swarMatchesScalar() {
-        for byte in UInt8.min...UInt8.max {
+        for byte in UInt8.min ... UInt8.max {
             let scalarValid = FieldValidation.isRequestTargetByte(byte)
             // Lengths chosen to span the 8-octet SWAR word boundary and the scalar tail.
             for length in [1, 7, 8, 9, 13, 16] {
-                for position in 0..<length {
+                for position in 0 ..< length {
                     var buffer = [UInt8](repeating: 0x61, count: length)  // 'a' — valid
                     buffer[position] = byte
                     #expect(

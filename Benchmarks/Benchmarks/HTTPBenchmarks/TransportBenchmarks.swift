@@ -27,7 +27,7 @@ func registerTransportBenchmarks() {
     }
 
     let socketBackbones: [TransportBackbone] = [
-        .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem,
+        .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem
     ]
     for backbone in socketBackbones {
         Benchmark("transport/\(backbone.rawValue)/echo") { benchmark in
@@ -35,7 +35,8 @@ func registerTransportBenchmarks() {
             let stream: AsyncStream<any TransportConnection>
             do {
                 stream = try await transport.start()
-            } catch {
+            }
+            catch {
                 return
             }
             let server = Task { await echoServer(stream) }
@@ -49,7 +50,7 @@ func registerTransportBenchmarks() {
             benchmark.startMeasurement()
             for _ in benchmark.scaledIterations {
                 await clientSend(client, transportPayload)
-                blackHole(await clientReceive(client, maxLength: 4096))
+                blackHole(await clientReceive(client, maxLength: 4_096))
             }
             benchmark.stopMeasurement()
 
@@ -68,20 +69,20 @@ private func makeSocketTransport(
 ) -> (any ServerTransport, () -> UInt16)? {
     let configuration = TransportConfiguration(port: 0, backbone: backbone)
     switch backbone {
-    case .networkFramework:
-        let transport = NetworkFrameworkTransport(configuration: configuration)
-        return (transport, { transport.boundPort })
-    case .posixKqueue:
-        let transport = POSIXKqueueTransport(configuration: configuration)
-        return (transport, { transport.boundPort })
-    case .posixDispatch:
-        let transport = POSIXDispatchTransport(configuration: configuration)
-        return (transport, { transport.boundPort })
-    case .swiftSystem:
-        let transport = SwiftSystemTransport(configuration: configuration)
-        return (transport, { transport.boundPort })
-    case .fake:
-        return nil
+        case .networkFramework:
+            let transport = NetworkFrameworkTransport(configuration: configuration)
+            return (transport, { transport.boundPort })
+        case .posixKqueue:
+            let transport = POSIXKqueueTransport(configuration: configuration)
+            return (transport, { transport.boundPort })
+        case .posixDispatch:
+            let transport = POSIXDispatchTransport(configuration: configuration)
+            return (transport, { transport.boundPort })
+        case .swiftSystem:
+            let transport = SwiftSystemTransport(configuration: configuration)
+            return (transport, { transport.boundPort })
+        case .fake:
+            return nil
     }
 }
 
@@ -120,9 +121,11 @@ private func clientReceive(_ connection: NWConnection, maxLength: Int) async -> 
             data, _, isComplete, _ in
             if let data, !data.isEmpty {
                 continuation.resume(returning: [UInt8](data))
-            } else if isComplete {
+            }
+            else if isComplete {
                 continuation.resume(returning: nil)
-            } else {
+            }
+            else {
                 continuation.resume(returning: [])
             }
         }

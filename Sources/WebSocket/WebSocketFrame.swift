@@ -9,7 +9,6 @@
 
 /// A single decoded WebSocket frame (RFC 6455 §5.2), payload already unmasked.
 public struct WebSocketFrame: Sendable, Equatable {
-
     /// The FIN bit: whether this frame is the final fragment of its message (RFC 6455 §5.4).
     public var isFinal: Bool
 

@@ -14,7 +14,6 @@ internal import Darwin
 
 /// Stateless POSIX sockets helpers shared by the BSD-socket transport backbones.
 enum POSIXSocket {
-
     /// How an `accept()` failure should be handled by an accept loop.
     enum AcceptOutcome {
         /// `EAGAIN`/`EWOULDBLOCK` — no connection is pending right now (a non-blocking socket is drained).
@@ -116,15 +115,15 @@ enum POSIXSocket {
     /// Classifies an `accept()` failure (backs off briefly on fd exhaustion before retrying).
     static func classifyAcceptError(_ error: Int32) -> AcceptOutcome {
         switch error {
-        case EAGAIN, EWOULDBLOCK:
-            return .wouldBlock
-        case EINTR, ECONNABORTED:
-            return .retry
-        case EMFILE, ENFILE:
-            usleep(10_000)  // fd exhaustion — back off ~10 ms, then retry
-            return .retry
-        default:
-            return .stop  // EBADF / EINVAL or unrecoverable
+            case EAGAIN, EWOULDBLOCK:
+                return .wouldBlock
+            case EINTR, ECONNABORTED:
+                return .retry
+            case EMFILE, ENFILE:
+                usleep(10_000)  // fd exhaustion — back off ~10 ms, then retry
+                return .retry
+            default:
+                return .stop  // EBADF / EINVAL or unrecoverable
         }
     }
 

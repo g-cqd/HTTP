@@ -11,7 +11,6 @@ public import HTTPCore
 
 /// Short-circuits requests whose body exceeds `maxBytes` with `413 Content Too Large`.
 public struct BodyLimitMiddleware: HTTPMiddleware {
-
     private let maxBytes: Int
 
     /// Creates the middleware with the maximum accepted body size in octets.

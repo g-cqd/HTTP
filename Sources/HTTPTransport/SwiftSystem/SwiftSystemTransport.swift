@@ -25,7 +25,6 @@ internal import SystemPackage
 /// `Sendable`. The blocking `accept()` runs on `acceptQueue`; each connection serializes its I/O on
 /// a child of the shared `ioQueue` pool.
 public final class SwiftSystemTransport: ServerTransport {
-
     /// The backbone this transport implements.
     public let backbone: TransportBackbone = .swiftSystem
 
@@ -49,7 +48,7 @@ public final class SwiftSystemTransport: ServerTransport {
 
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
-        state.withLock { $0.boundPort }
+        state.withLock(\.boundPort)
     }
 
     /// Binds a POSIX TCP listening socket and begins accepting, returning a stream of connections.
@@ -90,7 +89,7 @@ public final class SwiftSystemTransport: ServerTransport {
         listenDescriptor: FileDescriptor,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        while state.withLock({ $0.isRunning }) {
+        while state.withLock(\.isRunning) {
             var address = sockaddr_in()
             var length = socklen_t(MemoryLayout<sockaddr_in>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in

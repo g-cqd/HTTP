@@ -11,11 +11,10 @@ import Testing
 
 @Suite("RFC 6265bis — cookies")
 struct CookieTests {
-
     @Test("serializes the attributes in order (RFC 6265bis §4.1.1)")
     func serializesAttributes() {
         let cookie = SetCookie(
-            name: "session", value: "abc123", path: "/", maxAge: 3600, isSecure: true,
+            name: "session", value: "abc123", path: "/", maxAge: 3_600, isSecure: true,
             isHTTPOnly: true, sameSite: .lax)
         #expect(
             cookie.headerValue

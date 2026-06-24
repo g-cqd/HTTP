@@ -10,7 +10,6 @@
 
 /// An HTTP/3 error code (RFC 9114 §8.1); the raw value is the QUIC application error code.
 public enum HTTP3ErrorCode: UInt64, Sendable, Equatable, Hashable, CaseIterable {
-
     /// No error — graceful closure (§8.1).
     case h3NoError = 0x0100
     /// A protocol error not covered by a more specific code (§8.1).

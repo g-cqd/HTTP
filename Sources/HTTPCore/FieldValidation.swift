@@ -12,7 +12,6 @@
 /// All routines iterate a byte sequence exactly once (`O(n)` time, `O(1)` space) and never
 /// recurse, so they are safe to run on adversarial input on the hot path.
 public enum FieldValidation {
-
     /// Returns `true` iff `bytes` is a non-empty `token` per RFC 9110 §5.6.2.
     ///
     /// ```
@@ -47,19 +46,19 @@ public enum FieldValidation {
         // pays a lazy-init access guard, which costs more per byte than this inlined, well-predicted
         // switch. The switch is the measured optimum — do not "optimize" it into a table.
         switch byte {
-        case 0x30...0x39,  // DIGIT 0-9
-            0x41...0x5A,  // ALPHA A-Z
-            0x61...0x7A,  // ALPHA a-z
-            0x21,  // "!"
-            0x23...0x27,  // "#" "$" "%" "&" "'"
-            0x2A...0x2B,  // "*" "+"
-            0x2D...0x2E,  // "-" "."
-            0x5E...0x60,  // "^" "_" "`"
-            0x7C,  // "|"
-            0x7E:  // "~"
-            return true
-        default:
-            return false
+            case 0x30 ... 0x39,  // DIGIT 0-9
+                0x41 ... 0x5A,  // ALPHA A-Z
+                0x61 ... 0x7A,  // ALPHA a-z
+                0x21,  // "!"
+                0x23 ... 0x27,  // "#" "$" "%" "&" "'"
+                0x2A ... 0x2B,  // "*" "+"
+                0x2D ... 0x2E,  // "-" "."
+                0x5E ... 0x60,  // "^" "_" "`"
+                0x7C,  // "|"
+                0x7E:  // "~"
+                return true
+            default:
+                return false
         }
     }
 
@@ -132,12 +131,12 @@ public enum FieldValidation {
     @inlinable
     public static func isFieldValueByte(_ byte: UInt8) -> Bool {
         switch byte {
-        case 0x09,  // HTAB
-            0x20...0x7E,  // SP + VCHAR
-            0x80...0xFF:  // obs-text
-            true
-        default:  // NUL, CR, LF, other C0 controls, DEL
-            false
+            case 0x09,  // HTAB
+                0x20 ... 0x7E,  // SP + VCHAR
+                0x80 ... 0xFF:  // obs-text
+                true
+            default:  // NUL, CR, LF, other C0 controls, DEL
+                false
         }
     }
 

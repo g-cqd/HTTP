@@ -10,7 +10,6 @@
 
 /// A typed `Set-Cookie` directive (RFC 6265bis §4.1).
 public struct SetCookie: Sendable, Equatable {
-
     /// The `SameSite` attribute (RFC 6265bis §4.1.2.7) — when the cookie accompanies cross-site requests.
     public enum SameSite: String, Sendable, Equatable {
         case strict = "Strict"
@@ -83,29 +82,29 @@ public struct SetCookie: Sendable, Equatable {
     /// RFC 9110 token octet (no controls, no separators).
     private static func isTokenByte(_ byte: UInt8) -> Bool {
         switch byte {
-        case 0x21, 0x23...0x27, 0x2A, 0x2B, 0x2D, 0x2E, 0x30...0x39, 0x41...0x5A, 0x5E...0x7A,
-            0x7C, 0x7E:
-            true
-        default:
-            false
+            case 0x21, 0x23 ... 0x27, 0x2A, 0x2B, 0x2D, 0x2E, 0x30 ... 0x39, 0x41 ... 0x5A,
+                0x5E ... 0x7A,
+                0x7C, 0x7E:
+                true
+            default:
+                false
         }
     }
 
     /// RFC 6265bis cookie-octet: printable ASCII except whitespace, `"`, `,`, `;`, and `\`.
     private static func isCookieOctet(_ byte: UInt8) -> Bool {
         switch byte {
-        case 0x21, 0x23...0x2B, 0x2D...0x3A, 0x3C...0x5B, 0x5D...0x7E: true
-        default: false
+            case 0x21, 0x23 ... 0x2B, 0x2D ... 0x3A, 0x3C ... 0x5B, 0x5D ... 0x7E: true
+            default: false
         }
     }
 }
 
 /// Parses the `Cookie` request header (RFC 6265bis §4.2).
 public enum Cookies {
-
     /// The cookies in `fields` as name→value pairs (RFC 6265bis §4.2.1); later duplicates win.
     public static func parse(_ fields: HTTPFields) -> [String: String] {
-        var cookies = [String: String]()
+        var cookies: [String: String] = [:]
         for header in fields.values(for: .cookie) {
             for pair in header.split(separator: ";") {
                 guard let separator = pair.firstIndex(of: "=") else { continue }
@@ -127,7 +126,6 @@ public enum Cookies {
 }
 
 extension HTTPFields {
-
     /// Appends `cookie` as a `Set-Cookie` header when it is valid; returns whether it was added.
     @discardableResult
     public mutating func setCookie(_ cookie: SetCookie) -> Bool {

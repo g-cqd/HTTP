@@ -12,7 +12,6 @@ import Testing
 
 @Suite("RFC 9113 §6.2 — HEADERS field block")
 struct HTTP2HeadersFrameTests {
-
     private func fragment(_ payload: [UInt8], _ flags: HTTP2FrameFlags) throws -> [UInt8] {
         Array(try HTTP2HeadersFrame.fieldBlockFragment(payload, flags: flags))
     }
@@ -21,9 +20,11 @@ struct HTTP2HeadersFrameTests {
         do {
             _ = try fragment(payload, flags)
             return nil
-        } catch let error as HTTP2Error {
+        }
+        catch let error as HTTP2Error {
             return error.code
-        } catch {
+        }
+        catch {
             return nil
         }
     }

@@ -12,7 +12,6 @@ internal import HTTP1
 internal import HTTPCore
 
 extension HTTPServer {
-
     /// The carried state of a resumable chunked-body decode (audit H1-F1).
     ///
     /// Threaded `inout` across the read loop so the decoded `body` grows in place; `consumed` marks how
@@ -21,7 +20,7 @@ extension HTTPServer {
         var started = false
         var state = ChunkedBodyDecoder.State()
         var consumed = 0
-        var body = [UInt8]()
+        var body: [UInt8] = []
     }
 
     /// Frames a chunked body, *resuming* the decoder across reads so each octet is decoded once.
@@ -42,14 +41,14 @@ extension HTTPServer {
             }
         }
         switch result {
-        case .success(true):
-            let parsed = ParsedRequest(
-                request: head.request, body: chunked.body, version: head.version)
-            return .complete(parsed, consumed: chunked.consumed)
-        case .success(false):
-            return .incomplete
-        case .failure(let error):
-            return .failed(error)
+            case .success(true):
+                let parsed = ParsedRequest(
+                    request: head.request, body: chunked.body, version: head.version)
+                return .complete(parsed, consumed: chunked.consumed)
+            case .success(false):
+                return .incomplete
+            case .failure(let error):
+                return .failed(error)
         }
     }
 }

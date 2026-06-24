@@ -10,7 +10,6 @@
 
 /// A defined SETTINGS parameter identifier (RFC 9113 §6.5.2).
 public enum HTTP2SettingsParameter: UInt16, Sendable, Equatable {
-
     /// `SETTINGS_HEADER_TABLE_SIZE` (0x01) — HPACK dynamic table bound.
     case headerTableSize = 0x01
     /// `SETTINGS_ENABLE_PUSH` (0x02) — whether server push is permitted.
@@ -29,12 +28,11 @@ public enum HTTP2SettingsParameter: UInt16, Sendable, Equatable {
 
 /// The set of known HTTP/2 SETTINGS parameters, with protocol defaults (RFC 9113 §6.5.2).
 public struct HTTP2Settings: Sendable, Equatable {
-
     /// Each parameter is 2 octets of identifier and 4 octets of value (RFC 9113 §6.5.1).
     public static let parameterLength = 6
 
     /// HPACK dynamic table size in octets (default 4096).
-    public var headerTableSize = 4096
+    public var headerTableSize = 4_096
     /// Whether server push is enabled (default true).
     public var enablePush = true
     /// Maximum concurrent streams, or `nil` for unlimited (the default).
@@ -80,40 +78,40 @@ public struct HTTP2Settings: Sendable, Equatable {
     /// Validates and stores one parameter; unknown identifiers are ignored (RFC 9113 §6.5.2).
     private mutating func applyParameter(identifier: UInt16, value: UInt32) throws(HTTP2Error) {
         switch HTTP2SettingsParameter(rawValue: identifier) {
-        case .headerTableSize:
-            headerTableSize = Int(value)
-        case .enablePush:
-            guard value <= 1 else {
-                throw .connection(.protocolError, "ENABLE_PUSH must be 0 or 1")
-            }
-            enablePush = value == 1
-        case .maxConcurrentStreams:
-            maxConcurrentStreams = Int(value)
-        case .initialWindowSize:
-            guard value <= 0x7FFF_FFFF else {
-                throw .connection(.flowControlError, "INITIAL_WINDOW_SIZE exceeds 2^31-1")
-            }
-            initialWindowSize = Int(value)
-        case .maxFrameSize:
-            guard value >= 16_384, value <= 0xFF_FFFF else {
-                throw .connection(.protocolError, "MAX_FRAME_SIZE outside 2^14...2^24-1")
-            }
-            maxFrameSize = Int(value)
-        case .maxHeaderListSize:
-            maxHeaderListSize = Int(value)
-        case .enableConnectProtocol:
-            guard value <= 1 else {
-                throw .connection(.protocolError, "ENABLE_CONNECT_PROTOCOL must be 0 or 1")
-            }
-            enableConnectProtocol = value == 1
-        case nil:
-            break  // unknown identifier — ignore (§6.5.2)
+            case .headerTableSize:
+                headerTableSize = Int(value)
+            case .enablePush:
+                guard value <= 1 else {
+                    throw .connection(.protocolError, "ENABLE_PUSH must be 0 or 1")
+                }
+                enablePush = value == 1
+            case .maxConcurrentStreams:
+                maxConcurrentStreams = Int(value)
+            case .initialWindowSize:
+                guard value <= 0x7FFF_FFFF else {
+                    throw .connection(.flowControlError, "INITIAL_WINDOW_SIZE exceeds 2^31-1")
+                }
+                initialWindowSize = Int(value)
+            case .maxFrameSize:
+                guard value >= 16_384, value <= 0xFF_FFFF else {
+                    throw .connection(.protocolError, "MAX_FRAME_SIZE outside 2^14...2^24-1")
+                }
+                maxFrameSize = Int(value)
+            case .maxHeaderListSize:
+                maxHeaderListSize = Int(value)
+            case .enableConnectProtocol:
+                guard value <= 1 else {
+                    throw .connection(.protocolError, "ENABLE_CONNECT_PROTOCOL must be 0 or 1")
+                }
+                enableConnectProtocol = value == 1
+            case nil:
+                break  // unknown identifier — ignore (§6.5.2)
         }
     }
 
     /// Serializes these settings into a SETTINGS frame payload (RFC 9113 §6.5.1).
     public func encodePayload() -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         append(.headerTableSize, UInt32(headerTableSize), to: &output)
         append(.enablePush, enablePush ? 1 : 0, to: &output)
         if let maxConcurrentStreams {

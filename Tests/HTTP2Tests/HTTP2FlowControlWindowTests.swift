@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 9113 §6.9 — flow-control window")
 struct HTTP2FlowControlWindowTests {
-
     @Test("starts at the initial size")
     func initial() {
         #expect(HTTP2FlowControlWindow(initialSize: 65_535).available == 65_535)
@@ -21,10 +20,10 @@ struct HTTP2FlowControlWindowTests {
 
     @Test("reserve grants up to the available window, then nothing")
     func reserve() {
-        var window = HTTP2FlowControlWindow(initialSize: 1000)
+        var window = HTTP2FlowControlWindow(initialSize: 1_000)
         #expect(window.reserve(400) == 400)
         #expect(window.size == 600)
-        #expect(window.reserve(1000) == 600)  // only what remains
+        #expect(window.reserve(1_000) == 600)  // only what remains
         #expect(window.size == 0)
         #expect(window.reserve(10) == 0)  // empty
     }
@@ -32,8 +31,8 @@ struct HTTP2FlowControlWindowTests {
     @Test("WINDOW_UPDATE increases the window (§6.9)")
     func increase() {
         var window = HTTP2FlowControlWindow(initialSize: 0)
-        #expect(window.increase(by: 5000) == .applied)
-        #expect(window.size == 5000)
+        #expect(window.increase(by: 5_000) == .applied)
+        #expect(window.size == 5_000)
     }
 
     @Test("a zero increment is reported as a PROTOCOL_ERROR (§6.9)")

@@ -10,14 +10,13 @@
 internal import HTTP2
 
 extension HTTPServer {
-
     /// The length of the HTTP/2 client preface marker that, once matched, commits to HTTP/2.
     static var http2MarkerLength: Int { 16 }
 
     /// Whether `buffer` is a prefix of the HTTP/2 client preface (so the connection may still be h2).
     static func couldBeHTTP2Preface(_ buffer: [UInt8]) -> Bool {
         let marker = HTTP2ConnectionPreface.client
-        for index in 0..<min(buffer.count, marker.count) where buffer[index] != marker[index] {
+        for index in 0 ..< min(buffer.count, marker.count) where buffer[index] != marker[index] {
             return false
         }
         return true
@@ -27,7 +26,7 @@ extension HTTPServer {
     static func matchesHTTP2Marker(_ buffer: [UInt8]) -> Bool {
         let marker = HTTP2ConnectionPreface.client
         guard buffer.count >= http2MarkerLength else { return false }
-        for index in 0..<http2MarkerLength where buffer[index] != marker[index] { return false }
+        for index in 0 ..< http2MarkerLength where buffer[index] != marker[index] { return false }
         return true
     }
 }

@@ -12,7 +12,6 @@ import Testing
 
 @Suite("HeaderField — shared header name/value pair")
 struct HeaderFieldTests {
-
     @Test("a value defaults to empty")
     func defaultValueIsEmpty() {
         let field = HeaderField(name: ":authority")
@@ -25,7 +24,7 @@ struct HeaderFieldTests {
         arguments: [
             (name: "", value: "", size: 32),
             (name: ":method", value: "GET", size: 7 + 3 + 32),
-            (name: "content-type", value: "text/plain", size: 12 + 10 + 32),
+            (name: "content-type", value: "text/plain", size: 12 + 10 + 32)
         ] as [(name: String, value: String, size: Int)])
     func tableSize(_ testCase: (name: String, value: String, size: Int)) {
         #expect(HeaderField(name: testCase.name, value: testCase.value).tableSize == testCase.size)

@@ -11,7 +11,6 @@
 
 /// One HTTP/2 flow-control window (RFC 9113 §5.2 / §6.9) — pure arithmetic, scope-agnostic.
 public struct HTTP2FlowControlWindow: Sendable, Equatable {
-
     /// The maximum window value, 2^31-1 (RFC 9113 §6.9.1).
     public static let maxSize = Int(Int32.max)
 
@@ -39,7 +38,6 @@ public struct HTTP2FlowControlWindow: Sendable, Equatable {
 
     /// The result of applying a window increment (RFC 9113 §6.9 / §6.9.1).
     public enum UpdateOutcome: Sendable, Equatable {
-
         /// The increment was applied.
         case applied
 

@@ -11,7 +11,6 @@ import Testing
 
 @Suite("RFC 1952 §8 — CRC-32")
 struct CRC32Tests {
-
     @Test("the empty input has CRC-32 zero")
     func empty() {
         #expect(CRC32.checksum([UInt8]()) == 0)

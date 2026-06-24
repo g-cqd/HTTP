@@ -13,7 +13,6 @@ import Testing
 
 @Suite("RFC 9113 §6.10 — header block assembly")
 struct HTTP2HeaderBlockAccumulatorTests {
-
     private func make() -> HTTP2HeaderBlockAccumulator {
         HTTP2HeaderBlockAccumulator(maxContinuationFrames: 4, maxBlockSize: 64)
     }
@@ -68,7 +67,7 @@ struct HTTP2HeaderBlockAccumulatorTests {
     func continuationFlood() throws {
         var accumulator = make()  // cap is 4 CONTINUATION frames
         _ = try accumulator.begin(streamID: stream, fragment: [], endHeaders: false)
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             _ = try accumulator.append(streamID: stream, fragment: [0], endHeaders: false)
         }
         #expect(
@@ -90,9 +89,11 @@ struct HTTP2HeaderBlockAccumulatorTests {
         do {
             _ = try body()
             return nil
-        } catch let error as HTTP2Error {
+        }
+        catch let error as HTTP2Error {
             return error.code
-        } catch {
+        }
+        catch {
             return nil
         }
     }

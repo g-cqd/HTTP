@@ -11,7 +11,6 @@
 
 /// An error decoding a Huffman-coded string (RFC 7541 §5.2).
 public enum HuffmanError: Error, Sendable, Equatable {
-
     /// The encoded data decoded the `EOS` symbol, which MUST NOT appear in the input (§5.2).
     case eosInInput
 
@@ -24,7 +23,6 @@ public enum HuffmanError: Error, Sendable, Equatable {
 
 /// The canonical HTTP Huffman code (RFC 7541 Appendix B).
 public enum Huffman {
-
     /// The end-of-string symbol — its code's high bits pad the final octet; it is never a literal.
     @usableFromInline
     static let eosSymbol: UInt16 = 256
@@ -43,7 +41,7 @@ public enum Huffman {
 
     /// Huffman-encodes `input`, padding the final partial octet with the high bits of `EOS` (§5.2).
     public static func encode(_ input: some Sequence<UInt8>) -> [UInt8] {
-        var output = [UInt8]()
+        var output: [UInt8] = []
         // Reserve up front so byte-at-a-time append doesn't pay repeated geometric re-grows. For the
         // ASCII-dominant header text we encode the Huffman form is ≤ the input size, so the input's
         // own count is a good single reservation (a `Sequence` with no count reserves nothing).
@@ -84,7 +82,8 @@ public enum Huffman {
         var caught: (any Error)?
         let output = [UInt8](unsafeUninitializedCapacity: decodedUpperBound(of: input)) {
             buffer, count in
-            do { count = try decode(input, into: buffer) } catch { caught = error }
+            do { count = try decode(input, into: buffer) }
+            catch { caught = error }
         }
         if let caught { throw (caught as? HuffmanError) ?? .invalidCode }
         return output
@@ -104,7 +103,8 @@ public enum Huffman {
                 let written = try decode(input, into: buffer)
                 decoded = String(
                     decoding: UnsafeBufferPointer(rebasing: buffer[..<written]), as: UTF8.self)
-            } catch {
+            }
+            catch {
                 caught = error
             }
         }

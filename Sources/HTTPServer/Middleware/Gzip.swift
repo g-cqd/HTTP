@@ -12,10 +12,9 @@ internal import HTTPCore
 
 /// Produces gzip members (RFC 1952) by wrapping Darwin's raw-DEFLATE encoder.
 enum Gzip {
-
     /// The fixed gzip header: magic, CM=deflate, no flags, no mtime, no extra flags, OS=unknown.
     private static let header: [UInt8] = [
-        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff
     ]
 
     /// Compresses `input` into a gzip member, or `nil` if it is empty or DEFLATE could not encode it.

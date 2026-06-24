@@ -10,11 +10,15 @@ public import Testing
 
 extension Tag {
     /// Seeded fuzz / crash-injection suites that prove "never trap / hang / OOM".
-    @Tag public static var fuzz: Self
+    @Tag
+    public static var fuzz: Self
     /// Property-based suites asserting an invariant over seeded random inputs.
-    @Tag public static var property: Self
+    @Tag
+    public static var property: Self
     /// Concurrency / async-coordination suites.
-    @Tag public static var concurrency: Self
+    @Tag
+    public static var concurrency: Self
     /// Long-running soak / endurance suites.
-    @Tag public static var soak: Self
+    @Tag
+    public static var soak: Self
 }

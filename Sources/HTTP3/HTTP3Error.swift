@@ -17,7 +17,6 @@ public import QPACK
 
 /// An HTTP/3 error, scoped to the connection or to a single stream (RFC 9114 §8).
 public struct HTTP3Error: Error, Sendable, Equatable {
-
     /// The QUIC application error code reported to the peer (RFC 9114 §8.1 / RFC 9204 §6).
     public let code: UInt64
 
@@ -38,8 +37,8 @@ public struct HTTP3Error: Error, Sendable, Equatable {
     public var isConnectionError: Bool { streamID == nil }
 
     /// A connection error carrying an HTTP/3 code (RFC 9114 §8.1).
-    public static func connection(_ code: HTTP3ErrorCode, _ reason: String = "") -> HTTP3Error {
-        HTTP3Error(code: code.rawValue, streamID: nil, reason: reason)
+    public static func connection(_ code: HTTP3ErrorCode, _ reason: String = "") -> Self {
+        Self(code: code.rawValue, streamID: nil, reason: reason)
     }
 
     /// A stream error on `streamID` carrying an HTTP/3 code (RFC 9114 §8.1).
@@ -47,13 +46,13 @@ public struct HTTP3Error: Error, Sendable, Equatable {
         _ streamID: QUICStreamID,
         _ code: HTTP3ErrorCode,
         _ reason: String = ""
-    ) -> HTTP3Error {
-        HTTP3Error(code: code.rawValue, streamID: streamID, reason: reason)
+    ) -> Self {
+        Self(code: code.rawValue, streamID: streamID, reason: reason)
     }
 
     /// A connection error carrying a QPACK code (RFC 9204 §6) — a QPACK fault is always fatal.
-    public static func connection(qpack code: QPACKError.Code, _ reason: String = "") -> HTTP3Error
+    public static func connection(qpack code: QPACKError.Code, _ reason: String = "") -> Self
     {
-        HTTP3Error(code: UInt64(code.rawValue), streamID: nil, reason: reason)
+        Self(code: UInt64(code.rawValue), streamID: nil, reason: reason)
     }
 }

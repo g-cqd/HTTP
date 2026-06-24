@@ -18,7 +18,6 @@ public import HTTPCore
 /// Conform to add cross-cutting behaviour — logging, CORS, compression, auth, headers — then compose
 /// it with ``HTTPResponder/wrapped(by:)`` or ``MiddlewareChain``.
 public protocol HTTPMiddleware: Sendable {
-
     /// Processes `request` (with its decoded `body`), delegating to `next` to produce the response.
     ///
     /// Call `next.respond(to:body:)` to continue the chain — passing a rewritten request/body if
@@ -32,7 +31,6 @@ public protocol HTTPMiddleware: Sendable {
 }
 
 extension HTTPResponder {
-
     /// This responder with `middleware` interposed in front of it (the middleware runs first).
     public func wrapped(by middleware: any HTTPMiddleware) -> any HTTPResponder {
         InterceptedResponder(middleware: middleware, next: self)
@@ -50,7 +48,6 @@ extension HTTPResponder {
 /// `MiddlewareChain([a, b, c], terminatingAt: app)` runs `a` outermost and `app` innermost. Reorder
 /// or replace by editing the array; conform new behaviour by adopting ``HTTPMiddleware``.
 public struct MiddlewareChain: HTTPResponder {
-
     private let composed: any HTTPResponder
 
     /// Composes `middleware` (first outermost) around the `responder` that terminates the chain.
@@ -66,7 +63,6 @@ public struct MiddlewareChain: HTTPResponder {
 
 /// One link of a middleware chain: a middleware bound to the responder that follows it.
 private struct InterceptedResponder: HTTPResponder {
-
     let middleware: any HTTPMiddleware
     let next: any HTTPResponder
 

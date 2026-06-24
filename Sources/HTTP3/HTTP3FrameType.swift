@@ -11,7 +11,6 @@
 
 /// An HTTP/3 frame type (RFC 9114 §7.2); a varint, with unknown values representable and ignored (§9).
 public struct HTTP3FrameType: Sendable, Equatable, Hashable, RawRepresentable {
-
     /// The frame type value (a variable-length integer).
     public let rawValue: UInt64
 
@@ -21,19 +20,19 @@ public struct HTTP3FrameType: Sendable, Equatable, Hashable, RawRepresentable {
     }
 
     /// `DATA` (RFC 9114 §7.2.1).
-    public static let data = HTTP3FrameType(rawValue: 0x00)
+    public static let data = Self(rawValue: 0x00)
     /// `HEADERS` (RFC 9114 §7.2.2).
-    public static let headers = HTTP3FrameType(rawValue: 0x01)
+    public static let headers = Self(rawValue: 0x01)
     /// `CANCEL_PUSH` (RFC 9114 §7.2.3).
-    public static let cancelPush = HTTP3FrameType(rawValue: 0x03)
+    public static let cancelPush = Self(rawValue: 0x03)
     /// `SETTINGS` (RFC 9114 §7.2.4).
-    public static let settings = HTTP3FrameType(rawValue: 0x04)
+    public static let settings = Self(rawValue: 0x04)
     /// `PUSH_PROMISE` (RFC 9114 §7.2.5).
-    public static let pushPromise = HTTP3FrameType(rawValue: 0x05)
+    public static let pushPromise = Self(rawValue: 0x05)
     /// `GOAWAY` (RFC 9114 §7.2.6).
-    public static let goAway = HTTP3FrameType(rawValue: 0x07)
+    public static let goAway = Self(rawValue: 0x07)
     /// `MAX_PUSH_ID` (RFC 9114 §7.2.7).
-    public static let maxPushID = HTTP3FrameType(rawValue: 0x0D)
+    public static let maxPushID = Self(rawValue: 0x0D)
 
     /// Whether this type is a reserved value that maps to an HTTP/2 frame, invalid in HTTP/3.
     ///

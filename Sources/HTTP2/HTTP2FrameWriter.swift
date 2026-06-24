@@ -10,12 +10,11 @@
 
 /// Buffers and serializes outbound HTTP/2 frames for the connection engine (RFC 9113 §4.1).
 struct HTTP2FrameWriter {
-
-    private var output = [UInt8]()
+    private var output: [UInt8] = []
 
     /// Hands the queued octets to the caller and leaves the buffer empty — a swap, not a CoW copy.
     mutating func drain() -> [UInt8] {
-        var drained = [UInt8]()
+        var drained: [UInt8] = []
         swap(&drained, &output)
         return drained
     }
@@ -41,7 +40,8 @@ struct HTTP2FrameWriter {
         HTTP2FrameHeader(
             payloadLength: payload.count, type: .data, flags: endStream ? [.endStream] : [],
             streamID: streamID
-        ).encode(into: &output)
+        )
+        .encode(into: &output)
         output.append(contentsOf: payload)
     }
 

@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 6455 §8.1 — text UTF-8 validation")
 struct WebSocketUTF8ValidationTests {
-
     /// A masked client text frame (FIN, opcode 0x1) carrying `payload` (≤ 125 octets).
     private func maskedTextFrame(_ payload: [UInt8]) -> [UInt8] {
         let key: [UInt8] = [0x1A, 0x2B, 0x3C, 0x4D]
@@ -32,7 +31,7 @@ struct WebSocketUTF8ValidationTests {
         Array("🦊".utf8),  // 4-byte
         [0xED, 0x9F, 0xBF],  // U+D7FF — just below the surrogate range
         [0xEE, 0x80, 0x80],  // U+E000 — just above the surrogate range
-        [0xF4, 0x8F, 0xBF, 0xBF],  // U+10FFFF — the maximum code point
+        [0xF4, 0x8F, 0xBF, 0xBF]  // U+10FFFF — the maximum code point
     ]
 
     static let invalid: [[UInt8]] = [
@@ -46,7 +45,7 @@ struct WebSocketUTF8ValidationTests {
         [0xF4, 0x90, 0x80, 0x80],  // U+110000 — beyond U+10FFFF
         [0xE2, 0x82],  // truncated 3-byte
         [0xC2],  // truncated 2-byte
-        [0x68, 0xC3, 0x28],  // valid byte, then a bad continuation
+        [0x68, 0xC3, 0x28]  // valid byte, then a bad continuation
     ]
 
     @Test("well-formed UTF-8 text is accepted (RFC 3629)", arguments: valid)
@@ -60,7 +59,8 @@ struct WebSocketUTF8ValidationTests {
     func rejectsInvalid(payload: [UInt8]) {
         var connection = WebSocketConnection()
         var thrown: WebSocketError?
-        do { _ = try connection.receive(maskedTextFrame(payload)) } catch { thrown = error }
+        do { _ = try connection.receive(maskedTextFrame(payload)) }
+        catch { thrown = error }
         #expect(thrown == .invalidTextEncoding)
     }
 }

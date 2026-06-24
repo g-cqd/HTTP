@@ -16,7 +16,6 @@
 /// `String`. Equality and hashing use the canonical form, so `"Content-Type"` and `"content-type"`
 /// are equal and collide in a `Set`/`Dictionary`.
 public struct HTTPFieldName: Sendable, Hashable {
-
     /// Backing storage for the original field-name spelling.
     enum RawName: Sendable {
         /// A compile-time name (a registered constant) — stored without heap allocation.
@@ -37,8 +36,8 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// ``appendRawNameUTF8(to:)`` on the response hot path, which avoids that allocation.
     public var rawName: String {
         switch storage {
-        case .literal(let name): name.description
-        case .parsed(let name): name
+            case .literal(let name): name.description
+            case .parsed(let name): name
         }
     }
 
@@ -50,8 +49,8 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// response).
     public func appendRawNameUTF8(to output: inout [UInt8]) {
         switch storage {
-        case .literal(let name): name.withUTF8Buffer { output.append(contentsOf: $0) }
-        case .parsed(let name): output.append(contentsOf: name.utf8)
+            case .literal(let name): name.withUTF8Buffer { output.append(contentsOf: $0) }
+            case .parsed(let name): output.append(contentsOf: name.utf8)
         }
     }
 
@@ -60,9 +59,10 @@ public struct HTTPFieldName: Sendable, Hashable {
         guard FieldValidation.isToken(name.utf8) else { return nil }
         self.storage = .parsed(name)
         // h2/h3 field names arrive lower-case, so reuse the input when possible to avoid allocating.
-        if name.utf8.contains(where: { (0x41...0x5A).contains($0) }) {
+        if name.utf8.contains(where: { (0x41 ... 0x5A).contains($0) }) {
             self.canonicalName = Self.asciiLowercased(name.utf8)
-        } else {
+        }
+        else {
             self.canonicalName = name
         }
     }
@@ -77,9 +77,10 @@ public struct HTTPFieldName: Sendable, Hashable {
         guard FieldValidation.isToken(bytes) else { return nil }
         let raw = String(decoding: bytes, as: UTF8.self)
         self.storage = .parsed(raw)
-        if bytes.contains(where: { (0x41...0x5A).contains($0) }) {
+        if bytes.contains(where: { (0x41 ... 0x5A).contains($0) }) {
             self.canonicalName = Self.asciiLowercased(bytes)
-        } else {
+        }
+        else {
             self.canonicalName = raw
         }
     }
@@ -109,7 +110,7 @@ public struct HTTPFieldName: Sendable, Hashable {
     }
 
     /// Two field names are equal iff their canonical (ASCII-lower-cased) forms match.
-    public static func == (lhs: HTTPFieldName, rhs: HTTPFieldName) -> Bool {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.canonicalName == rhs.canonicalName
     }
 

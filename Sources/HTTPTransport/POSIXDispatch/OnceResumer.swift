@@ -11,7 +11,6 @@ internal import Synchronization
 
 /// Resumes a `CheckedContinuation` at most once, regardless of how many times its callback fires.
 final class OnceResumer<Success: Sendable>: Sendable {
-
     private let continuation: Mutex<CheckedContinuation<Success, any Error>?>
 
     init(_ continuation: CheckedContinuation<Success, any Error>) {

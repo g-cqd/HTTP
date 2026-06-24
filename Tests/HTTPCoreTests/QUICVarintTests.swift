@@ -12,7 +12,6 @@ import Testing
 
 @Suite("QUICVarint — RFC 9000 §16 variable-length integer")
 struct QUICVarintTests {
-
     /// Decodes `bytes` and reports the value with how many octets the reader consumed.
     private func decode(_ bytes: [UInt8]) -> (value: UInt64?, consumed: Int) {
         bytes.withUnsafeBytes { raw in
@@ -32,7 +31,7 @@ struct QUICVarintTests {
             ),
             (bytes: [0x9D, 0x7F, 0x3E, 0x7D], value: 494_878_333),
             (bytes: [0x7B, 0xBD], value: 15_293),
-            (bytes: [0x25], value: 37),
+            (bytes: [0x25], value: 37)
         ] as [(bytes: [UInt8], value: UInt64)])
     func appendixA1(_ testCase: (bytes: [UInt8], value: UInt64)) {
         let (value, consumed) = decode(testCase.bytes)
@@ -54,10 +53,10 @@ struct QUICVarintTests {
             (value: 0, length: 1), (value: 63, length: 1),
             (value: 64, length: 2), (value: 16_383, length: 2),
             (value: 16_384, length: 4), (value: 1_073_741_823, length: 4),
-            (value: 1_073_741_824, length: 8), (value: QUICVarint.maxValue, length: 8),
+            (value: 1_073_741_824, length: 8), (value: QUICVarint.maxValue, length: 8)
         ] as [(value: UInt64, length: Int)])
     func encodeRoundTrips(_ testCase: (value: UInt64, length: Int)) {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         QUICVarint.encode(testCase.value, into: &out)
         #expect(out.count == testCase.length)
         #expect(QUICVarint.encodedLength(of: testCase.value) == testCase.length)
@@ -91,7 +90,7 @@ struct QUICVarintTests {
 
     @Test("two varints decode back-to-back from one buffer")
     func sequentialDecode() {
-        var out = [UInt8]()
+        var out: [UInt8] = []
         QUICVarint.encode(0x41, into: &out)  // type byte
         QUICVarint.encode(1_073_741_824, into: &out)  // length
         out.withUnsafeBytes { raw in

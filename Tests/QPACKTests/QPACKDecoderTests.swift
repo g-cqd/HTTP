@@ -15,7 +15,6 @@ import Testing
 
 @Suite("RFC 9204 §4.5 — QPACK field-section decoder (static-only, capacity 0)")
 struct QPACKDecoderTests {
-
     private func decode(_ bytes: [UInt8]) throws -> [HeaderField] {
         let result: Result<[HeaderField], QPACKError> = bytes.withUnsafeBytes { raw in
             Result { () throws(QPACKError) in try QPACKDecoder().decode(raw.bytes) }
@@ -58,7 +57,7 @@ struct QPACKDecoderTests {
             try decode(bytes) == [
                 HeaderField(name: ":path", value: "/"),
                 HeaderField(name: ":method", value: "GET"),
-                HeaderField(name: ":scheme", value: "https"),
+                HeaderField(name: ":scheme", value: "https")
             ])
     }
 
@@ -84,7 +83,7 @@ struct QPACKDecoderTests {
             // §4.5.5 — post-base name reference (0000) needs the dynamic table.
             (label: "post-base name reference", bytes: [0x00, 0x00, 0x00]),
             // §4.5.4 — value string truncated below its declared length.
-            (label: "truncated value string", bytes: [0x00, 0x00, 0x51, 0x0B, 0x2F, 0x69, 0x6E]),
+            (label: "truncated value string", bytes: [0x00, 0x00, 0x51, 0x0B, 0x2F, 0x69, 0x6E])
         ] as [(label: String, bytes: [UInt8])])
     func malformed(_ testCase: (label: String, bytes: [UInt8])) {
         #expect("\(testCase.label) is a decompression failure") {

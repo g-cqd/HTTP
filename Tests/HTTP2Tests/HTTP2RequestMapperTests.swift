@@ -15,7 +15,6 @@ import Testing
 
 @Suite("RFC 9113 §8.3 — request mapping")
 struct HTTP2RequestMapperTests {
-
     private let stream = HTTP2StreamID(1)
 
     private func make(_ fields: [HPACKField]) throws -> HTTPRequest {
@@ -26,9 +25,11 @@ struct HTTP2RequestMapperTests {
         do {
             _ = try make(fields)
             return nil
-        } catch let error as HTTP2Error {
+        }
+        catch let error as HTTP2Error {
             return error.code
-        } catch {
+        }
+        catch {
             return nil
         }
     }
@@ -38,7 +39,7 @@ struct HTTP2RequestMapperTests {
         [
             HPACKField(name: ":method", value: "GET"),
             HPACKField(name: ":scheme", value: "https"),
-            HPACKField(name: ":path", value: "/"),
+            HPACKField(name: ":path", value: "/")
         ] + extras
     }
 
@@ -49,7 +50,7 @@ struct HTTP2RequestMapperTests {
             HPACKField(name: ":scheme", value: "https"),
             HPACKField(name: ":authority", value: "example.com"),
             HPACKField(name: ":path", value: "/index.html"),
-            HPACKField(name: "accept", value: "text/html"),
+            HPACKField(name: "accept", value: "text/html")
         ])
         #expect(mapped.method == .get)
         #expect(mapped.scheme == "https")
@@ -63,7 +64,7 @@ struct HTTP2RequestMapperTests {
         #expect(
             errorCode([
                 HPACKField(name: "accept", value: "text/html"),
-                HPACKField(name: ":method", value: "GET"),
+                HPACKField(name: ":method", value: "GET")
             ]) == .protocolError)
     }
 
@@ -72,7 +73,7 @@ struct HTTP2RequestMapperTests {
         #expect(
             errorCode([
                 HPACKField(name: ":method", value: "GET"),
-                HPACKField(name: ":method", value: "POST"),
+                HPACKField(name: ":method", value: "POST")
             ]) == .protocolError)
     }
 
@@ -92,7 +93,7 @@ struct HTTP2RequestMapperTests {
             errorCode([
                 HPACKField(name: ":method", value: "GET"),
                 HPACKField(name: ":scheme", value: "https"),
-                HPACKField(name: ":path", value: ""),
+                HPACKField(name: ":path", value: "")
             ]) == .protocolError)
     }
 
@@ -131,14 +132,14 @@ struct HTTP2RequestMapperTests {
             (name: ":authority", value: "example.com\r\nx-evil: 1"),
             (name: ":authority", value: "ex\u{00}ample.com"),
             (name: ":scheme", value: "ht\r\ntps"),
-            (name: ":scheme", value: "https\n"),
+            (name: ":scheme", value: "https\n")
         ])
     func controlByteInPseudoHeaderIsMalformed(probe: (name: String, value: String)) {
         var fields = [
             HPACKField(name: ":method", value: "GET"),
             HPACKField(name: ":scheme", value: "https"),
             HPACKField(name: ":authority", value: "example.com"),
-            HPACKField(name: ":path", value: "/"),
+            HPACKField(name: ":path", value: "/")
         ]
         fields.removeAll { $0.name == probe.name }
         fields.append(HPACKField(name: probe.name, value: probe.value))
@@ -151,7 +152,7 @@ struct HTTP2RequestMapperTests {
     func standardConnectAccepted() throws {
         let mapped = try make([
             HPACKField(name: ":method", value: "CONNECT"),
-            HPACKField(name: ":authority", value: "example.com:443"),
+            HPACKField(name: ":authority", value: "example.com:443")
         ])
         #expect(mapped.method == .connect)
         #expect(mapped.authority == "example.com:443")
@@ -164,7 +165,7 @@ struct HTTP2RequestMapperTests {
             errorCode([
                 HPACKField(name: ":method", value: "CONNECT"),
                 HPACKField(name: ":authority", value: "example.com:443"),
-                HPACKField(name: ":path", value: "/"),
+                HPACKField(name: ":path", value: "/")
             ]) == .protocolError)
     }
 

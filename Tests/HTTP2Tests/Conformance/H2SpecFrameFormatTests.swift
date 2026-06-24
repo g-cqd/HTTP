@@ -16,7 +16,6 @@ import Testing
 
 @Suite("h2spec http2 §4 — HTTP Frames")
 struct H2SpecFrameFormatTests {
-
     // MARK: §4.1 Frame Format
 
     @Test("4.1/1 — sends a frame with unknown type; MUST be ignored and discarded (RFC 9113 §4.1)")

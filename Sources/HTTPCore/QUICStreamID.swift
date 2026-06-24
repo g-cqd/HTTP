@@ -11,7 +11,6 @@
 
 /// A QUIC stream identifier (RFC 9000 §2.1): a 62-bit value with low-2-bit type classification.
 public struct QUICStreamID: Sendable, Equatable, Hashable, Comparable, RawRepresentable {
-
     /// The 62-bit identifier value.
     public let rawValue: UInt64
 
@@ -40,10 +39,10 @@ public struct QUICStreamID: Sendable, Equatable, Hashable, Comparable, RawRepres
     /// The stream class, from the two low bits (RFC 9000 §2.1).
     public var kind: Kind {
         switch rawValue & 0x3 {
-        case 0x0: .clientBidirectional
-        case 0x1: .serverBidirectional
-        case 0x2: .clientUnidirectional
-        default: .serverUnidirectional
+            case 0x0: .clientBidirectional
+            case 0x1: .serverBidirectional
+            case 0x2: .clientUnidirectional
+            default: .serverUnidirectional
         }
     }
 
@@ -60,7 +59,7 @@ public struct QUICStreamID: Sendable, Equatable, Hashable, Comparable, RawRepres
     public var isBidirectional: Bool { rawValue & 0x2 == 0 }
 
     /// Orders stream identifiers by their numeric value.
-    public static func < (lhs: QUICStreamID, rhs: QUICStreamID) -> Bool {
+    public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
 }

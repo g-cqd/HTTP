@@ -14,7 +14,6 @@ import Testing
 
 @Suite("RFC 9113 §6.5 — SETTINGS")
 struct HTTP2SettingsTests {
-
     private func applied(_ bytes: [UInt8]) throws -> HTTP2Settings {
         var settings = HTTP2Settings()
         try bytes.withUnsafeBytes { try settings.apply($0.bytes) }
@@ -25,9 +24,11 @@ struct HTTP2SettingsTests {
         do {
             _ = try applied(bytes)
             return nil
-        } catch let error as HTTP2Error {
+        }
+        catch let error as HTTP2Error {
             return error.code
-        } catch {
+        }
+        catch {
             return nil
         }
     }
@@ -38,9 +39,9 @@ struct HTTP2SettingsTests {
             0x00, 0x01, 0x00, 0x00, 0x20, 0x00,  // HEADER_TABLE_SIZE = 8192
             0x00, 0x03, 0x00, 0x00, 0x00, 0x64,  // MAX_CONCURRENT_STREAMS = 100
             0x00, 0x04, 0x00, 0x02, 0x00, 0x00,  // INITIAL_WINDOW_SIZE = 131072
-            0x00, 0x05, 0x00, 0x00, 0x40, 0x00,  // MAX_FRAME_SIZE = 16384
+            0x00, 0x05, 0x00, 0x00, 0x40, 0x00  // MAX_FRAME_SIZE = 16384
         ])
-        #expect(settings.headerTableSize == 8192)
+        #expect(settings.headerTableSize == 8_192)
         #expect(settings.maxConcurrentStreams == 100)
         #expect(settings.initialWindowSize == 131_072)
         #expect(settings.maxFrameSize == 16_384)
@@ -75,7 +76,7 @@ struct HTTP2SettingsTests {
     @Test("settings round-trip through encodePayload then apply")
     func roundTrips() throws {
         var settings = HTTP2Settings()
-        settings.headerTableSize = 8192
+        settings.headerTableSize = 8_192
         settings.enablePush = false
         settings.maxConcurrentStreams = 250
         settings.initialWindowSize = 1 << 20

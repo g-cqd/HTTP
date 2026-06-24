@@ -10,7 +10,6 @@
 /// Carries a ``HTTPStatus`` (the `:status` pseudo-header on HTTP/2 and HTTP/3, or the status-line
 /// code on HTTP/1.1) and its header fields. The same value serializes onto any HTTP version.
 public struct HTTPResponse: Sendable, Equatable {
-
     /// The response status code (RFC 9110 §15).
     public var status: HTTPStatus
 

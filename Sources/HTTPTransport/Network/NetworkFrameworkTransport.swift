@@ -20,7 +20,6 @@ internal import Synchronization
 /// genuinely `Sendable` (no `@unchecked`). Listener state changes and inbound connections
 /// (callback-driven on a dispatch queue) are bridged to `async`/`AsyncStream`.
 public final class NetworkFrameworkTransport: ServerTransport {
-
     /// The backbone this transport implements.
     public let backbone: TransportBackbone = .networkFramework
 
@@ -87,7 +86,8 @@ public final class NetworkFrameworkTransport: ServerTransport {
         let parameters = try makeParameters()  // may throw TransportError.tlsConfigurationFailed
         do {
             return try NWListener(using: parameters, on: port)
-        } catch {
+        }
+        catch {
             throw TransportError.bindFailed("\(error)")
         }
     }
@@ -114,17 +114,17 @@ public final class NetworkFrameworkTransport: ServerTransport {
         // cleartext listener `.ready` is just the completed TCP connect and ALPN resolves to nil.
         nwConnection.stateUpdateHandler = { state in
             switch state {
-            case .ready:
-                nwConnection.stateUpdateHandler = nil
-                let alpn = NetworkFrameworkTLS.negotiatedApplicationProtocol(of: nwConnection)
-                continuation.yield(
-                    NetworkFrameworkConnection(
-                        id: id, connection: nwConnection, negotiatedApplicationProtocol: alpn))
-            case .failed, .cancelled:
-                nwConnection.stateUpdateHandler = nil
-                nwConnection.cancel()
-            default:
-                break
+                case .ready:
+                    nwConnection.stateUpdateHandler = nil
+                    let alpn = NetworkFrameworkTLS.negotiatedApplicationProtocol(of: nwConnection)
+                    continuation.yield(
+                        NetworkFrameworkConnection(
+                            id: id, connection: nwConnection, negotiatedApplicationProtocol: alpn))
+                case .failed, .cancelled:
+                    nwConnection.stateUpdateHandler = nil
+                    nwConnection.cancel()
+                default:
+                    break
             }
         }
         nwConnection.start(queue: queue)
@@ -136,20 +136,20 @@ public final class NetworkFrameworkTransport: ServerTransport {
     ) {
         state.withLock { current in
             switch newState {
-            case .ready:
-                current.isReady = true
-                current.readyContinuation?.resume()
-                current.readyContinuation = nil
-            case .failed(let error):
-                let failure = TransportError.bindFailed("\(error)")
-                current.failure = failure
-                current.readyContinuation?.resume(throwing: failure)
-                current.readyContinuation = nil
-                continuation.finish()
-            case .cancelled:
-                continuation.finish()
-            default:
-                break
+                case .ready:
+                    current.isReady = true
+                    current.readyContinuation?.resume()
+                    current.readyContinuation = nil
+                case .failed(let error):
+                    let failure = TransportError.bindFailed("\(error)")
+                    current.failure = failure
+                    current.readyContinuation?.resume(throwing: failure)
+                    current.readyContinuation = nil
+                    continuation.finish()
+                case .cancelled:
+                    continuation.finish()
+                default:
+                    break
             }
         }
     }
@@ -160,9 +160,11 @@ public final class NetworkFrameworkTransport: ServerTransport {
             state.withLock { current in
                 if current.isReady {
                     continuation.resume()
-                } else if let failure = current.failure {
+                }
+                else if let failure = current.failure {
                     continuation.resume(throwing: failure)
-                } else {
+                }
+                else {
                     current.readyContinuation = continuation
                 }
             }
