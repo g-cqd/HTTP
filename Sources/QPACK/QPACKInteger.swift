@@ -66,23 +66,35 @@ public enum QPACKInteger {
     /// ``Outcome/overflow`` on a value past ``maxValue``. The reader is left unspecified on a
     /// non-`value` outcome — callers that need to retry snapshot it first.
     public static func decode(_ reader: inout ByteReader, prefixBits: Int) -> Outcome {
-        guard let first = reader.readByte() else { return .incomplete }
+        guard let first = reader.readByte() else {
+            return .incomplete
+        }
         let prefixMask = (1 << prefixBits) - 1
         var value = Int(first) & prefixMask
-        if value < prefixMask { return .value(value) }
+        if value < prefixMask {
+            return .value(value)
+        }
 
         var shift = 0
         while true {
-            guard let byte = reader.readByte() else { return .incomplete }
+            guard let byte = reader.readByte() else {
+                return .incomplete
+            }
             // Bound the running total *before* adding, so it can never overflow `Int` (§5.1).
             let added = Int(byte & 0x7F) << shift
-            guard added <= maxValue - value else { return .overflow }
+            guard added <= maxValue - value else {
+                return .overflow
+            }
             value += added
-            if byte & 0x80 == 0 { return .value(value) }
+            if byte & 0x80 == 0 {
+                return .value(value)
+            }
             shift += 7
             // At most five continuation octets are needed for any value up to `maxValue`; more is a
             // padding attack (an endless run of 0x80 octets that never terminates).
-            guard shift < 32 else { return .overflow }
+            guard shift < 32 else {
+                return .overflow
+            }
         }
     }
 }

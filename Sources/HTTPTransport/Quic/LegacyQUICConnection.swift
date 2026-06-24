@@ -41,10 +41,16 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
         }
         group.stateUpdateHandler = { [weak self] state in
             switch state {
-                case .cancelled, .failed: self?.continuation.finish()
-                default: break
+                case .cancelled, .failed:
+                    self?.continuation.finish()
+                default:
+                    break
             }
         }
+    }
+
+    deinit {
+        // No teardown beyond ARC.
     }
 
     /// Starts the underlying connection group on its queue.
@@ -78,7 +84,9 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
 
     private func acceptInbound(_ streamConnection: NWConnection) {
         streamConnection.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
+            guard let self else {
+                return
+            }
             switch state {
                 case .ready:
                     streamConnection.stateUpdateHandler = nil
@@ -107,8 +115,10 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
         }
         let id = QUICStreamID(metadata.streamIdentifier)
         return LegacyQUICStream(
-            id: id, direction: id.isUnidirectional ? .unidirectional : .bidirectional,
-            connection: connection)
+            id: id,
+            direction: id.isUnidirectional ? .unidirectional : .bidirectional,
+            connection: connection
+        )
     }
 
     private func waitUntilReady(_ connection: NWConnection) async throws {
@@ -118,11 +128,15 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
             connection.stateUpdateHandler = { state in
                 switch state {
                     case .ready:
-                        guard resumed.takeFirst() else { return }
+                        guard resumed.takeFirst() else {
+                            return
+                        }
                         connection.stateUpdateHandler = nil
                         continuation.resume()
                     case .failed(let error):
-                        guard resumed.takeFirst() else { return }
+                        guard resumed.takeFirst() else {
+                            return
+                        }
                         connection.stateUpdateHandler = nil
                         continuation.resume(throwing: error)
                     default:
@@ -136,9 +150,12 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
 
 extension Mutex where Value == Bool {
     /// Atomically flips a `false` latch to `true`, returning whether this call was the first to do so.
+    // swiftlint:disable:next strict_fileprivate - needed across types in-file
     fileprivate func takeFirst() -> Bool {
         withLock { taken in
-            guard !taken else { return false }
+            guard !taken else {
+                return false
+            }
             taken = true
             return true
         }

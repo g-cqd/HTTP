@@ -19,7 +19,9 @@ public struct HTTPField: Sendable, Hashable {
 
     /// Creates a field, returning `nil` if `value` is not a legal `field-value`.
     public init?(name: HTTPFieldName, value: String) {
-        guard FieldValidation.isValidFieldValue(value.utf8) else { return nil }
+        guard FieldValidation.isValidFieldValue(value.utf8) else {
+            return nil
+        }
         self.name = name
         self.value = value
     }
@@ -27,7 +29,9 @@ public struct HTTPField: Sendable, Hashable {
     /// Creates a field from a string name, returning `nil` if the name is not a valid `token` or
     /// the value is not a legal `field-value`.
     public init?(name: String, value: String) {
-        guard let fieldName = HTTPFieldName(name) else { return nil }
+        guard let fieldName = HTTPFieldName(name) else {
+            return nil
+        }
         self.init(name: fieldName, value: value)
     }
 

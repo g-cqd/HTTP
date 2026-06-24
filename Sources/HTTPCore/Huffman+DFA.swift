@@ -70,7 +70,9 @@ extension Huffman {
         //    emission, and any §5.2 error.
         let stateCount = children.count
         var transitions = [NibbleTransition](
-            repeating: NibbleTransition(nextState: 0, symbol: 0, flags: 0), count: stateCount * 16)
+            repeating: NibbleTransition(nextState: 0, symbol: 0, flags: 0),
+            count: stateCount * 16
+        )
         for state in 0 ..< stateCount where symbol[state] == nil {  // leaves are never start states
             for nibble in 0 ..< 16 {
                 var node = state
@@ -95,7 +97,10 @@ extension Huffman {
                 }
                 if emitted != nil { flags |= emitFlag }
                 transitions[state * 16 + nibble] = NibbleTransition(
-                    nextState: UInt16(node), symbol: UInt8(emitted ?? 0), flags: flags)
+                    nextState: UInt16(node),
+                    symbol: UInt8(emitted ?? 0),
+                    flags: flags
+                )
             }
         }
 

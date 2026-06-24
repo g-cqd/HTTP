@@ -77,14 +77,18 @@ public struct ByteReader: ~Escapable {
     @inlinable
     public func peek(ahead distance: Int) -> UInt8? {
         let index = offset + distance
-        guard index >= 0, index < bytes.byteCount else { return nil }
+        guard index >= 0, index < bytes.byteCount else {
+            return nil
+        }
         return loadByte(at: index)
     }
 
     /// Reads the byte at the current position and advances by one, or returns `nil` at end.
     @inlinable
     public mutating func readByte() -> UInt8? {
-        guard offset < bytes.byteCount else { return nil }
+        guard offset < bytes.byteCount else {
+            return nil
+        }
         defer { offset += 1 }
         return loadByte(at: offset)
     }
@@ -122,7 +126,9 @@ public struct ByteReader: ~Escapable {
     public func firstIndex(of byte: UInt8) -> Int? {
         var index = offset
         while index < bytes.byteCount {
-            if loadByte(at: index) == byte { return index }
+            if loadByte(at: index) == byte {
+                return index
+            }
             index += 1
         }
         return nil
@@ -134,7 +140,9 @@ public struct ByteReader: ~Escapable {
     /// Returns `nil` and leaves the cursor unchanged if the delimiter does not occur.
     @inlinable
     public mutating func readSlice(until delimiter: UInt8) -> Range<Int>? {
-        guard let end = firstIndex(of: delimiter) else { return nil }
+        guard let end = firstIndex(of: delimiter) else {
+            return nil
+        }
         let slice = offset ..< end
         offset = end + 1  // advance just past the delimiter
         return slice
@@ -159,6 +167,6 @@ public struct ByteReader: ~Escapable {
     /// exactly once when a value must outlive the borrowed buffer.
     @inlinable
     public func string(in range: Range<Int>) -> String {
-        slice(in: range).withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
+        slice(in: range).withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
     }
 }

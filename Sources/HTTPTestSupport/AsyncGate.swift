@@ -34,6 +34,10 @@ public final class AsyncGate: Sendable {
         state = Mutex(State(permits: initiallyOpen ? 1 : 0))
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// Tasks currently suspended on the gate — the async analogue of ``TestClock/sleeperCount``.
     public var waiterCount: Int { state.withLock(\.waiters.count) }
 
@@ -45,11 +49,16 @@ public final class AsyncGate: Sendable {
         let id = state.withLock { $0.waiters.makeID() }
         enum Action { case proceed, cancelled, suspended }
         try await withTaskCancellationHandler {
+            // Keep the closure parameter clauses on the brace line for swiftlint
+            // (closure_parameter_position); the collapsed signatures exceed swift-format's lineLength,
+            // so this one statement is exempted from swift-format below.
             try await withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Void, any Error>) in
                 let resumals = state.withLock {
                     s -> (Action, [(UnsafeContinuation<Void, any Error>, Void)]) in
-                    if Task.isCancelled { return (.cancelled, []) }
+                    if Task.isCancelled {
+                        return (.cancelled, [])
+                    }
                     if s.permits > 0 {
                         s.permits -= 1
                         return (.proceed, [])
@@ -60,9 +69,12 @@ public final class AsyncGate: Sendable {
                 }
                 for (waiter, _) in resumals.1 { waiter.resume() }
                 switch resumals.0 {
-                    case .proceed: continuation.resume()
-                    case .cancelled: continuation.resume(throwing: CancellationError())
-                    case .suspended: break
+                    case .proceed:
+                        continuation.resume()
+                    case .cancelled:
+                        continuation.resume(throwing: CancellationError())
+                    case .suspended:
+                        break
                 }
             }
         } onCancel: {
@@ -73,22 +85,34 @@ public final class AsyncGate: Sendable {
     /// Suspends until at least `count` holders are parked on the gate, then returns — the
     /// deterministic replacement for `while waiterCount < count { await Task.yield() }`.
     public func waitForWaiters(atLeast count: Int) async throws {
-        if count <= 0 { return }
+        if count <= 0 {
+            return
+        }
         let id = state.withLock { $0.countWaiters.makeID() }
         enum Action { case ready, cancelled, suspended }
         try await withTaskCancellationHandler {
+            // Keep the closure parameter clause on the brace line for swiftlint
+            // (closure_parameter_position); the collapsed signature exceeds swift-format's lineLength,
+            // so this one statement is exempted from swift-format below.
             try await withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Void, any Error>) in
                 let action = state.withLock { s -> Action in
-                    if Task.isCancelled { return .cancelled }
-                    if s.waiters.count >= count { return .ready }
+                    if Task.isCancelled {
+                        return .cancelled
+                    }
+                    if s.waiters.count >= count {
+                        return .ready
+                    }
                     s.countWaiters.park(id: id, key: count, continuation)
                     return .suspended
                 }
                 switch action {
-                    case .ready: continuation.resume()
-                    case .cancelled: continuation.resume(throwing: CancellationError())
-                    case .suspended: break
+                    case .ready:
+                        continuation.resume()
+                    case .cancelled:
+                        continuation.resume(throwing: CancellationError())
+                    case .suspended:
+                        break
                 }
             }
         } onCancel: {
@@ -102,7 +126,9 @@ public final class AsyncGate: Sendable {
     /// The continuation resumes outside the lock.
     public func open() {
         let woken = state.withLock { s -> UnsafeContinuation<Void, any Error>? in
-            if let continuation = s.waiters.wakeOne() { return continuation }
+            if let continuation = s.waiters.wakeOne() {
+                return continuation
+            }
             s.permits += 1
             return nil
         }

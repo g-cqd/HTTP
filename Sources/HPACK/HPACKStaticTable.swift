@@ -81,7 +81,9 @@ public enum HPACKStaticTable {
 
     /// Returns the static entry at HPACK index `index` (1...61), or `nil` if out of range.
     public static func field(at index: Int) -> HPACKField? {
-        guard index >= 1, index <= count else { return nil }
+        guard index >= 1, index <= count else {
+            return nil
+        }
         return entries[index - 1]
     }
 

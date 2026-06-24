@@ -25,7 +25,9 @@ extension HTTPServer {
     /// Whether the first 16 octets of `buffer` are the HTTP/2 preface marker (the commit point to h2).
     static func matchesHTTP2Marker(_ buffer: [UInt8]) -> Bool {
         let marker = HTTP2ConnectionPreface.client
-        guard buffer.count >= http2MarkerLength else { return false }
+        guard buffer.count >= http2MarkerLength else {
+            return false
+        }
         for index in 0 ..< http2MarkerLength where buffer[index] != marker[index] { return false }
         return true
     }

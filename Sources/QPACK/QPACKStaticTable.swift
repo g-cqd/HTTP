@@ -77,10 +77,12 @@ public enum QPACKStaticTable {
         HeaderField(name: "range", value: "bytes=0-"),
         HeaderField(name: "strict-transport-security", value: "max-age=31536000"),
         HeaderField(
-            name: "strict-transport-security", value: "max-age=31536000;includesubdomains"),
+            name: "strict-transport-security", value: "max-age=31536000;includesubdomains"
+        ),
         HeaderField(
             name: "strict-transport-security",
-            value: "max-age=31536000;includesubdomains;preload"),
+            value: "max-age=31536000;includesubdomains;preload"
+        ),
         HeaderField(name: "vary", value: "accept-encoding"),
         HeaderField(name: "vary", value: "origin"),
         HeaderField(name: "x-content-type-options", value: "nosniff"),
@@ -109,7 +111,8 @@ public enum QPACKStaticTable {
         HeaderField(name: "authorization"),
         HeaderField(
             name: "content-security-policy",
-            value: "script-src 'none'; object-src 'none'; base-uri 'none'"),
+            value: "script-src 'none'; object-src 'none'; base-uri 'none'"
+        ),
         HeaderField(name: "early-data", value: "1"),
         HeaderField(name: "expect-ct"),
         HeaderField(name: "forwarded"),
@@ -127,7 +130,9 @@ public enum QPACKStaticTable {
 
     /// Returns the static entry at QPACK index `index` (0...98), or `nil` if out of range.
     public static func field(at index: Int) -> HeaderField? {
-        guard index >= 0, index < count else { return nil }
+        guard index >= 0, index < count else {
+            return nil
+        }
         return entries[index]
     }
 

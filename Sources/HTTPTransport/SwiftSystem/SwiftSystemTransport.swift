@@ -31,7 +31,9 @@ public final class SwiftSystemTransport: ServerTransport {
     private let configuration: TransportConfiguration
     private let acceptQueue = DispatchQueue(label: "http.transport.swift-system.accept")
     private let ioQueue = DispatchQueue(
-        label: "http.transport.swift-system.io", attributes: .concurrent)
+        label: "http.transport.swift-system.io",
+        attributes: .concurrent
+    )
     private let state = Mutex<State>(State())
     private let connectionIDs = ConnectionIDAllocator()
 
@@ -46,6 +48,10 @@ public final class SwiftSystemTransport: ServerTransport {
         self.configuration = configuration
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
         state.withLock(\.boundPort)
@@ -54,8 +60,11 @@ public final class SwiftSystemTransport: ServerTransport {
     /// Binds a POSIX TCP listening socket and begins accepting, returning a stream of connections.
     public func start() async throws -> AsyncStream<any TransportConnection> {
         let listener = try POSIXSocket.makeListenSocket(
-            host: configuration.host, port: configuration.port, nonBlocking: false,
-            reusePort: configuration.reusePort)
+            host: configuration.host,
+            port: configuration.port,
+            nonBlocking: false,
+            reusePort: configuration.reusePort
+        )
         let descriptor = FileDescriptor(rawValue: listener.descriptor)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
         state.withLock {
@@ -108,7 +117,9 @@ public final class SwiftSystemTransport: ServerTransport {
                     id: id,
                     descriptor: FileDescriptor(rawValue: clientFD),
                     peer: POSIXSocket.peerAddress(from: address),
-                    targetQueue: ioQueue))
+                    targetQueue: ioQueue
+                )
+            )
         }
         continuation.finish()
     }

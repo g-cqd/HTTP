@@ -51,11 +51,11 @@ public enum QPACKInstructions {
             if first & 0x40 != 0 {
                 throw .encoderStreamError("insert with literal name (dynamic table disabled)")
             }
-            if first & 0x20 != 0 {
-                guard try consumeSetCapacity(&reader, maxCapacity: maxCapacity) else { return }
-            }
-            else {
+            guard first & 0x20 != 0 else {
                 throw .encoderStreamError("duplicate (dynamic table disabled)")
+            }
+            guard try consumeSetCapacity(&reader, maxCapacity: maxCapacity) else {
+                return
             }
         }
     }
@@ -73,11 +73,15 @@ public enum QPACKInstructions {
             }
             if first & 0x40 != 0 {
                 // §4.4.2 Stream Cancellation — consumed and ignored (no dynamic-table state).
-                guard try consumeStreamCancellation(&reader) else { return }
+                guard try consumeStreamCancellation(&reader) else {
+                    return
+                }
             }
             else {
                 // §4.4.3 Insert Count Increment — always a violation here (no inserts were sent).
-                guard try consumeInsertCountIncrement(&reader) else { return }
+                guard try consumeInsertCountIncrement(&reader) else {
+                    return
+                }
             }
         }
     }
@@ -129,7 +133,8 @@ public enum QPACKInstructions {
                 throw .decoderStreamError(
                     increment == 0
                         ? "Insert Count Increment of 0"
-                        : "Insert Count Increment beyond what the encoder sent")
+                        : "Insert Count Increment beyond what the encoder sent"
+                )
             case .incomplete:
                 return false
             case .overflow:

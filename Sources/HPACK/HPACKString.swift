@@ -66,7 +66,7 @@ public enum HPACKString {
             do { return try Huffman.decodeString(payload) }
             catch { throw .invalidHuffman }
         }
-        return payload.withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
+        return payload.withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
     }
 
     /// Parses the §5.2 string header (H flag + 7-bit length), bounds the declared length against

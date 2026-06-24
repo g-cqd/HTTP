@@ -68,7 +68,7 @@ struct HPACKDynamicTableTests {
         var table = HPACKDynamicTable(maxSize: 4_096)
         table.add(HPACKField(name: "cache-control", value: "no-cache"))
         table.setMaxSize(0)
-        #expect(table.count == 0)
+        #expect(table.isEmpty)
         #expect(table.size == 0)
     }
 
@@ -79,7 +79,7 @@ struct HPACKDynamicTableTests {
         // 1 + 100 + 32 = 133 octets, larger than the whole 100-octet table.
         table.add(HPACKField(name: "x", value: String(repeating: "y", count: 100)))
 
-        #expect(table.count == 0)
+        #expect(table.isEmpty)
         #expect(table.size == 0)
     }
 }

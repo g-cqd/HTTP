@@ -48,13 +48,19 @@ public struct HTTP3FrameDecoder {
     public func nextFrame(_ reader: inout ByteReader) throws(HTTP3Error) -> Frame? {
         // Probe on a copy so an incomplete frame leaves the real cursor untouched for a later retry.
         var probe = reader
-        guard let rawType = QUICVarint.decode(&probe) else { return nil }
-        guard let length = QUICVarint.decode(&probe) else { return nil }
+        guard let rawType = QUICVarint.decode(&probe) else {
+            return nil
+        }
+        guard let length = QUICVarint.decode(&probe) else {
+            return nil
+        }
         guard length <= UInt64(maxFrameSize) else {
             throw .connection(.h3ExcessiveLoad, "frame payload exceeds the accepted maximum")
         }
         let payloadLength = Int(length)
-        guard probe.remaining >= payloadLength else { return nil }
+        guard probe.remaining >= payloadLength else {
+            return nil
+        }
 
         reader.advance(by: probe.position - reader.position)  // consume the type + length varints
         let start = reader.position

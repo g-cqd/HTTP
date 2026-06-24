@@ -38,7 +38,9 @@ public enum HTTP2ConnectionPreface {
             }
             index += 1
         }
-        guard reader.remaining >= client.count else { return .incomplete }
+        guard reader.remaining >= client.count else {
+            return .incomplete
+        }
         reader.advance(by: client.count)
         return .matched
     }

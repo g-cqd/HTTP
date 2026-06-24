@@ -51,8 +51,7 @@ public struct HTTP3Error: Error, Sendable, Equatable {
     }
 
     /// A connection error carrying a QPACK code (RFC 9204 §6) — a QPACK fault is always fatal.
-    public static func connection(qpack code: QPACKError.Code, _ reason: String = "") -> Self
-    {
+    public static func connection(qpack code: QPACKError.Code, _ reason: String = "") -> Self {
         Self(code: UInt64(code.rawValue), streamID: nil, reason: reason)
     }
 }

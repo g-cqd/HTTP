@@ -24,14 +24,18 @@ public func expectThrows<T, E: Error>(
     do {
         _ = try expression()
         Issue.record(
-            "expected to throw \(E.self), but returned normally", sourceLocation: sourceLocation)
+            "expected to throw \(E.self), but returned normally", sourceLocation: sourceLocation
+        )
         return nil
     }
     catch let error as E {
-        if predicate(error) { return error }
+        if predicate(error) {
+            return error
+        }
         Issue.record(
             "threw \(error) but its payload was rejected by the predicate",
-            sourceLocation: sourceLocation)
+            sourceLocation: sourceLocation
+        )
         return error
     }
     catch {
@@ -50,14 +54,18 @@ public func expectThrows<T, E: Error>(
     do {
         _ = try await expression()
         Issue.record(
-            "expected to throw \(E.self), but returned normally", sourceLocation: sourceLocation)
+            "expected to throw \(E.self), but returned normally", sourceLocation: sourceLocation
+        )
         return nil
     }
     catch let error as E {
-        if predicate(error) { return error }
+        if predicate(error) {
+            return error
+        }
         Issue.record(
             "threw \(error) but its payload was rejected by the predicate",
-            sourceLocation: sourceLocation)
+            sourceLocation: sourceLocation
+        )
         return error
     }
     catch {

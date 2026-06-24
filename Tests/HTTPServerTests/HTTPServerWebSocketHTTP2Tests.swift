@@ -21,8 +21,10 @@ struct HTTPServerWebSocketHTTP2Tests {
     @Test("Extended CONNECT upgrades to WebSocket and echoes a text frame")
     func webSocketOverHTTP2() async throws {
         let echo = ClosureWebSocketHandler { event in
-            guard case .message(let opcode, let payload) = event, opcode == .text else { return [] }
-            return [.sendText(String(decoding: payload, as: UTF8.self))]
+            guard case .message(let opcode, let payload) = event, opcode == .text else {
+                return []
+            }
+            return [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
         }
 
         var wire = HTTP2ConnectionPreface.client
@@ -34,7 +36,8 @@ struct HTTPServerWebSocketHTTP2Tests {
         let server = HTTPServer(
             transport: FakeTransport(),
             responder: ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .notFound)) },
-            webSocketHandler: echo)
+            webSocketHandler: echo
+        )
         await server.serve(connection)
 
         let frames = try decodeFrames(await connection.sentBytes())
@@ -52,8 +55,7 @@ struct HTTPServerWebSocketHTTP2Tests {
     private func settingsFrame() -> [UInt8] {
         var out: [UInt8] = []
         HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection)
-            .encode(
-                into: &out)
+            .encode(into: &out)
         return out
     }
 
@@ -68,7 +70,9 @@ struct HTTPServerWebSocketHTTP2Tests {
         ])
         var out: [UInt8] = []
         HTTP2FrameHeader(
-            payloadLength: block.count, type: .headers, flags: [.endHeaders],
+            payloadLength: block.count,
+            type: .headers,
+            flags: [.endHeaders],
             streamID: HTTP2StreamID(streamID)
         )
         .encode(into: &out)
@@ -116,7 +120,8 @@ struct HTTPServerWebSocketHTTP2Tests {
         var status: String?
         for frame in frames where frame.header.type == .headers {
             let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
-                frame.payload, flags: frame.header.flags)
+                frame.payload, flags: frame.header.flags
+            )
             let fields = try Array(fragment).withUnsafeBytes { try decoder.decode($0.bytes) }
             guard frame.header.streamID == HTTP2StreamID(streamID) else { continue }
             for field in fields where field.name == ":status" { status = field.value }
@@ -125,7 +130,9 @@ struct HTTPServerWebSocketHTTP2Tests {
     }
 
     private func containsSubsequence(_ haystack: [UInt8], _ needle: [UInt8]) -> Bool {
-        guard needle.count <= haystack.count, !needle.isEmpty else { return false }
+        guard needle.count <= haystack.count, !needle.isEmpty else {
+            return false
+        }
         for start in 0 ... (haystack.count - needle.count)
         where Array(haystack[start ..< start + needle.count]) == needle {
             return true

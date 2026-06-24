@@ -9,18 +9,6 @@
 //  not all 1-bits.
 //
 
-/// An error decoding a Huffman-coded string (RFC 7541 §5.2).
-public enum HuffmanError: Error, Sendable, Equatable {
-    /// The encoded data decoded the `EOS` symbol, which MUST NOT appear in the input (§5.2).
-    case eosInInput
-
-    /// The trailing padding was longer than 7 bits, or was not the MSBs of `EOS` (all 1-bits) (§5.2).
-    case invalidPadding
-
-    /// The bit stream did not form any valid code within the maximum code length.
-    case invalidCode
-}
-
 /// The canonical HTTP Huffman code (RFC 7541 Appendix B).
 public enum Huffman {
     /// The end-of-string symbol — its code's high bits pad the final octet; it is never a literal.
@@ -102,7 +90,9 @@ public enum Huffman {
             do {
                 let written = try decode(input, into: buffer)
                 decoded = String(
-                    decoding: UnsafeBufferPointer(rebasing: buffer[..<written]), as: UTF8.self)
+                    decoding: UnsafeBufferPointer(rebasing: buffer[..<written]),
+                    as: Unicode.UTF8.self
+                )
             }
             catch {
                 caught = error

@@ -36,8 +36,7 @@ struct ConditionalRequestMiddlewareTests {
         let etag = first.head.headerFields[.etag]
         #expect(etag != nil)
         let second = await body("cached payload")
-            .respond(
-                to: get(ifNoneMatch: etag ?? ""), body: [])
+            .respond(to: get(ifNoneMatch: etag ?? ""), body: [])
         #expect(second.head.status == .notModified)
         #expect(second.body.isEmpty)
         #expect(second.head.headerFields[.etag] == etag)
@@ -68,8 +67,7 @@ struct ConditionalRequestMiddlewareTests {
     @Test("a non-200 response is not tagged")
     func skipsErrors() async {
         let response = await body("error", status: .internalServerError)
-            .respond(
-                to: get(), body: [])
+            .respond(to: get(), body: [])
         #expect(response.head.headerFields[.etag] == nil)
     }
 
@@ -77,6 +75,7 @@ struct ConditionalRequestMiddlewareTests {
         var fields = HTTPFields()
         if let ifNoneMatch { _ = fields.append(ifNoneMatch, for: .ifNoneMatch) }
         return HTTPRequest(
-            method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields)
+            method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields
+        )
     }
 }

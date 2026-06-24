@@ -11,26 +11,6 @@
 internal import Synchronization
 public import Testing
 
-/// Raised when an ``AsyncEventProbe/wait(forAtLeast:within:clock:)`` boundary is not reached before
-/// its (clock-driven) timeout.
-///
-/// Carries the probe's *creation* site, so a hung test points at the probe rather than at the timeout
-/// machinery.
-public struct AsyncEventProbeTimeoutError: Error, CustomStringConvertible {
-    /// The number of events the wait required.
-    public let requested: Int
-    /// The number of events recorded when the timeout fired.
-    public let recorded: Int
-    /// The source location where the probe was created.
-    public let creation: SourceLocation
-
-    /// A human-readable description naming the shortfall and the probe's creation site.
-    public var description: String {
-        "AsyncEventProbe timed out waiting for at least \(requested) event(s); only \(recorded) recorded. "
-            + "Probe created at \(creation)."
-    }
-}
-
 /// A suspend-until-count event boundary.
 ///
 /// The timeout is **clock-injectable**: ``wait(forAtLeast:within:clock:)`` races the boundary against
@@ -54,6 +34,10 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
     /// Creates a probe; `sourceLocation` records the creation site for stall diagnostics.
     public init(sourceLocation: SourceLocation = #_sourceLocation) {
         self.creation = sourceLocation
+    }
+
+    deinit {
+        // No teardown beyond ARC.
     }
 
     /// All events recorded so far — the introspection native `Confirmation` lacks.
@@ -84,14 +68,19 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
         within duration: C.Duration,
         clock: C
     ) async throws -> [Event] {
-        if count <= 0 { return events }
+        if count <= 0 {
+            return events
+        }
         let creation = self.creation
         return try await withThrowingTaskGroup(of: [Event].self) { group in
             group.addTask { try await self.waitForThreshold(count) }
             group.addTask {
                 try await clock.sleep(for: duration)
                 throw AsyncEventProbeTimeoutError(
-                    requested: count, recorded: self.count, creation: creation)
+                    requested: count,
+                    recorded: self.count,
+                    creation: creation
+                )
             }
             defer { group.cancelAll() }
             return try await group.next() ?? []
@@ -111,18 +100,28 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
     private func waitForThreshold(_ count: Int) async throws -> [Event] {
         let id = state.withLock { $0.waiters.makeID() }
         return try await withTaskCancellationHandler {
+            // Keep the closure parameter clause on the brace line for swiftlint
+            // (closure_parameter_position); the collapsed signature exceeds swift-format's lineLength,
+            // so this one statement is exempted from swift-format below.
             try await withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<[Event], any Error>) in
                 let action = state.withLock { s -> ThresholdAction in
-                    if Task.isCancelled { return .cancelled }
-                    if s.events.count >= count { return .ready(s.events) }
+                    if Task.isCancelled {
+                        return .cancelled
+                    }
+                    if s.events.count >= count {
+                        return .ready(s.events)
+                    }
                     s.waiters.park(id: id, key: count, continuation)
                     return .suspended
                 }
                 switch action {
-                    case .ready(let events): continuation.resume(returning: events)
-                    case .cancelled: continuation.resume(throwing: CancellationError())
-                    case .suspended: break
+                    case .ready(let events):
+                        continuation.resume(returning: events)
+                    case .cancelled:
+                        continuation.resume(throwing: CancellationError())
+                    case .suspended:
+                        break
                 }
             }
         } onCancel: {

@@ -24,7 +24,9 @@ func assertLoopbackEcho(
 
     let server = Task {
         var iterator = stream.makeAsyncIterator()
-        guard let connection = await iterator.next() else { return }
+        guard let connection = await iterator.next() else {
+            return
+        }
         let chunk = try await connection.receive(maxLength: 64)
         if let chunk {
             try await connection.send(chunk)
@@ -35,7 +37,10 @@ func assertLoopbackEcho(
     let endpointPort = try #require(NWEndpoint.Port(rawValue: port))
     let client = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
     let bridged = NetworkFrameworkConnection(
-        id: TransportConnectionID(0), connection: client, negotiatedApplicationProtocol: nil)
+        id: TransportConnectionID(0),
+        connection: client,
+        negotiatedApplicationProtocol: nil
+    )
     client.start(queue: .global())
 
     try await bridged.send(payload)

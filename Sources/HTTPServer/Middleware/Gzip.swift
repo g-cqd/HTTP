@@ -19,7 +19,9 @@ enum Gzip {
 
     /// Compresses `input` into a gzip member, or `nil` if it is empty or DEFLATE could not encode it.
     static func compress(_ input: [UInt8]) -> [UInt8]? {
-        guard !input.isEmpty, let deflated = deflate(input) else { return nil }
+        guard !input.isEmpty, let deflated = deflate(input) else {
+            return nil
+        }
         var out = header
         out.reserveCapacity(header.count + deflated.count + 8)
         out.append(contentsOf: deflated)
@@ -38,10 +40,13 @@ enum Gzip {
                 guard let source = source.baseAddress, let destination = destination.baseAddress
                 else { return 0 }
                 return compression_encode_buffer(
-                    destination, capacity, source, input.count, nil, COMPRESSION_ZLIB)
+                    destination, capacity, source, input.count, nil, COMPRESSION_ZLIB
+                )
             }
         }
-        guard written > 0 else { return nil }
+        guard written > 0 else {
+            return nil
+        }
         destination.removeLast(destination.count - written)
         return destination
     }

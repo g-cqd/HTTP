@@ -22,7 +22,7 @@ struct HTTPServerTests {
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array(request.utf8))
         let server = HTTPServer(transport: FakeTransport(), responder: responder)
         await server.serve(connection)
-        return String(decoding: await connection.sentBytes(), as: UTF8.self)
+        return String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
     }
 
     @Test("serves a request and writes the serialized response")
@@ -31,7 +31,8 @@ struct HTTPServerTests {
             ServerResponse(HTTPResponse(status: .ok), body: Array("hi from \(request.path)".utf8))
         }
         let wire = await serve(
-            request: "GET /hello HTTP/1.1\r\nHost: x\r\n\r\n", responder: responder)
+            request: "GET /hello HTTP/1.1\r\nHost: x\r\n\r\n", responder: responder
+        )
         #expect(wire.hasPrefix("HTTP/1.1 200 OK\r\n"))
         #expect(wire.contains("hi from /hello"))
     }
@@ -43,7 +44,8 @@ struct HTTPServerTests {
         }
         let wire = await serve(
             request: "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello",
-            responder: responder)
+            responder: responder
+        )
         #expect(wire.hasSuffix("\r\n\r\nhello"))
     }
 
@@ -54,7 +56,8 @@ struct HTTPServerTests {
         let wire = await serve(
             request:
                 "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n",
-            responder: responder)
+            responder: responder
+        )
         #expect(wire.hasPrefix("HTTP/1.1 400 Bad Request\r\n"))
     }
 
@@ -63,7 +66,8 @@ struct HTTPServerTests {
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let wire = await serve(
             request: "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: gzip\r\n\r\n",
-            responder: responder)
+            responder: responder
+        )
         #expect(wire.hasPrefix("HTTP/1.1 501 "))
     }
 
@@ -75,7 +79,8 @@ struct HTTPServerTests {
         // Two requests pipelined on one persistent connection (RFC 9112 §9.3).
         let wire = await serve(
             request: "GET /a HTTP/1.1\r\nHost: x\r\n\r\nGET /b HTTP/1.1\r\nHost: x\r\n\r\n",
-            responder: responder)
+            responder: responder
+        )
         #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 2)
         #expect(wire.hasSuffix("\r\n\r\n/b"))  // second response served after the first
         #expect(!wire.contains(" 400 "))  // a clean EOF on a boundary is not an error
@@ -90,7 +95,8 @@ struct HTTPServerTests {
         let wire = await serve(
             request:
                 "GET /a HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\nGET /b HTTP/1.1\r\nHost: x\r\n\r\n",
-            responder: responder)
+            responder: responder
+        )
         #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 1)
         #expect(wire.hasSuffix("\r\n\r\n/a"))
     }
@@ -102,7 +108,8 @@ struct HTTPServerTests {
         }
         // Two pipelined HTTP/1.0 requests; 1.0 is non-persistent by default, so only /a is served.
         let wire = await serve(
-            request: "GET /a HTTP/1.0\r\n\r\nGET /b HTTP/1.0\r\n\r\n", responder: responder)
+            request: "GET /a HTTP/1.0\r\n\r\nGET /b HTTP/1.0\r\n\r\n", responder: responder
+        )
         #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 1)
         #expect(wire.hasSuffix("\r\n\r\n/a"))
     }
@@ -115,7 +122,8 @@ struct HTTPServerTests {
         let wire = await serve(
             request: "GET /a HTTP/1.0\r\nConnection: keep-alive\r\n\r\n"
                 + "GET /b HTTP/1.0\r\nConnection: keep-alive\r\n\r\n",
-            responder: responder)
+            responder: responder
+        )
         #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 2)
     }
 
@@ -136,21 +144,24 @@ struct HTTPServerTests {
         let wire = await serve(
             request:
                 "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n",
-            responder: responder)
+            responder: responder
+        )
         #expect(wire.hasPrefix("HTTP/1.1 400 Bad Request\r\n"))
         #expect(wire.contains("connection: close\r\n"))
     }
 
     @Test(
         "an idle persistent connection is closed after the keep-alive timeout (Slowloris)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(.minutes(1))
+    )
     func idleTimeoutClosesConnection() async {
         let clock = TestClock()
         let limits = HTTPLimits(keepAliveTimeout: .milliseconds(100))
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let connection = HangingConnection(id: TransportConnectionID(1))
         let server = HTTPServer(
-            transport: FakeTransport(), responder: responder, limits: limits, clock: clock)
+            transport: FakeTransport(), responder: responder, limits: limits, clock: clock
+        )
 
         // Serve concurrently with a time pump that advances past every keep-alive deadline the server
         // arms (the peer never sends), until serve() closes the connection. Zero real-time waiting —
@@ -171,7 +182,8 @@ struct HTTPServerTests {
 
     @Test(
         "rejects connections beyond maxConnectionsPerClient for one peer",
-        .timeLimit(.minutes(1)))
+        .timeLimit(.minutes(1))
+    )
     func perClientConnectionCap() async throws {
         let limits = HTTPLimits(maxConnectionsPerClient: 2)
         let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
@@ -180,7 +192,8 @@ struct HTTPServerTests {
         let connections = (1 ... 3)
             .map {
                 HangingConnection(
-                    id: TransportConnectionID(UInt64($0)), peer: peer, admissionProbe: probe)
+                    id: TransportConnectionID(UInt64($0)), peer: peer, admissionProbe: probe
+                )
             }
         let server = HTTPServer(
             transport: FakeTransport(connections: connections), responder: responder, limits: limits
@@ -213,7 +226,8 @@ struct HTTPServerTests {
                 HangingConnection(
                     id: TransportConnectionID(UInt64($0)),
                     peer: TransportAddress(host: "198.51.100.\($0)", port: 0),
-                    admissionProbe: probe)
+                    admissionProbe: probe
+                )
             }
         let server = HTTPServer(
             transport: FakeTransport(connections: connections), responder: responder, limits: limits
@@ -241,7 +255,7 @@ struct HTTPServerTests {
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array(flood.utf8))
         let server = HTTPServer(transport: FakeTransport(), responder: responder, limits: limits)
         await server.serve(connection)
-        let wire = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        let wire = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
         #expect(wire.hasPrefix("HTTP/1.1 431"))
         #expect(wire.contains("connection: close\r\n"))
     }
@@ -253,10 +267,11 @@ struct HTTPServerTests {
         }
         let request = "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
         let connection = DribblingConnection(
-            id: TransportConnectionID(1), inbound: Array(request.utf8), chunkSize: 1)
+            id: TransportConnectionID(1), inbound: Array(request.utf8), chunkSize: 1
+        )
         let server = HTTPServer(transport: FakeTransport(), responder: responder)
         await server.serve(connection)
-        let wire = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        let wire = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
         #expect(wire.hasSuffix("\r\n\r\nhello"))
     }
 
@@ -270,10 +285,11 @@ struct HTTPServerTests {
             "POST /echo HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n"
             + "4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n"
         let connection = DribblingConnection(
-            id: TransportConnectionID(1), inbound: Array(request.utf8), chunkSize: 3)
+            id: TransportConnectionID(1), inbound: Array(request.utf8), chunkSize: 3
+        )
         let server = HTTPServer(transport: FakeTransport(), responder: responder)
         await server.serve(connection)
-        let wire = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        let wire = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
         #expect(wire.hasSuffix("\r\n\r\nWikipedia"))
     }
 }

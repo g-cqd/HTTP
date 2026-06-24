@@ -38,12 +38,18 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
         self.connection = connection
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
     public func receive(maxLength: Int) async throws -> [UInt8]? {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                connection.receive(minimumIncompleteLength: 1, maximumLength: max(1, maxLength)) {
-                    data, _, isComplete, error in
+                connection.receive(
+                    minimumIncompleteLength: 1,
+                    maximumLength: max(1, maxLength)
+                ) { data, _, isComplete, error in
                     if let error {
                         continuation.resume(throwing: error)
                     }
@@ -77,7 +83,8 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
                         else {
                             continuation.resume()
                         }
-                    })
+                    }
+                )
             }
         } onCancel: {
             cancelUnderlying()

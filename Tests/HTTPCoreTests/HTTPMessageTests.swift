@@ -14,7 +14,11 @@ struct HTTPRequestTests {
     @Test("stores its components")
     func storesComponents() {
         let request = HTTPRequest(
-            method: .get, scheme: "https", authority: "example.com", path: "/users")
+            method: .get,
+            scheme: "https",
+            authority: "example.com",
+            path: "/users"
+        )
         #expect(request.method == .get)
         #expect(request.scheme == "https")
         #expect(request.authority == "example.com")
@@ -27,7 +31,11 @@ struct HTTPRequestTests {
         var fields = HTTPFields()
         fields.append("from-host.example", for: .host)
         let request = HTTPRequest(
-            method: .get, authority: "from-authority.example", path: "/", headerFields: fields)
+            method: .get,
+            authority: "from-authority.example",
+            path: "/",
+            headerFields: fields
+        )
         #expect(request.effectiveAuthority == "from-authority.example")
     }
 
@@ -43,25 +51,5 @@ struct HTTPRequestTests {
     func effectiveAuthorityNilWhenAbsent() {
         let request = HTTPRequest(method: .get, path: "/")
         #expect(request.effectiveAuthority == nil)
-    }
-}
-
-@Suite("RFC 9110 §3/§15 — HTTPResponse")
-struct HTTPResponseTests {
-    @Test("stores its status and fields")
-    func storesStatusAndFields() {
-        var fields = HTTPFields()
-        fields.append("text/plain", for: .contentType)
-        let response = HTTPResponse(status: .ok, headerFields: fields)
-        #expect(response.status == .ok)
-        #expect(response.status.kind == .successful)
-        #expect(response.headerFields[.contentType] == "text/plain")
-    }
-
-    @Test("defaults to empty header fields")
-    func defaultsToEmptyFields() {
-        let response = HTTPResponse(status: .notFound)
-        #expect(response.status.code == 404)
-        #expect(response.headerFields.isEmpty)
     }
 }

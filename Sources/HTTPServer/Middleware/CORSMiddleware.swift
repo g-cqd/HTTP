@@ -66,11 +66,15 @@ public struct CORSMiddleware: HTTPMiddleware {
         if allowCredentials {
             _ = head.headerFields.setValue("true", for: .accessControlAllowCredentials)
         }
-        guard preflight else { return }
+        guard preflight else {
+            return
+        }
         _ = head.headerFields.setValue(
-            allowedMethods.map(\.rawValue).joined(separator: ", "), for: .accessControlAllowMethods)
+            allowedMethods.map(\.rawValue).joined(separator: ", "), for: .accessControlAllowMethods
+        )
         _ = head.headerFields.setValue(
-            allowedHeaders.joined(separator: ", "), for: .accessControlAllowHeaders)
+            allowedHeaders.joined(separator: ", "), for: .accessControlAllowHeaders
+        )
         if let maxAge {
             _ = head.headerFields.setValue(String(maxAge), for: .accessControlMaxAge)
         }
@@ -78,8 +82,10 @@ public struct CORSMiddleware: HTTPMiddleware {
 
     private func allowOrigin(for origin: String?) -> String {
         switch allowedOrigin {
-            case .exact(let value): value
-            case .any: allowCredentials ? (origin ?? "*") : "*"
+            case .exact(let value):
+                value
+            case .any:
+                allowCredentials ? (origin ?? "*") : "*"
         }
     }
 }

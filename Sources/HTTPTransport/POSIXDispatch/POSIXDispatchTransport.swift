@@ -26,7 +26,9 @@ public final class POSIXDispatchTransport: ServerTransport {
     private let configuration: TransportConfiguration
     private let acceptQueue = DispatchQueue(label: "http.transport.posix-dispatch.accept")
     private let ioQueue = DispatchQueue(
-        label: "http.transport.posix-dispatch.io", attributes: .concurrent)
+        label: "http.transport.posix-dispatch.io",
+        attributes: .concurrent
+    )
     private let state = Mutex<State>(State())
     private let connectionIDs = ConnectionIDAllocator()
 
@@ -44,6 +46,10 @@ public final class POSIXDispatchTransport: ServerTransport {
         self.configuration = configuration
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
         state.withLock(\.boundPort)
@@ -52,12 +58,17 @@ public final class POSIXDispatchTransport: ServerTransport {
     /// Binds a non-blocking TCP socket and begins accepting via a read source.
     public func start() async throws -> AsyncStream<any TransportConnection> {
         let listener = try POSIXSocket.makeListenSocket(
-            host: configuration.host, port: configuration.port, nonBlocking: true,
-            reusePort: configuration.reusePort)
+            host: configuration.host,
+            port: configuration.port,
+            nonBlocking: true,
+            reusePort: configuration.reusePort
+        )
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
 
         let source = DispatchSource.makeReadSource(
-            fileDescriptor: listener.descriptor, queue: acceptQueue)
+            fileDescriptor: listener.descriptor,
+            queue: acceptQueue
+        )
         source.setEventHandler { [weak self] in
             self?.acceptPending(listenFD: listener.descriptor, continuation: continuation)
         }
@@ -119,11 +130,17 @@ public final class POSIXDispatchTransport: ServerTransport {
             // connection's read/write readiness handling and close (so a close never races a syscall on
             // the fd), while still spreading connections across the pool's threads.
             let connectionQueue = DispatchQueue(
-                label: "http.transport.posix-dispatch.conn", target: ioQueue)
+                label: "http.transport.posix-dispatch.conn",
+                target: ioQueue
+            )
             continuation.yield(
                 POSIXDispatchConnection(
-                    id: id, descriptor: clientFD,
-                    peer: POSIXSocket.peerAddress(from: address), queue: connectionQueue))
+                    id: id,
+                    descriptor: clientFD,
+                    peer: POSIXSocket.peerAddress(from: address),
+                    queue: connectionQueue
+                )
+            )
         }
     }
 }

@@ -9,13 +9,13 @@
 /// An in-memory ``TransportConnection`` for deterministic tests.
 public actor FakeConnection: TransportConnection {
     /// The connection's stable identifier.
-    public nonisolated let id: TransportConnectionID
+    nonisolated public let id: TransportConnectionID
 
     /// The peer's address.
-    public nonisolated let peer: TransportAddress
+    nonisolated public let peer: TransportAddress
 
     /// The ALPN-negotiated protocol to report (RFC 7301), injected for routing tests.
-    public nonisolated let negotiatedApplicationProtocol: String?
+    nonisolated public let negotiatedApplicationProtocol: String?
 
     private var inbound: ArraySlice<UInt8>
     private var output: [UInt8] = []
@@ -36,7 +36,9 @@ public actor FakeConnection: TransportConnection {
 
     /// Delivers the next buffered inbound chunk (up to `maxLength`), or `nil` at EOF.
     public func receive(maxLength: Int) async -> [UInt8]? {
-        guard !inbound.isEmpty else { return nil }
+        guard !inbound.isEmpty else {
+            return nil
+        }
         let count = min(maxLength, inbound.count)
         defer { inbound = inbound.dropFirst(count) }
         return Array(inbound.prefix(count))

@@ -64,7 +64,8 @@ struct ByteReaderTests {
     func firstIndexOf() {
         withReader(over: "key: value") { reader in
             #expect(reader.firstIndex(of: UInt8(ascii: ":")) == 3)
-            #expect(reader.firstIndex(of: UInt8(ascii: "?")) == nil)
+            let missingByteIndex = reader.firstIndex(of: UInt8(ascii: "?"))
+            #expect(missingByteIndex == nil)
             #expect(reader.position == 0)  // non-mutating
         }
     }

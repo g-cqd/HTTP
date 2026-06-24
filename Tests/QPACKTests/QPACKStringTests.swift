@@ -19,7 +19,8 @@ struct QPACKStringTests {
             Result { () throws(QPACKError) in
                 var reader = ByteReader(raw)
                 return try QPACKString.decodeString(
-                    &reader, prefixBits: prefixBits, maxEncodedLength: 4_096)
+                    &reader, prefixBits: prefixBits, maxEncodedLength: 4_096
+                )
             }
         }
         return try result.get()

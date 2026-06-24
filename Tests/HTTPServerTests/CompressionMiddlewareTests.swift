@@ -54,8 +54,7 @@ struct CompressionMiddlewareTests {
     func skipsIncompressible() async {
         let body = [UInt8](repeating: 7, count: 4_096)
         let response = await wrapped(body, contentType: "image/png")
-            .respond(
-                to: get("gzip"), body: [])
+            .respond(to: get("gzip"), body: [])
         #expect(response.head.headerFields[.contentEncoding] == nil)
     }
 
@@ -81,7 +80,8 @@ struct CompressionMiddlewareTests {
         var fields = HTTPFields()
         if let acceptEncoding { _ = fields.append(acceptEncoding, for: .acceptEncoding) }
         return HTTPRequest(
-            method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields)
+            method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields
+        )
     }
 
     /// Inflates a gzip member by stripping the 10-octet header and 8-octet trailer, then decoding the
@@ -94,7 +94,8 @@ struct CompressionMiddlewareTests {
                 guard let source = source.baseAddress, let destination = destination.baseAddress
                 else { return 0 }
                 return compression_decode_buffer(
-                    destination, 1 << 20, source, deflate.count, nil, COMPRESSION_ZLIB)
+                    destination, 1 << 20, source, deflate.count, nil, COMPRESSION_ZLIB
+                )
             }
         }
         return Array(destination.prefix(written))

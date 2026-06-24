@@ -18,7 +18,9 @@ struct ConnectionIDAllocator: ~Copyable, Sendable {
     private let counter = Atomic<UInt64>(0)
 
     /// Creates an allocator whose first ``next()`` returns id `1`.
-    init() {}
+    init() {
+        // No setup beyond the zero-initialized counter.
+    }
 
     /// Returns the next unique connection id.
     func next() -> TransportConnectionID {

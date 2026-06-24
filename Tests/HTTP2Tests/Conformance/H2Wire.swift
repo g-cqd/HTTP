@@ -48,7 +48,9 @@ enum H2Wire {
     ) -> [UInt8] {
         var out: [UInt8] = []
         HTTP2FrameHeader(
-            payloadLength: payload.count, type: type, flags: flags,
+            payloadLength: payload.count,
+            type: type,
+            flags: flags,
             streamID: HTTP2StreamID(streamID)
         )
         .encode(into: &out)
@@ -205,8 +207,11 @@ enum H2Wire {
         endHeaders: Bool = true
     ) -> [UInt8] {
         frame(
-            .continuation, flags: endHeaders ? [.endHeaders] : [], streamID: streamID,
-            payload: fragment)
+            .continuation,
+            flags: endHeaders ? [.endHeaders] : [],
+            streamID: streamID,
+            payload: fragment
+        )
     }
 
     // MARK: PUSH_PROMISE (§6.6)

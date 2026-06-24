@@ -18,7 +18,8 @@ let getRequestBytes = Array(
         + "Accept: text/html,application/json\r\n"
         + "Accept-Encoding: gzip, br\r\n"
         + "\r\n")
-        .utf8)
+        .utf8
+)
 
 let headerBlockBytes = Array(
     ("Host: example.com\r\n"
@@ -27,7 +28,8 @@ let headerBlockBytes = Array(
         + "Accept-Encoding: gzip, br\r\n"
         + "Cookie: session=abc123; theme=dark\r\n"
         + "\r\n")
-        .utf8)
+        .utf8
+)
 
 let postBody = Array(#"{"hello":"world","n":123}"#.utf8)
 
@@ -38,7 +40,8 @@ let postRequestBytes: [UInt8] = {
             + "Content-Type: application/json\r\n"
             + "Content-Length: \(postBody.count)\r\n"
             + "\r\n")
-            .utf8)
+            .utf8
+    )
     bytes.append(contentsOf: postBody)
     return bytes
 }()
@@ -49,7 +52,8 @@ let chunkedRequestBytes = Array(
         + "Transfer-Encoding: chunked\r\n"
         + "\r\n"
         + "5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n")
-        .utf8)
+        .utf8
+)
 
 let chunkedBodyBytes = Array("1a\r\nabcdefghijklmnopqrstuvwxyz\r\n0\r\n\r\n".utf8)
 
@@ -68,7 +72,8 @@ let realisticHTTP1Request = Array(
         + "Cache-Control: no-cache\r\n"
         + "Connection: keep-alive\r\n"
         + "\r\n")
-        .utf8)
+        .utf8
+)
 
 // MARK: - Byte-class / token fixtures
 
@@ -85,7 +90,8 @@ let longFieldValue = Array(String(repeating: "session=a1b2c3; ", count: 12).utf8
 let longRequestTarget = Array(
     ("/api/v2/users/12345/posts?filter=published&sort=-created_at&page=3&limit=50"
         + "&include=author,comments,tags&fields=id,title,body,excerpt,created_at")
-        .utf8)
+        .utf8
+)
 
 /// A 48-octet value whose Huffman form is longer than the literal — the "raw-wins" encode branch.
 ///
@@ -115,9 +121,11 @@ let realisticRequestFields = [
     HPACKField(name: ":path", value: "/api/v1/items?page=2&sort=desc"),
     HPACKField(
         name: "user-agent",
-        value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15"),
+        value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15"
+    ),
     HPACKField(
-        name: "accept", value: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+        name: "accept", value: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    ),
     HPACKField(name: "accept-encoding", value: "gzip, deflate, br"),
     HPACKField(name: "accept-language", value: "en-US,en;q=0.9"),
     HPACKField(name: "cookie", value: "session=8f3a2b1c9d4e5f6a7b8c; theme=dark; consent=granted"),

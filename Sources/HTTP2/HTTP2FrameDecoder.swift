@@ -41,11 +41,15 @@ public struct HTTP2FrameDecoder {
     public func nextFrame(_ reader: inout ByteReader) throws(HTTP2Error) -> Frame? {
         // Probe on a copy so an incomplete frame leaves the real cursor untouched for a later retry.
         var probe = reader
-        guard let header = HTTP2FrameHeader.parse(&probe) else { return nil }
+        guard let header = HTTP2FrameHeader.parse(&probe) else {
+            return nil
+        }
         guard header.payloadLength <= maxFrameSize else {
             throw .connection(.frameSizeError, "frame payload exceeds SETTINGS_MAX_FRAME_SIZE")
         }
-        guard probe.remaining >= header.payloadLength else { return nil }
+        guard probe.remaining >= header.payloadLength else {
+            return nil
+        }
 
         reader.advance(by: HTTP2FrameHeader.encodedLength)
         let start = reader.position

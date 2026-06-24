@@ -42,11 +42,14 @@ public func expectAllocations(
     sourceLocation: SourceLocation = #_sourceLocation,
     _ body: () -> Void
 ) -> Int? {
-    guard let count = mallocDelta(body) else { return nil }
+    guard let count = mallocDelta(body) else {
+        return nil
+    }
     if count > limit {
         Issue.record(
             "expected at most \(limit) allocation(s), measured \(count)",
-            sourceLocation: sourceLocation)
+            sourceLocation: sourceLocation
+        )
     }
     return count
 }

@@ -86,7 +86,9 @@ private func clientGetWire() -> [UInt8] {
         .encode(into: &settings)
     var headers: [UInt8] = []
     HTTP2FrameHeader(
-        payloadLength: block.count, type: .headers, flags: [.endHeaders, .endStream],
+        payloadLength: block.count,
+        type: .headers,
+        flags: [.endHeaders, .endStream],
         streamID: HTTP2StreamID(1)
     )
     .encode(into: &headers)

@@ -54,7 +54,9 @@ public struct HTTP2HeaderBlockAccumulator {
         guard fragment.count <= maxBlockSize else {
             throw .connection(.enhanceYourCalm, "header block exceeds the configured size bound")
         }
-        if endHeaders { return .complete(streamID, Array(fragment)) }
+        if endHeaders {
+            return .complete(streamID, Array(fragment))
+        }
         pending = Pending(streamID: streamID, fragment: Array(fragment), continuationCount: 0)
         return .needsContinuation
     }

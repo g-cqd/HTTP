@@ -14,10 +14,10 @@ public import HTTPTransport
 /// An in-memory ``TransportConnection`` whose `receive` blocks until cancelled.
 public actor HangingConnection: TransportConnection {
     /// The connection's stable identifier.
-    public nonisolated let id: TransportConnectionID
+    nonisolated public let id: TransportConnectionID
 
     /// The peer's address.
-    public nonisolated let peer: TransportAddress
+    nonisolated public let peer: TransportAddress
 
     private let gate = AsyncGate()
     private let admissionProbe: AsyncEventProbe<TransportConnectionID>?
@@ -47,7 +47,9 @@ public actor HangingConnection: TransportConnection {
     }
 
     /// Discards sent bytes.
-    public func send(_: [UInt8]) async {}
+    public func send(_: [UInt8]) async {
+        // no-op: a hanging connection discards all sent bytes.
+    }
 
     /// Marks the connection closed, recording the admission decision (rejected) if not already made.
     public func close() async {
@@ -59,7 +61,9 @@ public actor HangingConnection: TransportConnection {
     public func isClosed() -> Bool { closed }
 
     private func recordDecision() {
-        guard !decided else { return }
+        guard !decided else {
+            return
+        }
         decided = true
         admissionProbe?.record(id)
     }

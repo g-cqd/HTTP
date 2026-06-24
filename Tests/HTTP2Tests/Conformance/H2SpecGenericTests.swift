@@ -133,7 +133,11 @@ struct H2SpecGenericTests {
         var wire = H2Wire.openStream(streamID: 1)
         // PADDED: pad-length octet 2, body "ab", then 2 padding octets.
         wire += H2Wire.frame(
-            .data, flags: [.padded, .endStream], streamID: 1, payload: [2, 0x61, 0x62, 0, 0])
+            .data,
+            flags: [.padded, .endStream],
+            streamID: 1,
+            payload: [2, 0x61, 0x62, 0, 0]
+        )
         let event = H2Wire.expectRequest(wire, on: &connection)
         if case .request(_, _, let body) = event { #expect(body == Array("ab".utf8)) }
     }
@@ -151,8 +155,10 @@ struct H2SpecGenericTests {
             (
                 label: "with priority",
                 frame: H2Wire.headers(
-                    streamID: 1, fields: H2Wire.requestFields(),
-                    priority: (exclusive: false, dependency: 0, weight: 0))
+                    streamID: 1,
+                    fields: H2Wire.requestFields(),
+                    priority: (exclusive: false, dependency: 0, weight: 0)
+                )
             )
         ])
     func acceptsHeadersFrame(_ testCase: (label: String, frame: [UInt8])) throws {
@@ -166,7 +172,11 @@ struct H2SpecGenericTests {
     func acceptsContinuationFrame() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: true, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: true,
+            endHeaders: false
+        )
         wire += H2Wire.continuation(streamID: 1, endHeaders: true)
         H2Wire.expectRequest(wire, on: &connection)
     }
@@ -175,7 +185,11 @@ struct H2SpecGenericTests {
     func acceptsMultipleContinuationFrames() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: true, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: true,
+            endHeaders: false
+        )
         wire += H2Wire.continuation(streamID: 1, endHeaders: false)
         wire += H2Wire.continuation(streamID: 1, endHeaders: true)
         H2Wire.expectRequest(wire, on: &connection)
@@ -214,7 +228,10 @@ struct H2SpecGenericTests {
         var wire = H2Wire.openStream(streamID: 1)
         wire += H2Wire.data(streamID: 1, payload: Array("body".utf8), endStream: false)
         wire += H2Wire.headers(
-            streamID: 1, fields: [HPACKField(name: "x-trace", value: "1")], endStream: true)
+            streamID: 1,
+            fields: [HPACKField(name: "x-trace", value: "1")],
+            endStream: true
+        )
         H2Wire.expectRequest(wire, on: &connection)
     }
 

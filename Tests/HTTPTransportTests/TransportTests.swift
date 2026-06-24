@@ -20,13 +20,13 @@ struct TransportTests {
     }
 
     @Test("FakeTransport yields its seeded connections in order")
-    func fakeTransportYieldsConnections() async throws {
+    func fakeTransportYieldsConnections() async {
         let transport = FakeTransport(connections: [
             FakeConnection(id: TransportConnectionID(1)),
             FakeConnection(id: TransportConnectionID(2))
         ])
         var ids: [TransportConnectionID] = []
-        for await connection in try await transport.start() {
+        for await connection in await transport.start() {
             ids.append(connection.id)
         }
         #expect(ids == [TransportConnectionID(1), TransportConnectionID(2)])
@@ -39,7 +39,11 @@ struct TransportTests {
         #expect(strict.maxVersion == .tlsV13)  // ceiling pinned, not left open to future drafts
 
         let compat = TransportTLS(
-            pkcs12: [], passphrase: "", minVersion: .tlsV12, maxVersion: .tlsV13)
+            pkcs12: [],
+            passphrase: "",
+            minVersion: .tlsV12,
+            maxVersion: .tlsV13
+        )
         #expect(compat.minVersion == .tlsV12)
         #expect(compat.maxVersion == .tlsV13)
     }
@@ -47,14 +51,14 @@ struct TransportTests {
     @Test("FakeConnection delivers inbound bytes then EOF, and records sent bytes")
     func fakeConnectionRoundTrip() async throws {
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array("ping".utf8))
-        let chunk = try await connection.receive(maxLength: 16)
-        #expect(chunk.map { String(decoding: $0, as: UTF8.self) } == "ping")
+        let chunk = await connection.receive(maxLength: 16)
+        #expect(chunk.map { String(decoding: $0, as: Unicode.UTF8.self) } == "ping")
 
-        let eof = try await connection.receive(maxLength: 16)
+        let eof = await connection.receive(maxLength: 16)
         #expect(eof == nil)
 
         try await connection.send(Array("pong".utf8))
         let sent = await connection.sentBytes()
-        #expect(String(decoding: sent, as: UTF8.self) == "pong")
+        #expect(String(decoding: sent, as: Unicode.UTF8.self) == "pong")
     }
 }

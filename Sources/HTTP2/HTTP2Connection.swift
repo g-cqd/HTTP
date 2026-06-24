@@ -144,11 +144,14 @@ public struct HTTP2Connection {
         self.maxConcurrentStreams = advertised.maxConcurrentStreams ?? limits.maxConcurrentStreams
         self.limits = limits
         self.decoder = HPACKDecoder(
-            maxDynamicTableSize: advertised.headerTableSize, limits: limits)
+            maxDynamicTableSize: advertised.headerTableSize,
+            limits: limits
+        )
         self.encoder = HPACKEncoder(maxDynamicTableSize: remoteSettings.headerTableSize)
         self.accumulator = HTTP2HeaderBlockAccumulator(
             maxContinuationFrames: limits.maxContinuationFrames,
-            maxBlockSize: limits.maxHeaderListSize)
+            maxBlockSize: limits.maxHeaderListSize
+        )
         self.frameDecoder = HTTP2FrameDecoder(maxFrameSize: advertised.maxFrameSize)
         self.now = now
         self.windowStart = now()
@@ -169,7 +172,9 @@ public struct HTTP2Connection {
         do {
             inbound.append(contentsOf: bytes)
             if phase == .awaitingPreface {
-                guard try consumePreface() else { return [] }
+                guard try consumePreface() else {
+                    return []
+                }
             }
             var events: [Event] = []
             for frame in try drainFrames() {
@@ -196,7 +201,9 @@ public struct HTTP2Connection {
                 return try HTTP2ConnectionPreface.consume(&reader) == .matched
             }
         }
-        guard try result.get() else { return false }
+        guard try result.get() else {
+            return false
+        }
         inbound.removeFirst(HTTP2ConnectionPreface.client.count)
         phase = .awaitingSettings
         return true
@@ -209,7 +216,7 @@ public struct HTTP2Connection {
             inbound.withUnsafeBytes { raw in
                 Result { () throws(HTTP2Error) in
                     var reader = ByteReader(raw)
-                    var frames = [HTTP2FrameDecoder.Frame]()
+                    var frames: [HTTP2FrameDecoder.Frame] = []
                     while let frame = try frameDecoder.nextFrame(&reader) { frames.append(frame) }
                     return (frames, reader.position)
                 }
@@ -263,87 +270,32 @@ public struct HTTP2Connection {
         into events: inout [Event]
     ) throws(HTTP2Error) {
         switch frame.header.type {
-            case .headers: try receiveHeaders(frame, into: &events)
-            case .continuation: try receiveContinuation(frame, into: &events)
-            case .data: try receiveData(frame, into: &events)
-            case .settings: try applySettings(frame)
-            case .ping: try receivePing(frame)
-            case .rstStream: try receiveReset(frame, into: &events)
-            case .windowUpdate: try receiveWindowUpdate(frame)
-            case .priority: try receivePriority(frame)
-            case .goAway: try receiveGoAway(frame)
+            case .headers:
+                try receiveHeaders(frame, into: &events)
+            case .continuation:
+                try receiveContinuation(frame, into: &events)
+            case .data:
+                try receiveData(frame, into: &events)
+            case .settings:
+                try applySettings(frame)
+            case .ping:
+                try receivePing(frame)
+            case .rstStream:
+                try receiveReset(frame, into: &events)
+            case .windowUpdate:
+                try receiveWindowUpdate(frame)
+            case .priority:
+                try receivePriority(frame)
+            case .goAway:
+                try receiveGoAway(frame)
             case .pushPromise:
                 throw .connection(
-                    .protocolError, "a client must not send PUSH_PROMISE (RFC 9113 §8.4)")
-            default: break  // unknown frame types MUST be ignored (RFC 9113 §4.1)
+                    .protocolError,
+                    "a client must not send PUSH_PROMISE (RFC 9113 §8.4)"
+                )
+            default:
+                break  // unknown frame types MUST be ignored (RFC 9113 §4.1)
         }
-    }
-
-    /// Validates a PRIORITY frame (RFC 9113 §6.3); the deprecated priority data (§5.3.2) is not used.
-    private func receivePriority(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
-        guard frame.header.streamID != .connection else {
-            throw .connection(.protocolError, "PRIORITY must not be on stream 0")
-        }
-        guard frame.payload.count == 5 else {
-            throw .stream(frame.header.streamID, .frameSizeError, "PRIORITY must be 5 octets")
-        }
-        let dependency = HTTP2StreamID(
-            rawValue: frame.payload.withUnsafeBytes {
-                UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self))
-            })
-        guard dependency != frame.header.streamID else {
-            throw .stream(frame.header.streamID, .protocolError, "stream depends on itself")
-        }
-    }
-
-    /// Validates a received GOAWAY (RFC 9113 §6.8); a client GOAWAY is informational to a server.
-    private func receiveGoAway(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
-        guard frame.header.streamID == .connection else {
-            throw .connection(.protocolError, "GOAWAY must be on stream 0")
-        }
-    }
-
-    // MARK: SETTINGS / PING
-
-    private mutating func applySettings(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
-        guard frame.header.streamID == .connection else {
-            throw .connection(.protocolError, "SETTINGS must be on stream 0")
-        }
-        if frame.header.flags.contains(.ack) {
-            guard frame.payload.isEmpty else {
-                throw .connection(.frameSizeError, "SETTINGS ACK must be empty")
-            }
-            return  // acknowledgement of our settings; nothing to apply
-        }
-        try chargeControlFrame()
-        let previousInitialWindow = remoteSettings.initialWindowSize
-        var updated = remoteSettings  // SETTINGS frames are deltas applied to the running set
-        let applied: Result<HTTP2Settings, HTTP2Error> = frame.payload.withUnsafeBytes { raw in
-            Result { () throws(HTTP2Error) in
-                try updated.apply(raw.bytes)
-                return updated
-            }
-        }
-        remoteSettings = try applied.get()
-        // A change to SETTINGS_INITIAL_WINDOW_SIZE shifts every open stream's send window by the same
-        // delta (RFC 9113 §6.9.2); a positive shift may unblock DATA that was waiting on the window.
-        let windowDelta = remoteSettings.initialWindowSize - previousInitialWindow
-        if windowDelta != 0 {
-            try shiftStreamSendWindows(by: windowDelta)
-        }
-        writer.writeFrame(.settings, flags: .ack)  // acknowledge (§6.5.3)
-    }
-
-    private mutating func receivePing(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
-        guard frame.header.streamID == .connection else {
-            throw .connection(.protocolError, "PING must be on stream 0 (RFC 9113 §6.7)")
-        }
-        guard frame.payload.count == 8 else {
-            throw .connection(.frameSizeError, "PING payload must be 8 octets (RFC 9113 §6.7)")
-        }
-        guard !frame.header.flags.contains(.ack) else { return }  // a PING ACK needs no response
-        try chargeControlFrame()
-        writer.writeFrame(.ping, flags: .ack, streamID: .connection, payload: frame.payload)
     }
 
     // MARK: HEADERS / CONTINUATION / DATA
@@ -353,13 +305,19 @@ public struct HTTP2Connection {
         into events: inout [Event]
     ) throws(HTTP2Error) {
         let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
-            frame.payload, flags: frame.header.flags)
+            frame.payload,
+            flags: frame.header.flags
+        )
         pendingHeadersEndStream = frame.header.flags.contains(.endStream)
         pendingHeadersDependency = HTTP2HeadersFrame.priorityDependency(
-            frame.payload, flags: frame.header.flags)
+            frame.payload,
+            flags: frame.header.flags
+        )
         let outcome = try accumulator.begin(
-            streamID: frame.header.streamID, fragment: fragment,
-            endHeaders: frame.header.flags.contains(.endHeaders))
+            streamID: frame.header.streamID,
+            fragment: fragment,
+            endHeaders: frame.header.flags.contains(.endHeaders)
+        )
         if case .complete(let streamID, let block) = outcome {
             try completeHeaderBlock(streamID, block: block, into: &events)
         }
@@ -370,8 +328,10 @@ public struct HTTP2Connection {
         into events: inout [Event]
     ) throws(HTTP2Error) {
         let outcome = try accumulator.append(
-            streamID: frame.header.streamID, fragment: frame.payload,
-            endHeaders: frame.header.flags.contains(.endHeaders))
+            streamID: frame.header.streamID,
+            fragment: frame.payload,
+            endHeaders: frame.header.flags.contains(.endHeaders)
+        )
         if case .complete(let streamID, let block) = outcome {
             try completeHeaderBlock(streamID, block: block, into: &events)
         }
@@ -414,13 +374,18 @@ public struct HTTP2Connection {
             return
         }
         let (request, connectProtocol) = try HTTP2RequestMapper.makeRequest(
-            from: fields, streamID: streamID)
+            from: fields,
+            streamID: streamID
+        )
         var stream = HTTP2Stream(id: streamID)
         try stream.receiveHeaders(endStream: endStream)
         var record = StreamRecord(
-            stream: stream, request: request, body: [],
+            stream: stream,
+            request: request,
+            body: [],
             sendWindow: HTTP2FlowControlWindow(initialSize: remoteSettings.initialWindowSize),
-            receiveWindow: localSettings.initialWindowSize)
+            receiveWindow: localSettings.initialWindowSize
+        )
         // An Extended CONNECT (RFC 8441 §4) opens a tunnel rather than a request: surface it for the
         // driver to accept, and route this stream's DATA as opaque tunnel bytes from here on.
         if let connectProtocol {
@@ -430,7 +395,8 @@ public struct HTTP2Connection {
             record.isTunnel = true
             streams[streamID] = record
             events.append(
-                .extendedConnect(streamID: streamID, request: request, protocol: connectProtocol))
+                .extendedConnect(streamID: streamID, request: request, protocol: connectProtocol)
+            )
             return
         }
         streams[streamID] = record
@@ -448,7 +414,9 @@ public struct HTTP2Connection {
         endStream: Bool,
         into events: inout [Event]
     ) throws(HTTP2Error) {
-        guard var record = streams.removeValue(forKey: streamID) else { return }
+        guard var record = streams.removeValue(forKey: streamID) else {
+            return
+        }
         do {
             // The state machine first: a frame on a closed stream is STREAM_CLOSED (§5.1) and trailers
             // without END_STREAM is a §8.1 stream PROTOCOL_ERROR — both take precedence over the field
@@ -497,7 +465,8 @@ public struct HTTP2Connection {
         streams[frame.header.streamID] = nil
         markStreamClosed(frame.header.streamID)
         events.append(
-            .streamReset(streamID: frame.header.streamID, code: HTTP2ErrorCode(code: code)))
+            .streamReset(streamID: frame.header.streamID, code: HTTP2ErrorCode(code: code))
+        )
     }
 
     // MARK: Helpers
@@ -505,7 +474,9 @@ public struct HTTP2Connection {
     /// Records `streamID` as recently closed (bounded FIFO) so a later frame on it reports
     /// STREAM_CLOSED rather than a connection error (RFC 9113 §5.1; audit F1).
     mutating func markStreamClosed(_ streamID: HTTP2StreamID) {
-        guard closedStreams.insert(streamID).inserted else { return }
+        guard closedStreams.insert(streamID).inserted else {
+            return
+        }
         closedStreamOrder.append(streamID)
         if closedStreamOrder.count > maxConcurrentStreams {
             closedStreams.remove(closedStreamOrder.removeFirst())
@@ -520,7 +491,9 @@ public struct HTTP2Connection {
     )
         throws(HTTP2Error)
     {
-        guard let record = streams[streamID] else { return }
+        guard let record = streams[streamID] else {
+            return
+        }
         try validateContentLength(record)
         controlFrameBudget = max(0, controlFrameBudget - 1)  // useful work drains the flood budget
         events.append(.request(streamID: streamID, request: record.request, body: record.body))
@@ -537,7 +510,10 @@ public struct HTTP2Connection {
             case .length(let declared):
                 guard declared == record.body.count else {
                     throw .stream(
-                        record.stream.id, .protocolError, "content-length does not match body")
+                        record.stream.id,
+                        .protocolError,
+                        "content-length does not match body"
+                    )
                 }
         }
     }
@@ -547,8 +523,10 @@ public struct HTTP2Connection {
             Result { () throws(HPACKError) in try decoder.decode(raw.bytes) }
         }
         switch decoded {
-            case .success(let fields): return fields
-            case .failure: throw .connection(.compressionError, "HPACK decoding failed")
+            case .success(let fields):
+                return fields
+            case .failure:
+                throw .connection(.compressionError, "HPACK decoding failed")
         }
     }
 }

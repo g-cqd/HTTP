@@ -23,7 +23,7 @@ struct HTTPFieldsTests {
     func emptyCollection() {
         let fields = HTTPFields()
         #expect(fields.isEmpty)
-        #expect(fields.count == 0)
+        #expect(fields.count == Int.zero)
         #expect(fields[.contentType] == nil)
         #expect(!fields.contains(.contentType))
     }

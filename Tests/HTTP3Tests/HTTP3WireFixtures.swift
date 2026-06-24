@@ -76,7 +76,9 @@ extension HTTP3WireFixtures {
     /// The error code of the first queued `resetStream` action, if any (a stream-scoped error).
     func resetStreamCode(_ connection: inout HTTP3Connection) -> UInt64? {
         for action in connection.outbound() {
-            if case .resetStream(_, let errorCode) = action { return errorCode }
+            if case .resetStream(_, let errorCode) = action {
+                return errorCode
+            }
         }
         return nil
     }
@@ -129,14 +131,16 @@ extension HTTP3WireFixtures {
             return nil
         }
         catch {
-            return (error as? HTTP3Error)?.code
+            return error.code
         }
     }
 
     /// The error code of the first queued `closeConnection` action, if any.
     func closeConnectionCode(_ connection: inout HTTP3Connection) -> UInt64? {
         for action in connection.outbound() {
-            if case .closeConnection(let errorCode) = action { return errorCode }
+            if case .closeConnection(let errorCode) = action {
+                return errorCode
+            }
         }
         return nil
     }

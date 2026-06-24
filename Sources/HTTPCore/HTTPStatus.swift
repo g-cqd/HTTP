@@ -31,7 +31,9 @@ public struct HTTPStatus: Sendable, Hashable {
 
     /// Creates a status from a numeric code, returning `nil` if it is outside `100...599`.
     public init?(code: Int) {
-        guard (100 ... 599).contains(code) else { return nil }
+        guard (100 ... 599).contains(code) else {
+            return nil
+        }
         self.code = UInt16(code)
     }
 
@@ -46,11 +48,16 @@ public struct HTTPStatus: Sendable, Hashable {
     /// `code` is an invariant `100...599`, so the five arms below are exhaustive.
     public var kind: Kind {
         switch code {
-            case 100 ... 199: .informational
-            case 200 ... 299: .successful
-            case 300 ... 399: .redirection
-            case 400 ... 499: .clientError
-            default: .serverError  // 500...599 (code is invariant-bounded to 100...599)
+            case 100 ... 199:
+                .informational
+            case 200 ... 299:
+                .successful
+            case 300 ... 399:
+                .redirection
+            case 400 ... 499:
+                .clientError
+            default:
+                .serverError  // 500...599 (code is invariant-bounded to 100...599)
         }
     }
 }

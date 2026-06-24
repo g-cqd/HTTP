@@ -34,8 +34,9 @@ public enum HTTPDate {
         let shifted = days + 719_468  // shift the epoch to 0000-03-01
         let era = (shifted >= 0 ? shifted : shifted - 146_096) / 146_097
         let dayOfEra = shifted - era * 146_097  // [0, 146096]
+        // [0, 399]
         let yearOfEra =
-            (dayOfEra - dayOfEra / 1_460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365  // [0, 399]
+            (dayOfEra - dayOfEra / 1_460 + dayOfEra / 36_524 - dayOfEra / 146_096) / 365
         let year = yearOfEra + era * 400
         let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100)  // [0, 365]
         let monthPrime = (5 * dayOfYear + 2) / 153  // [0, 11]

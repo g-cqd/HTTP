@@ -44,7 +44,8 @@ enum NetworkFrameworkTLS {
         }
         guard status == errSecSuccess else {
             throw TransportError.tlsConfigurationFailed(
-                "SecPKCS12Import failed (OSStatus \(status))")
+                "SecPKCS12Import failed (OSStatus \(status))"
+            )
         }
         guard let items = rawItems as? [[String: AnyObject]],
             let identityValue = items.first?[kSecImportItemIdentity as String]
@@ -66,12 +67,14 @@ enum NetworkFrameworkTLS {
 
     /// Builds `NWProtocolTLS.Options` advertising `applicationProtocols` (ALPN, RFC 7301) and the
     /// server `identity`, pinning the TLS version range (RFC 8446 / RFC 9325; default TLS 1.3-only).
+    // swiftlint:disable discouraged_default_parameter - secure TLS 1.3 default
     static func options(
         identity: sec_identity_t,
         applicationProtocols: [String],
         minVersion: TLSVersion = .tlsV13,
         maxVersion: TLSVersion = .tlsV13
     ) -> NWProtocolTLS.Options {
+        // swiftlint:enable discouraged_default_parameter
         let options = NWProtocolTLS.Options()
         let security = options.securityProtocolOptions
         sec_protocol_options_set_local_identity(security, identity)
@@ -90,8 +93,10 @@ enum NetworkFrameworkTLS {
     /// Maps a backbone-agnostic ``TLSVersion`` to the Security framework's `tls_protocol_version_t`.
     private static func protocolVersion(_ version: TLSVersion) -> tls_protocol_version_t {
         switch version {
-            case .tlsV12: .TLSv12
-            case .tlsV13: .TLSv13
+            case .tlsV12:
+                .TLSv12
+            case .tlsV13:
+                .TLSv13
         }
     }
 
@@ -102,7 +107,8 @@ enum NetworkFrameworkTLS {
             let metadata = connection.metadata(definition: NWProtocolTLS.definition)
                 as? NWProtocolTLS.Metadata,
             let raw = sec_protocol_metadata_get_negotiated_protocol(
-                metadata.securityProtocolMetadata)
+                metadata.securityProtocolMetadata
+            )
         else {
             return nil
         }

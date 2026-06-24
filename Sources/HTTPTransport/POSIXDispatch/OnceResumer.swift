@@ -17,6 +17,10 @@ final class OnceResumer<Success: Sendable>: Sendable {
         self.continuation = Mutex(continuation)
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     func resume(returning value: Success) {
         take()?.resume(returning: value)
     }

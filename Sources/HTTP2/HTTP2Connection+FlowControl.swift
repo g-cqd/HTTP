@@ -64,7 +64,9 @@ extension HTTP2Connection {
     ///
     /// A pad length that is not strictly less than the payload is a PROTOCOL_ERROR (RFC 9113 §6.1).
     static func dataBody(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) -> ArraySlice<UInt8> {
-        guard frame.header.flags.contains(.padded) else { return frame.payload[...] }
+        guard frame.header.flags.contains(.padded) else {
+            return frame.payload[...]
+        }
         guard let padLength = frame.payload.first, Int(padLength) < frame.payload.count else {
             throw .connection(.protocolError, "DATA pad length exceeds the payload")
         }
@@ -114,8 +116,10 @@ extension HTTP2Connection {
             let end = record.pendingOffset + chunk
             let isLast = end == record.pending.count
             writer.writeData(
-                streamID: streamID, endStream: isLast && record.pendingEndStream,
-                record.pending[record.pendingOffset ..< end])
+                streamID: streamID,
+                endStream: isLast && record.pendingEndStream,
+                record.pending[record.pendingOffset ..< end]
+            )
             record.pendingOffset = end
             _ = connectionSendWindow.reserve(chunk)
             _ = record.sendWindow.reserve(chunk)
@@ -152,10 +156,12 @@ extension HTTP2Connection {
         // The high bit is reserved; the increment is the low 31 bits (RFC 9113 §6.9.1).
         let increment = Int(
             frame.payload.withUnsafeBytes { UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self)) }
-                & 0x7FFF_FFFF)
+                & 0x7FFF_FFFF
+        )
         guard frame.header.streamID != .connection else {
             switch connectionSendWindow.increase(by: increment) {
-                case .applied: flushAll()
+                case .applied:
+                    flushAll()
                 case .zeroIncrement:
                     throw .connection(.protocolError, "WINDOW_UPDATE increment must be non-zero")
                 case .overflow:
@@ -177,12 +183,17 @@ extension HTTP2Connection {
             case .zeroIncrement:
                 streams[frame.header.streamID] = record
                 throw .stream(
-                    frame.header.streamID, .protocolError,
-                    "WINDOW_UPDATE increment must be non-zero")
+                    frame.header.streamID,
+                    .protocolError,
+                    "WINDOW_UPDATE increment must be non-zero"
+                )
             case .overflow:
                 streams[frame.header.streamID] = record
                 throw .stream(
-                    frame.header.streamID, .flowControlError, "stream send window exceeded 2^31-1")
+                    frame.header.streamID,
+                    .flowControlError,
+                    "stream send window exceeded 2^31-1"
+                )
         }
     }
 

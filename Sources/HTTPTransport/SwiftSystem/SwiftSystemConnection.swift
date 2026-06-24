@@ -47,7 +47,13 @@ public final class SwiftSystemConnection: TransportConnection {
         self.peer = peer
         self.descriptor = descriptor
         self.ioQueue = DispatchQueue(
-            label: "http.transport.swift-system.conn.\(id.rawValue)", target: targetQueue)
+            label: "http.transport.swift-system.conn.\(id.rawValue)",
+            target: targetQueue
+        )
+    }
+
+    deinit {
+        // No teardown beyond ARC.
     }
 
     /// Reads up to `maxLength` bytes, or `nil` at end of stream.
@@ -103,7 +109,9 @@ public final class SwiftSystemConnection: TransportConnection {
     }
 
     private func closeDescriptor() {
-        guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else { return }
+        guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else {
+            return
+        }
         let descriptor = self.descriptor
         ioQueue.async { try? descriptor.close() }
     }
@@ -114,7 +122,9 @@ public final class SwiftSystemConnection: TransportConnection {
     /// Skipped once `close()` has begun, so it can never act on a descriptor whose number the OS may
     /// have recycled.
     private func shutdownDescriptor() {
-        guard !isClosed.load(ordering: .acquiring) else { return }
+        guard !isClosed.load(ordering: .acquiring) else {
+            return
+        }
         _ = Darwin.shutdown(descriptor.rawValue, SHUT_RDWR)
     }
 

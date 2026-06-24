@@ -54,9 +54,13 @@ public enum HTTP2HeadersFrame {
         _ payload: [UInt8],
         flags: HTTP2FrameFlags
     ) -> HTTP2StreamID? {
-        guard flags.contains(.priority) else { return nil }
+        guard flags.contains(.priority) else {
+            return nil
+        }
         let offset = flags.contains(.padded) ? 1 : 0
-        guard payload.count >= offset + priorityFieldLength else { return nil }
+        guard payload.count >= offset + priorityFieldLength else {
+            return nil
+        }
         let dependency =
             (UInt32(payload[offset]) << 24 | UInt32(payload[offset + 1]) << 16
                 | UInt32(payload[offset + 2]) << 8 | UInt32(payload[offset + 3])) & 0x7FFF_FFFF

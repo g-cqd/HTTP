@@ -28,7 +28,7 @@ struct AsyncGateTests {
             passed.record(1)
         }
         try await gate.waitForWaiters(atLeast: 1)  // holder is parked — no yield spin
-        #expect(passed.count == 0)
+        #expect(passed.events.isEmpty)
         gate.open()
         try await holder.value
         #expect(passed.events == [1])

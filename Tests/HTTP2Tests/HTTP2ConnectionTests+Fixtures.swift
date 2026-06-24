@@ -21,7 +21,8 @@ extension HTTP2WireFixtures {
         var out: [UInt8] = []
         HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection)
             .encode(
-                into: &out)
+                into: &out
+            )
         return out
     }
 
@@ -32,7 +33,9 @@ extension HTTP2WireFixtures {
         if endStream { flags.insert(.endStream) }
         var out: [UInt8] = []
         HTTP2FrameHeader(
-            payloadLength: block.count, type: .headers, flags: flags,
+            payloadLength: block.count,
+            type: .headers,
+            flags: flags,
             streamID: HTTP2StreamID(streamID)
         )
         .encode(into: &out)
@@ -56,8 +59,10 @@ extension HTTP2WireFixtures {
         ]
         var out: [UInt8] = []
         HTTP2FrameHeader(
-            payloadLength: priority.count + block.count, type: .headers,
-            flags: [.endHeaders, .endStream, .priority], streamID: HTTP2StreamID(streamID)
+            payloadLength: priority.count + block.count,
+            type: .headers,
+            flags: [.endHeaders, .endStream, .priority],
+            streamID: HTTP2StreamID(streamID)
         )
         .encode(into: &out)
         out.append(contentsOf: priority)
@@ -68,7 +73,9 @@ extension HTTP2WireFixtures {
     func dataFrame(streamID: UInt32, payload: [UInt8], endStream: Bool) -> [UInt8] {
         var out: [UInt8] = []
         HTTP2FrameHeader(
-            payloadLength: payload.count, type: .data, flags: endStream ? [.endStream] : [],
+            payloadLength: payload.count,
+            type: .data,
+            flags: endStream ? [.endStream] : [],
             streamID: HTTP2StreamID(streamID)
         )
         .encode(into: &out)
@@ -84,7 +91,9 @@ extension HTTP2WireFixtures {
                 HPACKField(name: ":scheme", value: "https"),
                 HPACKField(name: ":path", value: path),
                 HPACKField(name: ":authority", value: "example.com")
-            ], endStream: true)
+            ],
+            endStream: true
+        )
     }
 
     /// A HEADERS frame that opens a stream without END_STREAM (a body is still expected).
@@ -96,7 +105,9 @@ extension HTTP2WireFixtures {
                 HPACKField(name: ":scheme", value: "https"),
                 HPACKField(name: ":path", value: "/"),
                 HPACKField(name: ":authority", value: "example.com")
-            ], endStream: false)
+            ],
+            endStream: false
+        )
     }
 
     /// An Extended CONNECT HEADERS frame (RFC 8441 §4) opening a tunnel for `protocol`, no END_STREAM.
@@ -109,7 +120,9 @@ extension HTTP2WireFixtures {
                 HPACKField(name: ":scheme", value: "https"),
                 HPACKField(name: ":path", value: "/chat"),
                 HPACKField(name: ":authority", value: "example.com")
-            ], endStream: false)
+            ],
+            endStream: false
+        )
     }
 
     func rstStreamFrame(streamID: UInt32, code: UInt32 = 8) -> [UInt8] {
@@ -170,7 +183,9 @@ extension HTTP2WireFixtures {
                 switch frame.header.type {
                     case .headers:
                         let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
-                            frame.payload, flags: frame.header.flags)
+                            frame.payload,
+                            flags: frame.header.flags
+                        )
                         let fields = try Array(fragment)
                             .withUnsafeBytes {
                                 try decoder.decode($0.bytes)

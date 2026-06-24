@@ -39,8 +39,14 @@ enum HTTP3RequestMapper {
                     throw malformed(streamID, "pseudo-header after a regular field")
                 }
                 try assignPseudo(
-                    field, method: &method, scheme: &scheme, authority: &authority,
-                    path: &path, connectProtocol: &connectProtocol, streamID: streamID)
+                    field,
+                    method: &method,
+                    scheme: &scheme,
+                    authority: &authority,
+                    path: &path,
+                    connectProtocol: &connectProtocol,
+                    streamID: streamID
+                )
             }
             else {
                 sawRegularField = true
@@ -76,8 +82,12 @@ enum HTTP3RequestMapper {
             throw malformed(streamID, ":protocol is only valid on a CONNECT request")
         }
         let request = HTTPRequest(
-            method: parsedMethod, scheme: scheme, authority: authority, path: path ?? "",
-            headerFields: headerFields)
+            method: parsedMethod,
+            scheme: scheme,
+            authority: authority,
+            path: path ?? "",
+            headerFields: headerFields
+        )
         return (request, connectProtocol)
     }
 
@@ -93,7 +103,8 @@ enum HTTP3RequestMapper {
     ) throws(HTTP3Error) {
         switch field.name {
             // `:method` is token-validated downstream by `HTTPMethod(rawValue:)`, which rejects controls.
-            case ":method": try setOnce(&method, to: field.value, named: ":method", streamID)
+            case ":method":
+                try setOnce(&method, to: field.value, named: ":method", streamID)
             case ":scheme":
                 try rejectControls(in: field.value, named: ":scheme", streamID)
                 try setOnce(&scheme, to: field.value, named: ":scheme", streamID)
@@ -106,7 +117,8 @@ enum HTTP3RequestMapper {
             case ":protocol":
                 try rejectControls(in: field.value, named: ":protocol", streamID)
                 try setOnce(&connectProtocol, to: field.value, named: ":protocol", streamID)
-            default: throw malformed(streamID, "unknown request pseudo-header \(field.name)")
+            default:
+                throw malformed(streamID, "unknown request pseudo-header \(field.name)")
         }
     }
 

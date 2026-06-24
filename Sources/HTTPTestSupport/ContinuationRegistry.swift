@@ -27,6 +27,7 @@ struct ContinuationRegistry<Key: Comparable, Value> {
     private struct Entry: Comparable {
         let key: Key
         let id: UInt64
+
         static func < (lhs: Self, rhs: Self) -> Bool {
             lhs.key == rhs.key ? lhs.id < rhs.id : lhs.key < rhs.key
         }

@@ -6,32 +6,6 @@
 //  methods; the HTTP engines consume the protocol and never a concrete backbone.
 //
 
-/// A stable per-connection identifier (for logging and per-client limits).
-public struct TransportConnectionID: Hashable, Sendable {
-    /// The underlying identifier value.
-    public let rawValue: UInt64
-
-    /// Wraps a raw identifier value.
-    public init(_ rawValue: UInt64) {
-        self.rawValue = rawValue
-    }
-}
-
-/// A peer network address.
-public struct TransportAddress: Hashable, Sendable {
-    /// The host (IP literal or name).
-    public let host: String
-
-    /// The port number.
-    public let port: UInt16
-
-    /// Creates an address from a host and port.
-    public init(host: String, port: UInt16) {
-        self.host = host
-        self.port = port
-    }
-}
-
 /// A bidirectional byte stream to one connected peer.
 ///
 /// Backbones bridge their native I/O — Network.framework callbacks, POSIX socket syscalls, kqueue

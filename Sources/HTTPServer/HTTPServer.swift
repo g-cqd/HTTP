@@ -62,6 +62,10 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         self.clock = clock
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// Starts accepting connections and serves each concurrently until the transport finishes.
     ///
     /// When a ``QUICServerTransport`` was supplied it is run alongside the TCP listener to serve
@@ -88,9 +92,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     private func accept(_ connection: any TransportConnection) async {
         let host = connection.peer.host
         let admitted = connectionCounts.withLock { counts in
-            guard counts.total < limits.maxConnections else { return false }
+            guard counts.total < limits.maxConnections else {
+                return false
+            }
             let current = counts.perHost[host, default: 0]
-            guard current < limits.maxConnectionsPerClient else { return false }
+            guard current < limits.maxConnectionsPerClient else {
+                return false
+            }
             counts.perHost[host] = current + 1
             counts.total += 1
             return true
@@ -102,7 +110,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         await serve(connection)
         connectionCounts.withLock { counts in
             counts.total -= 1
-            guard let current = counts.perHost[host] else { return }
+            guard let current = counts.perHost[host] else {
+                return
+            }
             if current <= 1 {
                 counts.perHost[host] = nil
             }
@@ -147,7 +157,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                 await self.serveHTTP2(connection, deadline: deadline, initialBytes: buffer)
             }
             else {
-                while await self.serveOne(connection, deadline: deadline, buffer: &buffer) {}
+                while await self.serveOne(connection, deadline: deadline, buffer: &buffer) {
+                    // Loop until serveOne returns false (close); the work is the call itself.
+                }
             }
         }
         await connection.close()
@@ -186,7 +198,8 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                     do {
                         // `withAltSvc` advertises HTTP/3 (RFC 7838) when a QUIC listener is running.
                         try engine.respond(
-                            to: streamID, withAltSvc(response.head), body: response.body)
+                            to: streamID, withAltSvc(response.head), body: response.body
+                        )
                     }
                     catch {
                         // A connection-level fault (e.g. responding to an unknown stream) is fatal:
@@ -237,7 +250,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         catch {
             return false  // transport-level read failure
         }
-        guard case .request(let framed) = outcome else { return false }  // clean EOF on a boundary
+        guard case .request(let framed) = outcome else {
+            return false  // clean EOF on a boundary
+        }
         buffer.removeFirst(framed.consumed)  // carry any pipelined remainder to the next iteration
 
         let request = framed.parsed.request
@@ -247,14 +262,19 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             handler.shouldUpgrade(request)
         {
             await serveWebSocket(
-                connection, deadline: deadline, request: request, handler: handler,
-                carryover: buffer)
+                connection,
+                deadline: deadline,
+                request: request,
+                handler: handler,
+                carryover: buffer
+            )
             return false
         }
         let response = await responder.respond(to: request, body: framed.parsed.body)
         // A response to HEAD repeats the GET header section but sends no body (RFC 9112 §6.3).
         let bytes = ResponseSerializer.serialize(
-            withAltSvc(response.head), body: response.body, omitBody: request.method == .head)
+            withAltSvc(response.head), body: response.body, omitBody: request.method == .head
+        )
         do {
             try await connection.send(bytes)
         }
@@ -262,7 +282,8 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             return false
         }
         return !Self.shouldClose(
-            version: framed.parsed.version, request: request, response: response.head)
+            version: framed.parsed.version, request: request, response: response.head
+        )
     }
 
     /// Reads from `connection`, accumulating into `buffer` until a complete request frames, EOF on a
@@ -301,7 +322,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             }
             deadline.arm(
                 clock.now.advanced(
-                    by: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)))
+                    by: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
+                )
+            )
             let chunk: [UInt8]?
             do {
                 chunk = try await connection.receive(maxLength: 16_384)
@@ -309,14 +332,20 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             catch {
                 deadline.disarm()
                 // The watchdog closed the connection (idle / Slowloris), or a genuine transport fault.
-                if deadline.hasLapsed { return .cleanClose }
+                if deadline.hasLapsed {
+                    return .cleanClose
+                }
                 throw error
             }
             deadline.disarm()
-            if deadline.hasLapsed { return .cleanClose }  // timeout (the close surfaced as EOF)
+            if deadline.hasLapsed {
+                return .cleanClose  // timeout (the close surfaced as EOF)
+            }
             guard let chunk, !chunk.isEmpty else {
                 // EOF: graceful on a request boundary, truncation mid-request.
-                if buffer.isEmpty { return .cleanClose }
+                if buffer.isEmpty {
+                    return .cleanClose
+                }
                 throw HTTP1ParseError.incompleteHeaders
             }
             buffer.append(contentsOf: chunk)
@@ -338,11 +367,15 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                 return .incomplete
             }
             switch parseHeadStep(buffer) {
-                case .parsed(let head): pending = head
-                case .failed(let error): return .failed(error)
+                case .parsed(let head):
+                    pending = head
+                case .failed(let error):
+                    return .failed(error)
             }
         }
-        guard let pending else { return .incomplete }
+        guard let pending else {
+            return .incomplete
+        }
         switch frameBody(buffer, pending, chunked: &chunked) {
             case .complete(let parsed, let consumed):
                 return .request(FramedRequest(parsed: parsed, consumed: consumed))
@@ -359,8 +392,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         headersParsed: Bool,
         _ headerDeadline: inout C.Instant?
     ) -> Duration {
-        if buffer.isEmpty { return limits.keepAliveTimeout }  // idle, awaiting the next request
-        if headersParsed { return limits.idleTimeout }  // body phase
+        if buffer.isEmpty {
+            return limits.keepAliveTimeout  // idle, awaiting the next request
+        }
+        if headersParsed {
+            return limits.idleTimeout  // body phase
+        }
         let deadline = headerDeadline ?? clock.now.advanced(by: limits.headerReadTimeout)
         headerDeadline = deadline  // cumulative across the whole header section
         return max(.zero, clock.now.duration(to: deadline))
@@ -435,8 +472,10 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             }
         }
         switch outcome {
-            case .success(let pending): return .parsed(pending)
-            case .failure(let error): return .failed(error)
+            case .success(let pending):
+                return .parsed(pending)
+            case .failure(let error):
+                return .failed(error)
         }
     }
 
@@ -450,76 +489,20 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             case .none:
                 return .complete(
                     ParsedRequest(request: head.request, body: [], version: head.version),
-                    consumed: start)
+                    consumed: start
+                )
             case .contentLength(let length):
-                guard buffer.count - start >= length else { return .incomplete }
+                guard buffer.count - start >= length else {
+                    return .incomplete
+                }
                 let body = Array(buffer[start ..< (start + length)])
                 return .complete(
                     ParsedRequest(request: head.request, body: body, version: head.version),
-                    consumed: start + length)
+                    consumed: start + length
+                )
             case .chunked:
                 return frameChunkedBody(buffer, head: head, start: start, chunked: &chunked)
         }
-    }
-
-    private func sendErrorResponse(
-        for error: HTTP1ParseError,
-        to connection: any TransportConnection
-    ) async {
-        var response = HTTPResponse(status: Self.status(for: error))
-        // The server fails closed on a parse error, so it tells the peer (RFC 9112 §9.6).
-        response.headerFields.append("close", for: .connection)
-        let bytes = ResponseSerializer.serialize(response)
-        try? await connection.send(bytes)
-    }
-
-    /// Maps a parse error to the response status it should produce (RFC 9110 §15).
-    private static func status(for error: HTTP1ParseError) -> HTTPStatus {
-        switch error {
-            case .requestLineTooLong:
-                .uriTooLong
-            case .fieldTooLarge, .headerSectionTooLarge, .tooManyFields:
-                .requestHeaderFieldsTooLarge
-            case .bodyTooLarge:
-                .contentTooLarge
-            case .unsupportedVersion:
-                .httpVersionNotSupported
-            case .unsupportedTransferEncoding:
-                // A transfer coding the server doesn't understand (RFC 9112 §6.1; audit H1-F5).
-                .notImplemented
-            default:
-                .badRequest
-        }
-    }
-
-    /// Whether the connection must close after this exchange.
-    ///
-    /// An explicit `close` connection-option on either message always ends persistence (RFC 9110
-    /// §7.6.1). Otherwise the default follows the request version (RFC 9112 §9.3): HTTP/1.1 persists,
-    /// while HTTP/1.0 closes unless the request asked to `keep-alive`.
-    private static func shouldClose(
-        version: HTTPVersion,
-        request: HTTPRequest,
-        response: HTTPResponse
-    ) -> Bool {
-        if connectionContains(request.headerFields, "close")
-            || connectionContains(response.headerFields, "close")
-        {
-            return true
-        }
-        if version.major == 1, version.minor >= 1 { return false }
-        return !connectionContains(request.headerFields, "keep-alive")
-    }
-
-    /// Whether the `Connection` field's comma-separated list contains `option` (case-insensitive,
-    /// OWS-trimmed) — RFC 9110 §7.6.1.
-    private static func connectionContains(_ fields: HTTPFields, _ option: String) -> Bool {
-        guard let value = fields[.connection] else { return false }
-        return value.split(separator: ",").contains { normalizedToken($0) == option }
-    }
-
-    private static func normalizedToken(_ option: Substring) -> String {
-        option.lowercased().filter { $0 != " " && $0 != "\t" }
     }
 }
 
@@ -536,7 +519,12 @@ extension HTTPServer where C == ContinuousClock {
         limits: HTTPLimits = .default
     ) {
         self.init(
-            transport: transport, responder: responder, quicTransport: quicTransport,
-            webSocketHandler: webSocketHandler, limits: limits, clock: ContinuousClock())
+            transport: transport,
+            responder: responder,
+            quicTransport: quicTransport,
+            webSocketHandler: webSocketHandler,
+            limits: limits,
+            clock: ContinuousClock()
+        )
     }
 }

@@ -36,7 +36,9 @@ extension HTTP2Connection {
 
     /// Ends a tunnel stream with END_STREAM after flushing any queued DATA (RFC 8441 §5).
     public mutating func closeTunnel(_ streamID: HTTP2StreamID) throws(HTTP2Error) {
-        guard var record = streams.removeValue(forKey: streamID) else { return }
+        guard var record = streams.removeValue(forKey: streamID) else {
+            return
+        }
         try record.stream.sendData(endStream: true)
         record.pendingEndStream = true
         guard record.pendingOffset >= record.pending.count else {

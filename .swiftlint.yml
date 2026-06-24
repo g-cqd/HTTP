@@ -9,7 +9,7 @@ only_rules:
   - attribute_name_spacing
   - blanket_disable_command
   - closing_brace
-  - closure_parameter_position
+  # - closure_parameter_position  # omitted: conflicts with swift-format wrapping of typed closures past lineLength 100
   - colon
   - comma
   - comment_spacing
@@ -77,7 +77,7 @@ only_rules:
   - unused_import
   # Secondary Rules
   - array_init
-  - async_without_await
+  # - async_without_await  # omitted: every site is an async protocol witness (false positive) and it fights swift-format's AllPublicDeclarationsHaveDocumentation
   - attributes
   - closure_body_length
   - closure_end_indentation
@@ -91,11 +91,11 @@ only_rules:
   - contains_over_range_nil_comparison
   - convenience_type
   - direct_return
-  - discouraged_default_parameter
+  # - discouraged_default_parameter  # omitted: every occurrence is a test fixture (0 in Sources); a nested Tests config to scope it makes swiftlint fall back to its default rule set
   - empty_collection_literal
   - empty_count
   - empty_string
-  - explicit_enum_raw_value
+  # - explicit_enum_raw_value  # omitted: contradicts redundant_string_enum_value for string enums whose value equals the case name
   - explicit_init
   # - extension_access_modifier  # omitted: contradicts swift-format's NoAccessLevelOnExtensionDeclaration
   - fatal_error_message
@@ -168,7 +168,7 @@ strict: true                  # any violation fails CI
 
 attributes:
   always_on_same_line: ["@IBAction", "@NSManaged", "@objc", "@testable", "@State", "@Binding", "@Environment", "@Published"]
-  always_on_line_above: ["@MainActor", "@Observable", "@Sendable", "@available", "@discardableResult", "@frozen", "@inlinable", "@inlineable", "@nonobjc", "@objcMembers", "@propertyWrapper", "@resultBuilder"]
+  always_on_line_above: ["@MainActor", "@Observable", "@Sendable", "@available", "@discardableResult", "@frozen", "@inlinable", "@inlineable", "@nonobjc", "@objcMembers", "@propertyWrapper", "@resultBuilder", "@usableFromInline", "@Tag"]
 force_unwrapping:
   severity: error
 force_cast:
@@ -194,8 +194,6 @@ line_length:
 nesting:
   ignore_typealiases_and_associatedtypes: true
   ignore_coding_keys: true
-optional_data_string_conversion:
-  include_implicit_init: true
 redundant_discardable_let:
   ignore_swiftui_view_bodies: true
 switch_case_alignment:

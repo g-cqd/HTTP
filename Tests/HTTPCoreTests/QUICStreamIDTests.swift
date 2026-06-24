@@ -44,7 +44,7 @@ struct QUICStreamIDTests {
     @Test("identifiers order and hash by their numeric value")
     func comparableAndHashable() {
         #expect(QUICStreamID(0) < QUICStreamID(4))
-        #expect(QUICStreamID(4) == QUICStreamID(4))
+        #expect(QUICStreamID(4) == QUICStreamID(rawValue: 4))
         #expect(Set([QUICStreamID(0), QUICStreamID(0), QUICStreamID(4)]).count == 2)
     }
 }

@@ -39,10 +39,14 @@ public struct QUICStreamID: Sendable, Equatable, Hashable, Comparable, RawRepres
     /// The stream class, from the two low bits (RFC 9000 §2.1).
     public var kind: Kind {
         switch rawValue & 0x3 {
-            case 0x0: .clientBidirectional
-            case 0x1: .serverBidirectional
-            case 0x2: .clientUnidirectional
-            default: .serverUnidirectional
+            case 0x0:
+                .clientBidirectional
+            case 0x1:
+                .serverBidirectional
+            case 0x2:
+                .clientUnidirectional
+            default:
+                .serverUnidirectional
         }
     }
 

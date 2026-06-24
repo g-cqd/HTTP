@@ -75,7 +75,9 @@ public struct HTTPFields: Sendable, Equatable {
     /// Returns `false` (leaving the collection unchanged) if `value` is not a legal `field-value`.
     @discardableResult
     public mutating func append(_ value: String, for name: HTTPFieldName) -> Bool {
-        guard let field = HTTPField(name: name, value: value) else { return false }
+        guard let field = HTTPField(name: name, value: value) else {
+            return false
+        }
         storage.append(field)
         return true
     }
@@ -86,7 +88,9 @@ public struct HTTPFields: Sendable, Equatable {
     /// A surviving replacement is placed at the position of the first removed line, else appended.
     @discardableResult
     public mutating func setValue(_ value: String, for name: HTTPFieldName) -> Bool {
-        guard let field = HTTPField(name: name, value: value) else { return false }
+        guard let field = HTTPField(name: name, value: value) else {
+            return false
+        }
         if let firstIndex = storage.firstIndex(where: { $0.name == name }) {
             storage.removeAll { $0.name == name }
             storage.insert(field, at: firstIndex)
@@ -101,28 +105,7 @@ public struct HTTPFields: Sendable, Equatable {
     public mutating func removeAll(named name: HTTPFieldName) {
         storage.removeAll { $0.name == name }
     }
-}
 
-extension HTTPFields: RandomAccessCollection {
-    // `Element` (HTTPField) and `Index` (Int) are inferred from the members below.
-
-    /// The position of the first field (RFC 9110 §5.3 order is preserved).
-    public var startIndex: Int { storage.startIndex }
-
-    /// The position one past the last field.
-    public var endIndex: Int { storage.endIndex }
-
-    /// The field at `position` in wire order.
-    public subscript(position: Int) -> HTTPField { storage[position] }
-
-    /// The position immediately after `index`.
-    public func index(after index: Int) -> Int { storage.index(after: index) }
-
-    /// The position immediately before `index`.
-    public func index(before index: Int) -> Int { storage.index(before: index) }
-}
-
-extension HTTPFields {
     /// An empty field collection — a readable alias for `HTTPFields()`.
-    public static var empty: HTTPFields { HTTPFields() }
+    public static var empty: Self { Self() }
 }

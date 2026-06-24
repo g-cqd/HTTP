@@ -12,18 +12,6 @@
 
 internal import HTTPCore
 
-/// A defined HTTP/3 SETTINGS parameter identifier (RFC 9114 §7.2.4.2 / RFC 9204 §5 / RFC 9220).
-public enum HTTP3SettingsParameter: UInt64, Sendable, Equatable {
-    /// `SETTINGS_QPACK_MAX_TABLE_CAPACITY` (0x01) — the QPACK dynamic table bound (RFC 9204 §5).
-    case qpackMaxTableCapacity = 0x01
-    /// `SETTINGS_MAX_FIELD_SECTION_SIZE` (0x06) — the advisory maximum decoded header-list size.
-    case maxFieldSectionSize = 0x06
-    /// `SETTINGS_QPACK_BLOCKED_STREAMS` (0x07) — the QPACK blocked-streams bound (RFC 9204 §5).
-    case qpackBlockedStreams = 0x07
-    /// `SETTINGS_ENABLE_CONNECT_PROTOCOL` (0x08) — permits Extended CONNECT (RFC 9220 / RFC 8441).
-    case enableConnectProtocol = 0x08
-}
-
 /// The set of known HTTP/3 SETTINGS parameters, with the v1 defaults (RFC 9114 §7.2.4).
 public struct HTTP3Settings: Sendable, Equatable {
     /// QPACK dynamic table capacity in octets — 0 in v1 (the dynamic table is disabled, RFC 9204 §3.2.2).
@@ -36,7 +24,9 @@ public struct HTTP3Settings: Sendable, Equatable {
     public var enableConnectProtocol = false
 
     /// Creates a settings set at the v1 defaults (QPACK table + blocked streams 0).
-    public init() {}
+    public init() {
+        // No-op: all stored properties use their declared v1 defaults.
+    }
 
     /// Applies a received SETTINGS payload, updating the known parameters (RFC 9114 §7.2.4).
     ///

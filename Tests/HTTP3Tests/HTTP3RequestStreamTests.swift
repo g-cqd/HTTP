@@ -22,7 +22,8 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
     func getRequest() throws {
         var connection = HTTP3Connection()
         let events = try connection.receive(
-            Self.stream, requestStream(requestFieldSection()), fin: true)
+            Self.stream, requestStream(requestFieldSection()), fin: true
+        )
         guard case .request(let id, let request, let body) = events.first else {
             Issue.record("expected a request event")
             return
@@ -39,9 +40,11 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
     func postBody() throws {
         var connection = HTTP3Connection()
         let section = requestFieldSection(
-            method: "POST", extra: [HeaderField(name: "content-length", value: "5")])
+            method: "POST", extra: [HeaderField(name: "content-length", value: "5")]
+        )
         let events = try connection.receive(
-            Self.stream, requestStream(section, body: Array("hello".utf8)), fin: true)
+            Self.stream, requestStream(section, body: Array("hello".utf8)), fin: true
+        )
         guard case .request(_, let request, let body) = events.first else {
             Issue.record("expected a request event")
             return
@@ -125,7 +128,8 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
     func malformedMessage(_ testCase: (label: String, fields: [HeaderField])) throws {
         var connection = HTTP3Connection()
         _ = try connection.receive(
-            Self.stream, requestStream(fieldSection(testCase.fields)), fin: true)
+            Self.stream, requestStream(fieldSection(testCase.fields)), fin: true
+        )
         #expect(resetStreamCode(&connection) == HTTP3ErrorCode.h3MessageError.rawValue)
     }
 
@@ -133,9 +137,11 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
     func contentLengthMismatch() throws {
         var connection = HTTP3Connection()
         let section = requestFieldSection(
-            method: "POST", extra: [HeaderField(name: "content-length", value: "3")])
+            method: "POST", extra: [HeaderField(name: "content-length", value: "3")]
+        )
         _ = try connection.receive(
-            Self.stream, requestStream(section, body: Array("hello".utf8)), fin: true)
+            Self.stream, requestStream(section, body: Array("hello".utf8)), fin: true
+        )
         #expect(resetStreamCode(&connection) == HTTP3ErrorCode.h3MessageError.rawValue)
     }
 

@@ -42,7 +42,9 @@ public struct WebSocketConnection {
     /// to `maxFrameSize` and a reassembled message to `maxMessageSize` (resource-exhaustion guards).
     public init(maxFrameSize: Int = 1 << 20, maxMessageSize: Int = 16 << 20) {
         self.decoder = WebSocketFrameDecoder(
-            maxPayloadLength: maxFrameSize, requireMaskedFrames: true)
+            maxPayloadLength: maxFrameSize,
+            requireMaskedFrames: true
+        )
         self.maxMessageSize = maxMessageSize
     }
 
@@ -94,7 +96,9 @@ public struct WebSocketConnection {
 
     /// Initiates the closing handshake with `code` and an optional `reason` (RFC 6455 §5.5.1).
     public mutating func close(_ code: WebSocketCloseCode = .normalClosure, reason: String = "") {
-        guard !closeSent else { return }
+        guard !closeSent else {
+            return
+        }
         closeSent = true
         // §7.4.1 — never put a code that must not appear on the wire (1005/1006/1015/undefined) out.
         let safeCode = code.isValidOnWire ? code : .protocolError
@@ -146,7 +150,9 @@ public struct WebSocketConnection {
         if frame.opcode == .continuation {
             guard let opcode = fragmentOpcode else { throw .unexpectedContinuation }  // §5.4
             try appendFragment(frame.payload)
-            guard frame.isFinal else { return }
+            guard frame.isFinal else {
+                return
+            }
             let message = fragments
             fragmentOpcode = nil
             fragments = []
@@ -181,15 +187,20 @@ public struct WebSocketConnection {
     // MARK: Outbound + parsing helpers
 
     private mutating func queue(_ frame: WebSocketFrame) {
-        guard !closeSent else { return }  // §5.5.1 — nothing follows a Close
+        guard !closeSent else {
+            return  // §5.5.1 — nothing follows a Close
+        }
         output += encoder.encode(frame)
     }
 
     private mutating func queueClose(_ code: WebSocketCloseCode) {
-        guard !closeSent else { return }
+        guard !closeSent else {
+            return
+        }
         closeSent = true
         output += encoder.encode(
-            WebSocketFrame(opcode: .close, payload: Self.closePayload(code, reason: [])))
+            WebSocketFrame(opcode: .close, payload: Self.closePayload(code, reason: []))
+        )
     }
 
     private static func closePayload(_ code: WebSocketCloseCode, reason: [UInt8]) -> [UInt8] {
@@ -201,7 +212,9 @@ public struct WebSocketConnection {
     /// Truncates `bytes` to at most `maxBytes`, backing off to a UTF-8 scalar boundary so a multi-byte
     /// sequence is never split (RFC 3629) — used to keep a Close reason within the §5.5 control limit.
     private static func truncatedUTF8(_ bytes: [UInt8], maxBytes: Int) -> [UInt8] {
-        guard bytes.count > maxBytes else { return bytes }
+        guard bytes.count > maxBytes else {
+            return bytes
+        }
         var end = maxBytes
         while end > 0, bytes[end] & 0xC0 == 0x80 { end -= 1 }  // step back over continuation octets
         return Array(bytes[..<end])
@@ -211,7 +224,9 @@ public struct WebSocketConnection {
     private static func parseClose(
         _ payload: [UInt8]
     ) throws(WebSocketError) -> (WebSocketCloseCode?, [UInt8]) {
-        guard !payload.isEmpty else { return (nil, []) }
+        guard !payload.isEmpty else {
+            return (nil, [])
+        }
         guard payload.count >= 2 else { throw .malformedClosePayload }
         let code = WebSocketCloseCode(rawValue: UInt16(payload[0]) << 8 | UInt16(payload[1]))
         guard code.isValidOnWire else { throw .invalidCloseCode }  // §7.4.1
@@ -234,13 +249,21 @@ public struct WebSocketConnection {
                 index += 1
                 continue
             }
-            guard let sequence = utf8Sequence(forLead: lead) else { return false }
-            guard index + sequence.length <= count else { return false }  // truncated
+            guard let sequence = utf8Sequence(forLead: lead) else {
+                return false
+            }
+            guard index + sequence.length <= count else {
+                return false  // truncated
+            }
             let second = bytes[index + 1]
-            guard second >= sequence.secondLow, second <= sequence.secondHigh else { return false }
+            guard second >= sequence.secondLow, second <= sequence.secondHigh else {
+                return false
+            }
             var continuation = index + 2
             while continuation < index + sequence.length {
-                guard bytes[continuation] >= 0x80, bytes[continuation] <= 0xBF else { return false }
+                guard bytes[continuation] >= 0x80, bytes[continuation] <= 0xBF else {
+                    return false
+                }
                 continuation += 1
             }
             index += sequence.length
@@ -255,15 +278,24 @@ public struct WebSocketConnection {
         forLead lead: UInt8
     ) -> (length: Int, secondLow: UInt8, secondHigh: UInt8)? {
         switch lead {
-            case 0xC2 ... 0xDF: (2, 0x80, 0xBF)
-            case 0xE0: (3, 0xA0, 0xBF)  // reject overlong
-            case 0xE1 ... 0xEC: (3, 0x80, 0xBF)
-            case 0xED: (3, 0x80, 0x9F)  // reject surrogates
-            case 0xEE ... 0xEF: (3, 0x80, 0xBF)
-            case 0xF0: (4, 0x90, 0xBF)  // reject overlong
-            case 0xF1 ... 0xF3: (4, 0x80, 0xBF)
-            case 0xF4: (4, 0x80, 0x8F)  // reject > U+10FFFF
-            default: nil
+            case 0xC2 ... 0xDF:
+                (2, 0x80, 0xBF)
+            case 0xE0:
+                (3, 0xA0, 0xBF)  // reject overlong
+            case 0xE1 ... 0xEC:
+                (3, 0x80, 0xBF)
+            case 0xED:
+                (3, 0x80, 0x9F)  // reject surrogates
+            case 0xEE ... 0xEF:
+                (3, 0x80, 0xBF)
+            case 0xF0:
+                (4, 0x90, 0xBF)  // reject overlong
+            case 0xF1 ... 0xF3:
+                (4, 0x80, 0xBF)
+            case 0xF4:
+                (4, 0x80, 0x8F)  // reject > U+10FFFF
+            default:
+                nil
         }
     }
 
@@ -274,7 +306,7 @@ public struct WebSocketConnection {
             inbound.withUnsafeBytes { raw in
                 Result { () throws(WebSocketError) in
                     var reader = ByteReader(raw)
-                    var frames = [WebSocketFrame]()
+                    var frames: [WebSocketFrame] = []
                     while let frame = try decoder.nextFrame(&reader) { frames.append(frame) }
                     return (frames, reader.position)
                 }

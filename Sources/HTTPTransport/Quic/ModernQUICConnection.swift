@@ -36,6 +36,10 @@ final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
         (self.inbound, self.continuation) = AsyncStream.makeStream()
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// Serves the connection for its lifetime, feeding inbound peer streams into the AsyncStream.
     ///
     /// Blocks until the connection closes (peer-driven) or ``close(errorCode:)`` cancels the inbound
@@ -52,8 +56,11 @@ final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
 
     func openStream(direction: QUICStreamDirection) async throws -> any QUICStream {
         let networkStream = try await connection.openStream(
-            directionality: direction == .unidirectional ? .unidirectional : .bidirectional)
-        return ModernQUICStream(stream: networkStream) {}
+            directionality: direction == .unidirectional ? .unidirectional : .bidirectional
+        )
+        return ModernQUICStream(stream: networkStream) {
+            // no-op: a locally-opened stream has no close hook
+        }
     }
 
     func close(errorCode _: UInt64) async {
@@ -68,7 +75,8 @@ final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
         try? await connection.inboundStreams { networkStream in
             await withCheckedContinuation { (resume: CheckedContinuation<Void, Never>) in
                 self.continuation.yield(
-                    ModernQUICStream(stream: networkStream) { resume.resume() })
+                    ModernQUICStream(stream: networkStream) { resume.resume() }
+                )
             }
         }
         continuation.finish()

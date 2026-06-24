@@ -32,7 +32,10 @@ struct H2SpecMessageTests {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.openStream(streamID: 1)  // first HEADERS, stream open
         wire += H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(method: "POST"), endStream: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(method: "POST"),
+            endStream: false
+        )
         H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
     }
 
@@ -43,8 +46,11 @@ struct H2SpecMessageTests {
         var connection = try H2Wire.handshaked()
         let fields = H2Wire.requestFields(extra: [hf("X-Test", "1")])
         H2Wire.expectStreamError(
-            .protocolError, on: 1, feeding: H2Wire.headers(streamID: 1, fields: fields),
-            connection: &connection)
+            .protocolError,
+            on: 1,
+            feeding: H2Wire.headers(streamID: 1, fields: fields),
+            connection: &connection
+        )
     }
 
     // MARK: §8.1.2.1 Pseudo-Header Fields
@@ -79,8 +85,11 @@ struct H2SpecMessageTests {
     ) throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectStreamError(
-            .protocolError, on: 1, feeding: H2Wire.headers(streamID: 1, fields: testCase.fields),
-            connection: &connection)
+            .protocolError,
+            on: 1,
+            feeding: H2Wire.headers(streamID: 1, fields: testCase.fields),
+            connection: &connection
+        )
     }
 
     @Test(
@@ -101,12 +110,14 @@ struct H2SpecMessageTests {
             (
                 label: "connection-specific field",
                 fields: H2Wire.requestFields(
-                    extra: [hf("connection", "keep-alive")])
+                    extra: [hf("connection", "keep-alive")]
+                )
             ),
             (
                 label: "TE with a value other than trailers",
                 fields: H2Wire.requestFields(
-                    extra: [hf("te", "gzip")])
+                    extra: [hf("te", "gzip")]
+                )
             )
         ])
     func connectionSpecificFieldIsStreamError(
@@ -116,8 +127,11 @@ struct H2SpecMessageTests {
     {
         var connection = try H2Wire.handshaked()
         H2Wire.expectStreamError(
-            .protocolError, on: 1, feeding: H2Wire.headers(streamID: 1, fields: testCase.fields),
-            connection: &connection)
+            .protocolError,
+            on: 1,
+            feeding: H2Wire.headers(streamID: 1, fields: testCase.fields),
+            connection: &connection
+        )
     }
 
     // MARK: §8.1.2.3 Request Pseudo-Header Fields
@@ -168,8 +182,11 @@ struct H2SpecMessageTests {
     ) throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectStreamError(
-            .protocolError, on: 1, feeding: H2Wire.headers(streamID: 1, fields: testCase.fields),
-            connection: &connection)
+            .protocolError,
+            on: 1,
+            feeding: H2Wire.headers(streamID: 1, fields: testCase.fields),
+            connection: &connection
+        )
     }
 
     // MARK: §8.1.2.6 Malformed Requests and Responses
@@ -182,7 +199,8 @@ struct H2SpecMessageTests {
         var wire = H2Wire.headers(
             streamID: 1,
             fields: H2Wire.requestFields(method: "POST", extra: [hf("content-length", "5")]),
-            endStream: false)
+            endStream: false
+        )
         wire += H2Wire.data(streamID: 1, payload: Array("ab".utf8), endStream: true)  // 2 ≠ 5
         H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
     }
@@ -195,7 +213,8 @@ struct H2SpecMessageTests {
         var wire = H2Wire.headers(
             streamID: 1,
             fields: H2Wire.requestFields(method: "POST", extra: [hf("content-length", "10")]),
-            endStream: false)
+            endStream: false
+        )
         wire += H2Wire.data(streamID: 1, payload: Array("abc".utf8), endStream: false)
         wire += H2Wire.data(streamID: 1, payload: Array("de".utf8), endStream: true)  // 5 ≠ 10
         H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
@@ -207,7 +226,10 @@ struct H2SpecMessageTests {
     func clientPushPromiseIsConnectionError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.pushPromise(onStream: 1), on: &connection)
+            .protocolError,
+            feeding: H2Wire.pushPromise(onStream: 1),
+            on: &connection
+        )
     }
 
     // h2spec coverage: §8.1 (1) + §8.1.2 (1) + §8.1.2.1 (4) + §8.1.2.2 (2) + §8.1.2.3 (7)

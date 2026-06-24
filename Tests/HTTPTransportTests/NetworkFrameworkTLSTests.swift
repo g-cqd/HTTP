@@ -37,7 +37,9 @@ struct NetworkFrameworkTLSTests {
             for _ in 0 ..< count {
                 group.addTask {
                     let identity = try? NetworkFrameworkTLS.identity(
-                        pkcs12: tls.pkcs12, passphrase: tls.passphrase)
+                        pkcs12: tls.pkcs12,
+                        passphrase: tls.passphrase
+                    )
                     return identity != nil
                 }
             }
@@ -52,14 +54,17 @@ struct NetworkFrameworkTLSTests {
     func negotiatesHTTP2OverTLS() async throws {
         let tls = try SharedDevTLSIdentity.value()
         let transport = NetworkFrameworkTransport(
-            configuration: TransportConfiguration(port: 0, backbone: .networkFramework, tls: tls))
+            configuration: TransportConfiguration(port: 0, backbone: .networkFramework, tls: tls)
+        )
         let connections = try await transport.start()
         let port = try #require(NWEndpoint.Port(rawValue: transport.boundPort))
 
         // Server: the accepted connection is surfaced only after `.ready`, so its ALPN is settled.
         let accepted = Task { () -> String? in
             var iterator = connections.makeAsyncIterator()
-            guard let connection = await iterator.next() else { return nil }
+            guard let connection = await iterator.next() else {
+                return nil
+            }
             defer { Task { await connection.close() } }
             return connection.negotiatedApplicationProtocol
         }
@@ -79,7 +84,10 @@ struct NetworkFrameworkTLSTests {
         let security = options.securityProtocolOptions
         "h2".withCString { sec_protocol_options_add_tls_application_protocol(security, $0) }
         sec_protocol_options_set_verify_block(
-            security, { _, _, complete in complete(true) }, DispatchQueue.global())
+            security,
+            { _, _, complete in complete(true) },
+            DispatchQueue.global()
+        )
         return NWParameters(tls: options)
     }
 }

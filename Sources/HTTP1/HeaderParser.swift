@@ -89,7 +89,7 @@ public enum HeaderParser {
             .withUnsafeBytes { HTTPFieldName(validating: $0) }
         guard let fieldName else { throw .invalidFieldName }
         let value = line.extracting(valueStart ..< valueEnd)
-            .withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
+            .withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
         guard let field = HTTPField(name: fieldName, value: value) else { throw .invalidFieldValue }
         return field
     }

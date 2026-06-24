@@ -17,22 +17,33 @@ public import HTTPCore
 
 /// A resumable decoder for the HTTP/1.1 chunked transfer-coding (RFC 9112 §7.1).
 public enum ChunkedBodyDecoder {
+    /// The phase of a chunked decode, carried in ``State`` between feeds.
+    ///
+    /// `fileprivate` (not `private`) so the stepping helpers below can read and switch over it; one
+    /// level of nesting keeps it scoped to the decoder without tripping the nesting limit.
+    // swiftlint:disable:next strict_fileprivate - shared by State and the stepping helpers in-file
+    fileprivate enum Phase: Equatable, Sendable {
+        case size  // expecting a chunk-size line
+        case data(remaining: Int)  // copying a chunk's data octets
+        case dataTerminator  // expecting the CRLF after a chunk's data
+        case trailers  // consuming the trailer section
+        case complete  // terminating chunk + trailers seen
+    }
+
     /// The carried position of a chunked decode between feeds (a value type; the decoded body is held
     /// by the caller and passed `inout`, so it grows in place without a copy-on-write copy per feed).
     public struct State: Equatable, Sendable {
-        fileprivate enum Phase: Equatable, Sendable {
-            case size  // expecting a chunk-size line
-            case data(remaining: Int)  // copying a chunk's data octets
-            case dataTerminator  // expecting the CRLF after a chunk's data
-            case trailers  // consuming the trailer section
-            case complete  // terminating chunk + trailers seen
-        }
+        // swiftlint:disable:next strict_fileprivate - read and written by ChunkedBodyDecoder in-file
         fileprivate var phase: Phase = .size
+        // swiftlint:disable:next strict_fileprivate - read and written by ChunkedBodyDecoder in-file
         fileprivate var extBytes = 0
+        // swiftlint:disable:next strict_fileprivate - read and written by ChunkedBodyDecoder in-file
         fileprivate var trailerBytes = 0
 
         /// Creates a decoder positioned before the first chunk-size line.
-        public init() {}
+        public init() {
+            // No initial state beyond the property defaults above.
+        }
 
         /// Whether the terminating zero-size chunk and trailer section have been fully consumed.
         public var isComplete: Bool { phase == .complete }
@@ -83,7 +94,9 @@ public enum ChunkedBodyDecoder {
                     took < remaining ? .data(remaining: remaining - took) : .dataTerminator
                 return took == remaining
             case .dataTerminator:
-                guard try consumeCRLF(&reader) else { return false }
+                guard try consumeCRLF(&reader) else {
+                    return false
+                }
                 state.phase = .size
                 return true
             case .trailers:
@@ -99,7 +112,11 @@ public enum ChunkedBodyDecoder {
                 return false
             case .line(let range):
                 try beginChunk(
-                    reader.slice(in: range), state: &state, bodyCount: bodyCount, limits: limits)
+                    reader.slice(in: range),
+                    state: &state,
+                    bodyCount: bodyCount,
+                    limits: limits
+                )
                 return true
         }
     }
@@ -108,8 +125,10 @@ public enum ChunkedBodyDecoder {
         _ reader: inout ByteReader, state: inout State, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
         switch try consumeTrailer(&reader, state: &state, limits: limits) {
-            case .needMore: return false
-            case .consumed: return true
+            case .needMore:
+                return false
+            case .consumed:
+                return true
             case .complete:
                 state.phase = .complete
                 return true
@@ -128,9 +147,13 @@ public enum ChunkedBodyDecoder {
     /// Returns `.needMore` (without advancing) until the full CRLF is present; a bare CR is a framing
     /// error.
     private static func readLine(_ reader: inout ByteReader) throws(HTTP1ParseError) -> LineStep {
-        guard let crIndex = reader.firstIndex(of: cr) else { return .needMore }
+        guard let crIndex = reader.firstIndex(of: cr) else {
+            return .needMore
+        }
         let lfIndex = crIndex + 1
-        guard lfIndex < reader.count else { return .needMore }  // CR present, LF not yet
+        guard lfIndex < reader.count else {
+            return .needMore
+        }  // CR present, LF not yet
         guard reader.peek(ahead: lfIndex - reader.position) == lf else { throw .malformedChunk }
         let range = reader.position ..< crIndex
         reader.advance(by: lfIndex + 1 - reader.position)
@@ -187,7 +210,9 @@ public enum ChunkedBodyDecoder {
         _ reader: inout ByteReader, remaining: Int, into body: inout [UInt8]
     ) -> Int {
         let take = min(remaining, reader.remaining)
-        guard take > 0 else { return 0 }
+        guard take > 0 else {
+            return 0
+        }
         let start = reader.position
         reader.slice(in: start ..< (start + take)).withUnsafeBytes { body.append(contentsOf: $0) }
         reader.advance(by: take)
@@ -196,7 +221,9 @@ public enum ChunkedBodyDecoder {
 
     /// Consumes the CRLF that follows a chunk's data; returns `false` until both octets are present.
     private static func consumeCRLF(_ reader: inout ByteReader) throws(HTTP1ParseError) -> Bool {
-        guard reader.remaining >= 2 else { return false }
+        guard reader.remaining >= 2 else {
+            return false
+        }
         guard reader.peek() == cr, reader.peek(ahead: 1) == lf else { throw .malformedChunk }
         reader.advance(by: 2)
         return true
@@ -212,7 +239,10 @@ public enum ChunkedBodyDecoder {
             case .needMore:
                 return .needMore
             case .line(let range):
-                if range.isEmpty { return .complete }  // the terminating empty line ends the trailers
+                // The terminating empty line ends the trailers.
+                if range.isEmpty {
+                    return .complete
+                }
                 try validateTrailer(reader.slice(in: range))
                 state.trailerBytes += range.count + 2
                 guard state.trailerBytes <= limits.maxHeaderListSize else {
@@ -249,7 +279,8 @@ public enum ChunkedBodyDecoder {
         while value < count {
             guard
                 FieldValidation.isFieldValueByte(
-                    line.unsafeLoad(fromByteOffset: value, as: UInt8.self))
+                    line.unsafeLoad(fromByteOffset: value, as: UInt8.self)
+                )
             else { throw .invalidFieldValue }
             value += 1
         }
@@ -258,10 +289,14 @@ public enum ChunkedBodyDecoder {
     /// The value of a single hexadecimal digit, or `nil` if `byte` is not a HEXDIG.
     private static func hexValue(_ byte: UInt8) -> Int? {
         switch byte {
-            case 0x30 ... 0x39: Int(byte - 0x30)  // 0-9
-            case 0x41 ... 0x46: Int(byte - 0x41 + 10)  // A-F
-            case 0x61 ... 0x66: Int(byte - 0x61 + 10)  // a-f
-            default: nil
+            case 0x30 ... 0x39:
+                Int(byte - 0x30)  // 0-9
+            case 0x41 ... 0x46:
+                Int(byte - 0x41 + 10)  // A-F
+            case 0x61 ... 0x66:
+                Int(byte - 0x61 + 10)  // a-f
+            default:
+                nil
         }
     }
 }

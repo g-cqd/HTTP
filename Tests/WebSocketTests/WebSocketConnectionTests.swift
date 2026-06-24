@@ -47,7 +47,8 @@ struct WebSocketConnectionTests {
     func closeIsEchoed() throws {
         var connection = WebSocketConnection()
         let events = try connection.receive(
-            clientFrame(.close, [0x03, 0xE8]))  // code 1000
+            clientFrame(.close, [0x03, 0xE8])  // code 1000
+        )
         #expect(events == [.close(code: .normalClosure, reason: [])])
         #expect(connection.isClosing)
         let reply = try serverFrames(connection.outboundBytes())
@@ -186,6 +187,7 @@ struct WebSocketConnectionTests {
             close.payload.count >= 2
         else { return nil }
         return WebSocketCloseCode(
-            rawValue: UInt16(close.payload[0]) << 8 | UInt16(close.payload[1]))
+            rawValue: UInt16(close.payload[0]) << 8 | UInt16(close.payload[1])
+        )
     }
 }

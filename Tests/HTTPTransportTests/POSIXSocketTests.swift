@@ -42,7 +42,10 @@ struct POSIXSocketTests {
     @Test("makeListenSocket sets SO_NOSIGPIPE on the listening descriptor")
     func listenSocketSuppressesSIGPIPE() throws {
         let (fd, _) = try POSIXSocket.makeListenSocket(
-            host: "127.0.0.1", port: 0, nonBlocking: true)
+            host: "127.0.0.1",
+            port: 0,
+            nonBlocking: true
+        )
         defer { close(fd) }
 
         var value: Int32 = 0

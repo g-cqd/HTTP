@@ -47,8 +47,10 @@ public struct WebSocketCloseCode: Sendable, Equatable, Hashable {
     /// and the undefined 1004 — MUST NOT be sent and are rejected when received.
     public var isValidOnWire: Bool {
         switch rawValue {
-            case 1_000 ... 1_003, 1_007 ... 1_011, 3_000 ... 4_999: true
-            default: false
+            case 1_000 ... 1_003, 1_007 ... 1_011, 3_000 ... 4_999:
+                true
+            default:
+                false
         }
     }
 }

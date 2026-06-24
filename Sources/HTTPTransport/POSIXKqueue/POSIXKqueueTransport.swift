@@ -41,6 +41,10 @@ public final class POSIXKqueueTransport: ServerTransport {
         self.configuration = configuration
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
         state.withLock(\.boundPort)
@@ -49,8 +53,11 @@ public final class POSIXKqueueTransport: ServerTransport {
     /// Binds a non-blocking TCP socket and begins accepting via the kqueue loop.
     public func start() async throws -> AsyncStream<any TransportConnection> {
         let listener = try POSIXSocket.makeListenSocket(
-            host: configuration.host, port: configuration.port, nonBlocking: true,
-            reusePort: configuration.reusePort)
+            host: configuration.host,
+            port: configuration.port,
+            nonBlocking: true,
+            reusePort: configuration.reusePort
+        )
         let eventLoop = KqueueEventLoop()
         eventLoop.start()
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
@@ -99,7 +106,10 @@ public final class POSIXKqueueTransport: ServerTransport {
         eventLoop.waitReadable(listenFD) { [weak self] in
             self?
                 .acceptPending(
-                    listenFD: listenFD, eventLoop: eventLoop, continuation: continuation)
+                    listenFD: listenFD,
+                    eventLoop: eventLoop,
+                    continuation: continuation
+                )
         }
     }
 
@@ -108,7 +118,9 @@ public final class POSIXKqueueTransport: ServerTransport {
         eventLoop: KqueueEventLoop,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        guard state.withLock(\.isRunning) else { return }
+        guard state.withLock(\.isRunning) else {
+            return
+        }
         while true {
             var address = sockaddr_in()
             var length = socklen_t(MemoryLayout<sockaddr_in>.size)
@@ -126,8 +138,12 @@ public final class POSIXKqueueTransport: ServerTransport {
             let id = connectionIDs.next()
             continuation.yield(
                 POSIXKqueueConnection(
-                    id: id, descriptor: clientFD,
-                    peer: POSIXSocket.peerAddress(from: address), eventLoop: eventLoop))
+                    id: id,
+                    descriptor: clientFD,
+                    peer: POSIXSocket.peerAddress(from: address),
+                    eventLoop: eventLoop
+                )
+            )
         }
         armAccept(listenFD: listenFD, eventLoop: eventLoop, continuation: continuation)
     }

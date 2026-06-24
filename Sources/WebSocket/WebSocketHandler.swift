@@ -10,21 +10,6 @@
 
 public import HTTPCore
 
-/// A frame an application asks the connection to send in response to an event (RFC 6455 §5).
-public enum WebSocketAction: Sendable, Equatable {
-    /// Send a text message (RFC 6455 §5.6).
-    case sendText(String)
-
-    /// Send a binary message (RFC 6455 §5.6).
-    case sendBinary([UInt8])
-
-    /// Send a Ping (RFC 6455 §5.5.2).
-    case sendPing([UInt8])
-
-    /// Begin the closing handshake with a status code and reason (RFC 6455 §5.5.1).
-    case close(WebSocketCloseCode, reason: String)
-}
-
 /// Application logic for an upgraded WebSocket connection (RFC 6455 §5 / §6).
 public protocol WebSocketHandler: Sendable {
     /// Whether to upgrade `request` to WebSocket (e.g. gate by path); defaults to accepting any valid
@@ -53,47 +38,4 @@ extension WebSocketHandler {
     /// Override to defend credentialed endpoints against cross-site WebSocket hijacking
     /// (RFC 6455 §10.2).
     public func isOriginAllowed(_: String?) -> Bool { true }
-}
-
-/// A ``WebSocketHandler`` backed by closures.
-public struct ClosureWebSocketHandler: WebSocketHandler {
-    private let upgrade: @Sendable (HTTPRequest) -> Bool
-    private let originAllowed: @Sendable (String?) -> Bool
-    private let onEvent: @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
-
-    /// Creates a handler from an optional upgrade predicate, an optional `Origin` allowlist predicate
-    /// (defaults to accepting any origin — override for credentialed endpoints, RFC 6455 §10.2), and
-    /// an event handler.
-    public init(
-        shouldUpgrade: @escaping @Sendable (HTTPRequest) -> Bool = { _ in true },
-        isOriginAllowed: @escaping @Sendable (String?) -> Bool = { _ in true },
-        handle: @escaping @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
-    ) {
-        self.upgrade = shouldUpgrade
-        self.originAllowed = isOriginAllowed
-        self.onEvent = handle
-    }
-
-    /// Asks the upgrade predicate.
-    public func shouldUpgrade(_ request: HTTPRequest) -> Bool { upgrade(request) }
-
-    /// Asks the origin-allowlist predicate.
-    public func isOriginAllowed(_ origin: String?) -> Bool { originAllowed(origin) }
-
-    /// Invokes the event closure.
-    public func handle(_ event: WebSocketConnection.Event) async -> [WebSocketAction] {
-        await onEvent(event)
-    }
-}
-
-extension WebSocketConnection {
-    /// Applies an application `action`, queuing the corresponding frame (RFC 6455 §5).
-    public mutating func apply(_ action: WebSocketAction) {
-        switch action {
-            case .sendText(let text): send(text: text)
-            case .sendBinary(let bytes): send(binary: bytes)
-            case .sendPing(let payload): sendPing(payload)
-            case .close(let code, let reason): close(code, reason: reason)
-        }
-    }
 }

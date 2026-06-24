@@ -11,10 +11,10 @@ import Testing
 
 @testable import HTTPTestSupport
 
-private enum SampleError: Error, Equatable { case bad(Int) }
-
 @Suite("Property toolkit")
 struct PropertyToolkitTests {
+    private enum SampleError: Error, Equatable { case bad(Int) }
+
     @Test
     func `SeededRNG reproduces the same stream for a fixed seed`() {
         var a = SeededRNG(seed: 42)
@@ -26,6 +26,7 @@ struct PropertyToolkitTests {
 
     @Test
     func `Seed.named is stable and distinguishes names`() {
+        // swiftlint:disable:next identical_operands - intentional reflexivity check
         #expect(Seed.named("http1.request") == Seed.named("http1.request"))
         #expect(Seed.named("http1.request") != Seed.named("http2.frame"))
     }
@@ -45,7 +46,13 @@ struct PropertyToolkitTests {
     @Test
     func `fuzzNeverTraps runs the requested iterations`() {
         let report = fuzzNeverTraps(
-            seed: .named("toolkit"), iterations: 50, corpus: { [1, 2, 3] }, exercise: { _ in })
+            seed: .named("toolkit"),
+            iterations: 50,
+            corpus: { [1, 2, 3] },
+            exercise: { _ in
+                // no-op: surviving the run is the assertion.
+            }
+        )
         #expect(report.iterations == 50)
     }
 
@@ -67,18 +74,21 @@ struct PropertyToolkitTests {
     func `expectThrows checks the error type and payload`() {
         let caught = expectThrows(
             { () throws -> Int in throw SampleError.bad(7) },
-            where: { (error: SampleError) in error == .bad(7) })
+            where: { (error: SampleError) in error == .bad(7) }
+        )
         #expect(caught == .bad(7))
     }
 
     @Test
     func `expectRoundTripIdentity accepts an identity round trip`() {
-        expectRoundTripIdentity(\.self)  // records no issue
+        expectRoundTripIdentity(Array("ping".utf8), via: \.self)  // records no issue
     }
 
     @Test
     func `mallocDelta measures a growing buffer where counting is available`() {
-        guard allocationCountingAvailable else { return }
+        guard allocationCountingAvailable else {
+            return
+        }
         var sink: [UInt8] = []
         sink.append(0)  // warm up the first buffer
         let count = mallocDelta { for _ in 0 ..< 2_000 { sink.append(0) } }

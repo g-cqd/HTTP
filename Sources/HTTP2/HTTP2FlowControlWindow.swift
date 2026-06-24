@@ -53,8 +53,12 @@ public struct HTTP2FlowControlWindow: Sendable, Equatable {
     /// A zero increment and an increment that would exceed 2^31-1 are reported for the caller to scope
     /// (PROTOCOL_ERROR and FLOW_CONTROL_ERROR respectively).
     public mutating func increase(by delta: Int) -> UpdateOutcome {
-        guard delta != 0 else { return .zeroIncrement }
-        guard delta <= Self.maxSize - size else { return .overflow }
+        guard delta != 0 else {
+            return .zeroIncrement
+        }
+        guard delta <= Self.maxSize - size else {
+            return .overflow
+        }
         size += delta
         return .applied
     }
@@ -64,7 +68,9 @@ public struct HTTP2FlowControlWindow: Sendable, Equatable {
     /// A positive change that would exceed 2^31-1 is a FLOW_CONTROL_ERROR; a negative change may drive
     /// the window negative, which is valid and throttles the sender until it recovers.
     public mutating func shiftInitial(by delta: Int) -> UpdateOutcome {
-        guard delta <= Self.maxSize - size else { return .overflow }
+        guard delta <= Self.maxSize - size else {
+            return .overflow
+        }
         size += delta
         return .applied
     }

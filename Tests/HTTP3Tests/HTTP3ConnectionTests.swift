@@ -26,14 +26,18 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
         var connection = HTTP3Connection()
         let actions = connection.outbound()
         let roles = actions.compactMap { action -> HTTP3StreamRole? in
-            if case .openUniStream(let role, _) = action { return role }
+            if case .openUniStream(let role, _) = action {
+                return role
+            }
             return nil
         }
         #expect(roles == [.control, .qpackEncoder, .qpackDecoder])
         // The control preamble opens with the §6.2 type byte 0x00 then a SETTINGS frame.
         let controlPreamble =
             actions.compactMap { action -> [UInt8]? in
-                if case .openUniStream(.control, let preamble) = action { return preamble }
+                if case .openUniStream(.control, let preamble) = action {
+                    return preamble
+                }
                 return nil
             }
             .first
@@ -44,7 +48,8 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
     func appliesPeerSettings() throws {
         var connection = HTTP3Connection()
         let events = try connection.receive(
-            Self.control, controlPreamble([(0x06, 8_192)]), fin: false)
+            Self.control, controlPreamble([(0x06, 8_192)]), fin: false
+        )
         #expect(events.isEmpty)
         #expect(connection.remoteSettings.maxFieldSectionSize == 8_192)
     }
@@ -98,7 +103,8 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
     func goAwayMonotonic() throws {
         var connection = HTTP3Connection()
         let events = try connection.receive(
-            Self.control, controlPreamble() + frame(.goAway, varint(8)), fin: false)
+            Self.control, controlPreamble() + frame(.goAway, varint(8)), fin: false
+        )
         #expect(events == [.goAway(streamID: QUICStreamID(8))])
         #expect(
             errorCode(feeding: &connection, Self.control, frame(.goAway, varint(12)))

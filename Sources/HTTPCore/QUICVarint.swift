@@ -24,10 +24,14 @@ public enum QUICVarint {
     /// The minimal number of octets needed to encode `value` (RFC 9000 §16).
     public static func encodedLength(of value: UInt64) -> Int {
         switch value {
-            case 0 ... 63: 1
-            case 64 ... 16_383: 2
-            case 16_384 ... 1_073_741_823: 4
-            default: 8
+            case 0 ... 63:
+                1
+            case 64 ... 16_383:
+                2
+            case 16_384 ... 1_073_741_823:
+                4
+            default:
+                8
         }
     }
 
@@ -65,13 +69,20 @@ public enum QUICVarint {
     /// so an incremental parser can treat a short read as "need more bytes" rather than an error. A
     /// varint always fits in 62 bits, so truncation is the only failure mode.
     public static func decode(_ reader: inout ByteReader) -> UInt64? {
-        guard let first = reader.peek() else { return nil }
+        guard let first = reader.peek() else {
+            return nil
+        }
         let length = encodedLength(firstByte: first)
-        guard reader.remaining >= length else { return nil }
+        guard reader.remaining >= length else {
+            return nil
+        }
         var value = UInt64(first & 0x3F)
         reader.advance()
         for _ in 1 ..< length {
-            guard let byte = reader.readByte() else { return nil }  // guarded by `remaining` above
+            // `remaining` above already guards the read.
+            guard let byte = reader.readByte() else {
+                return nil
+            }
             value = (value << 8) | UInt64(byte)
         }
         return value

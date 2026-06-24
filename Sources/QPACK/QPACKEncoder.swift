@@ -16,7 +16,9 @@ public import HTTPCore
 /// A QPACK field-section encoder with the dynamic table disabled (RFC 9204 §4.5, capacity 0).
 public struct QPACKEncoder {
     /// Creates a static-only encoder.
-    public init() {}
+    public init() {
+        // No-op: the static-only encoder holds no state.
+    }
 
     /// Encodes `fields` into a complete encoded field section (RFC 9204 §4.5).
     ///

@@ -36,8 +36,10 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// ``appendRawNameUTF8(to:)`` on the response hot path, which avoids that allocation.
     public var rawName: String {
         switch storage {
-            case .literal(let name): name.description
-            case .parsed(let name): name
+            case .literal(let name):
+                name.description
+            case .parsed(let name):
+                name
         }
     }
 
@@ -49,14 +51,18 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// response).
     public func appendRawNameUTF8(to output: inout [UInt8]) {
         switch storage {
-            case .literal(let name): name.withUTF8Buffer { output.append(contentsOf: $0) }
-            case .parsed(let name): output.append(contentsOf: name.utf8)
+            case .literal(let name):
+                name.withUTF8Buffer { output.append(contentsOf: $0) }
+            case .parsed(let name):
+                output.append(contentsOf: name.utf8)
         }
     }
 
     /// Creates a field name from a runtime token, returning `nil` if it is not a valid `token`.
     public init?(_ name: String) {
-        guard FieldValidation.isToken(name.utf8) else { return nil }
+        guard FieldValidation.isToken(name.utf8) else {
+            return nil
+        }
         self.storage = .parsed(name)
         // h2/h3 field names arrive lower-case, so reuse the input when possible to avoid allocating.
         if name.utf8.contains(where: { (0x41 ... 0x5A).contains($0) }) {
@@ -74,8 +80,10 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// spelling is materialized once; the canonical form reuses it when the bytes are already
     /// lower-case (the h2/h3 hot path), else folds in a single allocation.
     public init?(validating bytes: some Collection<UInt8>) {
-        guard FieldValidation.isToken(bytes) else { return nil }
-        let raw = String(decoding: bytes, as: UTF8.self)
+        guard FieldValidation.isToken(bytes) else {
+            return nil
+        }
+        let raw = String(decoding: bytes, as: Unicode.UTF8.self)
         self.storage = .parsed(raw)
         if bytes.contains(where: { (0x41 ... 0x5A).contains($0) }) {
             self.canonicalName = Self.asciiLowercased(bytes)

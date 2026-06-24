@@ -8,24 +8,6 @@
 //  serializing one to send. Unknown identifiers are ignored (§6.5.2).
 //
 
-/// A defined SETTINGS parameter identifier (RFC 9113 §6.5.2).
-public enum HTTP2SettingsParameter: UInt16, Sendable, Equatable {
-    /// `SETTINGS_HEADER_TABLE_SIZE` (0x01) — HPACK dynamic table bound.
-    case headerTableSize = 0x01
-    /// `SETTINGS_ENABLE_PUSH` (0x02) — whether server push is permitted.
-    case enablePush = 0x02
-    /// `SETTINGS_MAX_CONCURRENT_STREAMS` (0x03).
-    case maxConcurrentStreams = 0x03
-    /// `SETTINGS_INITIAL_WINDOW_SIZE` (0x04) — initial flow-control window.
-    case initialWindowSize = 0x04
-    /// `SETTINGS_MAX_FRAME_SIZE` (0x05).
-    case maxFrameSize = 0x05
-    /// `SETTINGS_MAX_HEADER_LIST_SIZE` (0x06).
-    case maxHeaderListSize = 0x06
-    /// `SETTINGS_ENABLE_CONNECT_PROTOCOL` (0x08) — permits the Extended CONNECT method (RFC 8441 §3).
-    case enableConnectProtocol = 0x08
-}
-
 /// The set of known HTTP/2 SETTINGS parameters, with protocol defaults (RFC 9113 §6.5.2).
 public struct HTTP2Settings: Sendable, Equatable {
     /// Each parameter is 2 octets of identifier and 4 octets of value (RFC 9113 §6.5.1).
@@ -50,7 +32,9 @@ public struct HTTP2Settings: Sendable, Equatable {
     public var enableConnectProtocol = false
 
     /// Creates a settings set at the protocol defaults.
-    public init() {}
+    public init() {
+        // All stored properties carry their protocol-default values.
+    }
 
     /// Applies a received SETTINGS payload, updating the known parameters (RFC 9113 §6.5).
     ///

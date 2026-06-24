@@ -52,9 +52,11 @@ struct FuzzTests {
             corpus: {
                 Array(
                     "POST /path HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello"
-                        .utf8)
+                        .utf8
+                )
             },
-            exercise: parseRequest)
+            exercise: parseRequest
+        )
         #expect(report.iterations == iterations)
     }
 
@@ -64,7 +66,8 @@ struct FuzzTests {
             seed: .named("http1.chunked-decoder.mutated"),
             iterations: iterations,
             corpus: { Array("5\r\nhello\r\n6\r\n world\r\n0\r\nX-T: v\r\n\r\n".utf8) },
-            exercise: decodeChunked)
+            exercise: decodeChunked
+        )
         #expect(report.iterations == iterations)
     }
 }

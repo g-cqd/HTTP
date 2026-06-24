@@ -25,7 +25,7 @@ import HTTPTransport
 import WebSocket
 
 @main
-struct HTTPDExample {
+enum HTTPDExample {
     static func main() async {
         // Prefork: HTTPD_WORKERS=N makes this the supervisor (it forks N fresh worker processes and
         // never returns); each worker re-enters here with HTTPD_WORKER set and serves with
@@ -37,8 +37,12 @@ struct HTTPDExample {
         let backbone = parseBackbone()
         let tls = makeTLS()
         let configuration = TransportConfiguration(
-            host: "127.0.0.1", port: port, backbone: backbone, tls: tls,
-            reusePort: Prefork.isWorker)
+            host: "127.0.0.1",
+            port: port,
+            backbone: backbone,
+            tls: tls,
+            reusePort: Prefork.isWorker
+        )
         // A middleware chain (outermost first) wraps the application responder — a stand-in for what a
         // consumer composes; reorder or replace any entry, or add their own `HTTPMiddleware`.
         let responder = MiddlewareChain(
@@ -51,7 +55,8 @@ struct HTTPDExample {
                 CORSMiddleware(),
                 ConditionalRequestMiddleware()  // ETag on the raw body, If-None-Match → 304
             ],
-            terminatingAt: makeResponder())
+            terminatingAt: makeResponder()
+        )
         // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
         // QUIC/TLS); the server advertises it via Alt-Svc (RFC 7838) on the h1/h2 responses so a
         // browser upgrades to h3 on the next request.
@@ -71,13 +76,15 @@ struct HTTPDExample {
         else if tls == nil {
             print(
                 "httpd-example: serving HTTP/1.1 + HTTP/2 (h2c) on http://127.0.0.1:\(port) "
-                    + "via \(backbone.rawValue)")
+                    + "via \(backbone.rawValue)"
+            )
             print("httpd-example: try  curl -v --http2-prior-knowledge http://127.0.0.1:\(port)/")
         }
         else {
             print(
                 "httpd-example: serving HTTP/1.1 + HTTP/2 + HTTP/3 over TLS (ALPN + Alt-Svc) on "
-                    + "https://127.0.0.1:\(port) via \(backbone.rawValue)")
+                    + "https://127.0.0.1:\(port) via \(backbone.rawValue)"
+            )
             print("httpd-example: curl -vk --http2 https://127.0.0.1:\(port)/  (h3: a browser)")
         }
         do {
@@ -98,13 +105,15 @@ struct HTTPDExample {
             switch (method, request.path) {
                 case (.get, "/"):
                     return text(
-                        .ok, "Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 server.\n")
+                        .ok, "Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 server.\n"
+                    )
                 case (.get, "/health"):
                     return text(.ok, "OK\n")
                 case (.get, "/large"):
                     // A large, compressible body to exercise the gzip middleware (curl --compressed).
                     return text(
-                        .ok, String(repeating: "from-scratch swift http server. ", count: 256))
+                        .ok, String(repeating: "from-scratch swift http server. ", count: 256)
+                    )
                 case (.post, "/echo"):
                     return ServerResponse(HTTPResponse(status: .ok), body: body)  // echo the body
                 default:
@@ -121,12 +130,13 @@ struct HTTPDExample {
                 switch event {
                     case .message(let opcode, let payload):
                         return opcode == .text
-                            ? [.sendText(String(decoding: payload, as: UTF8.self))]
+                            ? [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
                             : [.sendBinary(payload)]
                     default:
                         return []  // Ping is auto-answered by the engine; Pong/Close need no reply
                 }
-            })
+            }
+        )
     }
 
     /// Builds a `text/plain` response (RFC 9110 §8.3) carrying `message`.
@@ -156,7 +166,9 @@ struct HTTPDExample {
 
     private static func parsePort() -> UInt16 {
         let arguments = CommandLine.arguments
-        if arguments.count > 1, let port = UInt16(arguments[1]) { return port }
+        if arguments.count > 1, let port = UInt16(arguments[1]) {
+            return port
+        }
         return 8_080
     }
 
@@ -180,7 +192,9 @@ struct HTTPDExample {
     /// Advertises ALPN `h2` + `http/1.1`, so a `--http2` client negotiates HTTP/2 over TLS
     /// (RFC 9113 §3.3). Honored only by the Network.framework backbone.
     private static func makeTLS() -> TransportTLS? {
-        guard CommandLine.arguments.contains("tls") else { return nil }
+        guard CommandLine.arguments.contains("tls") else {
+            return nil
+        }
         do {
             return try DevTLSIdentity.selfSigned()
         }

@@ -45,8 +45,10 @@ public struct WebSocketOpcode: Sendable, Equatable, Hashable {
     /// Whether this opcode is one the protocol defines (RFC 6455 §11.8); the rest are reserved.
     public var isDefined: Bool {
         switch rawValue {
-            case 0x0, 0x1, 0x2, 0x8, 0x9, 0xA: true
-            default: false
+            case 0x0, 0x1, 0x2, 0x8, 0x9, 0xA:
+                true
+            default:
+                false
         }
     }
 }

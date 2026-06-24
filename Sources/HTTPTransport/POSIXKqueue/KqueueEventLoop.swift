@@ -33,6 +33,10 @@ final class KqueueEventLoop: Sendable {
         kq = kqueue()
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// Starts the event loop on its background queue.
     ///
     /// Each poll re-schedules the next via `queue.async` rather than spinning a `while` that
@@ -45,7 +49,9 @@ final class KqueueEventLoop: Sendable {
 
     private func scheduleNextPoll() {
         queue.async { [weak self] in
-            guard let self else { return }
+            guard let self else {
+                return
+            }
             guard registry.withLock(\.isRunning) else {
                 close(kq)
                 return
@@ -91,8 +97,13 @@ final class KqueueEventLoop: Sendable {
 
     private func register(fd: Int32, filter: Int32) {
         var event = KEvent(
-            ident: UInt(fd), filter: Int16(filter), flags: UInt16(EV_ADD | EV_ONESHOT),
-            fflags: 0, data: 0, udata: nil)
+            ident: UInt(fd),
+            filter: Int16(filter),
+            flags: UInt16(EV_ADD | EV_ONESHOT),
+            fflags: 0,
+            data: 0,
+            udata: nil
+        )
         _ = kevent(kq, &event, 1, nil, 0, nil)
     }
 
@@ -106,7 +117,10 @@ final class KqueueEventLoop: Sendable {
         let count = events.withUnsafeMutableBufferPointer { buffer in
             kevent(kq, nil, 0, buffer.baseAddress, Int32(buffer.count), &timeout)
         }
-        guard count > 0 else { return }  // 0 = timeout, < 0 = EINTR/error — the next poll retries
+        // count: 0 = timeout, < 0 = EINTR/error — the next poll retries.
+        guard count > 0 else {
+            return
+        }
         for index in 0 ..< Int(count) {
             dispatch(events[index])
         }

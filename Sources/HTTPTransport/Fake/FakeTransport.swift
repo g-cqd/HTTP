@@ -20,6 +20,10 @@ public final class FakeTransport: ServerTransport {
         self.connections = connections
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// Yields the seeded connections in order, then finishes the stream.
     public func start() async -> AsyncStream<any TransportConnection> {
         let connections = self.connections
@@ -32,5 +36,7 @@ public final class FakeTransport: ServerTransport {
     }
 
     /// A no-op for the in-memory transport.
-    public func shutdown() async {}
+    public func shutdown() async {
+        // No-op: the in-memory transport holds no resources to release.
+    }
 }

@@ -41,8 +41,10 @@ struct H2SpecFlowControlTests {
     func windowUpdateWrongLengthIsFrameSizeError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .frameSizeError, feeding: H2Wire.frame(.windowUpdate, payload: [0x00, 0x00, 0x00]),
-            on: &connection)
+            .frameSizeError,
+            feeding: H2Wire.frame(.windowUpdate, payload: [0x00, 0x00, 0x00]),
+            on: &connection
+        )
     }
 
     // MARK: §6.9.1 The Flow-Control Window
@@ -54,7 +56,10 @@ struct H2SpecFlowControlTests {
         _ = try connection.receive(H2Wire.get(streamID: 1))
         _ = connection.outboundBytes()
         try connection.respond(
-            to: HTTP2StreamID(1), HTTPResponse(status: .ok), body: Array("hello".utf8))
+            to: HTTP2StreamID(1),
+            HTTPResponse(status: .ok),
+            body: Array("hello".utf8)
+        )
         let data = H2Wire.dataPayload(in: connection.outboundBytes())
         #expect(data.bytes.count <= 1)  // only what the 1-octet window allows
         #expect(!data.endStream)  // the rest is deferred until a WINDOW_UPDATE
@@ -64,8 +69,10 @@ struct H2SpecFlowControlTests {
     func connectionWindowOverflowIsFlowControlError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .flowControlError, feeding: H2Wire.windowUpdate(streamID: 0, increment: 0x7FFF_FFFF),
-            on: &connection)
+            .flowControlError,
+            feeding: H2Wire.windowUpdate(streamID: 0, increment: 0x7FFF_FFFF),
+            on: &connection
+        )
     }
 
     @Test(
@@ -86,7 +93,10 @@ struct H2SpecFlowControlTests {
         _ = try connection.receive(H2Wire.get(streamID: 1))
         _ = connection.outboundBytes()
         try connection.respond(
-            to: HTTP2StreamID(1), HTTPResponse(status: .ok), body: Array("hello".utf8))
+            to: HTTP2StreamID(1),
+            HTTPResponse(status: .ok),
+            body: Array("hello".utf8)
+        )
         #expect(H2Wire.dataPayload(in: connection.outboundBytes()).bytes.isEmpty)  // window 0
         // Opening the initial window releases the deferred body across every open stream.
         _ = try connection.receive(H2Wire.settings([(id: 0x04, value: 5)]))
@@ -102,7 +112,10 @@ struct H2SpecFlowControlTests {
         _ = try connection.receive(H2Wire.get(streamID: 1))
         _ = connection.outboundBytes()
         try connection.respond(
-            to: HTTP2StreamID(1), HTTPResponse(status: .ok), body: Array("helloworld".utf8))
+            to: HTTP2StreamID(1),
+            HTTPResponse(status: .ok),
+            body: Array("helloworld".utf8)
+        )
         _ = connection.outboundBytes()  // "hello" flowed; stream window now 0, "world" deferred
         // Shrinking the initial window to 0 drives the in-flight window negative (0 - 5 = -5).
         _ = try connection.receive(H2Wire.settings([(id: 0x04, value: 0)]))
@@ -121,8 +134,10 @@ struct H2SpecFlowControlTests {
     func oversizedInitialWindowSizeIsFlowControlError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .flowControlError, feeding: H2Wire.settings([(id: 0x04, value: 0x8000_0000)]),
-            on: &connection)
+            .flowControlError,
+            feeding: H2Wire.settings([(id: 0x04, value: 0x8000_0000)]),
+            on: &connection
+        )
     }
 
     // MARK: §6.10 CONTINUATION
@@ -131,7 +146,11 @@ struct H2SpecFlowControlTests {
     func multipleContinuationsAccepted() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: true, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: true,
+            endHeaders: false
+        )
         wire += H2Wire.continuation(streamID: 1, endHeaders: false)
         wire += H2Wire.continuation(streamID: 1, endHeaders: true)
         H2Wire.expectRequest(wire, on: &connection)
@@ -142,7 +161,11 @@ struct H2SpecFlowControlTests {
     func continuationThenOtherFrameIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )
         wire += H2Wire.continuation(streamID: 1, endHeaders: false)
         wire += H2Wire.data(streamID: 1, payload: [0x61], endStream: false)
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
@@ -152,7 +175,11 @@ struct H2SpecFlowControlTests {
     func continuationOnStreamZeroIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )
         wire += H2Wire.continuation(streamID: 0, endHeaders: true)
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
     }
@@ -161,7 +188,11 @@ struct H2SpecFlowControlTests {
     func continuationAfterEndHeadersIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false, endHeaders: true)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: true
+        )
         wire += H2Wire.continuation(streamID: 1, endHeaders: true)
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
     }
@@ -171,7 +202,11 @@ struct H2SpecFlowControlTests {
     func continuationAfterContinuationEndHeadersIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )
         wire += H2Wire.continuation(streamID: 1, endHeaders: true)  // completes the block
         wire += H2Wire.continuation(streamID: 1, endHeaders: true)  // extra → illegal
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)

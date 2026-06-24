@@ -91,7 +91,11 @@ struct WebSocketHandshakeTests {
 
     private func upgradeRequest(_ fields: HTTPFields? = nil) -> HTTPRequest {
         HTTPRequest(
-            method: .get, scheme: "https", authority: "example.com", path: "/chat",
-            headerFields: fields ?? handshakeFields())
+            method: .get,
+            scheme: "https",
+            authority: "example.com",
+            path: "/chat",
+            headerFields: fields ?? handshakeFields()
+        )
     }
 }

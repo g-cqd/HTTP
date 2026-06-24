@@ -49,7 +49,9 @@ extension HTTPServer {
 
     /// Runs the QUIC listener: advertise `Alt-Svc` (RFC 7838), then serve each connection as HTTP/3.
     func runHTTP3() async {
-        guard let quicTransport, let connections = try? await quicTransport.start() else { return }
+        guard let quicTransport, let connections = try? await quicTransport.start() else {
+            return
+        }
         altSvc.withLock { $0 = "h3=\":\(quicTransport.boundPort)\"" }
         await withDiscardingTaskGroup { group in
             for await connection in connections {
@@ -103,7 +105,8 @@ extension HTTPServer {
             for case .request(let id, let request, let body) in events {
                 let response = await responder.respond(to: request, body: body)
                 let responseActions = await engine.respond(
-                    to: id, response.head, body: response.body)
+                    to: id, response.head, body: response.body
+                )
                 await applyHTTP3(responseActions, stream: stream, quic: quic)
             }
             if chunk.fin { break }
@@ -113,7 +116,9 @@ extension HTTPServer {
     /// Adds the `Alt-Svc` HTTP/3 advertisement (RFC 7838) to an h1/h2 response, when a QUIC listener
     /// is running, so clients can discover and upgrade to HTTP/3 on the same authority.
     func withAltSvc(_ response: HTTPResponse) -> HTTPResponse {
-        guard let value = altSvc.withLock(\.self) else { return response }
+        guard let value = altSvc.withLock(\.self) else {
+            return response
+        }
         var advertised = response
         // Use the registered constant (no per-response token re-validation / canonicalName build).
         advertised.headerFields.append(value, for: .altSvc)

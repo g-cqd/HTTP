@@ -9,40 +9,6 @@
 
 public import HTTPCore
 
-/// How a request body is delimited on the wire (RFC 9112 §6).
-public enum BodyFraming: Sendable, Equatable {
-    /// No body (no `Content-Length`, no `Transfer-Encoding`).
-    case none
-
-    /// A fixed-length body of `Content-Length` octets (RFC 9112 §6.2).
-    case contentLength(Int)
-
-    /// A `Transfer-Encoding: chunked` body (RFC 9112 §6.1 / §7.1).
-    case chunked
-}
-
-/// A parsed request head: the message, its wire version, and how its body is framed.
-///
-/// It deliberately excludes the body, so a server can frame the body incrementally as it arrives
-/// without re-parsing the request-line and header section on every chunk.
-public struct RequestHead: Sendable, Equatable {
-    /// The request message (method, authority, path, header fields).
-    public let request: HTTPRequest
-
-    /// The request-line version (RFC 9112 §2.3).
-    public let version: HTTPVersion
-
-    /// How the body is delimited (RFC 9112 §6).
-    public let framing: BodyFraming
-
-    /// Creates a request head.
-    public init(request: HTTPRequest, version: HTTPVersion, framing: BodyFraming) {
-        self.request = request
-        self.version = version
-        self.framing = framing
-    }
-}
-
 /// Parses a complete HTTP/1.1 request message (RFC 9112).
 public enum RequestParser {
     private static let chunkedToken: [UInt8] = Array("chunked".utf8)
@@ -65,7 +31,9 @@ public enum RequestParser {
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> RequestHead {
         let requestLine = try RequestLineParser.parse(
-            &reader, maxLength: limits.maxRequestLineLength)
+            &reader,
+            maxLength: limits.maxRequestLineLength
+        )
         let headerFields = try HeaderParser.parse(&reader, limits: limits)
 
         // RFC 9110 §7.2: an HTTP/1.1 request MUST carry exactly one valid Host.
@@ -139,7 +107,9 @@ public enum RequestParser {
     /// Any other or compound coding (e.g. `gzip, chunked`, or `chunked, chunked`) returns `false`,
     /// so the caller rejects it rather than guessing the body length (RFC 9112 §6.1).
     private static func isChunked(_ value: String?) -> Bool {
-        guard let value else { return false }
+        guard let value else {
+            return false
+        }
         let utf8 = value.utf8
         var start = utf8.startIndex
         var end = utf8.endIndex
@@ -151,10 +121,14 @@ public enum RequestParser {
         var index = start
         var position = 0
         while index < end {
-            guard position < chunkedToken.count else { return false }
+            guard position < chunkedToken.count else {
+                return false
+            }
             let byte = utf8[index]
             let lowered = byte >= 0x41 && byte <= 0x5A ? byte &+ 0x20 : byte
-            guard lowered == chunkedToken[position] else { return false }
+            guard lowered == chunkedToken[position] else {
+                return false
+            }
             index = utf8.index(after: index)
             position += 1
         }

@@ -21,8 +21,10 @@ struct H2SpecSettingsTests {
     func settingsAckWithPayloadIsFrameSizeError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .frameSizeError, feeding: H2Wire.settings([(id: 0x04, value: 1)], ack: true),
-            on: &connection)
+            .frameSizeError,
+            feeding: H2Wire.settings([(id: 0x04, value: 1)], ack: true),
+            on: &connection
+        )
     }
 
     @Test(
@@ -31,7 +33,10 @@ struct H2SpecSettingsTests {
     func settingsOnNonZeroStreamIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.frame(.settings, streamID: 1), on: &connection)
+            .protocolError,
+            feeding: H2Wire.frame(.settings, streamID: 1),
+            on: &connection
+        )
     }
 
     @Test(
@@ -39,8 +44,10 @@ struct H2SpecSettingsTests {
     func settingsBadLengthIsFrameSizeError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .frameSizeError, feeding: H2Wire.frame(.settings, payload: [0x00, 0x00, 0x00]),
-            on: &connection)
+            .frameSizeError,
+            feeding: H2Wire.frame(.settings, payload: [0x00, 0x00, 0x00]),
+            on: &connection
+        )
     }
 
     // MARK: §6.5.2 Defined SETTINGS Parameters
@@ -64,8 +71,10 @@ struct H2SpecSettingsTests {
     ) throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            testCase.code, feeding: H2Wire.settings([(id: testCase.id, value: testCase.value)]),
-            on: &connection)
+            testCase.code,
+            feeding: H2Wire.settings([(id: testCase.id, value: testCase.value)]),
+            on: &connection
+        )
     }
 
     @Test("6.5.2/5 — a SETTINGS frame with an unknown identifier is ignored (§6.5.2)")
@@ -82,7 +91,8 @@ struct H2SpecSettingsTests {
         var connection = try H2Wire.handshaked()
         // Applied as deltas in list order (the last wins); the engine must accept and acknowledge.
         _ = try connection.receive(
-            H2Wire.settings([(id: 0x04, value: 100), (id: 0x04, value: 200)]))
+            H2Wire.settings([(id: 0x04, value: 100), (id: 0x04, value: 200)])
+        )
         #expect(H2Wire.hasSettingsAck(in: connection.outboundBytes()))
     }
 
@@ -116,15 +126,18 @@ struct H2SpecSettingsTests {
         H2Wire.expectConnectionError(
             .protocolError,
             feeding: H2Wire.frame(.ping, streamID: 1, payload: [UInt8](repeating: 0, count: 8)),
-            on: &connection)
+            on: &connection
+        )
     }
 
     @Test("6.7/4 — a PING frame with a length other than 8 is a FRAME_SIZE_ERROR (§6.7)")
     func pingWithWrongLengthIsFrameSizeError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .frameSizeError, feeding: H2Wire.ping(payload: [UInt8](repeating: 0, count: 6)),
-            on: &connection)
+            .frameSizeError,
+            feeding: H2Wire.ping(payload: [UInt8](repeating: 0, count: 6)),
+            on: &connection
+        )
     }
 
     // MARK: §6.8 GOAWAY
@@ -134,7 +147,10 @@ struct H2SpecSettingsTests {
     func goAwayOnNonZeroStreamIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.goAway(onStream: 1), on: &connection)
+            .protocolError,
+            feeding: H2Wire.goAway(onStream: 1),
+            on: &connection
+        )
     }
 
     // MARK: §7 Error Codes

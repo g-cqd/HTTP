@@ -81,22 +81,28 @@ extension HTTPFieldName {
     public static let origin = HTTPFieldName(unchecked: "origin")
     /// `Access-Control-Request-Method` — the method a CORS preflight asks about.
     public static let accessControlRequestMethod = HTTPFieldName(
-        unchecked: "access-control-request-method")
+        unchecked: "access-control-request-method"
+    )
     /// `Access-Control-Request-Headers` — the headers a CORS preflight asks about.
     public static let accessControlRequestHeaders = HTTPFieldName(
-        unchecked: "access-control-request-headers")
+        unchecked: "access-control-request-headers"
+    )
     /// `Access-Control-Allow-Origin` — the origin(s) the server permits.
     public static let accessControlAllowOrigin = HTTPFieldName(
-        unchecked: "access-control-allow-origin")
+        unchecked: "access-control-allow-origin"
+    )
     /// `Access-Control-Allow-Methods` — the methods the server permits cross-origin.
     public static let accessControlAllowMethods = HTTPFieldName(
-        unchecked: "access-control-allow-methods")
+        unchecked: "access-control-allow-methods"
+    )
     /// `Access-Control-Allow-Headers` — the request headers the server permits cross-origin.
     public static let accessControlAllowHeaders = HTTPFieldName(
-        unchecked: "access-control-allow-headers")
+        unchecked: "access-control-allow-headers"
+    )
     /// `Access-Control-Allow-Credentials` — whether credentials may accompany the request.
     public static let accessControlAllowCredentials = HTTPFieldName(
-        unchecked: "access-control-allow-credentials")
+        unchecked: "access-control-allow-credentials"
+    )
     /// `Access-Control-Max-Age` — how long a preflight result may be cached.
     public static let accessControlMaxAge = HTTPFieldName(unchecked: "access-control-max-age")
 
@@ -113,7 +119,8 @@ extension HTTPFieldName {
 
     /// `Strict-Transport-Security` (RFC 6797) — pins the client to HTTPS for a duration.
     public static let strictTransportSecurity = HTTPFieldName(
-        unchecked: "strict-transport-security")
+        unchecked: "strict-transport-security"
+    )
     /// `X-Content-Type-Options` — `nosniff` stops content-type sniffing.
     public static let xContentTypeOptions = HTTPFieldName(unchecked: "x-content-type-options")
     /// `X-Frame-Options` — legacy clickjacking defense (framing policy).

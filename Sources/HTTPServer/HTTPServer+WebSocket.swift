@@ -52,7 +52,8 @@ extension HTTPServer {
         }
         catch {
             let rejection = ResponseSerializer.serialize(
-                HTTPResponse(status: error.rejectionStatus))
+                HTTPResponse(status: error.rejectionStatus)
+            )
             try? await connection.send(rejection)
             return
         }
@@ -107,7 +108,9 @@ extension HTTPServer {
         engine: inout HTTP2Connection,
         webSockets: inout [HTTP2StreamID: WebSocketConnection]
     ) async {
-        guard let handler = webSocketHandler else { return }
+        guard let handler = webSocketHandler else {
+            return
+        }
         switch event {
             case .extendedConnect(let streamID, let request, let proto):
                 // Same CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the
@@ -118,9 +121,12 @@ extension HTTPServer {
                 try? engine.acceptTunnel(streamID)  // 200, no END_STREAM (RFC 8441 §5)
                 webSockets[streamID] = WebSocketConnection(maxMessageSize: limits.maxBodySize)
             case .tunnelData(let streamID, let bytes):
-                guard var socket = webSockets[streamID] else { return }
+                guard var socket = webSockets[streamID] else {
+                    return
+                }
                 await driveTunnel(
-                    &socket, bytes: bytes, streamID: streamID, engine: &engine, handler: handler)
+                    &socket, bytes: bytes, streamID: streamID, engine: &engine, handler: handler
+                )
                 if socket.isClosing {
                     try? engine.closeTunnel(streamID)
                     webSockets[streamID] = nil

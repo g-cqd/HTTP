@@ -157,7 +157,9 @@ public struct HTTP3Connection {
     /// Optional — ``receive(_:_:fin:)`` auto-registers from the stream id's class — but the driver may
     /// call it as soon as QUIC surfaces the stream.
     public mutating func registerStream(_ id: QUICStreamID, direction: StreamDirection) {
-        guard streams[id] == nil else { return }
+        guard streams[id] == nil else {
+            return
+        }
         streams[id] = StreamState(kind: direction == .unidirectional ? .unclassifiedUni : .request)
     }
 
@@ -236,7 +238,8 @@ public struct HTTP3Connection {
         var state =
             streams[streamID]
             ?? StreamState(
-                kind: streamID.isUnidirectional ? .unclassifiedUni : .request)
+                kind: streamID.isUnidirectional ? .unclassifiedUni : .request
+            )
         state.buffer.append(contentsOf: bytes)
         if fin { state.finReceived = true }
         streams[streamID] = state
@@ -248,14 +251,23 @@ public struct HTTP3Connection {
         _ streamID: QUICStreamID,
         into events: inout [Event]
     ) throws(HTTP3Error) {
-        guard let kind = streams[streamID]?.kind else { return }
+        guard let kind = streams[streamID]?.kind else {
+            return
+        }
         switch kind {
-            case .unclassifiedUni: try classifyUniStream(streamID, into: &events)
-            case .control: try processControlStream(streamID, into: &events)
-            case .qpackEncoder: try processQpackEncoderStream(streamID)
-            case .qpackDecoder: try processQpackDecoderStream(streamID)
-            case .reserved: streams[streamID]?.buffer.removeAll(keepingCapacity: false)  // §6.2 discard
-            case .request: try processRequestStream(streamID, into: &events)
+            case .unclassifiedUni:
+                try classifyUniStream(streamID, into: &events)
+            case .control:
+                try processControlStream(streamID, into: &events)
+            case .qpackEncoder:
+                try processQpackEncoderStream(streamID)
+            case .qpackDecoder:
+                try processQpackDecoderStream(streamID)
+            case .reserved:
+                // §6.2 — an unknown unidirectional stream type: discard its buffered data.
+                streams[streamID]?.buffer.removeAll(keepingCapacity: false)
+            case .request:
+                try processRequestStream(streamID, into: &events)
         }
     }
 }

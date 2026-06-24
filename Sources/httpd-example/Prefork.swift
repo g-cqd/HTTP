@@ -81,7 +81,9 @@ enum Prefork {
     /// Uses `posix_spawn` (fork+exec, atomically), passing the current `environ` — which already
     /// carries `HTTPD_WORKER=1`, set once in the parent.
     private static func spawnWorker() -> pid_t {
-        guard let path = CommandLine.unsafeArgv[0] else { return -1 }
+        guard let path = CommandLine.unsafeArgv[0] else {
+            return -1
+        }
         var pid: pid_t = 0
         let result = posix_spawn(&pid, path, nil, nil, CommandLine.unsafeArgv, environ)
         return result == 0 ? pid : -1

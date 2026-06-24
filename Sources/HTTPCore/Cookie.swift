@@ -94,34 +94,11 @@ public struct SetCookie: Sendable, Equatable {
     /// RFC 6265bis cookie-octet: printable ASCII except whitespace, `"`, `,`, `;`, and `\`.
     private static func isCookieOctet(_ byte: UInt8) -> Bool {
         switch byte {
-            case 0x21, 0x23 ... 0x2B, 0x2D ... 0x3A, 0x3C ... 0x5B, 0x5D ... 0x7E: true
-            default: false
+            case 0x21, 0x23 ... 0x2B, 0x2D ... 0x3A, 0x3C ... 0x5B, 0x5D ... 0x7E:
+                true
+            default:
+                false
         }
-    }
-}
-
-/// Parses the `Cookie` request header (RFC 6265bis §4.2).
-public enum Cookies {
-    /// The cookies in `fields` as name→value pairs (RFC 6265bis §4.2.1); later duplicates win.
-    public static func parse(_ fields: HTTPFields) -> [String: String] {
-        var cookies: [String: String] = [:]
-        for header in fields.values(for: .cookie) {
-            for pair in header.split(separator: ";") {
-                guard let separator = pair.firstIndex(of: "=") else { continue }
-                let name = trimmed(pair[..<separator])
-                let value = trimmed(pair[pair.index(after: separator)...])
-                if !name.isEmpty { cookies[String(name)] = String(value) }
-            }
-        }
-        return cookies
-    }
-
-    /// `slice` without leading or trailing spaces or tabs (RFC 9110 OWS).
-    private static func trimmed(_ slice: Substring) -> Substring {
-        var slice = slice
-        while let first = slice.first, first == " " || first == "\t" { slice = slice.dropFirst() }
-        while let last = slice.last, last == " " || last == "\t" { slice = slice.dropLast() }
-        return slice
     }
 }
 
@@ -129,7 +106,9 @@ extension HTTPFields {
     /// Appends `cookie` as a `Set-Cookie` header when it is valid; returns whether it was added.
     @discardableResult
     public mutating func setCookie(_ cookie: SetCookie) -> Bool {
-        guard cookie.isValid else { return false }
+        guard cookie.isValid else {
+            return false
+        }
         return append(cookie.headerValue, for: .setCookie)
     }
 }

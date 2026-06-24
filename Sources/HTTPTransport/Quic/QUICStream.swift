@@ -11,14 +11,6 @@
 
 public import HTTPCore
 
-/// Whether a QUIC stream is bidirectional or unidirectional (RFC 9000 §2.1).
-public enum QUICStreamDirection: Sendable, Equatable {
-    /// A bidirectional stream — an HTTP/3 request stream (RFC 9114 §6.1).
-    case bidirectional
-    /// A unidirectional stream — an HTTP/3 control or QPACK stream (RFC 9114 §6.2).
-    case unidirectional
-}
-
 /// One QUIC stream: an ordered byte stream with an explicit end-of-stream (RFC 9000 §2).
 public protocol QUICStream: Sendable {
     /// The QUIC stream identifier (RFC 9000 §2.1).

@@ -35,7 +35,8 @@ extension HTTPServer {
             Result { () throws(HTTP1ParseError) in
                 var reader = ByteReader(raw, startingAt: chunked.consumed)
                 let done = try ChunkedBodyDecoder.advance(
-                    &reader, state: &chunked.state, into: &chunked.body, limits: limits)
+                    &reader, state: &chunked.state, into: &chunked.body, limits: limits
+                )
                 chunked.consumed = reader.position
                 return done
             }
@@ -43,7 +44,8 @@ extension HTTPServer {
         switch result {
             case .success(true):
                 let parsed = ParsedRequest(
-                    request: head.request, body: chunked.body, version: head.version)
+                    request: head.request, body: chunked.body, version: head.version
+                )
                 return .complete(parsed, consumed: chunked.consumed)
             case .success(false):
                 return .incomplete

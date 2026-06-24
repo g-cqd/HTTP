@@ -22,8 +22,11 @@ struct HTTP2FrameWriter {
     /// Appends a complete frame (header + payload) to the queue (RFC 9113 §4.1).
     mutating func writeFrame(
         _ type: HTTP2FrameType,
+        // swiftlint:disable:next discouraged_default_parameter - ergonomic frame-writer default
         flags: HTTP2FrameFlags = [],
+        // swiftlint:disable:next discouraged_default_parameter - ergonomic frame-writer default
         streamID: HTTP2StreamID = .connection,
+        // swiftlint:disable:next discouraged_default_parameter - ergonomic frame-writer default
         payload: [UInt8] = []
     ) {
         HTTP2FrameHeader(payloadLength: payload.count, type: type, flags: flags, streamID: streamID)
@@ -38,7 +41,9 @@ struct HTTP2FrameWriter {
         _ payload: ArraySlice<UInt8>
     ) {
         HTTP2FrameHeader(
-            payloadLength: payload.count, type: .data, flags: endStream ? [.endStream] : [],
+            payloadLength: payload.count,
+            type: .data,
+            flags: endStream ? [.endStream] : [],
             streamID: streamID
         )
         .encode(into: &output)

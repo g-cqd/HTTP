@@ -29,7 +29,11 @@ struct ChunkedBodyDecoderTests {
             let done = try buffer.withUnsafeBytes { raw -> Bool in
                 var reader = ByteReader(raw, startingAt: consumed)
                 let complete = try ChunkedBodyDecoder.advance(
-                    &reader, state: &state, into: &body, limits: limits)
+                    &reader,
+                    state: &state,
+                    into: &body,
+                    limits: limits
+                )
                 #expect(reader.position >= consumed)  // never rewinds past already-consumed octets
                 consumed = reader.position
                 return complete

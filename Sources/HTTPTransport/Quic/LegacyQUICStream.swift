@@ -30,17 +30,27 @@ final class LegacyQUICStream: QUICStream, @unchecked Sendable {
         self.connection = connection
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     func receive() async throws -> (bytes: [UInt8], fin: Bool)? {
-        if finished.withLock(\.self) { return nil }
+        if finished.withLock(\.self) {
+            return nil
+        }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                connection.receive(minimumIncompleteLength: 1, maximumLength: 65_535) {
-                    [self] data, _, isComplete, error in
+                connection.receive(
+                    minimumIncompleteLength: 1,
+                    maximumLength: 65_535
+                ) { [self] data, _, isComplete, error in
                     if let error {
                         continuation.resume(throwing: error)
                         return
                     }
-                    if isComplete { finished.withLock { $0 = true } }
+                    if isComplete {
+                        finished.withLock { $0 = true }
+                    }
                     continuation.resume(returning: ([UInt8](data ?? Data()), isComplete))
                 }
             }
@@ -67,7 +77,8 @@ final class LegacyQUICStream: QUICStream, @unchecked Sendable {
                     else {
                         continuation.resume()
                     }
-                })
+                }
+            )
         }
     }
 

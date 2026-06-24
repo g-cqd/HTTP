@@ -45,7 +45,8 @@ struct H3SpecTests: HTTP3WireFixtures {
     @Test("the HTTP/3 and QPACK error-code registries match the RFC wire values")
     func errorCodeRegistriesMatchRFC() {
         let http3 = Dictionary(
-            uniqueKeysWithValues: H3Conformance.http3ErrorCodes.map { ($0.name, $0.code) })
+            uniqueKeysWithValues: H3Conformance.http3ErrorCodes.map { ($0.name, $0.code) }
+        )
         #expect(http3["H3_NO_ERROR"] == 0x0100)  // RFC 9114 §8.1
         #expect(http3["H3_CLOSED_CRITICAL_STREAM"] == 0x0104)
         #expect(http3["H3_FRAME_UNEXPECTED"] == 0x0105)
@@ -55,7 +56,8 @@ struct H3SpecTests: HTTP3WireFixtures {
         #expect(H3Conformance.http3ErrorCodes.count == 17)
 
         let qpack = Dictionary(
-            uniqueKeysWithValues: H3Conformance.qpackErrorCodes.map { ($0.name, $0.code) })
+            uniqueKeysWithValues: H3Conformance.qpackErrorCodes.map { ($0.name, $0.code) }
+        )
         #expect(qpack["QPACK_DECOMPRESSION_FAILED"] == 0x0200)  // RFC 9204 §6
         #expect(qpack["QPACK_ENCODER_STREAM_ERROR"] == 0x0201)
         #expect(qpack["QPACK_DECODER_STREAM_ERROR"] == 0x0202)
@@ -74,7 +76,8 @@ struct H3SpecTests: HTTP3WireFixtures {
                 return
             case .pending:
                 Issue.record(
-                    "a catalog check is unexpectedly pending: \(check.section) \(check.title)")
+                    "a catalog check is unexpectedly pending: \(check.section) \(check.title)"
+                )
             case .supported:
                 guard let expected = expectedWireCode(check.expect) else {
                     Issue.record("no wire code parsed from expect: \(check.expect)")
@@ -82,7 +85,8 @@ struct H3SpecTests: HTTP3WireFixtures {
                 }
                 guard let observed = drive(check) else {
                     Issue.record(
-                        "\(check.section) \(check.title): the engine produced no error code")
+                        "\(check.section) \(check.title): the engine produced no error code"
+                    )
                     return
                 }
                 #expect(

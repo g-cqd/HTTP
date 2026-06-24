@@ -28,12 +28,14 @@ public enum QPACKString {
         if huffmanLength < bytes.count {
             let flagged = firstByte | (1 << UInt8(prefixBits))
             QPACKInteger.encode(
-                huffmanLength, prefixBits: prefixBits, firstByte: flagged, into: &output)
+                huffmanLength, prefixBits: prefixBits, firstByte: flagged, into: &output
+            )
             Huffman.encode(bytes, into: &output)
         }
         else {
             QPACKInteger.encode(
-                bytes.count, prefixBits: prefixBits, firstByte: firstByte, into: &output)
+                bytes.count, prefixBits: prefixBits, firstByte: firstByte, into: &output
+            )
             output.append(contentsOf: bytes)
         }
     }
@@ -52,8 +54,10 @@ public enum QPACKString {
         let huffmanCoded = (first >> UInt8(prefixBits)) & 1 == 1
         let length: Int
         switch QPACKInteger.decode(&reader, prefixBits: prefixBits) {
-            case .value(let value): length = value
-            case .incomplete, .overflow: throw .decompressionFailed("invalid string length")
+            case .value(let value):
+                length = value
+            case .incomplete, .overflow:
+                throw .decompressionFailed("invalid string length")
         }
         guard length <= maxEncodedLength else { throw .decompressionFailed("string too long") }
         guard reader.remaining >= length else { throw .decompressionFailed("truncated string") }
@@ -66,6 +70,6 @@ public enum QPACKString {
                 throw .decompressionFailed("invalid Huffman")
             }
         }
-        return payload.withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
+        return payload.withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
     }
 }

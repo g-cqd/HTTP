@@ -24,7 +24,8 @@ struct H2SpecFrameFormatTests {
         // A type the engine does not define (0xFF) must be ignored, leaving the connection usable.
         H2Wire.expectAccepted(
             H2Wire.frame(HTTP2FrameType(rawValue: 0xFF), payload: [1, 2, 3]),
-            on: &connection)
+            on: &connection
+        )
         H2Wire.expectRequest(H2Wire.get(streamID: 1), on: &connection)
     }
 
@@ -55,8 +56,10 @@ struct H2SpecFrameFormatTests {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.openStream(streamID: 1)
         wire += H2Wire.data(
-            streamID: 1, payload: [UInt8](repeating: 0x61, count: 16_384),
-            endStream: true)
+            streamID: 1,
+            payload: [UInt8](repeating: 0x61, count: 16_384),
+            endStream: true
+        )
         let event = H2Wire.expectRequest(wire, on: &connection)
         if case .request(_, _, let body) = event { #expect(body.count == 16_384) }
     }
@@ -68,8 +71,10 @@ struct H2SpecFrameFormatTests {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.openStream(streamID: 1)
         wire += H2Wire.data(
-            streamID: 1, payload: [UInt8](repeating: 0x61, count: 16_385),
-            endStream: true)
+            streamID: 1,
+            payload: [UInt8](repeating: 0x61, count: 16_385),
+            endStream: true
+        )
         H2Wire.expectConnectionError(.frameSizeError, feeding: wire, on: &connection)
     }
 
@@ -93,8 +98,11 @@ struct H2SpecFrameFormatTests {
         // 0x80 is an indexed header field at index 0 — an HPACK decoding error (RFC 7541 §6.1) the
         // engine surfaces as a connection COMPRESSION_ERROR.
         let wire = H2Wire.frame(
-            .headers, flags: [.endHeaders, .endStream], streamID: 1,
-            payload: [0x80])
+            .headers,
+            flags: [.endHeaders, .endStream],
+            streamID: 1,
+            payload: [0x80]
+        )
         H2Wire.expectConnectionError(.compressionError, feeding: wire, on: &connection)
     }
 
@@ -104,8 +112,11 @@ struct H2SpecFrameFormatTests {
     func priorityInterleavedInHeaderBlockIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false,
-            endHeaders: false)  // opens a block awaiting CONTINUATION
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )  // opens a block awaiting CONTINUATION
         // Interleaving anything other than CONTINUATION on the open block is illegal.
         wire += H2Wire.priority(streamID: 1, dependency: 0)
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
@@ -117,8 +128,11 @@ struct H2SpecFrameFormatTests {
     func headersForAnotherStreamInHeaderBlockIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false,
-            endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )
         // A HEADERS for a different stream while the block is open is illegal (must be CONTINUATION).
         wire += H2Wire.headers(streamID: 3, fields: H2Wire.requestFields())
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)

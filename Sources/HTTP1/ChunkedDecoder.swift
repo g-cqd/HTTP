@@ -21,7 +21,11 @@ public enum ChunkedDecoder {
         var state = ChunkedBodyDecoder.State()
         var body: [UInt8] = []
         let complete = try ChunkedBodyDecoder.advance(
-            &reader, state: &state, into: &body, limits: limits)
+            &reader,
+            state: &state,
+            into: &body,
+            limits: limits
+        )
         guard complete else { throw .incompleteBody }
         return body
     }

@@ -45,9 +45,11 @@ struct H2SpecStreamTests {
         _ = try connection.receive(H2Wire.get(streamID: 1))  // END_STREAM → half-closed (remote)
         _ = connection.outboundBytes()
         H2Wire.expectStreamError(
-            .streamClosed, on: 1,
+            .streamClosed,
+            on: 1,
             feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
-            connection: &connection)
+            connection: &connection
+        )
     }
 
     @Test("5.1/half-closed-remote — HEADERS is a STREAM_CLOSED stream error (§5.1)")
@@ -56,9 +58,11 @@ struct H2SpecStreamTests {
         _ = try connection.receive(H2Wire.get(streamID: 1))
         _ = connection.outboundBytes()
         H2Wire.expectStreamError(
-            .streamClosed, on: 1,
+            .streamClosed,
+            on: 1,
             feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields(), endStream: true),
-            connection: &connection)
+            connection: &connection
+        )
     }
 
     @Test("5.1/half-closed-remote — a lone CONTINUATION is a PROTOCOL_ERROR (RFC 9113 §6.10)")
@@ -69,7 +73,10 @@ struct H2SpecStreamTests {
         _ = try connection.receive(H2Wire.get(streamID: 1))
         _ = connection.outboundBytes()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.continuation(streamID: 1), on: &connection)
+            .protocolError,
+            feeding: H2Wire.continuation(streamID: 1),
+            on: &connection
+        )
     }
 
     // MARK: §5.1 Stream States — closed (recently-closed ids tracked → STREAM_CLOSED, audit F1)
@@ -82,9 +89,11 @@ struct H2SpecStreamTests {
         _ = try connection.receive(open)
         _ = connection.outboundBytes()
         H2Wire.expectStreamError(
-            .streamClosed, on: 1,
+            .streamClosed,
+            on: 1,
             feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
-            connection: &connection)
+            connection: &connection
+        )
     }
 
     @Test("5.1/closed-after-RST — HEADERS is a STREAM_CLOSED stream error (§5.1)")
@@ -95,9 +104,11 @@ struct H2SpecStreamTests {
         _ = try connection.receive(open)
         _ = connection.outboundBytes()
         H2Wire.expectStreamError(
-            .streamClosed, on: 1,
+            .streamClosed,
+            on: 1,
             feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields()),
-            connection: &connection)
+            connection: &connection
+        )
     }
 
     @Test("5.1/closed — DATA after a completed response is a STREAM_CLOSED stream error (§5.1)")
@@ -109,9 +120,11 @@ struct H2SpecStreamTests {
         try connection.respond(to: HTTP2StreamID(1), HTTPResponse(status: .ok))
         _ = connection.outboundBytes()
         H2Wire.expectStreamError(
-            .streamClosed, on: 1,
+            .streamClosed,
+            on: 1,
             feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
-            connection: &connection)
+            connection: &connection
+        )
     }
 
     @Test("5.1/closed — HEADERS after a completed response is a STREAM_CLOSED stream error (§5.1)")
@@ -122,9 +135,11 @@ struct H2SpecStreamTests {
         try connection.respond(to: HTTP2StreamID(1), HTTPResponse(status: .ok))
         _ = connection.outboundBytes()
         H2Wire.expectStreamError(
-            .streamClosed, on: 1,
+            .streamClosed,
+            on: 1,
             feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields()),
-            connection: &connection)
+            connection: &connection
+        )
     }
 
     @Test(
@@ -136,7 +151,10 @@ struct H2SpecStreamTests {
         _ = try connection.receive(open)
         _ = connection.outboundBytes()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.continuation(streamID: 1), on: &connection)
+            .protocolError,
+            feeding: H2Wire.continuation(streamID: 1),
+            on: &connection
+        )
     }
 
     // MARK: §5.1.1 Stream Identifiers
@@ -145,7 +163,10 @@ struct H2SpecStreamTests {
     func evenStreamIdentifierIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.get(streamID: 2), on: &connection)
+            .protocolError,
+            feeding: H2Wire.get(streamID: 2),
+            on: &connection
+        )
     }
 
     @Test("5.1.1/2 — a numerically smaller stream identifier is a PROTOCOL_ERROR (§5.1.1)")
@@ -154,7 +175,10 @@ struct H2SpecStreamTests {
         _ = try connection.receive(H2Wire.get(streamID: 3))
         _ = connection.outboundBytes()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.get(streamID: 1), on: &connection)
+            .protocolError,
+            feeding: H2Wire.get(streamID: 1),
+            on: &connection
+        )
     }
 
     // MARK: §5.1.2 Stream Concurrency
@@ -174,8 +198,10 @@ struct H2SpecStreamTests {
     func headersSelfDependencyIsStreamError() throws {
         var connection = try H2Wire.handshaked()
         let wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(),
-            priority: (exclusive: false, dependency: 1, weight: 0))
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            priority: (exclusive: false, dependency: 1, weight: 0)
+        )
         H2Wire.expectStreamError(.protocolError, on: 1, feeding: wire, connection: &connection)
     }
 
@@ -183,8 +209,11 @@ struct H2SpecStreamTests {
     func prioritySelfDependencyIsStreamError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectStreamError(
-            .protocolError, on: 1, feeding: H2Wire.priority(streamID: 1, dependency: 1),
-            connection: &connection)
+            .protocolError,
+            on: 1,
+            feeding: H2Wire.priority(streamID: 1, dependency: 1),
+            connection: &connection
+        )
     }
 
     // MARK: §5.4.1 Connection Error Handling
@@ -195,16 +224,22 @@ struct H2SpecStreamTests {
         // A PING with a 6-octet payload (≠ 8) is a connection FRAME_SIZE_ERROR (§6.7) — the engine
         // throws, which the driver turns into a TCP close.
         H2Wire.expectConnectionError(
-            .frameSizeError, feeding: H2Wire.ping(payload: [UInt8](repeating: 0, count: 6)),
-            on: &connection, requireGoAway: false)
+            .frameSizeError,
+            feeding: H2Wire.ping(payload: [UInt8](repeating: 0, count: 6)),
+            on: &connection,
+            requireGoAway: false
+        )
     }
 
     @Test("5.4.1/2 — a connection error first emits a GOAWAY frame (§5.4.1)")
     func connectionErrorEmitsGoAway() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .frameSizeError, feeding: H2Wire.ping(payload: [UInt8](repeating: 0, count: 6)),
-            on: &connection, requireGoAway: true)
+            .frameSizeError,
+            feeding: H2Wire.ping(payload: [UInt8](repeating: 0, count: 6)),
+            on: &connection,
+            requireGoAway: true
+        )
     }
 
     // MARK: §5.5 Extending HTTP/2
@@ -214,7 +249,8 @@ struct H2SpecStreamTests {
         var connection = try H2Wire.handshaked()
         H2Wire.expectAccepted(
             H2Wire.frame(HTTP2FrameType(rawValue: 0x16), streamID: 1, payload: [0xFF]),
-            on: &connection)
+            on: &connection
+        )
         H2Wire.expectRequest(H2Wire.get(streamID: 1), on: &connection)
     }
 
@@ -222,7 +258,11 @@ struct H2SpecStreamTests {
     func unknownExtensionFrameInHeaderBlockIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )
         wire += H2Wire.frame(HTTP2FrameType(rawValue: 0x16), streamID: 1, payload: [0xFF])
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
     }

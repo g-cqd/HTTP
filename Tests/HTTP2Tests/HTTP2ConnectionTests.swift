@@ -57,7 +57,9 @@ struct HTTP2ConnectionTests {
                 HPACKField(name: ":scheme", value: "https"),
                 HPACKField(name: ":path", value: "/submit"),
                 HPACKField(name: ":authority", value: "example.com")
-            ], endStream: false)
+            ],
+            endStream: false
+        )
         wire += dataFrame(streamID: 1, payload: Array("hello world".utf8), endStream: true)
 
         let events = try connection.receive(wire)
@@ -67,7 +69,7 @@ struct HTTP2ConnectionTests {
             return
         }
         #expect(request.method == .post)
-        #expect(String(decoding: body, as: UTF8.self) == "hello world")
+        #expect(String(decoding: body, as: Unicode.UTF8.self) == "hello world")
     }
 
     @Test("assembles a request delivered across two reads")
@@ -251,7 +253,7 @@ struct HTTP2ConnectionTests {
         let decoded = try decodeResponse(connection.outboundBytes())
         #expect(decoded.status == "200")
         #expect(decoded.contentType == "text/plain")
-        #expect(String(decoding: decoded.body, as: UTF8.self) == "hello")
+        #expect(String(decoding: decoded.body, as: Unicode.UTF8.self) == "hello")
     }
 
     // MARK: Performance guards
@@ -348,7 +350,8 @@ struct HTTP2ConnectionTests {
         // stream error — RST_STREAM(FLOW_CONTROL_ERROR) — so the connection (and its other streams)
         // survives and `receive` does not throw.
         let events = try connection.receive(
-            dataFrame(streamID: 1, payload: [UInt8](repeating: 0x61, count: 20), endStream: true))
+            dataFrame(streamID: 1, payload: [UInt8](repeating: 0x61, count: 20), endStream: true)
+        )
         #expect(events.isEmpty)
         let reset = try firstRstStream(connection.outboundBytes())
         #expect(reset?.streamID == HTTP2StreamID(1))
@@ -375,7 +378,8 @@ struct HTTP2ConnectionTests {
             let last = total + chunk.count >= 100_000
             let payload = last ? Array(chunk[0 ..< (100_000 - total)]) : chunk
             events += try connection.receive(
-                dataFrame(streamID: 1, payload: payload, endStream: last))
+                dataFrame(streamID: 1, payload: payload, endStream: last)
+            )
             windowUpdateTotal += try sumWindowUpdates(connection.outboundBytes())
             total += payload.count
         }
@@ -450,7 +454,9 @@ struct HTTP2ConnectionTests {
                 found = (frame.header.streamID, HTTP2ErrorCode(code: code))
             }
         }
-        guard let found else { return nil }
+        guard let found else {
+            return nil
+        }
         return (streamID: found.0, code: found.1)
     }
 }

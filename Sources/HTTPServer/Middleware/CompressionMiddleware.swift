@@ -33,7 +33,9 @@ public struct CompressionMiddleware: HTTPMiddleware {
         next: any HTTPResponder
     ) async -> ServerResponse {
         var response = await next.respond(to: request, body: body)
-        guard acceptsGzip(request) else { return response }
+        guard acceptsGzip(request) else {
+            return response
+        }
         // The representation now depends on Accept-Encoding (RFC 9110 §12.5.5), even if we skip below.
         addVary(&response)
         guard isEligible(response), let gzipped = Gzip.compress(response.body),
@@ -54,7 +56,9 @@ public struct CompressionMiddleware: HTTPMiddleware {
                 let parts = element.split(separator: ";")
                 let coding = parts.first?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
                 guard coding == "gzip" || coding == "*" else { continue }
-                if quality(parts.dropFirst()) > 0 { return true }
+                if quality(parts.dropFirst()) > 0 {
+                    return true
+                }
             }
         }
         return false
@@ -64,23 +68,33 @@ public struct CompressionMiddleware: HTTPMiddleware {
     private func quality(_ parameters: ArraySlice<Substring>) -> Double {
         for parameter in parameters {
             let token = parameter.trimmingCharacters(in: .whitespaces).lowercased()
-            if token.hasPrefix("q="), let value = Double(token.dropFirst(2)) { return value }
+            if token.hasPrefix("q="), let value = Double(token.dropFirst(2)) {
+                return value
+            }
         }
         return 1.0
     }
 
     /// Whether `response` is worth compressing: large enough, not already encoded, not already-compressed media.
     private func isEligible(_ response: ServerResponse) -> Bool {
-        guard response.body.count >= minimumSize else { return false }
-        guard !response.head.headerFields.contains(.contentEncoding) else { return false }
-        guard let type = response.head.headerFields[.contentType]?.lowercased() else { return true }
+        guard response.body.count >= minimumSize else {
+            return false
+        }
+        guard !response.head.headerFields.contains(.contentEncoding) else {
+            return false
+        }
+        guard let type = response.head.headerFields[.contentType]?.lowercased() else {
+            return true
+        }
         return !Self.incompressible.contains { type.contains($0) }
     }
 
     private func addVary(_ response: inout ServerResponse) {
         let alreadyVaries = response.head.headerFields.values(for: .vary)
             .contains { $0.lowercased().contains("accept-encoding") }
-        guard !alreadyVaries else { return }
+        guard !alreadyVaries else {
+            return
+        }
         _ = response.head.headerFields.append("Accept-Encoding", for: .vary)
     }
 }

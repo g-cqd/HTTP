@@ -61,7 +61,8 @@ struct HTTP2ExtendedConnectTests: HTTP2WireFixtures {
 
         // Inbound DATA on the tunnel surfaces as opaque tunnel bytes (not a request body).
         let inbound = try connection.receive(
-            dataFrame(streamID: 1, payload: Array("client-bytes".utf8), endStream: false))
+            dataFrame(streamID: 1, payload: Array("client-bytes".utf8), endStream: false)
+        )
         guard case .tunnelData(_, let bytes) = try #require(inbound.first) else {
             Issue.record("expected a tunnelData event")
             return
@@ -121,7 +122,9 @@ struct HTTP2ExtendedConnectTests: HTTP2WireFixtures {
                 found = (frame.header.streamID, HTTP2ErrorCode(code: code))
             }
         }
-        guard let found else { return nil }
+        guard let found else {
+            return nil
+        }
         return (streamID: found.0, code: found.1)
     }
 }

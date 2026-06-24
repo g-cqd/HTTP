@@ -10,7 +10,9 @@
 /// Serializes ``WebSocketFrame`` values to the wire, unmasked (RFC 6455 §5.1 / §5.2).
 public struct WebSocketFrameEncoder {
     /// Creates a frame encoder.
-    public init() {}
+    public init() {
+        // Stateless; nothing to configure.
+    }
 
     /// Encodes `frame` to its on-the-wire octets (RFC 6455 §5.2), unmasked.
     public func encode(_ frame: WebSocketFrame) -> [UInt8] {

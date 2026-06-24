@@ -14,7 +14,7 @@ import Testing
 struct ResponseSerializerTests {
     private func serialize(_ response: HTTPResponse, body: String = "") -> String {
         let bytes = ResponseSerializer.serialize(response, body: Array(body.utf8))
-        return String(decoding: bytes, as: UTF8.self)
+        return String(decoding: bytes, as: Unicode.UTF8.self)
     }
 
     @Test("serializes status-line, headers, and body with auto Content-Length")
@@ -35,8 +35,11 @@ struct ResponseSerializerTests {
     @Test("omits the body but keeps the equivalent Content-Length (HEAD, RFC 9112 §6.3)")
     func omitsBodyForHead() {
         let bytes = ResponseSerializer.serialize(
-            HTTPResponse(status: .ok), body: Array("0123456789".utf8), omitBody: true)
-        let wire = String(decoding: bytes, as: UTF8.self)
+            HTTPResponse(status: .ok),
+            body: Array("0123456789".utf8),
+            omitBody: true
+        )
+        let wire = String(decoding: bytes, as: Unicode.UTF8.self)
         #expect(wire == "HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\n")
     }
 

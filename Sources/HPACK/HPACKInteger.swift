@@ -54,7 +54,9 @@ public enum HPACKInteger {
         guard let first = reader.readByte() else { throw .truncatedInteger }
         let prefixMask = (1 << prefixBits) - 1
         var value = Int(first) & prefixMask
-        if value < prefixMask { return value }
+        if value < prefixMask {
+            return value
+        }
 
         var shift = 0
         while true {
@@ -63,7 +65,9 @@ public enum HPACKInteger {
             let added = Int(byte & 0x7F) << shift
             guard added <= maxValue - value else { throw .integerOverflow }
             value += added
-            if byte & 0x80 == 0 { return value }
+            if byte & 0x80 == 0 {
+                return value
+            }
             shift += 7
             // At most five continuation octets are needed for any value up to `maxValue`; more is a
             // padding attack (an endless run of 0x80 octets that never terminates).

@@ -10,20 +10,6 @@
 //  message, §8.1) and a frame on a closed stream are stream errors (PROTOCOL_ERROR / STREAM_CLOSED).
 //
 
-/// The lifecycle state of an HTTP/2 stream (RFC 9113 §5.1; push/reserved states omitted).
-public enum HTTP2StreamState: Sendable, Equatable {
-    /// No frames exchanged yet.
-    case idle
-    /// Both peers may send (the request is in flight).
-    case open
-    /// The client finished sending (END_STREAM received); the server still owes a response.
-    case halfClosedRemote
-    /// The server finished sending (END_STREAM sent); the client may still send.
-    case halfClosedLocal
-    /// The stream is finished.
-    case closed
-}
-
 /// A server-side HTTP/2 stream and its RFC 9113 §5.1 state transitions.
 public struct HTTP2Stream: Sendable, Equatable {
     /// The stream identifier (RFC 9113 §5.1.1).

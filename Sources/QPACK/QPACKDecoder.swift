@@ -60,7 +60,8 @@ public struct QPACKDecoder {
                 break  // Required Insert Count 0 — static-table-only, as required at capacity 0
             case .value:
                 throw .decompressionFailed(
-                    "non-zero Required Insert Count requires the dynamic table")
+                    "non-zero Required Insert Count requires the dynamic table"
+                )
             case .incomplete, .overflow:
                 throw .decompressionFailed("invalid Required Insert Count")
         }
@@ -120,7 +121,8 @@ public struct QPACKDecoder {
             throw .decompressionFailed("invalid static-table name index")
         }
         let value = try QPACKString.decodeString(
-            &reader, prefixBits: 7, maxEncodedLength: limits.maxFieldSize)
+            &reader, prefixBits: 7, maxEncodedLength: limits.maxFieldSize
+        )
         return HeaderField(name: entry.name, value: value)
     }
 
@@ -129,9 +131,11 @@ public struct QPACKDecoder {
         _ reader: inout ByteReader
     ) throws(QPACKError) -> HeaderField {
         let name = try QPACKString.decodeString(
-            &reader, prefixBits: 3, maxEncodedLength: limits.maxFieldSize)
+            &reader, prefixBits: 3, maxEncodedLength: limits.maxFieldSize
+        )
         let value = try QPACKString.decodeString(
-            &reader, prefixBits: 7, maxEncodedLength: limits.maxFieldSize)
+            &reader, prefixBits: 7, maxEncodedLength: limits.maxFieldSize
+        )
         return HeaderField(name: name, value: value)
     }
 
@@ -140,8 +144,10 @@ public struct QPACKDecoder {
         _ reader: inout ByteReader, prefixBits: Int, what: String
     ) throws(QPACKError) -> Int {
         switch QPACKInteger.decode(&reader, prefixBits: prefixBits) {
-            case .value(let value): return value
-            case .incomplete, .overflow: throw .decompressionFailed("invalid \(what)")
+            case .value(let value):
+                return value
+            case .incomplete, .overflow:
+                throw .decompressionFailed("invalid \(what)")
         }
     }
 }

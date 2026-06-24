@@ -35,15 +35,23 @@ extension HTTPFields {
             while true {
                 let comma = utf8[start...].firstIndex(of: 0x2C)  // ","
                 let token = utf8[start ..< (comma ?? utf8.endIndex)]
-                guard let parsed = Self.parseContentLengthToken(token) else { return .invalid }
-                if let resolvedValue = resolved, resolvedValue != parsed { return .invalid }
+                guard let parsed = Self.parseContentLengthToken(token) else {
+                    return .invalid
+                }
+                if let resolvedValue = resolved, resolvedValue != parsed {
+                    return .invalid
+                }
                 resolved = parsed
                 guard let comma else { break }
                 start = utf8.index(after: comma)
             }
         }
-        guard present else { return .absent }
-        guard let resolved else { return .invalid }
+        guard present else {
+            return .absent
+        }
+        guard let resolved else {
+            return .invalid
+        }
         return .length(resolved)
     }
 
@@ -63,17 +71,25 @@ extension HTTPFields {
             guard utf8[previous] == 0x20 || utf8[previous] == 0x09 else { break }
             tail = previous
         }
-        guard index < tail else { return nil }  // empty after trimming
+        guard index < tail else {
+            return nil  // empty after trimming
+        }
 
         var result = 0
         var cursor = index
         while cursor < tail {
             let byte = utf8[cursor]
-            guard byte >= 0x30, byte <= 0x39 else { return nil }  // not a DIGIT
+            guard byte >= 0x30, byte <= 0x39 else {
+                return nil  // not a DIGIT
+            }
             let (scaled, scaleOverflow) = result.multipliedReportingOverflow(by: 10)
-            guard !scaleOverflow else { return nil }
+            guard !scaleOverflow else {
+                return nil
+            }
             let (sum, addOverflow) = scaled.addingReportingOverflow(Int(byte - 0x30))
-            guard !addOverflow else { return nil }
+            guard !addOverflow else {
+                return nil
+            }
             result = sum
             cursor = utf8.index(after: cursor)
         }

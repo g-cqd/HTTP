@@ -22,8 +22,10 @@ struct H2SpecFrameDefinitionTests {
     func dataOnStreamZeroIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.data(streamID: 0, payload: [0x61], endStream: false),
-            on: &connection)
+            .protocolError,
+            feeding: H2Wire.data(streamID: 0, payload: [0x61], endStream: false),
+            on: &connection
+        )
     }
 
     @Test("6.1/2 — a DATA frame on a non-open stream is a STREAM_CLOSED stream error (§6.1)")
@@ -32,9 +34,11 @@ struct H2SpecFrameDefinitionTests {
         _ = try connection.receive(H2Wire.get(streamID: 1))  // END_STREAM → half-closed (remote)
         _ = connection.outboundBytes()
         H2Wire.expectStreamError(
-            .streamClosed, on: 1,
+            .streamClosed,
+            on: 1,
             feeding: H2Wire.data(streamID: 1, payload: [0x61], endStream: true),
-            connection: &connection)
+            connection: &connection
+        )
     }
 
     @Test("6.1/3 — a DATA frame with an invalid pad length is a PROTOCOL_ERROR (§6.1)")
@@ -43,7 +47,11 @@ struct H2SpecFrameDefinitionTests {
         var wire = H2Wire.openStream(streamID: 1)
         // PADDED with a pad-length octet (0xFF) larger than the rest of the payload.
         wire += H2Wire.frame(
-            .data, flags: [.padded, .endStream], streamID: 1, payload: [0xFF, 0x61])
+            .data,
+            flags: [.padded, .endStream],
+            streamID: 1,
+            payload: [0xFF, 0x61]
+        )
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
     }
 
@@ -55,7 +63,11 @@ struct H2SpecFrameDefinitionTests {
     func headersWithoutEndHeadersThenPriorityIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )
         wire += H2Wire.priority(streamID: 1, dependency: 0)
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
     }
@@ -66,7 +78,11 @@ struct H2SpecFrameDefinitionTests {
     func headersForAnotherStreamIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         var wire = H2Wire.headers(
-            streamID: 1, fields: H2Wire.requestFields(), endStream: false, endHeaders: false)
+            streamID: 1,
+            fields: H2Wire.requestFields(),
+            endStream: false,
+            endHeaders: false
+        )
         wire += H2Wire.headers(streamID: 3, fields: H2Wire.requestFields())
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
     }
@@ -75,8 +91,10 @@ struct H2SpecFrameDefinitionTests {
     func headersOnStreamZeroIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.headers(streamID: 0, fields: H2Wire.requestFields()),
-            on: &connection)
+            .protocolError,
+            feeding: H2Wire.headers(streamID: 0, fields: H2Wire.requestFields()),
+            on: &connection
+        )
     }
 
     @Test("6.2/4 — a HEADERS frame with an invalid pad length is a PROTOCOL_ERROR (§6.2)")
@@ -86,7 +104,11 @@ struct H2SpecFrameDefinitionTests {
         var payload: [UInt8] = [0xFF]
         payload += H2Wire.headerBlock(H2Wire.requestFields())
         let wire = H2Wire.frame(
-            .headers, flags: [.padded, .endHeaders, .endStream], streamID: 1, payload: payload)
+            .headers,
+            flags: [.padded, .endHeaders, .endStream],
+            streamID: 1,
+            payload: payload
+        )
         H2Wire.expectConnectionError(.protocolError, feeding: wire, on: &connection)
     }
 
@@ -96,7 +118,10 @@ struct H2SpecFrameDefinitionTests {
     func priorityOnStreamZeroIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.priority(streamID: 0, dependency: 0), on: &connection)
+            .protocolError,
+            feeding: H2Wire.priority(streamID: 0, dependency: 0),
+            on: &connection
+        )
     }
 
     @Test("6.3/2 — a PRIORITY frame with a length other than 5 octets is a FRAME_SIZE_ERROR (§6.3)")
@@ -113,14 +138,20 @@ struct H2SpecFrameDefinitionTests {
     func resetOnStreamZeroIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.rstStream(streamID: 0), on: &connection)
+            .protocolError,
+            feeding: H2Wire.rstStream(streamID: 0),
+            on: &connection
+        )
     }
 
     @Test("6.4/2 — an RST_STREAM frame on an idle stream is a PROTOCOL_ERROR (§6.4)")
     func resetOnIdleStreamIsProtocolError() throws {
         var connection = try H2Wire.handshaked()
         H2Wire.expectConnectionError(
-            .protocolError, feeding: H2Wire.rstStream(streamID: 1), on: &connection)
+            .protocolError,
+            feeding: H2Wire.rstStream(streamID: 1),
+            on: &connection
+        )
     }
 
     @Test(

@@ -23,7 +23,10 @@ struct HTTP2HeaderBlockAccumulatorTests {
     func singleHeadersFrame() throws {
         var accumulator = make()
         let outcome = try accumulator.begin(
-            streamID: stream, fragment: [1, 2, 3], endHeaders: true)
+            streamID: stream,
+            fragment: [1, 2, 3],
+            endHeaders: true
+        )
         #expect(outcome == .complete(stream, [1, 2, 3]))
         #expect(accumulator.isExpectingContinuation == false)
     }

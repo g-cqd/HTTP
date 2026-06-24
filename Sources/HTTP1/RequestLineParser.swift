@@ -50,11 +50,15 @@ public enum RequestLineParser {
     /// (RFC 9112 §3.2) — the octets that enable request-line injection / smuggling.
     private static func isValidRequestTarget(_ target: RawSpan) -> Bool {
         let count = target.byteCount
-        guard count > 0 else { return false }
+        guard count > 0 else {
+            return false
+        }
         var index = 0
         while index < count {
             let byte = target.unsafeLoad(fromByteOffset: index, as: UInt8.self)
-            guard byte > 0x20, byte != 0x7F else { return false }  // reject CTL, SP, and DEL
+            guard byte > 0x20, byte != 0x7F else {
+                return false
+            }  // reject CTL, SP, and DEL
             index += 1
         }
         return true

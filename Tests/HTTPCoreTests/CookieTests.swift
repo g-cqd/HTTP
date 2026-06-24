@@ -14,8 +14,14 @@ struct CookieTests {
     @Test("serializes the attributes in order (RFC 6265bis §4.1.1)")
     func serializesAttributes() {
         let cookie = SetCookie(
-            name: "session", value: "abc123", path: "/", maxAge: 3_600, isSecure: true,
-            isHTTPOnly: true, sameSite: .lax)
+            name: "session",
+            value: "abc123",
+            path: "/",
+            maxAge: 3_600,
+            isSecure: true,
+            isHTTPOnly: true,
+            sameSite: .lax
+        )
         #expect(
             cookie.headerValue
                 == "session=abc123; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax")
@@ -53,7 +59,7 @@ struct CookieTests {
         let cookies = Cookies.parse(fields)
         #expect(cookies["theme"] == "dark")
         #expect(cookies["sessionid"] == "42")
-        #expect(cookies["empty"] == "")
+        #expect(cookies["empty"]?.isEmpty == true)
     }
 
     @Test("trims surrounding whitespace and ignores malformed pairs")

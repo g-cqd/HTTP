@@ -17,7 +17,9 @@ import HTTPCore
 extension H3SpecTests {
     /// Runs the injection for `check` and returns the error code the engine answered with, or nil.
     func drive(_ check: H3Check) -> UInt64? {
-        guard let injection = injections[check.title] else { return nil }
+        guard let injection = injections[check.title] else {
+            return nil
+        }
         return observedCode(injection)
     }
 
@@ -26,19 +28,29 @@ extension H3SpecTests {
         var connection = HTTP3Connection()
         body(&connection)
         for action in connection.outbound() {
-            if case .closeConnection(let code) = action { return code }
-            if case .resetStream(_, let code) = action { return code }
+            if case .closeConnection(let code) = action {
+                return code
+            }
+            if case .resetStream(_, let code) = action {
+                return code
+            }
         }
         return nil
     }
 
     /// Parses the `(0x….)` wire code out of a catalog `expect` string.
     func expectedWireCode(_ expect: String) -> UInt64? {
-        guard let open = expect.firstIndex(of: "(") else { return nil }
+        guard let open = expect.firstIndex(of: "(") else {
+            return nil
+        }
         let after = expect.index(after: open)
-        guard let close = expect[after...].firstIndex(of: ")") else { return nil }
+        guard let close = expect[after...].firstIndex(of: ")") else {
+            return nil
+        }
         let inside = expect[after ..< close]
-        guard inside.hasPrefix("0x") else { return nil }
+        guard inside.hasPrefix("0x") else {
+            return nil
+        }
         return UInt64(inside.dropFirst(2), radix: 16)
     }
 
@@ -72,7 +84,8 @@ extension H3SpecTests {
             }
             .merging(
                 qpackInjections(
-                    request: request, encoder: encoder, decoder: decoder, secondUni: secondUni)
+                    request: request, encoder: encoder, decoder: decoder, secondUni: secondUni
+                )
             ) {
                 first, _ in first
             }
@@ -97,7 +110,10 @@ extension H3SpecTests {
                     HeaderField(name: ":path", value: "/")
                 ]
                 _ = try? connection.receive(
-                    request, self.requestStream(self.fieldSection(fields)), fin: true)
+                    request,
+                    self.requestStream(self.fieldSection(fields)),
+                    fin: true
+                )
             },
             "a mandatory pseudo-header field is absent": { connection in
                 let fields = [
@@ -105,14 +121,19 @@ extension H3SpecTests {
                     HeaderField(name: ":scheme", value: "https")
                 ]
                 _ = try? connection.receive(
-                    request, self.requestStream(self.fieldSection(fields)), fin: true)
+                    request,
+                    self.requestStream(self.fieldSection(fields)),
+                    fin: true
+                )
             },
             "a prohibited pseudo-header field is present": { connection in
                 _ = try? connection.receive(
                     request,
                     self.requestStream(
-                        self.fieldSection(base + [HeaderField(name: ":unknown", value: "x")])),
-                    fin: true)
+                        self.fieldSection(base + [HeaderField(name: ":unknown", value: "x")])
+                    ),
+                    fin: true
+                )
             },
             "a pseudo-header field after regular fields": { connection in
                 let fields = [
@@ -123,29 +144,38 @@ extension H3SpecTests {
                     HeaderField(name: ":authority", value: "example.com")
                 ]
                 _ = try? connection.receive(
-                    request, self.requestStream(self.fieldSection(fields)), fin: true)
+                    request,
+                    self.requestStream(self.fieldSection(fields)),
+                    fin: true
+                )
             },
             "a connection-specific header field": { connection in
                 _ = try? connection.receive(
                     request,
                     self.requestStream(
                         self.fieldSection(
-                            base + [HeaderField(name: "connection", value: "keep-alive")])),
-                    fin: true)
+                            base + [HeaderField(name: "connection", value: "keep-alive")]
+                        )
+                    ),
+                    fin: true
+                )
             },
             "a TE header field with a value other than trailers": { connection in
                 _ = try? connection.receive(
                     request,
                     self.requestStream(
-                        self.fieldSection(base + [HeaderField(name: "te", value: "gzip")])),
-                    fin: true)
+                        self.fieldSection(base + [HeaderField(name: "te", value: "gzip")])
+                    ),
+                    fin: true
+                )
             },
             "a content-length not matching the DATA length": { connection in
                 let fields = base + [HeaderField(name: "content-length", value: "3")]
                 _ = try? connection.receive(
                     request,
                     self.requestStream(self.fieldSection(fields), body: Array("hello".utf8)),
-                    fin: true)
+                    fin: true
+                )
             },
             "a frame whose length runs past the stream": { connection in
                 // HEADERS declaring length 10 but delivering 3 octets, then FIN.
@@ -153,14 +183,20 @@ extension H3SpecTests {
             },
             "a GOAWAY frame on a request stream": { connection in
                 _ = try? connection.receive(
-                    request, self.frame(.goAway, self.varint(0)), fin: false)
+                    request,
+                    self.frame(.goAway, self.varint(0)),
+                    fin: false
+                )
             },
             "a SETTINGS frame on a request stream": { connection in
                 _ = try? connection.receive(request, self.frame(.settings, []), fin: false)
             },
             "CANCEL_PUSH received on a request stream": { connection in
                 _ = try? connection.receive(
-                    request, self.frame(.cancelPush, self.varint(0)), fin: false)
+                    request,
+                    self.frame(.cancelPush, self.varint(0)),
+                    fin: false
+                )
             }
         ]
     }
@@ -172,39 +208,59 @@ extension H3SpecTests {
         [
             "the first control-stream frame is not SETTINGS": { connection in
                 _ = try? connection.receive(
-                    control, [0x00] + self.frame(.goAway, self.varint(0)), fin: false)
+                    control,
+                    [0x00] + self.frame(.goAway, self.varint(0)),
+                    fin: false
+                )
             },
             "a DATA frame on the control stream": { connection in
                 _ = try? connection.receive(
-                    control, self.controlPreamble() + self.frame(.data, [1]), fin: false)
+                    control,
+                    self.controlPreamble() + self.frame(.data, [1]),
+                    fin: false
+                )
             },
             "a HEADERS frame on the control stream": { connection in
                 _ = try? connection.receive(
-                    control, self.controlPreamble() + self.frame(.headers, [1]), fin: false)
+                    control,
+                    self.controlPreamble() + self.frame(.headers, [1]),
+                    fin: false
+                )
             },
             "a PUSH_PROMISE frame on the control stream": { connection in
                 _ = try? connection.receive(
-                    control, self.controlPreamble() + self.frame(.pushPromise, [1]), fin: false)
+                    control,
+                    self.controlPreamble() + self.frame(.pushPromise, [1]),
+                    fin: false
+                )
             },
             "a second SETTINGS frame": { connection in
                 _ = try? connection.receive(
-                    control, self.controlPreamble() + self.frame(.settings, []), fin: false)
+                    control,
+                    self.controlPreamble() + self.frame(.settings, []),
+                    fin: false
+                )
             },
             "an HTTP/2-only setting identifier is present": { connection in
                 _ = try? connection.receive(
-                    control, [0x00] + self.frame(.settings, self.settingsPayload([(0x02, 1)])),
-                    fin: false)
+                    control,
+                    [0x00] + self.frame(.settings, self.settingsPayload([(0x02, 1)])),
+                    fin: false
+                )
             },
             "a reserved HTTP/2 setting identifier (0x02/0x03/0x04/0x05)": { connection in
                 _ = try? connection.receive(
-                    control, [0x00] + self.frame(.settings, self.settingsPayload([(0x03, 1)])),
-                    fin: false)
+                    control,
+                    [0x00] + self.frame(.settings, self.settingsPayload([(0x03, 1)])),
+                    fin: false
+                )
             },
             "a duplicate setting identifier in one SETTINGS frame": { connection in
                 _ = try? connection.receive(
                     control,
                     [0x00] + self.frame(.settings, self.settingsPayload([(0x06, 1), (0x06, 2)])),
-                    fin: false)
+                    fin: false
+                )
             },
             "a second control stream is created": { connection in
                 _ = try? connection.receive(control, [0x00], fin: false)
@@ -215,20 +271,29 @@ extension H3SpecTests {
             },
             "a GOAWAY identifier that increases": { connection in
                 _ = try? connection.receive(
-                    control, self.controlPreamble() + self.frame(.goAway, self.varint(4)),
-                    fin: false)
+                    control,
+                    self.controlPreamble() + self.frame(.goAway, self.varint(4)),
+                    fin: false
+                )
                 _ = try? connection.receive(
-                    control, self.frame(.goAway, self.varint(8)), fin: false)
+                    control,
+                    self.frame(.goAway, self.varint(8)),
+                    fin: false
+                )
             },
             "a Push ID greater than MAX_PUSH_ID": { connection in
                 _ = try? connection.receive(
-                    control, self.controlPreamble() + self.frame(.cancelPush, self.varint(0)),
-                    fin: false)
+                    control,
+                    self.controlPreamble() + self.frame(.cancelPush, self.varint(0)),
+                    fin: false
+                )
             },
             "a CANCEL_PUSH for a Push ID above MAX_PUSH_ID": { connection in
                 _ = try? connection.receive(
-                    control, self.controlPreamble() + self.frame(.cancelPush, self.varint(0)),
-                    fin: false)
+                    control,
+                    self.controlPreamble() + self.frame(.cancelPush, self.varint(0)),
+                    fin: false
+                )
             },
             "a server receives a client-initiated push stream": { connection in
                 _ = try? connection.receive(push, [0x01], fin: false)
@@ -243,12 +308,18 @@ extension H3SpecTests {
         [
             "a field line references an invalid static-table index": { connection in
                 _ = try? connection.receive(
-                    request, self.frame(.headers, [0x00, 0x00, 0xFF, 0x24]), fin: true)
+                    request,
+                    self.frame(.headers, [0x00, 0x00, 0xFF, 0x24]),
+                    fin: true
+                )
             },
             "a reference to an evicted dynamic-table entry": { connection in
                 // An indexed dynamic reference (T=0) with the table disabled.
                 _ = try? connection.receive(
-                    request, self.frame(.headers, [0x00, 0x00, 0x80]), fin: true)
+                    request,
+                    self.frame(.headers, [0x00, 0x00, 0x80]),
+                    fin: true
+                )
             },
             "a Required Insert Count beyond the blocked-streams limit": { connection in
                 // A non-zero Required Insert Count in the §4.5.1 prefix.

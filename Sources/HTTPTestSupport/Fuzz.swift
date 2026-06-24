@@ -31,10 +31,14 @@ public struct ByteMutator: Sendable {
         /// A compact repro description (e.g. `set@12=0xff`).
         public var description: String {
             switch kind {
-                case .overwrite: "set@\(offset ?? -1)=0x\(String(value ?? 0, radix: 16))"
-                case .bitFlip: "flip@\(offset ?? -1)"
-                case .truncate: "truncate"
-                case .extend: "extend"
+                case .overwrite:
+                    "set@\(offset ?? -1)=0x\(String(value ?? 0, radix: 16))"
+                case .bitFlip:
+                    "flip@\(offset ?? -1)"
+                case .truncate:
+                    "truncate"
+                case .extend:
+                    "extend"
             }
         }
     }
@@ -96,23 +100,16 @@ public struct ByteMutator: Sendable {
     }
 
     private func pickIndex(_ count: Int, _ rng: inout SeededRNG) -> Int {
-        guard let region, !region.isEmpty else { return rng.below(count) }
+        guard let region, !region.isEmpty else {
+            return rng.below(count)
+        }
         let lower = max(0, region.lowerBound)
         let upper = min(count, region.upperBound)
-        guard upper > lower else { return rng.below(count) }
+        guard upper > lower else {
+            return rng.below(count)
+        }
         return lower + rng.below(upper - lower)
     }
-}
-
-/// What a fuzz run observed.
-///
-/// Reaching a report at all is the PASS signal — a trap aborts the process before the loop can
-/// return one.
-public struct FuzzReport: Sendable, Equatable {
-    /// The number of iterations run.
-    public let iterations: Int
-    /// The total number of edits applied across all iterations.
-    public let totalEdits: Int
 }
 
 /// The env var that turns on per-iteration repro tracing when a suite does not pass its own.

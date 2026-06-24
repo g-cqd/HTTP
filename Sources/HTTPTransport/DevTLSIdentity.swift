@@ -29,14 +29,18 @@ public enum DevTLSIdentity {
     ) throws -> TransportTLS {
         let pkcs12 = try makePKCS12(commonName: commonName, passphrase: passphrase)
         return TransportTLS(
-            pkcs12: [UInt8](pkcs12), passphrase: passphrase,
-            applicationProtocols: applicationProtocols)
+            pkcs12: [UInt8](pkcs12),
+            passphrase: passphrase,
+            applicationProtocols: applicationProtocols
+        )
     }
 
     private static func makePKCS12(commonName: String, passphrase: String) throws -> Data {
         let manager = FileManager.default
         let directory = manager.temporaryDirectory.appendingPathComponent(
-            "http-dev-tls-\(UUID().uuidString)", isDirectory: true)
+            "http-dev-tls-\(UUID().uuidString)",
+            isDirectory: true
+        )
         try manager.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: directory) }
 
@@ -102,8 +106,9 @@ public enum DevTLSIdentity {
         guard process.terminationStatus == 0 else {
             throw TransportError.tlsConfigurationFailed(
                 "openssl \(arguments.first ?? "") failed: "
-                    + String(decoding: stderr, as: UTF8.self))
+                    + String(decoding: stderr, as: Unicode.UTF8.self)
+            )
         }
-        return String(decoding: stdout, as: UTF8.self)
+        return String(decoding: stdout, as: Unicode.UTF8.self)
     }
 }

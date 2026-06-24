@@ -28,7 +28,9 @@ public enum FieldValidation {
         var sawByte = false
         for byte in bytes {
             sawByte = true
-            guard isTokenByte(byte) else { return false }
+            guard isTokenByte(byte) else {
+                return false
+            }
         }
         return sawByte  // 1*tchar — at least one byte is required.
     }
@@ -101,7 +103,9 @@ public enum FieldValidation {
     /// short-delimiter `ByteReader.firstIndex`, where SWAR did NOT pay off — see its note.)
     @usableFromInline
     static func fieldValueBytesAreValid(_ buffer: UnsafeBufferPointer<UInt8>) -> Bool {
-        guard let base = buffer.baseAddress else { return true }
+        guard let base = buffer.baseAddress else {
+            return true
+        }
         let count = buffer.count
         let ones: UInt64 = 0x0101_0101_0101_0101
         let highs: UInt64 = 0x8080_8080_8080_8080
@@ -114,11 +118,15 @@ public enum FieldValidation {
             let isControl = (word &- belowSpace) & ~word & highs  // octet < 0x20
             let isHTAB = ((word ^ htab) &- ones) & ~(word ^ htab) & highs  // octet == 0x09
             let isDEL = ((word ^ del) &- ones) & ~(word ^ del) & highs  // octet == 0x7F
-            if ((isControl & ~isHTAB) | isDEL) != 0 { return false }
+            if ((isControl & ~isHTAB) | isDEL) != 0 {
+                return false
+            }
             index &+= 8
         }
         while index < count {
-            if !isFieldValueByte(base[index]) { return false }
+            if !isFieldValueByte(base[index]) {
+                return false
+            }
             index &+= 1
         }
         return true
@@ -176,7 +184,9 @@ public enum FieldValidation {
     /// and `:path`/`:authority` can be long — a full scan, exactly the access pattern SWAR pays off on.
     @usableFromInline
     static func requestTargetBytesAreValid(_ buffer: UnsafeBufferPointer<UInt8>) -> Bool {
-        guard let base = buffer.baseAddress else { return true }
+        guard let base = buffer.baseAddress else {
+            return true
+        }
         let count = buffer.count
         let ones: UInt64 = 0x0101_0101_0101_0101
         let highs: UInt64 = 0x8080_8080_8080_8080
@@ -187,11 +197,15 @@ public enum FieldValidation {
             let word = UnsafeRawPointer(base + index).loadUnaligned(as: UInt64.self)
             let isControlOrSpace = (word &- controlOrSpace) & ~word & highs  // octet <= 0x20
             let isDEL = ((word ^ del) &- ones) & ~(word ^ del) & highs  // octet == 0x7F
-            if (isControlOrSpace | isDEL) != 0 { return false }
+            if (isControlOrSpace | isDEL) != 0 {
+                return false
+            }
             index &+= 8
         }
         while index < count {
-            if !isRequestTargetByte(base[index]) { return false }
+            if !isRequestTargetByte(base[index]) {
+                return false
+            }
             index &+= 1
         }
         return true

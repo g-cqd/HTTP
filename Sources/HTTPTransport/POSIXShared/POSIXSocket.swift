@@ -27,6 +27,7 @@ enum POSIXSocket {
     /// Creates, binds (IPv4, RFC 791), and listens (TCP, RFC 9293) on a POSIX.1-2017 stream socket,
     /// returning the descriptor and the OS-assigned port.
     static func makeListenSocket(
+        // swiftlint:disable:next discouraged_default_parameter - reusePort is prefork opt-in
         host: String, port: UInt16, nonBlocking: Bool, reusePort: Bool = false
     ) throws -> (descriptor: Int32, port: UInt16) {
         let rawFD = socket(AF_INET, SOCK_STREAM, 0)
@@ -39,7 +40,12 @@ enum POSIXSocket {
             // accepted connections across them (a worker per core). Off by default so a second,
             // accidental instance still fails with EADDRINUSE rather than silently sharing the port.
             _ = setsockopt(
-                rawFD, SOL_SOCKET, SO_REUSEPORT, &reuse, socklen_t(MemoryLayout<Int32>.size))
+                rawFD,
+                SOL_SOCKET,
+                SO_REUSEPORT,
+                &reuse,
+                socklen_t(MemoryLayout<Int32>.size)
+            )
         }
         setNoSIGPIPE(rawFD)
         if nonBlocking { setNonBlocking(rawFD) }
@@ -108,7 +114,9 @@ enum POSIXSocket {
             _ = inet_ntop(AF_INET, addressPointer, &buffer, socklen_t(INET_ADDRSTRLEN))
         }
         let host = String(
-            decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+            decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
+            as: Unicode.UTF8.self
+        )
         return TransportAddress(host: host, port: UInt16(bigEndian: address.sin_port))
     }
 

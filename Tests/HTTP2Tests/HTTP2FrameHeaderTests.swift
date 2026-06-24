@@ -31,7 +31,7 @@ struct HTTP2FrameHeaderTests {
         let header = parse([0x00, 0x00, 0x12, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00])
         #expect(header?.payloadLength == 18)
         #expect(header?.type == .settings)
-        #expect(header?.flags == [])
+        #expect(header?.flags.isEmpty == true)
         #expect(header?.streamID == .connection)
     }
 
@@ -69,8 +69,11 @@ struct HTTP2FrameHeaderTests {
     @Test("round-trips through encode then parse")
     func roundTrips() {
         let original = HTTP2FrameHeader(
-            payloadLength: 1_337, type: .data, flags: [.endStream, .padded],
-            streamID: HTTP2StreamID(42))
+            payloadLength: 1_337,
+            type: .data,
+            flags: [.endStream, .padded],
+            streamID: HTTP2StreamID(42)
+        )
         #expect(parse(encode(original)) == original)
         #expect(encode(original).count == HTTP2FrameHeader.encodedLength)
     }

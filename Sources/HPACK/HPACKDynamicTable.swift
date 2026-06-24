@@ -29,13 +29,20 @@ public struct HPACKDynamicTable: Sendable, Equatable {
     /// The number of entries currently held.
     public var count: Int { entries.count }
 
+    /// Whether the table currently holds no entries.
+    public var isEmpty: Bool { entries.isEmpty }
+
     /// Returns the field at combined HPACK index `index`, or `nil` if it addresses no entry.
     ///
     /// `1...61` index the static table; `62...` index the dynamic table, newest first (§2.3.3).
     public func field(at index: Int) -> HPACKField? {
-        if let staticField = HPACKStaticTable.field(at: index) { return staticField }
+        if let staticField = HPACKStaticTable.field(at: index) {
+            return staticField
+        }
         let position = index - HPACKStaticTable.count - 1
-        guard position >= 0, position < entries.count else { return nil }
+        guard position >= 0, position < entries.count else {
+            return nil
+        }
         return entries[position]
     }
 
@@ -55,7 +62,9 @@ public struct HPACKDynamicTable: Sendable, Equatable {
     /// not an error, per §4.4.
     public mutating func add(_ field: HPACKField) {
         evict(untilRoomFor: field.tableSize)
-        guard field.tableSize <= maxSize else { return }
+        guard field.tableSize <= maxSize else {
+            return
+        }
         entries.insert(field, at: 0)
         size += field.tableSize
     }

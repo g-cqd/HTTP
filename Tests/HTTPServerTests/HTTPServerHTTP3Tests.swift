@@ -28,7 +28,10 @@ struct HTTPServerHTTP3Tests {
         let (status, body) = try await serveAndGet(
             transport: LegacyQUICTransport(
                 configuration: TransportConfiguration(
-                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls)))
+                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls
+                )
+            )
+        )
         #expect(status == "200")
         #expect(body == Array("hello h3".utf8))
     }
@@ -36,12 +39,17 @@ struct HTTPServerHTTP3Tests {
     @Test(
         "an HTTP/3 GET over the modern QUIC backbone returns the response", .timeLimit(.minutes(1)))
     func http3GetModern() async throws {
-        guard #available(macOS 26, iOS 26, *) else { return }
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         let (status, body) = try await serveAndGet(
             transport: ModernQUICTransport(
                 configuration: TransportConfiguration(
-                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls)))
+                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls
+                )
+            )
+        )
         #expect(status == "200")
         #expect(body == Array("hello h3".utf8))
     }
@@ -58,7 +66,8 @@ struct HTTPServerHTTP3Tests {
         }
         let server = HTTPServer(
             transport: TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
-            responder: responder)
+            responder: responder
+        )
         let serving = Task {
             await withDiscardingTaskGroup { group in
                 for await connection in connections {
@@ -77,8 +86,10 @@ struct HTTPServerHTTP3Tests {
 
     private func get(port: UInt16, path: String) async throws -> (status: String?, body: [UInt8]) {
         let connection = NWConnection(
-            host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port) ?? .any,
-            using: Self.clientParameters())
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port) ?? .any,
+            using: Self.clientParameters()
+        )
         defer { connection.cancel() }
         try await ready(connection)
 
@@ -103,7 +114,8 @@ struct HTTPServerHTTP3Tests {
         sec_protocol_options_set_verify_block(
             options.securityProtocolOptions,
             { _, _, complete in complete(true) },
-            DispatchQueue(label: "h3.test.verify"))
+            DispatchQueue(label: "h3.test.verify")
+        )
         return NWParameters(quic: options)
     }
 
@@ -145,10 +157,12 @@ struct HTTPServerHTTP3Tests {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.stateUpdateHandler = { state in
                 switch state {
-                    case .ready where resumed.take(): continuation.resume()
+                    case .ready where resumed.take():
+                        continuation.resume()
                     case .failed(let error) where resumed.take():
                         continuation.resume(throwing: error)
-                    default: break
+                    default:
+                        break
                 }
             }
             connection.start(queue: queue)
@@ -159,7 +173,9 @@ struct HTTPServerHTTP3Tests {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.send(
-                content: Data(bytes), contentContext: .finalMessage, isComplete: true,
+                content: Data(bytes),
+                contentContext: .finalMessage,
+                isComplete: true,
                 completion: .contentProcessed { error in
                     if let error {
                         continuation.resume(throwing: error)
@@ -167,7 +183,8 @@ struct HTTPServerHTTP3Tests {
                     else {
                         continuation.resume()
                     }
-                })
+                }
+            )
         }
     }
 
@@ -176,7 +193,9 @@ struct HTTPServerHTTP3Tests {
         while true {
             let chunk = try await receiveChunk(connection)
             all.append(contentsOf: chunk.bytes)
-            if chunk.done { return all }
+            if chunk.done {
+                return all
+            }
         }
     }
 
@@ -194,18 +213,5 @@ struct HTTPServerHTTP3Tests {
                 }
             }
         }
-    }
-}
-
-/// A thread-safe "resume exactly once" latch for bridging callback state to a continuation.
-private final class OnceLatch: @unchecked Sendable {
-    private let lock = NSLock()
-    private var taken = false
-    func take() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if taken { return false }
-        taken = true
-        return true
     }
 }

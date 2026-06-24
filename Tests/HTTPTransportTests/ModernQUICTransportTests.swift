@@ -23,11 +23,18 @@ struct ModernQUICTransportTests {
         "a QUIC stream round-trips through the modern backbone over loopback",
         .timeLimit(.minutes(1)))
     func loopbackEcho() async throws {
-        guard #available(macOS 26, iOS 26, *) else { return }
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         let transport = QUICTransportFactory.make(
             TransportConfiguration(
-                host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls))
+                host: "127.0.0.1",
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
         #expect(transport is ModernQUICTransport)
         let connections = try await transport.start()
         let port = transport.boundPort
@@ -39,8 +46,10 @@ struct ModernQUICTransportTests {
         }
 
         let client = NWConnection(
-            host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port) ?? .any,
-            using: Self.clientParameters())
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port) ?? .any,
+            using: Self.clientParameters()
+        )
         defer { client.cancel() }
         try await ready(client)
         try await send([UInt8]("ping".utf8), on: client)
@@ -75,8 +84,10 @@ struct ModernQUICTransportTests {
     private static func clientParameters() -> NWParameters {
         let options = NWProtocolQUIC.Options(alpn: ["h3"])
         sec_protocol_options_set_verify_block(
-            options.securityProtocolOptions, { _, _, complete in complete(true) },
-            DispatchQueue(label: "modern.quic.test.verify"))
+            options.securityProtocolOptions,
+            { _, _, complete in complete(true) },
+            DispatchQueue(label: "modern.quic.test.verify")
+        )
         return NWParameters(quic: options)
     }
 
@@ -87,10 +98,12 @@ struct ModernQUICTransportTests {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.stateUpdateHandler = { state in
                 switch state {
-                    case .ready where resumed.take(): continuation.resume()
+                    case .ready where resumed.take():
+                        continuation.resume()
                     case .failed(let error) where resumed.take():
                         continuation.resume(throwing: error)
-                    default: break
+                    default:
+                        break
                 }
             }
             connection.start(queue: queue)
@@ -101,7 +114,9 @@ struct ModernQUICTransportTests {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.send(
-                content: Data(bytes), contentContext: .finalMessage, isComplete: true,
+                content: Data(bytes),
+                contentContext: .finalMessage,
+                isComplete: true,
                 completion: .contentProcessed { error in
                     if let error {
                         continuation.resume(throwing: error)
@@ -109,7 +124,8 @@ struct ModernQUICTransportTests {
                     else {
                         continuation.resume()
                     }
-                })
+                }
+            )
         }
     }
 
@@ -125,18 +141,5 @@ struct ModernQUICTransportTests {
                 }
             }
         }
-    }
-}
-
-/// A thread-safe "resume exactly once" latch for bridging callback state to a continuation.
-private final class ModernOnceLatch: @unchecked Sendable {
-    private let lock = NSLock()
-    private var taken = false
-    func take() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if taken { return false }
-        taken = true
-        return true
     }
 }

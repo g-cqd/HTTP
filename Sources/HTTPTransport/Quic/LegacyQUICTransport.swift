@@ -37,6 +37,10 @@ public final class LegacyQUICTransport: QUICServerTransport {
         self.limits = limits
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// The actual bound UDP port (valid after ``start()``; resolves an ephemeral `0` request).
     public var boundPort: UInt16 {
         state.withLock { $0.listener?.port?.rawValue ?? 0 }
@@ -81,12 +85,18 @@ public final class LegacyQUICTransport: QUICServerTransport {
         }
         let options = NWProtocolQUIC.Options(alpn: tls.applicationProtocols)
         let identity = try NetworkFrameworkTLS.identity(
-            pkcs12: tls.pkcs12, passphrase: tls.passphrase)
+            pkcs12: tls.pkcs12,
+            passphrase: tls.passphrase
+        )
         sec_protocol_options_set_local_identity(options.securityProtocolOptions, identity)
         sec_protocol_options_set_min_tls_protocol_version(
-            options.securityProtocolOptions, .TLSv13)
+            options.securityProtocolOptions,
+            .TLSv13
+        )
         sec_protocol_options_set_max_tls_protocol_version(
-            options.securityProtocolOptions, .TLSv13)
+            options.securityProtocolOptions,
+            .TLSv13
+        )
         // Bound the peer's streams: request streams to the concurrency cap, and a small headroom for
         // the client's three critical unidirectional streams (control + QPACK encoder/decoder) + grease.
         options.initialMaxStreamsBidirectional = limits.maxConcurrentStreams
@@ -107,9 +117,11 @@ public final class LegacyQUICTransport: QUICServerTransport {
     ) {
         // This transport offers only "h3", so a completed QUIC handshake has negotiated it.
         let connection = LegacyQUICConnection(
-            group: group, queue: queue,
+            group: group,
+            queue: queue,
             peer: TransportAddress(host: configuration.host, port: boundPort),
-            negotiatedApplicationProtocol: configuration.tls?.applicationProtocols.first)
+            negotiatedApplicationProtocol: configuration.tls?.applicationProtocols.first
+        )
         connection.start()
         continuation.yield(connection)
     }

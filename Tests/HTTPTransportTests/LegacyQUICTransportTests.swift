@@ -25,7 +25,12 @@ struct LegacyQUICTransportTests {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         let transport = LegacyQUICTransport(
             configuration: TransportConfiguration(
-                host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls))
+                host: "127.0.0.1",
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
         let connections = try await transport.start()
         let port = transport.boundPort
 
@@ -36,8 +41,10 @@ struct LegacyQUICTransportTests {
         }
 
         let client = NWConnection(
-            host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port) ?? .any,
-            using: Self.clientParameters())
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port) ?? .any,
+            using: Self.clientParameters()
+        )
         try await ready(client)
         defer { client.cancel() }
         try await send([UInt8]("ping".utf8), on: client)
@@ -75,7 +82,8 @@ struct LegacyQUICTransportTests {
         sec_protocol_options_set_verify_block(
             options.securityProtocolOptions,
             { _, _, complete in complete(true) },
-            DispatchQueue(label: "quic.test.verify"))
+            DispatchQueue(label: "quic.test.verify")
+        )
         return NWParameters(quic: options)
     }
 
@@ -86,10 +94,12 @@ struct LegacyQUICTransportTests {
             let resumed = OnceLatch()
             connection.stateUpdateHandler = { state in
                 switch state {
-                    case .ready where resumed.take(): continuation.resume()
+                    case .ready where resumed.take():
+                        continuation.resume()
                     case .failed(let error) where resumed.take():
                         continuation.resume(throwing: error)
-                    default: break
+                    default:
+                        break
                 }
             }
             connection.start(queue: queue)
@@ -100,7 +110,8 @@ struct LegacyQUICTransportTests {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, any Error>) in
             connection.send(
-                content: Data(bytes), isComplete: true,
+                content: Data(bytes),
+                isComplete: true,
                 completion: .contentProcessed { error in
                     if let error {
                         continuation.resume(throwing: error)
@@ -108,7 +119,8 @@ struct LegacyQUICTransportTests {
                     else {
                         continuation.resume()
                     }
-                })
+                }
+            )
         }
     }
 
@@ -124,18 +136,5 @@ struct LegacyQUICTransportTests {
                 }
             }
         }
-    }
-}
-
-/// A thread-safe "resume exactly once" latch for bridging callback state to a continuation.
-private final class OnceLatch: @unchecked Sendable {
-    private let lock = NSLock()
-    private var taken = false
-    func take() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if taken { return false }
-        taken = true
-        return true
     }
 }

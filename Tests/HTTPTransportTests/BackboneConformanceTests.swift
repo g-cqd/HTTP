@@ -92,7 +92,10 @@ struct BackboneConformanceTests {
         // After shutdown the stream must finish (its async iterator returns nil), not hang forever.
         let drained = AsyncEventProbe<Void>()
         let drainer = Task {
-            for await _ in stream {}  // drains to completion once the transport finishes the stream
+            // Drains to completion once the transport finishes the stream.
+            for await _ in stream {
+                // No per-element work: draining is the goal.
+            }
             drained.record(())
         }
         _ = try await drained.wait(forAtLeast: 1, timeout: .seconds(3))

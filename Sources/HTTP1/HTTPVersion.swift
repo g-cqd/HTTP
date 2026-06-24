@@ -28,19 +28,29 @@ public struct HTTPVersion: Sendable, Hashable {
     /// Reads the borrowed `RawSpan` in place (zero-copy): because a parsed version keeps only its two
     /// digits, no intermediate `String` is materialized on the hot path.
     public init?(parsing bytes: RawSpan) {
-        guard bytes.byteCount == 8 else { return nil }
+        guard bytes.byteCount == 8 else {
+            return nil
+        }
         // "HTTP/"
         guard bytes.unsafeLoad(fromByteOffset: 0, as: UInt8.self) == 0x48,  // H
             bytes.unsafeLoad(fromByteOffset: 1, as: UInt8.self) == 0x54,  // T
             bytes.unsafeLoad(fromByteOffset: 2, as: UInt8.self) == 0x54,  // T
             bytes.unsafeLoad(fromByteOffset: 3, as: UInt8.self) == 0x50,  // P
             bytes.unsafeLoad(fromByteOffset: 4, as: UInt8.self) == 0x2F  // /
-        else { return nil }
+        else {
+            return nil
+        }
         let majorByte = bytes.unsafeLoad(fromByteOffset: 5, as: UInt8.self)
-        guard majorByte >= 0x30, majorByte <= 0x39 else { return nil }
-        guard bytes.unsafeLoad(fromByteOffset: 6, as: UInt8.self) == 0x2E else { return nil }  // .
+        guard majorByte >= 0x30, majorByte <= 0x39 else {
+            return nil
+        }
+        guard bytes.unsafeLoad(fromByteOffset: 6, as: UInt8.self) == 0x2E else {
+            return nil
+        }  // .
         let minorByte = bytes.unsafeLoad(fromByteOffset: 7, as: UInt8.self)
-        guard minorByte >= 0x30, minorByte <= 0x39 else { return nil }
+        guard minorByte >= 0x30, minorByte <= 0x39 else {
+            return nil
+        }
         self.major = Int(majorByte - 0x30)
         self.minor = Int(minorByte - 0x30)
     }
@@ -50,11 +60,4 @@ public struct HTTPVersion: Sendable, Hashable {
 
     /// `HTTP/1.1` (RFC 9112).
     public static let http11 = Self(major: 1, minor: 1)
-}
-
-extension HTTPVersion: CustomStringConvertible {
-    /// The wire form, e.g. `"HTTP/1.1"`.
-    public var description: String {
-        "HTTP/\(major).\(minor)"
-    }
 }

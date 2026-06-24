@@ -21,7 +21,7 @@ struct ChunkedDecoderTests {
     }
 
     private func decodeString(_ string: String, limits: HTTPLimits = .default) throws -> String {
-        String(decoding: try decode(string, limits: limits), as: UTF8.self)
+        String(decoding: try decode(string, limits: limits), as: Unicode.UTF8.self)
     }
 
     @Test("decodes a single chunk")

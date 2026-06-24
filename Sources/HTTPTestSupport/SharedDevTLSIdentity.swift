@@ -19,7 +19,9 @@ public enum SharedDevTLSIdentity {
     /// The shared dev identity, minting it on first use and returning the cached value thereafter.
     public static func value() throws -> TransportTLS {
         try cache.withLock { cached in
-            if let cached { return cached }
+            if let cached {
+                return cached
+            }
             let identity = try DevTLSIdentity.selfSigned()
             cached = identity
             return identity

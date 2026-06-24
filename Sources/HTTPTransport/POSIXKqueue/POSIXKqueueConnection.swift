@@ -38,13 +38,19 @@ public final class POSIXKqueueConnection: TransportConnection {
 
     /// Wraps an accepted, non-blocking socket descriptor watched by `eventLoop`.
     init(
-        id: TransportConnectionID, descriptor: Int32, peer: TransportAddress,
+        id: TransportConnectionID,
+        descriptor: Int32,
+        peer: TransportAddress,
         eventLoop: KqueueEventLoop
     ) {
         self.id = id
         self.peer = peer
         self.descriptor = descriptor
         self.eventLoop = eventLoop
+    }
+
+    deinit {
+        // No teardown beyond ARC.
     }
 
     /// Reads up to `maxLength` bytes once the socket is readable, or `nil` at end of stream.
@@ -56,8 +62,11 @@ public final class POSIXKqueueConnection: TransportConnection {
                 let once = OnceResumer(continuation)
                 eventLoop.waitReadable(descriptor) {
                     Self.readAvailable(
-                        descriptor: descriptor, maxLength: maxLength, eventLoop: eventLoop,
-                        into: once)
+                        descriptor: descriptor,
+                        maxLength: maxLength,
+                        eventLoop: eventLoop,
+                        into: once
+                    )
                 }
             }
         } onCancel: {
@@ -74,8 +83,12 @@ public final class POSIXKqueueConnection: TransportConnection {
                 (continuation: CheckedContinuation<Void, any Error>) in
                 let once = OnceResumer(continuation)
                 Self.writeRemaining(
-                    bytes: bytes, offset: 0, descriptor: descriptor, eventLoop: eventLoop,
-                    once: once)
+                    bytes: bytes,
+                    offset: 0,
+                    descriptor: descriptor,
+                    eventLoop: eventLoop,
+                    once: once
+                )
             }
         } onCancel: {
             closeDescriptor()
@@ -88,7 +101,9 @@ public final class POSIXKqueueConnection: TransportConnection {
     }
 
     private func closeDescriptor() {
-        guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else { return }
+        guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else {
+            return
+        }
         eventLoop.closeDescriptor(descriptor)
     }
 
@@ -96,14 +111,18 @@ public final class POSIXKqueueConnection: TransportConnection {
     private struct WouldBlockOnRead: Error {}
 
     private static func readAvailable(
-        descriptor: Int32, maxLength: Int, eventLoop: KqueueEventLoop,
+        descriptor: Int32,
+        maxLength: Int,
+        eventLoop: KqueueEventLoop,
         into once: OnceResumer<[UInt8]?>
     ) {
         do {
             let bytes = try POSIXSocket.readBuffer(maxLength: maxLength) { raw -> Int in
                 while true {
                     let count = read(descriptor, raw.baseAddress, raw.count)
-                    if count >= 0 { return count }
+                    if count >= 0 {
+                        return count
+                    }
                     // EINTR: interrupted by a signal before any data — retry the read. EAGAIN: a
                     // spurious EVFILT_READ wakeup (data consumed elsewhere) — re-arm, don't fail.
                     if errno == EINTR { continue }
@@ -116,7 +135,11 @@ public final class POSIXKqueueConnection: TransportConnection {
         catch is WouldBlockOnRead {
             eventLoop.waitReadable(descriptor) {
                 readAvailable(
-                    descriptor: descriptor, maxLength: maxLength, eventLoop: eventLoop, into: once)
+                    descriptor: descriptor,
+                    maxLength: maxLength,
+                    eventLoop: eventLoop,
+                    into: once
+                )
             }
         }
         catch {
@@ -125,14 +148,20 @@ public final class POSIXKqueueConnection: TransportConnection {
     }
 
     private static func writeRemaining(
-        bytes: [UInt8], offset: Int, descriptor: Int32, eventLoop: KqueueEventLoop,
+        bytes: [UInt8],
+        offset: Int,
+        descriptor: Int32,
+        eventLoop: KqueueEventLoop,
         once: OnceResumer<Void>
     ) {
         var offset = offset
         let outcome: WriteOutcome = bytes.withUnsafeBytes { raw in
             while offset < raw.count {
                 let written = write(
-                    descriptor, raw.baseAddress?.advanced(by: offset), raw.count - offset)
+                    descriptor,
+                    raw.baseAddress?.advanced(by: offset),
+                    raw.count - offset
+                )
                 if written > 0 {
                     offset += written
                 }
@@ -156,9 +185,12 @@ public final class POSIXKqueueConnection: TransportConnection {
             case .wouldBlock(let remaining):
                 eventLoop.waitWritable(descriptor) {
                     writeRemaining(
-                        bytes: bytes, offset: remaining, descriptor: descriptor,
+                        bytes: bytes,
+                        offset: remaining,
+                        descriptor: descriptor,
                         eventLoop: eventLoop,
-                        once: once)
+                        once: once
+                    )
                 }
         }
     }

@@ -25,7 +25,9 @@ extension HTTP3Connection {
         for frame in try drainFrames(streamID) {
             try handleRequestFrame(streamID, frame)
         }
-        guard streams[streamID]?.finReceived == true else { return }
+        guard streams[streamID]?.finReceived == true else {
+            return
+        }
         try finishRequest(streamID, into: &events)
     }
 
@@ -36,7 +38,8 @@ extension HTTP3Connection {
     ) throws(HTTP3Error) {
         if frame.type.isReservedHTTP2Frame {
             throw .connection(
-                .h3FrameUnexpected, "a reserved HTTP/2 frame type on a request stream")
+                .h3FrameUnexpected, "a reserved HTTP/2 frame type on a request stream"
+            )
         }
         switch frame.type {
             case .headers:
@@ -55,7 +58,9 @@ extension HTTP3Connection {
         _ streamID: QUICStreamID,
         _ payload: [UInt8]
     ) throws(HTTP3Error) {
-        guard var state = streams[streamID] else { return }
+        guard var state = streams[streamID] else {
+            return
+        }
         guard !state.sawTrailers else {
             throw .connection(.h3FrameUnexpected, "a HEADERS frame after trailers")
         }
@@ -76,7 +81,9 @@ extension HTTP3Connection {
         _ streamID: QUICStreamID,
         _ payload: [UInt8]
     ) throws(HTTP3Error) {
-        guard var state = streams[streamID] else { return }
+        guard var state = streams[streamID] else {
+            return
+        }
         guard state.sawHeaders else {
             throw .connection(.h3FrameUnexpected, "a DATA frame before HEADERS")
         }
@@ -95,7 +102,9 @@ extension HTTP3Connection {
         _ streamID: QUICStreamID,
         into events: inout [Event]
     ) throws(HTTP3Error) {
-        guard let state = streams[streamID], !state.requestEmitted else { return }
+        guard let state = streams[streamID], !state.requestEmitted else {
+            return
+        }
         // A non-empty buffer at FIN is a frame whose Length ran past the stream end (RFC 9114 §7.1).
         guard state.buffer.isEmpty else {
             throw .connection(.h3FrameError, "a frame extends past the end of the stream")
@@ -122,7 +131,8 @@ extension HTTP3Connection {
             case .length(let declared):
                 guard declared == bodyCount else {
                     throw .stream(
-                        streamID, .h3MessageError, "content-length does not match the body")
+                        streamID, .h3MessageError, "content-length does not match the body"
+                    )
                 }
         }
     }
@@ -134,8 +144,10 @@ extension HTTP3Connection {
             Result { () throws(QPACKError) in try decoder.decode(raw.bytes) }
         }
         switch result {
-            case .success(let fields): return fields
-            case .failure(let error): throw .connection(qpack: error.code, error.reason)
+            case .success(let fields):
+                return fields
+            case .failure(let error):
+                throw .connection(qpack: error.code, error.reason)
         }
     }
 }

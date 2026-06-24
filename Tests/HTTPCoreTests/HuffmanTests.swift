@@ -78,8 +78,8 @@ struct HuffmanTests {
 
     @Test("an empty input encodes and decodes to nothing")
     func emptyRoundTrip() throws {
-        #expect(Huffman.encode([]) == [])
-        #expect(try decode([]) == [])
+        #expect(Huffman.encode([]).isEmpty)
+        #expect(try decode([]).isEmpty)
     }
 
     // MARK: §5.2 decoding errors

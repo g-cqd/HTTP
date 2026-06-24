@@ -40,6 +40,10 @@ public final class NetworkFrameworkTransport: ServerTransport {
         self.configuration = configuration
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// The actual bound port (meaningful after ``start()`` returns; resolves port `0` to the
     /// ephemeral port the OS chose).
     public var boundPort: UInt16 {
@@ -95,12 +99,19 @@ public final class NetworkFrameworkTransport: ServerTransport {
     /// TLS `NWParameters` when ``TransportConfiguration/tls`` is set (advertising ALPN so a client can
     /// pick `"h2"`, RFC 9113 §3.3), otherwise a cleartext TCP listener (h1 / h2c).
     private func makeParameters() throws -> NWParameters {
-        guard let tls = configuration.tls else { return .tcp }
+        guard let tls = configuration.tls else {
+            return .tcp
+        }
         let identity = try NetworkFrameworkTLS.identity(
-            pkcs12: tls.pkcs12, passphrase: tls.passphrase)
+            pkcs12: tls.pkcs12,
+            passphrase: tls.passphrase
+        )
         let options = NetworkFrameworkTLS.options(
-            identity: identity, applicationProtocols: tls.applicationProtocols,
-            minVersion: tls.minVersion, maxVersion: tls.maxVersion)
+            identity: identity,
+            applicationProtocols: tls.applicationProtocols,
+            minVersion: tls.minVersion,
+            maxVersion: tls.maxVersion
+        )
         return NWParameters(tls: options)
     }
 
@@ -119,7 +130,11 @@ public final class NetworkFrameworkTransport: ServerTransport {
                     let alpn = NetworkFrameworkTLS.negotiatedApplicationProtocol(of: nwConnection)
                     continuation.yield(
                         NetworkFrameworkConnection(
-                            id: id, connection: nwConnection, negotiatedApplicationProtocol: alpn))
+                            id: id,
+                            connection: nwConnection,
+                            negotiatedApplicationProtocol: alpn
+                        )
+                    )
                 case .failed, .cancelled:
                     nwConnection.stateUpdateHandler = nil
                     nwConnection.cancel()

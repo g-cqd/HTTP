@@ -55,6 +55,10 @@ public final class POSIXDispatchConnection: TransportConnection {
         self.queue = queue
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     // MARK: - Receive
 
     /// Reads up to `maxLength` currently-buffered bytes, or `nil` at end of stream.
@@ -102,7 +106,9 @@ public final class POSIXDispatchConnection: TransportConnection {
         try POSIXSocket.readBuffer(maxLength: maxLength) { raw in
             while true {
                 let count = read(fd, raw.baseAddress, raw.count)
-                if count >= 0 { return count }
+                if count >= 0 {
+                    return count
+                }
                 if errno == EINTR { continue }
                 if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlock() }
                 throw TransportError.ioFailed("read errno \(errno)")
@@ -114,7 +120,9 @@ public final class POSIXDispatchConnection: TransportConnection {
 
     /// Writes all of `bytes`, awaiting socket writability across short writes (backpressure).
     public func send(_ bytes: [UInt8]) async throws {
-        guard !bytes.isEmpty else { return }
+        guard !bytes.isEmpty else {
+            return
+        }
         let fd = descriptor
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation {
@@ -137,7 +145,10 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// and resumes from the new offset once the socket drains — iterative (event-driven), not recursive.
     private func writeFrom(_ offset: Int, fd: Int32, bytes: [UInt8], once: OnceResumer<Void>) {
         let outcome: WriteOutcome = bytes.withUnsafeBytes { raw -> WriteOutcome in
-            guard let base = raw.baseAddress else { return .done }  // empty (already guarded above)
+            // Empty buffer (already guarded above).
+            guard let base = raw.baseAddress else {
+                return .done
+            }
             var cursor = offset
             while cursor < raw.count {
                 let written = write(fd, base + cursor, raw.count - cursor)
@@ -147,7 +158,9 @@ public final class POSIXDispatchConnection: TransportConnection {
                 }
                 if written < 0 {
                     if errno == EINTR { continue }
-                    if errno == EAGAIN || errno == EWOULDBLOCK { return .wouldBlock(cursor) }
+                    if errno == EAGAIN || errno == EWOULDBLOCK {
+                        return .wouldBlock(cursor)
+                    }
                     return .failed(Int(errno))
                 }
                 return .wouldBlock(cursor)  // write returned 0
@@ -203,7 +216,9 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// a since-reused fd (cross-connection corruption). With no source armed there is no watcher, so an
     /// inline close is correct. Runs on `queue`.
     private func closeDescriptor() {
-        guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else { return }
+        guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else {
+            return
+        }
         let fd = descriptor
         queue.async { [self] in
             let parked = waiter.withLock { current -> Waiter? in

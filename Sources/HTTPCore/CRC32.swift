@@ -54,14 +54,22 @@ public enum CRC32 {
         _ buffer: UnsafeBufferPointer<UInt8>,
         _ backend: Backend
     ) -> UInt32 {
-        guard let base = buffer.baseAddress, !buffer.isEmpty else { return 0 }  // CRC-32 of "" is 0
+        guard let base = buffer.baseAddress, !buffer.isEmpty else {
+            return 0  // CRC-32 of "" is 0
+        }
         switch backend {
-            case .fastest: return ccrc32(base, buffer.count)
-            case .sliceBy1: return ccrc32_slice1(base, buffer.count)
-            case .sliceBy8: return ccrc32_slice8(base, buffer.count)
-            case .zlib: return ccrc32_zlib(base, buffer.count)
-            case .arm: return ccrc32_arm(base, buffer.count)
-            case .x86: return ccrc32_x86(base, buffer.count)
+            case .fastest:
+                return ccrc32(base, buffer.count)
+            case .sliceBy1:
+                return ccrc32_slice1(base, buffer.count)
+            case .sliceBy8:
+                return ccrc32_slice8(base, buffer.count)
+            case .zlib:
+                return ccrc32_zlib(base, buffer.count)
+            case .arm:
+                return ccrc32_arm(base, buffer.count)
+            case .x86:
+                return ccrc32_x86(base, buffer.count)
         }
     }
 

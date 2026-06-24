@@ -31,6 +31,10 @@ public final class ModernQUICTransport: QUICServerTransport {
         self.limits = limits
     }
 
+    deinit {
+        // No teardown beyond ARC.
+    }
+
     /// The actual bound UDP port (valid once the listener binds during ``start()``).
     public var boundPort: UInt16 {
         listenerBox.withLock { $0?.port?.rawValue ?? 0 }
@@ -42,7 +46,9 @@ public final class ModernQUICTransport: QUICServerTransport {
             throw TransportError.tlsConfigurationFailed("QUIC requires a TLS identity")
         }
         let identity = try NetworkFrameworkTLS.identity(
-            pkcs12: tls.pkcs12, passphrase: tls.passphrase)
+            pkcs12: tls.pkcs12,
+            passphrase: tls.passphrase
+        )
         let alpn = tls.applicationProtocols
         let maxBidirectional = limits.maxConcurrentStreams
         let listener = try Network.NetworkListener {
@@ -62,14 +68,15 @@ public final class ModernQUICTransport: QUICServerTransport {
                 let connection = ModernQUICConnection(
                     connection: networkConnection,
                     peer: TransportAddress(host: host, port: port),
-                    negotiatedApplicationProtocol: advertised)
+                    negotiatedApplicationProtocol: advertised
+                )
                 continuation.yield(connection)
                 await connection.serve()  // blocks until the connection closes
             }
             continuation.finish()
         }
         runTask.withLock { $0 = task }
-        try await waitUntilBound()
+        await waitUntilBound()
         return stream
     }
 

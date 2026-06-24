@@ -31,10 +31,10 @@ struct TestClockTests {
         // waitForSleepers replaces `while clock.sleeperCount == 0 { await Task.yield() }`.
         try await clock.waitForSleepers(atLeast: 1)
         #expect(clock.sleeperCount == 1)
-        #expect(woke.count == 0)
+        #expect(woke.events.isEmpty)
 
         clock.advance(by: .seconds(9))  // not yet past the deadline
-        #expect(woke.count == 0)
+        #expect(woke.events.isEmpty)
         clock.advance(by: .seconds(1))  // now at the deadline
         try await sleeper.value
         #expect(woke.events == [1])

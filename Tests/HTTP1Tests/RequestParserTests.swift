@@ -34,16 +34,18 @@ struct RequestParserTests {
     @Test("parses a Content-Length delimited body")
     func parsesContentLengthBody() throws {
         let parsed = try parse(
-            "POST /submit HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello")
-        #expect(String(decoding: parsed.body, as: UTF8.self) == "hello")
+            "POST /submit HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
+        )
+        #expect(String(decoding: parsed.body, as: Unicode.UTF8.self) == "hello")
     }
 
     @Test("parses a chunked body (RFC 9112 §6.1 / §7.1)")
     func parsesChunkedBody() throws {
         let parsed = try parse(
             "POST /submit HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n"
-                + "5\r\nhello\r\n0\r\n\r\n")
-        #expect(String(decoding: parsed.body, as: UTF8.self) == "hello")
+                + "5\r\nhello\r\n0\r\n\r\n"
+        )
+        #expect(String(decoding: parsed.body, as: Unicode.UTF8.self) == "hello")
     }
 
     @Test("rejects Content-Length AND Transfer-Encoding together (smuggling, RFC 9112 §6.1)")
@@ -51,7 +53,8 @@ struct RequestParserTests {
         #expect(throws: HTTP1ParseError.contentLengthWithTransferEncoding) {
             try parse(
                 "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n"
-                    + "5\r\nhello\r\n0\r\n\r\n")
+                    + "5\r\nhello\r\n0\r\n\r\n"
+            )
         }
     }
 
@@ -89,7 +92,8 @@ struct RequestParserTests {
         // chunked is an HTTP/1.1 feature; honoring it on a 1.0 message is a desync vector.
         #expect(throws: HTTP1ParseError.unsupportedTransferEncoding) {
             try parse(
-                "POST / HTTP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n")
+                "POST / HTTP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"
+            )
         }
     }
 
@@ -98,7 +102,7 @@ struct RequestParserTests {
         let parsed = try parse(
             "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: Chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"
         )
-        #expect(String(decoding: parsed.body, as: UTF8.self) == "hello")
+        #expect(String(decoding: parsed.body, as: Unicode.UTF8.self) == "hello")
     }
 
     @Test("rejects a request-line over the configured limit before materializing it (→ 414)")

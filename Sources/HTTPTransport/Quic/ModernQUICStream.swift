@@ -38,7 +38,9 @@ final class ModernQUICStream: QUICStream, @unchecked Sendable {
     deinit { close() }
 
     func receive() async throws -> (bytes: [UInt8], fin: Bool)? {
-        if finished.withLock(\.self) { return nil }
+        if finished.withLock(\.self) {
+            return nil
+        }
         let message = try await stream.receive(atLeast: 1, atMost: 65_535)
         let fin = message.metadata.endOfStream
         if fin { finished.withLock { $0 = true } }

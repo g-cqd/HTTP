@@ -88,7 +88,9 @@ public enum ResponseSerializer {
 
     /// Appends the registered reason-phrase for `status`, or nothing if the code is unregistered.
     private static func appendReasonPhrase(for status: HTTPStatus, to output: inout [UInt8]) {
-        guard let phrase = reasonPhrases[status.code] else { return }
+        guard let phrase = reasonPhrases[status.code] else {
+            return
+        }
         phrase.withUTF8Buffer { output.append(contentsOf: $0) }
     }
 }

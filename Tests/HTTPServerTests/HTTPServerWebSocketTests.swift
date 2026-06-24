@@ -20,19 +20,22 @@ struct HTTPServerWebSocketTests {
     @Test("upgrades an HTTP/1.1 request and echoes a text message end-to-end")
     func upgradesAndEchoes() async {
         let echo = ClosureWebSocketHandler { event in
-            guard case .message(let opcode, let payload) = event, opcode == .text else { return [] }
-            return [.sendText(String(decoding: payload, as: UTF8.self))]
+            guard case .message(let opcode, let payload) = event, opcode == .text else {
+                return []
+            }
+            return [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
         }
 
         var wire = upgradeRequest()
         wire += maskedTextFrame("hi")  // a frame the client sends right after the request
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: wire)
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo)
+            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo
+        )
         await server.serve(connection)
 
         let sent = await connection.sentBytes()
-        let head = String(decoding: sent, as: UTF8.self)
+        let head = String(decoding: sent, as: Unicode.UTF8.self)
         #expect(head.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
         #expect(head.contains("sec-websocket-accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n"))
         #expect(!head.contains("content-length"))  // a 101 carries no content (RFC 9110 §6.4.1)
@@ -50,24 +53,28 @@ struct HTTPServerWebSocketTests {
         wire += Array("Sec-WebSocket-Version: 8\r\n\r\n".utf8)  // unsupported version
         let connection = FakeConnection(id: TransportConnectionID(2), inbound: wire)
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo)
+            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo
+        )
         await server.serve(connection)
 
-        let head = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        let head = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
         #expect(head.hasPrefix("HTTP/1.1 426 "))
     }
 
     @Test("rejects a cross-site Origin with 403 and does not upgrade (CSWSH, RFC 6455 §10.2)")
     func rejectsDisallowedOrigin() async {
         let handler = ClosureWebSocketHandler(
-            isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] })
+            isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] }
+        )
         let connection = FakeConnection(
-            id: TransportConnectionID(3), inbound: upgradeRequest(origin: "https://evil.example"))
+            id: TransportConnectionID(3), inbound: upgradeRequest(origin: "https://evil.example")
+        )
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler)
+            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler
+        )
         await server.serve(connection)
 
-        let head = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        let head = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
         #expect(head.hasPrefix("HTTP/1.1 403 "))
         #expect(!head.contains("101 Switching Protocols"))
     }
@@ -75,14 +82,17 @@ struct HTTPServerWebSocketTests {
     @Test("accepts an allowlisted Origin and upgrades (RFC 6455 §4.2)")
     func acceptsAllowlistedOrigin() async {
         let handler = ClosureWebSocketHandler(
-            isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] })
+            isOriginAllowed: { $0 == "https://good.example" }, handle: { _ in [] }
+        )
         let connection = FakeConnection(
-            id: TransportConnectionID(4), inbound: upgradeRequest(origin: "https://good.example"))
+            id: TransportConnectionID(4), inbound: upgradeRequest(origin: "https://good.example")
+        )
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler)
+            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler
+        )
         await server.serve(connection)
 
-        let head = String(decoding: await connection.sentBytes(), as: UTF8.self)
+        let head = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
         #expect(head.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
     }
 
@@ -111,18 +121,13 @@ struct HTTPServerWebSocketTests {
     }
 
     private func containsSubsequence(_ haystack: [UInt8], _ needle: [UInt8]) -> Bool {
-        guard needle.count <= haystack.count else { return false }
+        guard needle.count <= haystack.count else {
+            return false
+        }
         for start in 0 ... (haystack.count - needle.count)
         where Array(haystack[start ..< start + needle.count]) == needle {
             return true
         }
         return false
-    }
-}
-
-/// A responder that always 404s — the WebSocket path never reaches it, so it is just a placeholder.
-private struct NotFound: HTTPResponder {
-    func respond(to _: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
-        ServerResponse(HTTPResponse(status: .notFound))
     }
 }

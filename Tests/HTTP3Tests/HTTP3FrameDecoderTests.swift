@@ -30,7 +30,7 @@ struct HTTP3FrameDecoderTests {
                 Result { () throws(HTTP3Error) in
                     var reader = ByteReader(raw)
                     let decoder = HTTP3FrameDecoder(maxFrameSize: maxFrameSize)
-                    var frames = [HTTP3FrameDecoder.Frame]()
+                    var frames: [HTTP3FrameDecoder.Frame] = []
                     while let next = try decoder.nextFrame(&reader) { frames.append(next) }
                     return (frames, reader.position)
                 }

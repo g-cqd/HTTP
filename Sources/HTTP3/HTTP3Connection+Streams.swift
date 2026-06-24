@@ -22,16 +22,24 @@ extension HTTP3Connection {
         _ streamID: QUICStreamID,
         into events: inout [Event]
     ) throws(HTTP3Error) {
-        guard var state = streams[streamID] else { return }
+        guard var state = streams[streamID] else {
+            return
+        }
         let decoded: (type: UInt64, consumed: Int)? = state.buffer.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
-            guard let type = QUICVarint.decode(&reader) else { return nil }
+            guard let type = QUICVarint.decode(&reader) else {
+                return nil
+            }
             return (type, reader.position)
         }
-        guard let decoded else { return }  // the Stream Type varint has not fully arrived yet
+        // the Stream Type varint has not fully arrived yet
+        guard let decoded else {
+            return
+        }
         state.buffer.removeFirst(decoded.consumed)
         try assignUniStreamRole(
-            streamID, role: HTTP3StreamRole(streamType: decoded.type), state: &state)
+            streamID, role: HTTP3StreamRole(streamType: decoded.type), state: &state
+        )
         streams[streamID] = state
         try dispatch(streamID, into: &events)  // process the remainder under the now-known kind
     }
@@ -175,7 +183,9 @@ extension HTTP3Connection {
     private mutating func parseQpackStream(
         _ streamID: QUICStreamID, isEncoder: Bool
     ) throws(HTTP3Error) {
-        guard var state = streams[streamID] else { return }
+        guard var state = streams[streamID] else {
+            return
+        }
         let maxCapacity = localSettings.qpackMaxTableCapacity
         let result: Result<Int, QPACKError> = state.buffer.withUnsafeBytes { raw in
             Result { () throws(QPACKError) in
@@ -204,12 +214,14 @@ extension HTTP3Connection {
     mutating func drainFrames(
         _ streamID: QUICStreamID
     ) throws(HTTP3Error) -> [HTTP3FrameDecoder.Frame] {
-        guard var state = streams[streamID] else { return [] }
+        guard var state = streams[streamID] else {
+            return []
+        }
         let result: Result<(frames: [HTTP3FrameDecoder.Frame], consumed: Int), HTTP3Error> =
             state.buffer.withUnsafeBytes { raw in
                 Result { () throws(HTTP3Error) in
                     var reader = ByteReader(raw)
-                    var frames = [HTTP3FrameDecoder.Frame]()
+                    var frames: [HTTP3FrameDecoder.Frame] = []
                     while let frame = try frameDecoder.nextFrame(&reader) { frames.append(frame) }
                     return (frames, reader.position)
                 }
@@ -228,7 +240,9 @@ extension HTTP3Connection {
     private func singleVarint(_ payload: [UInt8]) -> UInt64? {
         payload.withUnsafeBytes { raw in
             var reader = ByteReader(raw)
-            guard let value = QUICVarint.decode(&reader), reader.isAtEnd else { return nil }
+            guard let value = QUICVarint.decode(&reader), reader.isAtEnd else {
+                return nil
+            }
             return value
         }
     }

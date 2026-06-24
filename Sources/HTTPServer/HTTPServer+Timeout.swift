@@ -40,6 +40,10 @@ final class IdleDeadline<Instant: Comparable & Sendable>: Sendable {
     /// Whether the read ended on a deadline lapse (so the read loop reports a clean idle close, not a
     /// truncation error).
     var hasLapsed: Bool { state.withLock(\.lapsed) }
+
+    deinit {
+        // No teardown beyond ARC.
+    }
 }
 
 extension HTTPServer {

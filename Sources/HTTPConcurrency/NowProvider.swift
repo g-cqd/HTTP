@@ -44,7 +44,9 @@ extension Duration {
     public var monotonicNanoseconds: MonotonicNanoseconds {
         let (seconds, attoseconds) = components
         let (scaled, overflow) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
-        guard !overflow else { return .max }
+        guard !overflow else {
+            return .max
+        }
         let (total, addOverflow) = scaled.addingReportingOverflow(attoseconds / 1_000_000_000)
         return addOverflow ? .max : max(0, total)
     }

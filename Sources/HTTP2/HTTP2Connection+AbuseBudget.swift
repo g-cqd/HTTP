@@ -30,7 +30,9 @@ extension HTTP2Connection {
         activeStreamResets += 1
         guard activeStreamResets <= limits.maxStreamResetsPerInterval else {
             throw .connection(
-                .enhanceYourCalm, "excessive stream resets (Rapid Reset / MadeYouReset)")
+                .enhanceYourCalm,
+                "excessive stream resets (Rapid Reset / MadeYouReset)"
+            )
         }
     }
 
@@ -39,7 +41,9 @@ extension HTTP2Connection {
     /// bypass and the false positive on a legitimately long-lived connection.
     private mutating func decayBudgetsIfElapsed() {
         let timestamp = now()
-        guard timestamp - windowStart >= resetIntervalNanos else { return }
+        guard timestamp - windowStart >= resetIntervalNanos else {
+            return
+        }
         windowStart = timestamp
         activeStreamResets = 0
         controlFrameBudget = 0

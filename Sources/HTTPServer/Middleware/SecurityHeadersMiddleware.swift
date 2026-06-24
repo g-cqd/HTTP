@@ -52,7 +52,9 @@ public struct SecurityHeadersMiddleware: HTTPMiddleware {
     private func setIfAbsent(
         _ value: String?, _ name: HTTPFieldName, _ response: inout ServerResponse
     ) {
-        guard let value, !response.head.headerFields.contains(name) else { return }
+        guard let value, !response.head.headerFields.contains(name) else {
+            return
+        }
         _ = response.head.headerFields.append(value, for: name)
     }
 }

@@ -93,7 +93,9 @@ extension H2Wire {
         for frame in frames(in: bytes) where frame.header.type == .headers {
             guard
                 let fragment = try? HTTP2HeadersFrame.fieldBlockFragment(
-                    frame.payload, flags: frame.header.flags)
+                    frame.payload,
+                    flags: frame.header.flags
+                )
             else { continue }
             let fields =
                 (try? Array(fragment).withUnsafeBytes { try decoder.decode($0.bytes) }) ?? []
@@ -131,7 +133,8 @@ extension H2Wire {
         catch {
             Issue.record(
                 "expected the frame to be accepted, but a connection error \(error.code) was thrown",
-                sourceLocation: sourceLocation)
+                sourceLocation: sourceLocation
+            )
         }
     }
 
@@ -145,7 +148,9 @@ extension H2Wire {
         do {
             let events = try connection.receive(bytes)
             let request = events.first {
-                guard case .request = $0 else { return false }
+                guard case .request = $0 else {
+                    return false
+                }
                 return true
             }
             #expect(request != nil, "expected a request event", sourceLocation: sourceLocation)
@@ -154,7 +159,8 @@ extension H2Wire {
         catch {
             Issue.record(
                 "expected a request, but a connection error \(error.code) was thrown",
-                sourceLocation: sourceLocation)
+                sourceLocation: sourceLocation
+            )
             return nil
         }
     }
@@ -171,7 +177,8 @@ extension H2Wire {
             _ = try connection.receive(bytes)
             Issue.record(
                 "expected connection error \(code), but receive did not throw",
-                sourceLocation: sourceLocation)
+                sourceLocation: sourceLocation
+            )
         }
         catch {
             #expect(
@@ -202,7 +209,8 @@ extension H2Wire {
         catch {
             Issue.record(
                 "expected a stream error on \(streamID), but a connection error \(error.code) was thrown",
-                sourceLocation: sourceLocation)
+                sourceLocation: sourceLocation
+            )
             return
         }
         let reset = firstRst(in: connection.outboundBytes())

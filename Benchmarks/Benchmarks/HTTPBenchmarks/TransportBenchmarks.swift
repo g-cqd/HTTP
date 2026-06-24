@@ -31,7 +31,9 @@ func registerTransportBenchmarks() {
     ]
     for backbone in socketBackbones {
         Benchmark("transport/\(backbone.rawValue)/echo") { benchmark in
-            guard let (transport, boundPort) = makeSocketTransport(backbone) else { return }
+            guard let (transport, boundPort) = makeSocketTransport(backbone) else {
+                return
+            }
             let stream: AsyncStream<any TransportConnection>
             do {
                 stream = try await transport.start()
@@ -88,7 +90,9 @@ private func makeSocketTransport(
 
 private func echoServer(_ stream: AsyncStream<any TransportConnection>) async {
     var iterator = stream.makeAsyncIterator()
-    guard let connection = await iterator.next() else { return }
+    guard let connection = await iterator.next() else {
+        return
+    }
     while true {
         // `receive` returns `[UInt8]?`; `try?` flattens it, so nil means EOF or error → stop.
         guard let chunk = try? await connection.receive(maxLength: 65_536) else { break }
@@ -101,7 +105,9 @@ private func echoServer(_ stream: AsyncStream<any TransportConnection>) async {
 // MARK: - Client side (a universal Network.framework loopback client over plain TCP)
 
 private func startClient(port: UInt16) -> NWConnection? {
-    guard let endpointPort = NWEndpoint.Port(rawValue: port) else { return nil }
+    guard let endpointPort = NWEndpoint.Port(rawValue: port) else {
+        return nil
+    }
     let connection = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
     connection.start(queue: DispatchQueue(label: "bench.transport.client"))
     return connection
@@ -111,7 +117,8 @@ private func clientSend(_ connection: NWConnection, _ bytes: [UInt8]) async {
     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
         connection.send(
             content: Data(bytes),
-            completion: .contentProcessed { _ in continuation.resume() })
+            completion: .contentProcessed { _ in continuation.resume() }
+        )
     }
 }
 

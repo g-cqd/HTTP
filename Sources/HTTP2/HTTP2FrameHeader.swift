@@ -52,7 +52,9 @@ public struct HTTP2FrameHeader: Sendable, Equatable {
     /// The reserved high bit of the stream identifier is masked off, as a receiver MUST ignore it
     /// (RFC 9113 §4.1).
     public static func parse(_ reader: inout ByteReader) -> Self? {
-        guard reader.remaining >= encodedLength else { return nil }
+        guard reader.remaining >= encodedLength else {
+            return nil
+        }
         let start = reader.position
         reader.advance(by: encodedLength)
         let octets = reader.slice(in: start ..< (start + encodedLength))
@@ -63,14 +65,17 @@ public struct HTTP2FrameHeader: Sendable, Equatable {
         // Identifier (the reserved high bit is masked in HTTP2StreamID). Octet 4 (Flags) is the lone
         // byte load. The reserved `R` bit is ignored on receipt (RFC 9113 §4.1).
         let lengthAndType = UInt32(
-            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self))
+            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self)
+        )
         let streamRaw = UInt32(
-            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 5, as: UInt32.self))
+            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 5, as: UInt32.self)
+        )
         return Self(
             payloadLength: Int(lengthAndType >> 8),
             type: HTTP2FrameType(rawValue: UInt8(truncatingIfNeeded: lengthAndType)),
             flags: HTTP2FrameFlags(rawValue: octets.unsafeLoad(fromByteOffset: 4, as: UInt8.self)),
-            streamID: HTTP2StreamID(rawValue: streamRaw))
+            streamID: HTTP2StreamID(rawValue: streamRaw)
+        )
     }
 
     /// Appends the 9-octet header to `output` (RFC 9113 §4.1).

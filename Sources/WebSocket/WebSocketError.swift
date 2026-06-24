@@ -53,9 +53,12 @@ public enum WebSocketError: Error, Sendable, Equatable {
     /// The Close status code to report for this violation before closing (RFC 6455 §7.4.1).
     public var closeCode: WebSocketCloseCode {
         switch self {
-            case .payloadTooLong, .messageTooLarge: .messageTooBig  // 1009
-            case .invalidTextEncoding: .invalidPayloadData  // 1007
-            default: .protocolError  // 1002
+            case .payloadTooLong, .messageTooLarge:
+                .messageTooBig  // 1009
+            case .invalidTextEncoding:
+                .invalidPayloadData  // 1007
+            default:
+                .protocolError  // 1002
         }
     }
 }

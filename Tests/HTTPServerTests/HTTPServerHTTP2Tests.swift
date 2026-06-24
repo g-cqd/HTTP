@@ -36,7 +36,9 @@ struct HTTPServerHTTP2Tests {
             .encode(into: &settings)
         wire += settings
         HTTP2FrameHeader(
-            payloadLength: block.count, type: .headers, flags: [.endHeaders, .endStream],
+            payloadLength: block.count,
+            type: .headers,
+            flags: [.endHeaders, .endStream],
             streamID: HTTP2StreamID(1)
         )
         .encode(into: &wire)
@@ -48,7 +50,7 @@ struct HTTPServerHTTP2Tests {
 
         let response = try decodeHTTP2Response(await connection.sentBytes())
         #expect(response.status == "200")
-        #expect(String(decoding: response.body, as: UTF8.self) == "h2 from /hi")
+        #expect(String(decoding: response.body, as: Unicode.UTF8.self) == "h2 from /hi")
     }
 
     @Test("an ALPN-negotiated h2 connection is driven by the engine, not the preface sniffer")
@@ -58,8 +60,10 @@ struct HTTPServerHTTP2Tests {
         // HTTP/1.1, but ALPN "h2" commits the connection to HTTP/2 (RFC 9113 §3.3), so the engine
         // answers with a GOAWAY (PROTOCOL_ERROR) — never an HTTP/1 status line.
         let connection = FakeConnection(
-            id: TransportConnectionID(1), negotiatedApplicationProtocol: "h2",
-            inbound: Array("INVALID CONNECTION PREFACE\r\n\r\n".utf8))
+            id: TransportConnectionID(1),
+            negotiatedApplicationProtocol: "h2",
+            inbound: Array("INVALID CONNECTION PREFACE\r\n\r\n".utf8)
+        )
         let server = HTTPServer(transport: FakeTransport(), responder: responder)
         await server.serve(connection)
 
@@ -90,7 +94,8 @@ struct HTTPServerHTTP2Tests {
                 switch frame.header.type {
                     case .headers:
                         let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
-                            frame.payload, flags: frame.header.flags)
+                            frame.payload, flags: frame.header.flags
+                        )
                         let fields = try Array(fragment)
                             .withUnsafeBytes {
                                 try decoder.decode($0.bytes)
