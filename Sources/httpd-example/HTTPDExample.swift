@@ -43,20 +43,25 @@ enum HTTPDExample {
             tls: tls,
             reusePort: Prefork.isWorker
         )
-        // A middleware chain (outermost first) wraps the application responder — a stand-in for what a
-        // consumer composes; reorder or replace any entry, or add their own `HTTPMiddleware`.
-        let responder = MiddlewareChain(
-            [
-                AccessLogMiddleware { print("httpd-example: \($0)") },  // logs the final exchange
+        // A middleware chain (outermost first) wraps the responder — reorder/replace/add freely.
+        // HTTPD_QUIET drops the per-request access-log `print` (it dominates under load) — the fair
+        // posture for the Bench/ comparison against logging-off reference servers.
+        let quiet = ProcessInfo.processInfo.environment["HTTPD_QUIET"] != nil
+        var middlewares: [any HTTPMiddleware] = []
+        if !quiet {
+            middlewares.append(AccessLogMiddleware { print("httpd-example: \($0)") })
+        }
+        middlewares.append(
+            contentsOf: [
                 CompressionMiddleware(),  // gzip the outgoing body
                 ServerHeaderMiddleware("httpd-example"),
                 DateHeaderMiddleware(),
                 SecurityHeadersMiddleware(),
                 CORSMiddleware(),
                 ConditionalRequestMiddleware()  // ETag on the raw body, If-None-Match → 304
-            ],
-            terminatingAt: makeResponder()
+            ] as [any HTTPMiddleware]
         )
+        let responder = MiddlewareChain(middlewares, terminatingAt: makeResponder())
         // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
         // QUIC/TLS); the server advertises it via Alt-Svc (RFC 7838) on the h1/h2 responses so a
         // browser upgrades to h3 on the next request.
