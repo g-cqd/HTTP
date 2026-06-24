@@ -115,7 +115,51 @@ jobs:
       - name: Benchmark smoke (build + run)
         run: swift package --package-path Benchmarks --disable-sandbox benchmark
 
+  # ---------------------------------------------------------------------------
+  # HTTP/2 conformance — h2spec (RFC 9113) against the live httpd-example over h2c. Gates on the
+  # sections that pass 100% (frame format/definitions, GOAWAY, message exchanges, HPACK). The streams
+  # section (5.1.2 hang) and the invalid-preface case are tracked in Standards/CONFORMANCE.md and
+  # folded in once fixed. The hard `timeout` turns any future hang into a failure, not a stalled runner.
+  # ---------------------------------------------------------------------------
+  h2spec:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install h2spec
+        run: brew list h2spec >/dev/null 2>&1 || brew install h2spec
+      - name: Build example server (release)
+        run: swift build -c release --product httpd-example --scratch-path "$SCRATCH"
+      - name: h2spec — core sections (h2c)
+        run: |
+          BIN="$(swift build -c release --product httpd-example --scratch-path "$SCRATCH" --show-bin-path)/httpd-example"
+          HTTPD_MAX_CONN=100000 "$BIN" 18080 posixKqueue >/tmp/httpd.log 2>&1 &
+          PID=$!
+          # Wait for the listener via an h2c prior-knowledge probe (up to 20s).
+          for _ in $(seq 1 40); do
+            if curl -s --http2-prior-knowledge --max-time 1 -o /dev/null http://127.0.0.1:18080/; then
+              break
+            fi
+            sleep 0.5
+          done
+          set +e
+          timeout 120 h2spec -h 127.0.0.1 -p 18080 --timeout 3 http2/4 http2/6 http2/7 http2/8 hpack
+          rc=$?
+          set -e
+          kill "$PID" 2>/dev/null || true
+          exit $rc
+
 # NOTE: jobs run on the `macos-26` image with the Swift 6.4 development toolchain. If a specific 6.4
 # snapshot is needed beyond the image default, install it as the first step of each job with swiftly
-# (`swiftly install 6.4-snapshot --use`). `h2spec` conformance and fuzz smoke runs are added as their
-# milestones land (M7/M8); the benchmark smoke job is wired above.
+# (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
+# and under the ASan/TSan matrix above — no separate lane needed.
+#
+# Tracked follow-ups (each blocked on a specific item, see Standards/CONFORMANCE.md):
+#   • Expand the h2spec gate to generic/http2-3/http2-5 once the invalid-preface GOAWAY and the
+#     SETTINGS_MAX_CONCURRENT_STREAMS (5.1.2) gaps are fixed.
+#   • Autobahn (WebSocket, RFC 6455) — needs the crossbario/autobahn-testsuite Docker image; the CI
+#     image has no Docker. In-house WebSocket + WebSocketFuzzTests cover framing/masking/close/UTF-8.
+#   • Coverage threshold gate — requires merging llvm-cov across the 11 per-target .xctest bundles
+#     (single-binary export under-reports); wire once a robust multi-object merge is scripted.
+#   • Benchmark baseline gate — capture a runner baseline, then promote the smoke job to a check.
+#   • UBSan (-sanitize=undefined) — the UBSan runtime fails to link the test bundles on the current
+#     6.4 toolchain; revisit when the toolchain ships a linkable UBSan runtime.
