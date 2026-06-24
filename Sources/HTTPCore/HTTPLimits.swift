@@ -7,11 +7,16 @@
 //  Defaults are the reconciled safe values from the project's security analysis (RFCs + CVEs).
 //
 
-/// Configurable, safe-by-default resource limits enforced by every protocol engine.
+/// Configurable resource limits enforced by every protocol engine.
 ///
-/// These bound the work an adversary can force the server to do, so that malformed or hostile
-/// traffic fails closed (with the correct protocol error) instead of exhausting memory or CPU. Each
-/// limit is annotated with the attack it mitigates.
+/// The size, count, and timeout guards bound the work malformed or hostile traffic can force, so it
+/// fails closed (with the correct protocol error) instead of exhausting memory or CPU — each is
+/// annotated with the attack it mitigates, and a normal request stays far below every threshold.
+///
+/// The concurrency and connection *ceilings* (``maxConcurrentStreams``, ``maxConnectionsPerClient``,
+/// ``maxConnections``) are the only limits a legitimate high-throughput client can actually reach,
+/// so they default to a permissive `1_048_576` — a trusted-environment posture that does not throttle
+/// performance. Lower them to bound stream- or connection-exhaustion in hostile deployments.
 public struct HTTPLimits: Sendable, Equatable {
     // MARK: Message size limits
 
@@ -86,7 +91,10 @@ public struct HTTPLimits: Sendable, Equatable {
     /// raise the process file-descriptor limit to match).
     public var maxConnections: Int
 
-    /// Creates a set of limits; every parameter defaults to its documented safe value.
+    /// Creates a set of limits.
+    ///
+    /// Size/count guards and timeouts default to conservative values; the concurrency and connection
+    /// ceilings default to a permissive `1_048_576` (trusted-environment).
     public init(
         maxRequestLineLength: Int = 8 * 1_024,
         maxFieldSize: Int = 16 * 1_024,
@@ -127,6 +135,6 @@ public struct HTTPLimits: Sendable, Equatable {
         self.maxConnections = maxConnections
     }
 
-    /// The default, safe-by-default limits.
+    /// The default limits (conservative size/count/timeout guards; permissive concurrency ceilings).
     public static let `default` = Self()
 }

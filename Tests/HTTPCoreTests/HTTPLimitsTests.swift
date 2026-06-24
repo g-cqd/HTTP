@@ -19,14 +19,15 @@ struct HTTPLimitsTests {
         #expect(limits.maxHeaderListSize == 64 * 1_024)
         #expect(limits.maxFieldCount == 100)
         #expect(limits.maxBodySize == 1 << 30)
-        #expect(limits.maxConcurrentStreams == 100)
+        #expect(limits.maxConcurrentStreams == 1_048_576)
         #expect(limits.maxFrameSize == 16 * 1_024)
         #expect(limits.headerTableSize == 4 * 1_024)
         #expect(limits.maxContinuationFrames == 100)
         #expect(limits.headerReadTimeout == .seconds(10))
         #expect(limits.idleTimeout == .seconds(60))
         #expect(limits.keepAliveTimeout == .seconds(15))
-        #expect(limits.maxConnectionsPerClient == 20)
+        #expect(limits.maxConnectionsPerClient == 1_048_576)
+        #expect(limits.maxConnections == 1_048_576)
     }
 
     @Test("individual limits can be overridden while others keep their defaults")
@@ -37,6 +38,6 @@ struct HTTPLimitsTests {
 
         let custom = HTTPLimits(maxBodySize: 4_096)
         #expect(custom.maxBodySize == 4_096)
-        #expect(custom.maxConcurrentStreams == 100)
+        #expect(custom.maxConcurrentStreams == 1_048_576)
     }
 }
