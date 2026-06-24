@@ -107,7 +107,11 @@ public enum ChunkedBodyDecoder {
     private static func stepSize(
         _ reader: inout ByteReader, state: inout State, bodyCount: Int, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
-        switch try readLine(&reader) {
+        // A chunk-size line (size + optional chunk-ext) is bounded by `maxFieldSize`; the cumulative
+        // chunk-ext budget is enforced separately in `beginChunk` once the whole line is in hand.
+        switch try readLine(
+            &reader, maxLength: limits.maxFieldSize, ifTooLong: .chunkExtensionTooLarge
+        ) {
             case .needMore:
                 return false
             case .line(let range):
@@ -145,11 +149,18 @@ public enum ChunkedBodyDecoder {
     /// Reads one CRLF-terminated line, returning the bytes before CRLF and advancing past it.
     ///
     /// Returns `.needMore` (without advancing) until the full CRLF is present; a bare CR is a framing
-    /// error.
-    private static func readLine(_ reader: inout ByteReader) throws(HTTP1ParseError) -> LineStep {
+    /// error. An in-progress line longer than `maxLength` — whether the terminator has not arrived or a
+    /// CR has but the preceding line is already over the bound — fails closed with `error`, so a
+    /// CRLF-less chunk-size / chunk-ext / trailer line cannot grow the inbound buffer without limit
+    /// (audit F-CHUNKBUF; CWE-400/CWE-770).
+    private static func readLine(
+        _ reader: inout ByteReader, maxLength: Int, ifTooLong error: HTTP1ParseError
+    ) throws(HTTP1ParseError) -> LineStep {
         guard let crIndex = reader.firstIndex(of: cr) else {
+            guard reader.remaining <= maxLength else { throw error }
             return .needMore
         }
+        guard crIndex - reader.position <= maxLength else { throw error }
         let lfIndex = crIndex + 1
         guard lfIndex < reader.count else {
             return .needMore
@@ -235,7 +246,11 @@ public enum ChunkedBodyDecoder {
     private static func consumeTrailer(
         _ reader: inout ByteReader, state: inout State, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> TrailerStep {
-        switch try readLine(&reader) {
+        // A single trailer field-line is bounded by `maxFieldSize`; the cumulative trailer-section size
+        // is enforced separately below once each whole line is in hand.
+        switch try readLine(
+            &reader, maxLength: limits.maxFieldSize, ifTooLong: .headerSectionTooLarge
+        ) {
             case .needMore:
                 return .needMore
             case .line(let range):

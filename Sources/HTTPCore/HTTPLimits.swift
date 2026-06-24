@@ -13,10 +13,12 @@
 /// fails closed (with the correct protocol error) instead of exhausting memory or CPU — each is
 /// annotated with the attack it mitigates, and a normal request stays far below every threshold.
 ///
-/// The concurrency and connection *ceilings* (``maxConcurrentStreams``, ``maxConnectionsPerClient``,
-/// ``maxConnections``) are the only limits a legitimate high-throughput client can actually reach,
-/// so they default to a permissive `1_048_576` — a trusted-environment posture that does not throttle
-/// performance. Lower them to bound stream- or connection-exhaustion in hostile deployments.
+/// The connection *ceilings* (``maxConnectionsPerClient``, ``maxConnections``) and the per-connection
+/// ``maxConcurrentStreams`` default to **secure, non-throttling** values: bounding the per-connection
+/// stream table and the per-/global-connection count costs **zero** requests-per-second (throughput is
+/// across many connections, not within one) while denying a single peer the memory / file-descriptor
+/// amplification of unbounded streams or sockets. Use ``highThroughput`` to raise the connection
+/// ceilings for a trusted or benchmark environment, or ``hardened`` for a tighter public posture.
 public struct HTTPLimits: Sendable, Equatable {
     // MARK: Message size limits
 
@@ -49,7 +51,11 @@ public struct HTTPLimits: Sendable, Equatable {
 
     // MARK: HTTP/2 & HTTP/3 limits
 
-    /// Advertised `SETTINGS_MAX_CONCURRENT_STREAMS` (exhaustion; RFC 9113 §5.1.2).
+    /// Advertised + enforced `SETTINGS_MAX_CONCURRENT_STREAMS` — the per-connection open-stream bound.
+    ///
+    /// A stream-state exhaustion DoS guard (RFC 9113 §5.1.2, whose recommended floor is ≥100); default
+    /// 128. Unlike the connection ceilings it is *not* permissive: one connection opening unbounded
+    /// concurrent streams would exhaust memory, so it stays bounded even in a trusted environment.
     public var maxConcurrentStreams: Int
 
     /// Maximum accepted frame payload size (RFC 9113 §4.2 floor is 16,384).
@@ -93,8 +99,9 @@ public struct HTTPLimits: Sendable, Equatable {
 
     /// Creates a set of limits.
     ///
-    /// Size/count guards and timeouts default to conservative values; the concurrency and connection
-    /// ceilings default to a permissive `1_048_576` (trusted-environment).
+    /// Size/count guards and timeouts default to conservative values; the connection ceilings default
+    /// to secure, non-throttling values (``maxConnectionsPerClient`` 1024, ``maxConnections`` 65_536)
+    /// and ``maxConcurrentStreams`` stays bounded at 128. See ``highThroughput`` / ``hardened``.
     public init(
         maxRequestLineLength: Int = 8 * 1_024,
         maxFieldSize: Int = 16 * 1_024,
@@ -103,7 +110,7 @@ public struct HTTPLimits: Sendable, Equatable {
         maxBodySize: Int = 1 << 30,  // 1 GiB
         maxDecompressedBodySize: Int = 1 << 30,
         maxDecompressionRatio: Int = 10,
-        maxConcurrentStreams: Int = 1_048_576,
+        maxConcurrentStreams: Int = 128,
         maxFrameSize: Int = 16 * 1_024,
         headerTableSize: Int = 4 * 1_024,
         maxContinuationFrames: Int = 100,
@@ -112,8 +119,8 @@ public struct HTTPLimits: Sendable, Equatable {
         idleTimeout: Duration = .seconds(60),
         keepAliveTimeout: Duration = .seconds(15),
         streamResetInterval: Duration = .seconds(1),
-        maxConnectionsPerClient: Int = 1_048_576,
-        maxConnections: Int = 1_048_576
+        maxConnectionsPerClient: Int = 1_024,
+        maxConnections: Int = 65_536
     ) {
         self.maxRequestLineLength = maxRequestLineLength
         self.maxFieldSize = maxFieldSize
@@ -135,6 +142,36 @@ public struct HTTPLimits: Sendable, Equatable {
         self.maxConnections = maxConnections
     }
 
-    /// The default limits (conservative size/count/timeout guards; permissive concurrency ceilings).
+    /// The default limits — safe out of the box: conservative size/count/timeout guards and secure,
+    /// non-throttling connection ceilings with a bounded 128-stream per-connection cap.
     public static let `default` = Self()
+
+    /// A high-throughput / trusted-environment preset that raises the connection ceilings.
+    ///
+    /// The ceilings go far above any legitimate need so they never throttle a benchmark or a trusted
+    /// internal peer. Use ONLY where the peer set is trusted — it disables the connection-exhaustion
+    /// bounds that ``default`` provides. ``maxConcurrentStreams`` stays bounded (a memory bound, never
+    /// a throughput one).
+    public static let highThroughput = Self(
+        maxConnectionsPerClient: 1_048_576,
+        maxConnections: 1_048_576
+    )
+
+    /// Hardened preset for hostile / public-facing deployments: tighter sizes, counts, timeouts, and
+    /// ceilings than ``default`` — trading some legitimate-client headroom for a smaller attack surface.
+    public static let hardened = Self(
+        maxRequestLineLength: 4 * 1_024,
+        maxFieldSize: 8 * 1_024,
+        maxHeaderListSize: 32 * 1_024,
+        maxFieldCount: 64,
+        maxBodySize: 16 << 20,
+        maxConcurrentStreams: 100,
+        maxContinuationFrames: 32,
+        maxStreamResetsPerInterval: 50,
+        headerReadTimeout: .seconds(5),
+        idleTimeout: .seconds(30),
+        keepAliveTimeout: .seconds(5),
+        maxConnectionsPerClient: 64,
+        maxConnections: 16_384
+    )
 }

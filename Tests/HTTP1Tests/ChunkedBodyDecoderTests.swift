@@ -94,4 +94,23 @@ struct ChunkedBodyDecoderTests {
         #expect(
             try decodeWhole("5\r\nhello\r\n0\r\nX-Checksum: abc\r\n\r\n") == Array("hello".utf8))
     }
+
+    @Test("unterminated chunk-size line fails closed, not buffered (F-CHUNKBUF)")
+    func boundsEndlessChunkSizeLine() {
+        let limits = HTTPLimits(maxFieldSize: 64)
+        // 200 hex digits, no CRLF: `beginChunk` never runs, so without the per-line bound the inbound
+        // buffer would grow without limit. The bound trips at `maxFieldSize`.
+        #expect(throws: HTTP1ParseError.chunkExtensionTooLarge) {
+            _ = try decodeWhole(String(repeating: "a", count: 200), limits: limits)
+        }
+    }
+
+    @Test("an endless trailer line with no CRLF fails closed (F-CHUNKBUF)")
+    func boundsEndlessTrailerLine() {
+        let limits = HTTPLimits(maxFieldSize: 64)
+        // Terminating zero chunk, then a trailer line that never ends.
+        #expect(throws: HTTP1ParseError.headerSectionTooLarge) {
+            _ = try decodeWhole("0\r\n" + String(repeating: "X", count: 200), limits: limits)
+        }
+    }
 }
