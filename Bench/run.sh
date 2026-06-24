@@ -107,9 +107,14 @@ for s in $SERVERS; do
                 || echo "skip nginx (not installed)"
             ;;
         caddy)
-            command -v caddy >/dev/null && run_server "caddy" "" "http://127.0.0.1:$PORT_CADDY$ROUTE" \
-                caddy run --config "$SCRIPT_DIR/servers/Caddyfile" --adapter caddyfile \
-                || echo "skip caddy (not installed)"
+            if command -v caddy >/dev/null; then
+                mkdir -p "$RESULTS_DIR/caddy-home"
+                run_server "caddy" "" "http://127.0.0.1:$PORT_CADDY$ROUTE" \
+                    env HOME="$RESULTS_DIR/caddy-home" XDG_DATA_HOME="$RESULTS_DIR/caddy-home" \
+                    caddy run --config "$SCRIPT_DIR/servers/Caddyfile" --adapter caddyfile
+            else
+                echo "skip caddy (not installed)"
+            fi
             ;;
         hummingbird)
             if [ -d "$SCRIPT_DIR/hummingbird" ]; then
