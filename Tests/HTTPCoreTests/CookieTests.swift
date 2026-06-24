@@ -76,6 +76,33 @@ struct CookieTests {
         #expect(SetCookie(name: "ok", value: "value").isValid)
     }
 
+    @Test("rejects attribute injection through Domain and Path (CWE-113)")
+    func rejectsAttributeInjectionInAttributes() {
+        #expect(!SetCookie(name: "s", value: "v", path: "/; Domain=evil.example").isValid)
+        #expect(!SetCookie(name: "s", value: "v", domain: "evil.example; Secure").isValid)
+        #expect(!SetCookie(name: "s", value: "v", path: "/a\r\nSet-Cookie: x=1").isValid)
+        // A well-formed Domain and Path are accepted.
+        #expect(SetCookie(name: "s", value: "v", domain: "example.com", path: "/app").isValid)
+    }
+
+    @Test("enforces the __Host- / __Secure- name-prefix invariants (RFC 6265bis §4.1.3)")
+    func enforcesNamePrefixes() {
+        #expect(!SetCookie(name: "__Secure-id", value: "v").isValid)  // __Secure- needs Secure
+        #expect(SetCookie(name: "__Secure-id", value: "v", isSecure: true).isValid)
+        // __Host- needs Secure, no Domain, and Path="/".
+        #expect(!SetCookie(name: "__Host-id", value: "v", path: "/app", isSecure: true).isValid)
+        #expect(
+            !SetCookie(name: "__Host-id", value: "v", domain: "example.com", isSecure: true).isValid
+        )
+        #expect(SetCookie(name: "__Host-id", value: "v", path: "/", isSecure: true).isValid)
+    }
+
+    @Test("an invalid cookie has a nil headerValue (fail-closed serialization)")
+    func invalidCookieHasNilHeaderValue() {
+        #expect(SetCookie(name: "bad name", value: "v").headerValue == nil)
+        #expect(SetCookie(name: "s", value: "v; Secure").headerValue == nil)
+    }
+
     @Test("setCookie appends a valid cookie and refuses an invalid one")
     func appendsToFields() {
         var fields = HTTPFields()

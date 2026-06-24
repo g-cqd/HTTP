@@ -14,12 +14,18 @@ public import HTTPCore
 public struct CORSMiddleware: HTTPMiddleware {
     /// Which origins are permitted to read responses cross-origin.
     public enum AllowedOrigin: Sendable {
-        /// Any origin (`Access-Control-Allow-Origin: *`); echoes the request origin when credentials
-        /// are allowed, since `*` is invalid with credentials (Fetch §3.2.5).
+        /// Any origin (`Access-Control-Allow-Origin: *`). A wildcard is always credential-free: pairing
+        /// `*` (or a reflected arbitrary origin) with credentials is a total cross-origin bypass
+        /// (CWE-942), so ``CORSMiddleware`` suppresses credentials for this case (Fetch §3.2.5).
         case any
 
-        /// A single fixed origin.
+        /// A single fixed origin (credentials permitted).
         case exact(String)
+
+        /// An allow-list: the request `Origin` is reflected (with `Vary: Origin`) only when it exactly
+        /// matches one of these, and otherwise denied — the safe way to do credentialed multi-origin
+        /// CORS.
+        case allowList([String])
     }
 
     private let allowedOrigin: AllowedOrigin
@@ -62,8 +68,16 @@ public struct CORSMiddleware: HTTPMiddleware {
     }
 
     private func decorate(_ head: inout HTTPResponse, origin: String?, preflight: Bool) {
-        _ = head.headerFields.setValue(allowOrigin(for: origin), for: .accessControlAllowOrigin)
-        if allowCredentials {
+        let resolved = resolveOrigin(for: origin)
+        if let value = resolved.value {
+            _ = head.headerFields.setValue(value, for: .accessControlAllowOrigin)
+        }
+        if resolved.varyOnOrigin {
+            // The allow-origin value depends on the request `Origin`, so a shared cache MUST key on it
+            // — otherwise one origin's response (and its CORS grant) is served to another (CWE-942).
+            appendVaryOrigin(&head)
+        }
+        if resolved.credentials {
             _ = head.headerFields.setValue("true", for: .accessControlAllowCredentials)
         }
         guard preflight else {
@@ -80,12 +94,36 @@ public struct CORSMiddleware: HTTPMiddleware {
         }
     }
 
-    private func allowOrigin(for origin: String?) -> String {
+    /// Resolves the `Access-Control-Allow-Origin` value (or nil to omit it), whether the response
+    /// varies by `Origin`, and whether credentials may be granted — failing safe on the dangerous
+    /// wildcard-with-credentials combination (CWE-942).
+    private func resolveOrigin(
+        for origin: String?
+    ) -> (value: String?, varyOnOrigin: Bool, credentials: Bool) {
         switch allowedOrigin {
-            case .exact(let value):
-                value
             case .any:
-                allowCredentials ? (origin ?? "*") : "*"
+                // A wildcard can never carry credentials (Fetch §3.2.5); reflecting an arbitrary origin
+                // with credentials is a total bypass — so `.any` is always a credential-free `*`.
+                ("*", false, false)
+            case .exact(let value):
+                (value, false, allowCredentials)
+            case .allowList(let origins):
+                if let origin, origins.contains(origin) {
+                    (origin, true, allowCredentials)
+                }
+                else {
+                    (nil, true, false)
+                }
         }
+    }
+
+    /// Appends `Origin` to `Vary` unless it is already present (RFC 9110 §12.5.5).
+    private func appendVaryOrigin(_ head: inout HTTPResponse) {
+        let alreadyVaries = head.headerFields.values(for: .vary)
+            .contains { $0.lowercased().contains("origin") }
+        guard !alreadyVaries else {
+            return
+        }
+        _ = head.headerFields.append("Origin", for: .vary)
     }
 }

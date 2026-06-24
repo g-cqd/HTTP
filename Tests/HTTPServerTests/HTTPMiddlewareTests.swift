@@ -65,17 +65,48 @@ struct HTTPMiddlewareTests {
         #expect(response.head.headerFields[.accessControlAllowMethods]?.contains("POST") == true)
     }
 
-    @Test("CORSMiddleware echoes the origin and allows credentials when configured")
+    @Test("CORSMiddleware reflects an allow-listed origin with credentials + Vary: Origin")
     func corsCredentials() async {
         var fields = HTTPFields()
         _ = fields.append("https://app.example", for: .origin)
         let request = HTTPRequest(
             method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields
         )
-        let response = await ok.wrapped(by: CORSMiddleware(allowCredentials: true))
-            .respond(to: request, body: [])
+        let cors = CORSMiddleware(
+            allowedOrigin: .allowList(["https://app.example"]), allowCredentials: true
+        )
+        let response = await ok.wrapped(by: cors).respond(to: request, body: [])
         #expect(response.head.headerFields[.accessControlAllowOrigin] == "https://app.example")
         #expect(response.head.headerFields[.accessControlAllowCredentials] == "true")
+        #expect(response.head.headerFields[.vary]?.lowercased().contains("origin") == true)
+    }
+
+    @Test("CORSMiddleware never pairs a wildcard origin with credentials (CWE-942 fail-safe)")
+    func corsWildcardNeverCredentialed() async {
+        var fields = HTTPFields()
+        _ = fields.append("https://evil.example", for: .origin)
+        let request = HTTPRequest(
+            method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields
+        )
+        // `.any` + credentials is a footgun (reflect-any-origin-with-credentials); the middleware
+        // fails safe to a credential-free wildcard.
+        let cors = CORSMiddleware(allowedOrigin: .any, allowCredentials: true)
+        let response = await ok.wrapped(by: cors).respond(to: request, body: [])
+        #expect(response.head.headerFields[.accessControlAllowOrigin] == "*")
+        #expect(response.head.headerFields[.accessControlAllowCredentials] == nil)
+    }
+
+    @Test("CORSMiddleware denies an origin not on the allow-list (no ACAO, Vary: Origin)")
+    func corsAllowListDenies() async {
+        var fields = HTTPFields()
+        _ = fields.append("https://evil.example", for: .origin)
+        let request = HTTPRequest(
+            method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields
+        )
+        let cors = CORSMiddleware(allowedOrigin: .allowList(["https://app.example"]))
+        let response = await ok.wrapped(by: cors).respond(to: request, body: [])
+        #expect(response.head.headerFields[.accessControlAllowOrigin] == nil)
+        #expect(response.head.headerFields[.vary]?.lowercased().contains("origin") == true)
     }
 
     // MARK: Helpers

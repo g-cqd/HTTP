@@ -59,8 +59,15 @@ public struct SetCookie: Sendable, Equatable {
         self.sameSite = sameSite
     }
 
-    /// The serialized `Set-Cookie` value (RFC 6265bis §4.1.1).
-    public var headerValue: String {
+    /// The serialized `Set-Cookie` value (RFC 6265bis §4.1.1), or `nil` when the cookie is invalid.
+    ///
+    /// Returning `nil` for an invalid cookie is fail-closed by construction: a name / value / attribute
+    /// carrying an injection octet can never be serialized into a header (CWE-113), even by a caller
+    /// that uses this directly rather than going through ``HTTPFields/setCookie(_:)``.
+    public var headerValue: String? {
+        guard isValid else {
+            return nil
+        }
         var result = "\(name)=\(value)"
         if let domain { result += "; Domain=\(domain)" }
         if let path { result += "; Path=\(path)" }
@@ -72,11 +79,29 @@ public struct SetCookie: Sendable, Equatable {
         return result
     }
 
-    /// Whether the name is a valid token and the value valid cookie-octets (RFC 6265bis §4.1.1) — so
-    /// serializing it cannot inject attributes (`;`) or split the header (CR/LF) (CWE-113).
+    /// Whether the name, value, and every attribute are injection-safe (RFC 6265bis §4.1.1) — so
+    /// serializing the cookie cannot inject an attribute (`;`) or split the header (CR/LF) (CWE-113),
+    /// and the `__Host-` / `__Secure-` name prefixes carry their required attributes (§4.1.3).
     public var isValid: Bool {
         !name.isEmpty && name.utf8.allSatisfy(Self.isTokenByte)
             && value.utf8.allSatisfy(Self.isCookieOctet)
+            && (domain?.utf8.allSatisfy(Self.isDomainByte) ?? true)
+            && (path?.utf8.allSatisfy(Self.isPathByte) ?? true)
+            && satisfiesNamePrefix
+    }
+
+    /// The `__Host-` / `__Secure-` cookie-name prefix invariants (RFC 6265bis §4.1.3).
+    ///
+    /// `__Secure-` requires `Secure`; `__Host-` additionally forbids `Domain` and pins `Path` to `/`,
+    /// so a prefixed cookie cannot be set by a weaker (non-HTTPS, cross-host, or scoped) writer.
+    private var satisfiesNamePrefix: Bool {
+        if name.hasPrefix("__Host-") {
+            return isSecure && domain == nil && path == "/"
+        }
+        if name.hasPrefix("__Secure-") {
+            return isSecure
+        }
+        return true
     }
 
     /// RFC 9110 token octet (no controls, no separators).
@@ -100,15 +125,33 @@ public struct SetCookie: Sendable, Equatable {
                 false
         }
     }
+
+    /// RFC 6265bis path-av octet: any CHAR except CTLs and `;`, so a `Path` cannot inject an attribute
+    /// or split the header.
+    private static func isPathByte(_ byte: UInt8) -> Bool {
+        byte >= 0x20 && byte != 0x7F && byte != 0x3B
+    }
+
+    /// A conservative `Domain` octet — letters, digits, `-`, `.` (host characters) — rejecting `;`,
+    /// CR/LF, whitespace, and other separators so a `Domain` cannot inject an attribute or split the
+    /// header.
+    private static func isDomainByte(_ byte: UInt8) -> Bool {
+        switch byte {
+            case 0x30 ... 0x39, 0x41 ... 0x5A, 0x61 ... 0x7A, 0x2D, 0x2E:
+                true
+            default:
+                false
+        }
+    }
 }
 
 extension HTTPFields {
     /// Appends `cookie` as a `Set-Cookie` header when it is valid; returns whether it was added.
     @discardableResult
     public mutating func setCookie(_ cookie: SetCookie) -> Bool {
-        guard cookie.isValid else {
+        guard let headerValue = cookie.headerValue else {
             return false
         }
-        return append(cookie.headerValue, for: .setCookie)
+        return append(headerValue, for: .setCookie)
     }
 }
