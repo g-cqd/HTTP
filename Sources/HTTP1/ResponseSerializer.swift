@@ -69,7 +69,9 @@ public enum ResponseSerializer {
         }
         output.append(contentsOf: crlf)  // blank line terminates the header section
 
-        if !omitBody { output.append(contentsOf: body) }
+        // A body-forbidden status (1xx/204/304) must emit no body octets either: an unframed body on
+        // a keep-alive connection would be read as the start of the next response (RFC 9110 §6.4.1).
+        if !omitBody, !Self.forbidsContent(response.status) { output.append(contentsOf: body) }
         return output
     }
 

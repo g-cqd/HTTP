@@ -57,4 +57,15 @@ struct ResponseSerializerTests {
         let wire = serialize(HTTPResponse(status: status))
         #expect(wire == "HTTP/1.1 299 \r\ncontent-length: 0\r\n\r\n")
     }
+
+    @Test(
+        "a body-forbidden status emits neither Content-Length nor a body (RFC 9110 §6.4.1)",
+        arguments: [100, 101, 199, 204, 304])
+    func forbidsContentForStatus(_ code: Int) throws {
+        let status = try #require(HTTPStatus(code: code))
+        // Even handed a body, 1xx/204/304 must frame none of it: an unframed body desyncs keep-alive.
+        let wire = serialize(HTTPResponse(status: status), body: "BODY")
+        #expect(!wire.contains("content-length"))
+        #expect(!wire.contains("BODY"))
+    }
 }
