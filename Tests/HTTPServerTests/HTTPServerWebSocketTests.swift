@@ -96,6 +96,28 @@ struct HTTPServerWebSocketTests {
         #expect(head.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
     }
 
+    @Test("default Origin policy: reject browser origin, admit no-Origin client (CSWSH)")
+    func defaultOriginPolicyIsSecureByDefault() async {
+        // A default handler (no isOriginAllowed override) must reject any browser-supplied Origin…
+        let echo = ClosureWebSocketHandler { _ in [] }
+        let server = HTTPServer(
+            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo
+        )
+        let browser = FakeConnection(
+            id: TransportConnectionID(5), inbound: upgradeRequest(origin: "https://evil.example")
+        )
+        await server.serve(browser)
+        let rejected = String(decoding: await browser.sentBytes(), as: Unicode.UTF8.self)
+        #expect(rejected.hasPrefix("HTTP/1.1 403 "))
+        #expect(!rejected.contains("101 Switching Protocols"))
+
+        // …but still admit a non-browser client that sends no Origin.
+        let nonBrowser = FakeConnection(id: TransportConnectionID(6), inbound: upgradeRequest())
+        await server.serve(nonBrowser)
+        let admitted = String(decoding: await nonBrowser.sentBytes(), as: Unicode.UTF8.self)
+        #expect(admitted.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
+    }
+
     // MARK: Fixtures
 
     private func upgradeRequest(origin: String? = nil) -> [UInt8] {

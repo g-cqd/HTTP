@@ -20,9 +20,9 @@ public protocol WebSocketHandler: Sendable {
     ///
     /// WebSocket handshakes are exempt from the Same-Origin Policy and CORS, so a malicious page can
     /// open one against your server with the victim's ambient credentials — cross-site WebSocket
-    /// hijacking (RFC 6455 §10.2, CWE-346/CWE-1385). The default accepts every origin, which is
-    /// **unsafe for credentialed endpoints**: override this to allowlist trusted origins (and decide
-    /// whether to admit credential-less non-browser clients that send no `Origin`).
+    /// hijacking (RFC 6455 §10.2, CWE-346/CWE-1385). The default is **secure**: it admits only requests
+    /// with no `Origin` (non-browser clients) and rejects every browser-supplied origin until you
+    /// override this to allowlist the origins you trust.
     func isOriginAllowed(_ origin: String?) -> Bool
 
     /// Returns the frames to send in response to `event` (RFC 6455 §5 / §6).
@@ -33,9 +33,11 @@ extension WebSocketHandler {
     /// By default any request that already passed the handshake is upgraded.
     public func shouldUpgrade(_: HTTPRequest) -> Bool { true }
 
-    /// By default every origin is accepted.
+    /// By default only a request with no `Origin` is admitted — i.e. a non-browser client.
     ///
-    /// Override to defend credentialed endpoints against cross-site WebSocket hijacking
-    /// (RFC 6455 §10.2).
-    public func isOriginAllowed(_: String?) -> Bool { true }
+    /// Browsers always send `Origin` on a WebSocket handshake, so this rejects every browser (and thus
+    /// every cross-site) upgrade until the app allowlists its trusted origins — secure-by-default
+    /// against cross-site WebSocket hijacking (RFC 6455 §10.2, CWE-346/1385). Override to admit specific
+    /// origins, e.g. `{ $0 == "https://app.example" }`.
+    public func isOriginAllowed(_ origin: String?) -> Bool { origin == nil }
 }

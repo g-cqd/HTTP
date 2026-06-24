@@ -17,11 +17,11 @@ public struct ClosureWebSocketHandler: WebSocketHandler {
     private let onEvent: @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
 
     /// Creates a handler from an optional upgrade predicate, an optional `Origin` allowlist predicate
-    /// (defaults to accepting any origin — override for credentialed endpoints, RFC 6455 §10.2), and
-    /// an event handler.
+    /// (defaults to the secure ``WebSocketHandler`` policy — admit only a no-`Origin` non-browser
+    /// client; override to allowlist trusted browser origins, RFC 6455 §10.2), and an event handler.
     public init(
         shouldUpgrade: @escaping @Sendable (HTTPRequest) -> Bool = { _ in true },
-        isOriginAllowed: @escaping @Sendable (String?) -> Bool = { _ in true },
+        isOriginAllowed: @escaping @Sendable (String?) -> Bool = { $0 == nil },
         handle: @escaping @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
     ) {
         self.upgrade = shouldUpgrade

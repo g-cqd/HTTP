@@ -40,7 +40,8 @@ extension HTTPServer {
     ) async {
         // Cross-site WebSocket hijacking defense (RFC 6455 §10.2, CWE-1385): the handshake is exempt
         // from the Same-Origin Policy and CORS, so reject a disallowed Origin with 403 before
-        // completing the upgrade. The default policy admits any origin; apps allowlist via the handler.
+        // completing the upgrade. The default policy admits only a no-Origin (non-browser) client; apps
+        // allowlist trusted browser origins via the handler.
         guard handler.isOriginAllowed(request.headerFields[.origin]) else {
             let rejection = ResponseSerializer.serialize(HTTPResponse(status: .forbidden))
             try? await connection.send(rejection)
