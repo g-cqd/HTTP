@@ -9,6 +9,13 @@
 import Benchmark
 
 let benchmarks: @Sendable () -> Void = {
+    // Iron-Law metrics, made explicit (not the library default) so they cannot silently change and
+    // so committed baselines can gate on them: `instructions` and `mallocCountTotal` are the
+    // low-noise pair we regression-gate; wall/CPU/throughput/peak are captured for attribution.
+    Benchmark.defaultConfiguration.metrics = [
+        .instructions, .mallocCountTotal, .cpuTotal, .wallClock, .throughput, .peakMemoryResident
+    ]
+
     registerCoreBenchmarks()  // HTTPCore — byte primitives, validation, fields
     registerHTTP1Benchmarks()  // HTTP/1.1 — request/header/chunked parsers + serializer
     registerHPACKBenchmarks()  // HPACK — integer/string codecs + header-block round-trip
