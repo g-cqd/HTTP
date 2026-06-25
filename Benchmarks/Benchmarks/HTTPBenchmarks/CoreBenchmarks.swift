@@ -93,4 +93,39 @@ func registerCoreBenchmarks() {
             }
         }
     }
+
+    registerStructuredFieldBenchmarks()
 }
+
+/// RFC 8941 Structured Fields parser benchmarks — parsing an untrusted header value is the hot path.
+///
+/// The substrate for RFC 9218 Priority and other SF headers; extracted from
+/// ``registerCoreBenchmarks()`` so that registration stays under the cyclomatic-complexity cap.
+private func registerStructuredFieldBenchmarks() {
+    Benchmark("core/StructuredFields/parseItem") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(try? StructuredFields.parseItem(structuredFieldItem))
+        }
+    }
+
+    Benchmark("core/StructuredFields/parseList") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(try? StructuredFields.parseList(structuredFieldList))
+        }
+    }
+
+    Benchmark("core/StructuredFields/parseDictionary") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(try? StructuredFields.parseDictionary(structuredFieldDictionary))
+        }
+    }
+}
+
+/// A Structured Fields *item* with parameters (an integer plus a token and a boolean parameter).
+private let structuredFieldItem = "42;importance=high;fresh=?1"
+
+/// A Structured Fields *list*: tokens, a decimal parameter, and a parameterized inner list (§3.1).
+private let structuredFieldList = "gzip, deflate;q=0.5, (a b);n=2"
+
+/// A Structured Fields *dictionary* shaped like an RFC 9218 Priority header plus a string value.
+private let structuredFieldDictionary = "u=3, i, lang=\"en\""
