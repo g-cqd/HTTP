@@ -288,6 +288,9 @@ extension HTTP3Connection {
         // our own memory limit. The encoder references only acknowledged inserts, so it never blocks the
         // peer regardless of the peer's blocked-streams limit (RFC 9204 §3.2.3 / §2.1.2).
         let cap = min(remoteSettings.qpackMaxTableCapacity, Self.defaultQpackMaxTableCapacity)
-        encoder.enableDynamicTable(capacity: cap)
+        encoder.enableDynamicTable(
+            capacity: cap,
+            blockedStreams: remoteSettings.qpackBlockedStreams
+        )
     }
 }

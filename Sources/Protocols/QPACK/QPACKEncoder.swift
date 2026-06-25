@@ -8,21 +8,30 @@
 //  when only the name matches, or a Literal Field Line with a Literal Name (§4.5.6) otherwise — every
 //  section is self-contained with a Required Insert Count 0, Base 0 prefix (§4.5.1).
 //
-//  When a peer advertises a dynamic-table capacity, ``enableDynamicTable(capacity:)`` switches on the
-//  §4.3 encoder-stream path (``encodeSection(_:)`` in QPACKEncoder+Dynamic): a conservative, never-evict,
-//  never-block strategy that inserts a repeated field once and references it only after the peer's Insert
-//  Count Increment confirms receipt. The static path stays the fallback for a peer that disables the
-//  table, and for the per-field streaming entry points below.
+//  When a peer advertises a dynamic-table capacity, ``enableDynamicTable(capacity:blockedStreams:)``
+//  switches on the §4.3 encoder-stream path (``encodeSection(_:streamID:)`` in QPACKEncoder+Dynamic): the
+//  full RFC 9204 strategy — it inserts a repeated field and references it immediately (the peer blocks
+//  briefly, bounded by `SETTINGS_QPACK_BLOCKED_STREAMS`, §2.1.2), and evicts the oldest *unreferenced*
+//  entries to admit new ones, tracking per-section references so it never evicts an entry an unacknowledged
+//  section still needs (§2.1.3). The static path stays the fallback for a peer that disables the table,
+//  and for the per-field streaming entry points below.
 //
 
 public import HTTPCore
 
-/// A QPACK field-section encoder (RFC 9204 §4.5) — static-only until ``enableDynamicTable(capacity:)``.
+/// A QPACK field-section encoder (RFC 9204 §4.5) — static-only until the dynamic table is enabled.
 public struct QPACKEncoder {
+    /// One unacknowledged field section: its Required Insert Count and the absolute indices it referenced,
+    /// so a Section Acknowledgment / Stream Cancellation can release exactly those references (§2.1.3).
+    struct OutstandingSection: Sendable {
+        let requiredInsertCount: Int
+        let references: [Int]
+    }
+
     /// The encoder's view of its dynamic table (RFC 9204 §3.2); capacity 0 means static-only.
     var table = QPACKDynamicTable(capacity: 0)
     /// Inserts the peer's decoder has confirmed received (RFC 9204 §2.1.4, via Insert Count Increment);
-    /// only entries below this absolute count are referenced, so a section never blocks the peer.
+    /// referencing only known-received or freshly-inserted entries keeps a section decodable.
     var knownReceivedCount = 0
     /// A Set Dynamic Table Capacity (§4.3.1) owed on the next section, after enabling the table.
     var pendingCapacity: Int?
@@ -30,6 +39,14 @@ public struct QPACKEncoder {
     var recentFields: [HeaderField] = []
     /// The cap on ``recentFields`` — a field must recur within this window to be inserted.
     let recentFieldLimit = 64
+    /// How many entries reference each live absolute index across all unacknowledged sections — an entry
+    /// with a non-zero count MUST NOT be evicted (RFC 9204 §2.1.3).
+    var referenceCounts: [Int: Int] = [:]
+    /// Per-stream FIFO of unacknowledged sections; Section Acknowledgment retires the oldest (§4.4.1).
+    var outstandingSections: [UInt64: [OutstandingSection]] = [:]
+    /// The peer's `SETTINGS_QPACK_BLOCKED_STREAMS` — the cap on streams that may be blocked at once
+    /// (RFC 9204 §2.1.2); 0 disables blocking (the encoder then references only known-received entries).
+    var peerBlockedStreams = 0
 
     /// Creates a static-only encoder.
     public init() {
@@ -39,15 +56,18 @@ public struct QPACKEncoder {
     /// Whether the dynamic table is enabled (the peer advertised a non-zero capacity).
     public var dynamicTableEnabled: Bool { table.capacity > 0 }
 
-    /// Enables the dynamic table at `capacity` octets, owing a Set Capacity instruction on the next
-    /// section (RFC 9204 §4.3.1). `capacity` is the minimum of the peer's advertised maximum and our own
-    /// bound; a value of 0 leaves the encoder static-only.
-    public mutating func enableDynamicTable(capacity: Int) {
+    /// Enables the dynamic table at `capacity` octets and permits up to `blockedStreams` blocked streams,
+    /// owing a Set Capacity instruction on the next section (RFC 9204 §4.3.1 / §2.1.2).
+    ///
+    /// `capacity` is the minimum of the peer's advertised maximum and our own bound; 0 leaves the encoder
+    /// static-only. `blockedStreams` is the peer's advertised `SETTINGS_QPACK_BLOCKED_STREAMS`.
+    public mutating func enableDynamicTable(capacity: Int, blockedStreams: Int = 0) {
         guard capacity > 0 else {
             return
         }
         table.setCapacity(capacity)
         pendingCapacity = capacity
+        peerBlockedStreams = max(0, blockedStreams)
     }
 
     /// Advances the known-received insert count by `count` (RFC 9204 §2.1.4 / §4.4.3 Insert Count

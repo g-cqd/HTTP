@@ -216,3 +216,13 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   rather than rejected. The streaming response path stays static. This completes the bidirectional QPACK
   dynamic table (S5). 871 tests; ASan clean. Gate: encoder round-trips through the decoder end-to-end;
   the engine inserts on a repeated response header after the peer advertises capacity.
+- 2026-06-25 — P8/S5 encoder upgraded to the full RFC 9204 strategy (eviction + blocking). The response
+  encoder now references a freshly-inserted entry immediately — the peer blocks briefly, bounded by its
+  advertised SETTINGS_QPACK_BLOCKED_STREAMS (§2.1.2) — and evicts the oldest *unreferenced* entries to
+  admit new ones, tracking per-section references (a refcount per absolute index + a per-stream FIFO of
+  outstanding sections) so it never evicts an entry an unacknowledged section still needs (§2.1.3). The
+  peer's Section Acknowledgment / Stream Cancellation release those references; Insert Count Increment
+  advances the known-received count. Degrades cleanly: blockedStreams 0 → never blocks; capacity 0 →
+  static. Gate: end-to-end round-trips for immediate-reference, eviction-frees-on-ack, and the
+  blocked-stream limit, plus an 8-seed adversarial fuzz that delivers sections out of order across streams
+  after later evictions — proving the eviction-safety invariant never breaks. 875 tests; ASan clean.

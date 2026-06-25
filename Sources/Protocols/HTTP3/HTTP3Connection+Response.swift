@@ -25,7 +25,7 @@ extension HTTP3Connection {
         guard streams.removeValue(forKey: streamID) != nil else {
             throw .connection(.h3InternalError, "response for an unknown stream")
         }
-        let headerBlock = encodeBufferedResponse(response)
+        let headerBlock = encodeBufferedResponse(response, streamID: streamID)
         var bytes = HTTP3FrameWriter.frame(.headers, payload: headerBlock)
         if !body.isEmpty {
             HTTP3FrameWriter.append(.data, payload: body, to: &bytes)
@@ -93,11 +93,16 @@ extension HTTP3Connection {
     /// actions, so the encoder-stream inserts reach the peer alongside the response. The streaming
     /// ``respondHeaders(to:_:)`` path stays static (its bytes are returned to the driver directly, with no
     /// action drain), and the encoder never references a fresh insert, so deferring them is harmless.
-    private mutating func encodeBufferedResponse(_ response: HTTPResponse) -> [UInt8] {
+    private mutating func encodeBufferedResponse(
+        _ response: HTTPResponse, streamID: QUICStreamID
+    ) -> [UInt8] {
         guard encoder.dynamicTableEnabled else {
             return encodeResponseSection(response)
         }
-        let (section, encoderStream) = encoder.encodeSection(responseFields(response))
+        let (section, encoderStream) = encoder.encodeSection(
+            responseFields(response),
+            streamID: streamID.rawValue
+        )
         if !encoderStream.isEmpty {
             actions.append(.send(stream: .role(.qpackEncoder), bytes: encoderStream, fin: false))
         }

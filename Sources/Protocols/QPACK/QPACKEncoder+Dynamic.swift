@@ -2,72 +2,85 @@
 //  QPACKEncoder+Dynamic.swift
 //  QPACK
 //
-//  RFC 9204 §4.3 / §4.5 — the encoder's dynamic-table path. The strategy is deliberately conservative so
-//  it is provably interoperable and never corrupts a peer's decode:
+//  RFC 9204 §4.3 / §4.5 — the encoder's dynamic-table path, the full RFC strategy. A repeated field is
+//  inserted and referenced in the same section: the peer blocks until it reads the encoder stream, which
+//  is allowed for up to `SETTINGS_QPACK_BLOCKED_STREAMS` streams at once (§2.1.2). To admit new entries
+//  the encoder evicts the oldest entries — but only those with no outstanding reference, tracked per
+//  section, so it never evicts an entry an unacknowledged section still needs (§2.1.3 / the §3.2.2 eviction
+//  the peer mirrors). Base is fixed at the insert count, so every reference is a regular (pre-Base) index.
 //
-//    * never evict — a field is inserted only while the table has room (§2.1.3 is then trivial: no
-//      entry a pending, unacknowledged section references is ever displaced);
-//    * never block — a dynamic entry is referenced only once the peer's Insert Count Increment confirms
-//      it received that insert (`absolute < knownReceivedCount`), so a section's Required Insert Count
-//      never exceeds what the peer holds and the peer never waits (§2.1.2);
-//    * insert on second use — a field is inserted only after it recurs, so unique per-response values
-//      (date, etag, content-length) never crowd out genuinely repeated ones.
-//
-//  Because every reference is to a known-received entry, Base is fixed at the known-received count and
-//  the §4.5.1.2 prefix is always the S=0 form. The peer applies the inserts off the §4.3 encoder stream;
-//  this section then resolves them. A peer that disables the table leaves the encoder on the static path.
+//  Insert-on-second-use keeps unique per-response values (date, etag, content-length) out of the table.
+//  A field the static table already covers exactly is always encoded statically. A peer that disables the
+//  table (capacity 0) leaves the encoder on the static path.
 //
 
 public import HTTPCore
 
 extension QPACKEncoder {
-    /// Encodes `fields` into a field section plus the encoder-stream instructions its inserts require
-    /// (RFC 9204 §4.3 / §4.5).
+    /// Encodes `fields` for `streamID` into a field section plus the encoder-stream instructions its
+    /// inserts require (RFC 9204 §4.3 / §4.5).
     ///
     /// Returns the field-section bytes (for the request/response stream) and the encoder-stream bytes
-    /// (Set Capacity + inserts, for the QPACK encoder stream). The encoder-stream bytes are empty when no
-    /// insert is made; the section is byte-identical to the static path when nothing dynamic is
-    /// referenced (Required Insert Count 0).
+    /// (Set Capacity + inserts, for the QPACK encoder stream). The section is byte-identical to the static
+    /// path when nothing dynamic is referenced (Required Insert Count 0).
     public mutating func encodeSection(
-        _ fields: [HeaderField]
+        _ fields: [HeaderField], streamID: UInt64
     ) -> (section: [UInt8], encoderStream: [UInt8]) {
         var encoderStream: [UInt8] = []
         if let capacity = pendingCapacity {
             encoderStream += QPACKInstructions.setDynamicTableCapacity(capacity)
             pendingCapacity = nil
         }
+        // Pass 1 — insert repeated fields (eviction-aware), building the encoder stream.
         for field in fields {
             considerInsert(field, into: &encoderStream)
         }
-        let base = knownReceivedCount
+        // Pass 2 — encode representations against a now-fixed Base = insert count.
+        let base = table.insertCount
+        let mayBlock = mayBlockStream(streamID)
         var representations: [UInt8] = []
         representations.reserveCapacity(
             fields.reduce(0) { $0 + $1.name.utf8.count + $1.value.utf8.count + 2 }
         )
-        var maxAbsolute = -1
+        var referenced: [Int] = []
         for field in fields {
-            encodeFieldDynamic(field, base: base, into: &representations, maxAbsolute: &maxAbsolute)
+            encodeFieldDynamic(
+                field,
+                base: base,
+                mayBlock: mayBlock,
+                into: &representations,
+                referenced: &referenced
+            )
         }
+        let requiredInsertCount = (referenced.max() ?? -1) + 1
         var section: [UInt8] = []
         section.reserveCapacity(representations.count + 2)
-        appendPrefix(requiredInsertCount: maxAbsolute + 1, base: base, into: &section)
+        appendPrefix(requiredInsertCount: requiredInsertCount, base: base, into: &section)
         section += representations
+        recordOutstanding(
+            streamID: streamID,
+            requiredInsertCount: requiredInsertCount,
+            references: referenced
+        )
         return (section, encoderStream)
     }
 
-    /// Inserts `field` into the dynamic table when it recurs and still fits without eviction, emitting the
-    /// §4.3.2/§4.3.3 instruction; otherwise leaves the table unchanged.
+    // MARK: Insertion + eviction (RFC 9204 §3.2.2 / §2.1.3)
+
+    /// Inserts `field` when it recurs and the table can make room by evicting only unreferenced entries,
+    /// emitting the §4.3.2/§4.3.3 instruction; otherwise leaves the table unchanged.
     private mutating func considerInsert(_ field: HeaderField, into encoderStream: inout [UInt8]) {
-        // Already representable as a static-exact match or an existing dynamic entry → no insert needed.
         guard QPACKStaticTable.exactIndex[field] == nil,
             table.absoluteIndex(of: field) == nil
         else {
+            return  // already representable as a static-exact match or an existing dynamic entry
+        }
+        // First sighting, or no room without evicting a still-referenced entry → leave it a candidate
+        // (do not consume it from the window) so a later sighting can still insert it once room frees up.
+        guard isRepeatedField(field), makeRoom(for: field) else {
             return
         }
-        // Insert only a field proven to repeat that still fits without evicting a referenced entry.
-        guard recordAndCheckRepeat(field), table.hasRoom(for: field) else {
-            return
-        }
+        forgetRecentField(field)
         let value = Array(field.value.utf8)
         if let nameIndex = QPACKStaticTable.nameIndex[field.name] {
             encoderStream += QPACKInstructions.insertWithStaticName(index: nameIndex, value: value)
@@ -76,16 +89,36 @@ extension QPACKEncoder {
             let name = Array(field.name.utf8)
             encoderStream += QPACKInstructions.insertWithLiteralName(name: name, value: value)
         }
-        table.insert(field)
+        table.insert(field)  // room was ensured above, so this never evicts
     }
 
-    /// Records `field` as seen and reports whether it had already been seen (a repeat worth inserting).
+    /// Evicts the oldest *unreferenced* entries until `field` fits, returning whether it now fits.
     ///
-    /// A repeat is removed from the window — it is about to live in the dynamic table — while a first
-    /// sighting is appended, evicting the oldest tracked field past ``recentFieldLimit``.
-    private mutating func recordAndCheckRepeat(_ field: HeaderField) -> Bool {
-        if let position = recentFields.firstIndex(of: field) {
-            recentFields.remove(at: position)
+    /// Works on a value copy so a partial eviction is never committed: if the oldest entry that still
+    /// stands in the way is referenced by an unacknowledged section (RFC 9204 §2.1.3), nothing is evicted
+    /// and the field is not inserted.
+    private mutating func makeRoom(for field: HeaderField) -> Bool {
+        guard field.tableSize <= table.capacity else {
+            return false  // larger than the whole table — can never fit
+        }
+        var trial = table
+        while !trial.hasRoom(for: field) {
+            guard (referenceCounts[trial.oldestAbsoluteIndex] ?? 0) == 0 else {
+                return false  // the oldest entry is still referenced — cannot make room
+            }
+            trial.evictOldest()
+        }
+        table = trial
+        return true
+    }
+
+    /// Records `field` in the recent-sightings window and reports whether it had already been seen — a
+    /// repeat worth inserting.
+    ///
+    /// The field stays in the window until it is actually inserted, so a repeat whose insert is deferred
+    /// (no room yet) is not mistaken for a first sighting next time.
+    private mutating func isRepeatedField(_ field: HeaderField) -> Bool {
+        if recentFields.contains(field) {
             return true
         }
         recentFields.append(field)
@@ -95,39 +128,95 @@ extension QPACKEncoder {
         return false
     }
 
-    /// Encodes one field line, preferring a known-received dynamic indexed reference (§4.5.2) over the
-    /// static path, and raising `maxAbsolute` to the highest dynamic absolute index it references.
+    /// Drops `field` from the recent-sightings window once it lives in the dynamic table.
+    private mutating func forgetRecentField(_ field: HeaderField) {
+        if let position = recentFields.firstIndex(of: field) {
+            recentFields.remove(at: position)
+        }
+    }
+
+    // MARK: Representation + blocking (RFC 9204 §4.5 / §2.1.2)
+
+    /// Encodes one field line, preferring a dynamic indexed reference (§4.5.2) over the static path and
+    /// recording the absolute index it referenced.
     private func encodeFieldDynamic(
-        _ field: HeaderField, base: Int, into reps: inout [UInt8], maxAbsolute: inout Int
+        _ field: HeaderField,
+        base: Int,
+        mayBlock: Bool,
+        into reps: inout [UInt8],
+        referenced: inout [Int]
     ) {
-        if let absolute = dynamicReference(for: field) {
-            // §4.5.2 — a dynamic indexed field line (T=0), relative to Base = knownReceivedCount.
+        if let absolute = referenceableDynamic(field, mayBlock: mayBlock) {
             QPACKInteger.encode(base - 1 - absolute, prefixBits: 6, firstByte: 0x80, into: &reps)
-            maxAbsolute = max(maxAbsolute, absolute)
+            referenced.append(absolute)
             return
         }
         encode(field, into: &reps)  // §4.5 static-exact / static-name / literal
     }
 
-    /// The absolute index of a known-received dynamic entry equal to `field` that the static table does
-    /// not already cover exactly, or nil (RFC 9204 §4.5.2) — referencing only known-received entries is
-    /// what keeps a section from ever blocking the peer.
-    private func dynamicReference(for field: HeaderField) -> Int? {
+    /// The absolute index of a dynamic entry equal to `field` the encoder may reference: one the peer is
+    /// known to hold, or — when `mayBlock` — a freshly inserted one the peer will block on briefly.
+    private func referenceableDynamic(_ field: HeaderField, mayBlock: Bool) -> Int? {
         guard QPACKStaticTable.exactIndex[field] == nil else {
-            return nil  // a static-exact field uses the cheaper static representation
+            return nil  // the static table covers it exactly — cheaper than a dynamic reference
         }
-        guard let absolute = table.absoluteIndex(of: field), absolute < knownReceivedCount else {
-            return nil  // absent, or inserted but not yet acknowledged as received
+        guard let absolute = table.absoluteIndex(of: field) else {
+            return nil
         }
-        return absolute
+        if absolute < knownReceivedCount {
+            return absolute  // known-received — referencing it never blocks
+        }
+        return mayBlock ? absolute : nil
+    }
+
+    /// Whether a section on `streamID` may reference a not-yet-acknowledged entry — true if the stream is
+    /// already blocked (no new blocked stream) or another blocked stream fits under the peer's limit.
+    private func mayBlockStream(_ streamID: UInt64) -> Bool {
+        if isStreamBlocked(streamID) {
+            return true
+        }
+        return blockedStreamCount() < peerBlockedStreams
+    }
+
+    /// Whether `streamID` already has an unacknowledged section whose Required Insert Count exceeds the
+    /// known-received count (RFC 9204 §2.1.2).
+    private func isStreamBlocked(_ streamID: UInt64) -> Bool {
+        guard let sections = outstandingSections[streamID] else {
+            return false
+        }
+        return sections.contains { $0.requiredInsertCount > knownReceivedCount }
+    }
+
+    /// The number of streams currently blocked on not-yet-received inserts (RFC 9204 §2.1.2).
+    private func blockedStreamCount() -> Int {
+        outstandingSections.values.reduce(0) { count, sections in
+            count + (sections.contains { $0.requiredInsertCount > knownReceivedCount } ? 1 : 0)
+        }
+    }
+
+    /// Records a non-static section as outstanding and bumps the reference count of each entry it used,
+    /// pinning those entries against eviction until the peer acknowledges the section (RFC 9204 §2.1.3).
+    private mutating func recordOutstanding(
+        streamID: UInt64, requiredInsertCount: Int, references: [Int]
+    ) {
+        guard requiredInsertCount > 0 else {
+            return  // a Required-Insert-Count-0 section is never acknowledged (§4.4.1)
+        }
+        let section = OutstandingSection(
+            requiredInsertCount: requiredInsertCount,
+            references: references
+        )
+        outstandingSections[streamID, default: []].append(section)
+        for absolute in references {
+            referenceCounts[absolute, default: 0] += 1
+        }
     }
 
     /// Writes the §4.5.1 prefix for `requiredInsertCount` and `base`.
     ///
     /// A zero Required Insert Count is the static prefix (RIC 0, Base 0). Otherwise `base ≥ ric` always
-    /// holds — references are to known-received entries, so `ric ≤ knownReceivedCount = base` — giving
-    /// the S=0 form with DeltaBase = base − ric (§4.5.1.2); the wrapped Encoded Insert Count uses the
-    /// same MaxEntries = capacity / 32 the peer decoder applies (§4.5.1.1).
+    /// holds — every reference is below the insert count — giving the S=0 form with DeltaBase = base − ric
+    /// (§4.5.1.2); the wrapped Encoded Insert Count uses the MaxEntries = capacity / 32 the peer applies.
     private func appendPrefix(requiredInsertCount ric: Int, base: Int, into output: inout [UInt8]) {
         guard ric > 0 else {
             output.append(0x00)  // Required Insert Count 0
@@ -138,78 +227,5 @@ extension QPACKEncoder {
         let encodedInsertCount = (ric % (2 * maxEntries)) + 1
         QPACKInteger.encode(encodedInsertCount, prefixBits: 8, into: &output)
         QPACKInteger.encode(base - ric, prefixBits: 7, firstByte: 0x00, into: &output)  // S=0
-    }
-
-    // MARK: Decoder-stream acknowledgments (RFC 9204 §4.4)
-
-    /// Applies the peer decoder's instruction stream, advancing the known-received count from each Insert
-    /// Count Increment (RFC 9204 §4.4.3) and consuming Section Acknowledgments / Stream Cancellations.
-    ///
-    /// Returns the octets consumed; a partial trailing instruction is left for the next call. An Increment
-    /// of 0, or one beyond the inserts actually made, is a QPACK_DECODER_STREAM_ERROR (§4.4.3).
-    public mutating func applyDecoderInstructions(_ span: RawSpan) throws(QPACKError) -> Int {
-        var reader = ByteReader(span)
-        var committed = reader.position
-        while let first = reader.peek() {
-            guard try applyOneDecoderInstruction(&reader, first: first) else {
-                break  // truncated — stop at the last complete instruction
-            }
-            committed = reader.position
-        }
-        return committed
-    }
-
-    /// Applies one decoder-stream instruction, advancing `reader` on success; false (unmoved) if truncated.
-    private mutating func applyOneDecoderInstruction(
-        _ reader: inout ByteReader, first: UInt8
-    ) throws(QPACKError) -> Bool {
-        if first & 0x80 != 0 {
-            return try consumeAckStreamID(&reader, prefixBits: 7)  // §4.4.1 Section Acknowledgment
-        }
-        if first & 0x40 != 0 {
-            return try consumeAckStreamID(&reader, prefixBits: 6)  // §4.4.2 Stream Cancellation
-        }
-        return try applyInsertCountIncrement(&reader)  // §4.4.3
-    }
-
-    /// RFC 9204 §4.4.3 — Insert Count Increment: advance the known-received count, or fault if it is 0 or
-    /// would exceed the inserts actually made.
-    private mutating func applyInsertCountIncrement(
-        _ reader: inout ByteReader
-    ) throws(QPACKError) -> Bool {
-        var probe = reader
-        switch QPACKInteger.decode(&probe, prefixBits: 6) {
-            case .value(let increment):
-                guard increment > 0 else {
-                    throw .decoderStreamError("Insert Count Increment of 0")
-                }
-                guard knownReceivedCount + increment <= table.insertCount else {
-                    throw .decoderStreamError("Insert Count Increment beyond the inserts made")
-                }
-                acknowledgeInserts(increment)  // validated above, so the clamp is a no-op
-                reader = probe
-                return true
-            case .incomplete:
-                return false
-            case .overflow:
-                throw .decoderStreamError("invalid Insert Count Increment")
-        }
-    }
-
-    /// Consumes a Section Acknowledgment / Stream Cancellation stream id (RFC 9204 §4.4.1/§4.4.2) — the
-    /// never-evict encoder keeps no per-section state, so the id is validated and discarded.
-    private func consumeAckStreamID(
-        _ reader: inout ByteReader, prefixBits: Int
-    ) throws(QPACKError) -> Bool {
-        var probe = reader
-        switch QPACKInteger.decode(&probe, prefixBits: prefixBits) {
-            case .value:
-                reader = probe
-                return true
-            case .incomplete:
-                return false
-            case .overflow:
-                throw .decoderStreamError("invalid acknowledgment stream id")
-        }
     }
 }

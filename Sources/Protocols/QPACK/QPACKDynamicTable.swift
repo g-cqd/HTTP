@@ -134,6 +134,21 @@ public struct QPACKDynamicTable: Sendable, Equatable {
         evict(untilRoomFor: 0)
     }
 
+    /// Evicts exactly the oldest entry (lowest absolute index), returning it, or nil if empty.
+    ///
+    /// RFC 9204 §3.2.2 — for an encoder that gates eviction on its own reference tracking (§2.1.3): it
+    /// checks ``oldestAbsoluteIndex`` is unreferenced before calling this, rather than letting
+    /// ``insert(_:)`` evict blindly. `insertCount` is unchanged, so survivors keep their absolute indices.
+    @discardableResult
+    public mutating func evictOldest() -> HeaderField? {
+        guard let oldest = entries.last else {
+            return nil
+        }
+        size -= oldest.tableSize
+        entries.removeLast()
+        return oldest
+    }
+
     /// Evicts the oldest entries until `incoming` more octets would fit within ``capacity`` (§3.2.2).
     ///
     /// Eviction removes the entry with the *lowest* absolute index; `insertCount` is unchanged, so every
