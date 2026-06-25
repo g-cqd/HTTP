@@ -78,6 +78,35 @@ and charges *server-emitted* RST_STREAM, closing the **MadeYouReset** bypass (H2
 CVE-2023-44487); trailers scoped and validated as **stream** errors (H2-F2/F3/F5, §8.1); and a frame on
 a closed stream reported as **STREAM_CLOSED** via a bounded recently-closed-id set (F1, §5.1).
 
+### Deep hardening (2026-06-25)
+Traced in `Documentation/audit/2026-06-25-deep-hardening-audit.md`:
+- **Secure-by-default limits.** `maxConnections` / `maxConnectionsPerClient` default to 65 536 / 1 024
+  (were 1 048 576, which defanged the global/per-client caps); `maxConcurrentStreams` stays a bounded
+  128. `HTTPLimits.highThroughput` restores the permissive ceilings for trusted/benchmark use;
+  `HTTPLimits.hardened` tightens them further (CWE-770).
+- **Chunked body-phase buffer bounded.** An endless chunk-size / chunk-ext / trailer line with no CRLF
+  is failed closed by a per-line bound (`ChunkedBodyDecoder.readLine`) rather than buffered without
+  limit (RFC 9112 §7.1; CWE-400/770).
+- **HTTP/2 abuse budget completed.** A server-emitted REFUSED_STREAM is now charged (closing the
+  concurrency-cap Rapid-Reset/MadeYouReset bypass, CVE-2025-8671 / CVE-2023-44487); zero-length DATA
+  (CVE-2019-9518), PRIORITY (CVE-2019-9513), WINDOW_UPDATE-on-closed, and SETTINGS-ACK charge a separate
+  `maxControlFramesPerInterval` budget (`HTTP2Connection+AbuseBudget.swift`).
+- **WebSocket Origin is secure-by-default.** The default policy admits only a no-`Origin` (non-browser)
+  client and rejects browser origins until allowlisted — closing the CSWSH default-open (RFC 6455 §10.2,
+  CWE-346/1385; `WebSocketHandler`).
+- **WebSocket text UTF-8 validated incrementally** across fragments — rejected at the first bad octet,
+  not after the whole message buffers (RFC 6455 §8.1; `IncrementalUTF8Validator`).
+- **Cookie attributes validated.** `SetCookie` validates `Domain`/`Path` octets + the `__Host-` /
+  `__Secure-` prefix invariants; `headerValue` is fail-closed (`String?`), so an attacker-controlled
+  attribute cannot inject a directive or split the header (RFC 6265bis §4.1; CWE-113).
+- **CORS hardened.** `.any` never pairs a wildcard with credentials; `.allowList` does safe credentialed
+  multi-origin; a reflected origin carries `Vary: Origin` (Fetch §3.2; CWE-942; `CORSMiddleware.swift`).
+- **`Expect: 100-continue`** handled: an interim `100 Continue` (or `417` for an unsupported
+  expectation) is sent before the body, so a compliant client no longer stalls (RFC 9110 §10.1.1).
+
+Single-source-of-truth refactor: the HTTP/2 and HTTP/3 request mappers were unified into one
+`HTTPCore.RequestMapper`, so the §8.3 / §4.3 pseudo-header + field validation lives in exactly one place.
+
 ## Pending (tracked)
 
 These are **not yet enforced** — do not rely on them until the referenced milestone lands.
@@ -86,8 +115,8 @@ These are **not yet enforced** — do not rely on them until the referenced mile
 |---|---|---|
 | **transport**: strict ALPN no-overlap rejection (the platform does not send `no_application_protocol`) | ALPACA-class cross-protocol confusion | reject a TLS connection that resolved to a nil / unadvertised protocol (T-F6) |
 | **transport(kqueue)**: a parked read/write continuation leaks when the fd is closed mid-wait | task/memory leak via the Slowloris-timeout path | drain pending resumers in `KqueueEventLoop.closeDescriptor` (T-F7) |
-| **ws**: the `inbound` drain uses `removeFirst` (O(n) per read) | quadratic CPU under dribbled frames | consumed-offset + compaction (WS-F4; performance lane) |
-| **h1**: no `Expect: 100-continue` handling | stalled compliant clients / pause-desync | emit interim `100 Continue` or `417` (H1-F4) |
+| **transport(posix)**: accept-error back-off (`EMFILE`/`ENFILE`) `usleep`s on the shared accept/event-loop queue | FD-pressure latency for all connections | move the back-off off the shared queue (T-F8; transport follow-up) |
+| **transport(posix)**: IPv4-only listener; hard-coded `listen` backlog | coherency vs the dual-stack Network.framework backbone | dual-stack `AF_INET6` + configurable backlog (T-F12/T-F14; transport follow-up) |
 
 > Resolved since the first review (now implemented): per-client **and** global connection caps; the
 > CONTINUATION flood guard (CVE-2024-27316); the h1 header-accumulation cap; the HTTP/2 Rapid-Reset
