@@ -45,6 +45,15 @@ extension HTTPFieldName {
     /// `ETag` (RFC 9110 §8.8.3).
     public static let etag = HTTPFieldName(unchecked: "etag")
 
+    // MARK: Range requests (RFC 9110 §14)
+
+    /// `Range` (RFC 9110 §14.2).
+    public static let range = HTTPFieldName(unchecked: "range")
+    /// `Content-Range` (RFC 9110 §14.4).
+    public static let contentRange = HTTPFieldName(unchecked: "content-range")
+    /// `Accept-Ranges` (RFC 9110 §14.3).
+    public static let acceptRanges = HTTPFieldName(unchecked: "accept-ranges")
+
     // MARK: General & response metadata
 
     /// `Date` (RFC 9110 §6.6.1).

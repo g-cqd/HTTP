@@ -24,6 +24,8 @@ extension HTTPStatus {
     public static let accepted = HTTPStatus(unchecked: 202)
     /// `204 No Content` (RFC 9110 §15.3.5).
     public static let noContent = HTTPStatus(unchecked: 204)
+    /// `206 Partial Content` (RFC 9110 §15.3.7) — a range response.
+    public static let partialContent = HTTPStatus(unchecked: 206)
 
     // MARK: 3xx Redirection
 
@@ -46,6 +48,8 @@ extension HTTPStatus {
     public static let notFound = HTTPStatus(unchecked: 404)
     /// `405 Method Not Allowed` (RFC 9110 §15.5.6).
     public static let methodNotAllowed = HTTPStatus(unchecked: 405)
+    /// `416 Range Not Satisfiable` (RFC 9110 §15.5.17).
+    public static let rangeNotSatisfiable = HTTPStatus(unchecked: 416)
     /// `408 Request Timeout` (RFC 9110 §15.5.9) — emitted on Slowloris header/body timeouts.
     public static let requestTimeout = HTTPStatus(unchecked: 408)
     /// `413 Content Too Large` (RFC 9110 §15.5.14).
