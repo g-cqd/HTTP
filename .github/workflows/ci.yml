@@ -62,6 +62,21 @@ jobs:
           python3 -c "import json,sys; p=json.load(open('cov.json'))['data'][0]['totals']['lines']['percent']; print('Sources line coverage: %.2f%%' % p); sys.exit(0 if p>=85 else 1)" || { echo '::error::Sources line coverage is below the 85% threshold'; exit 1; }
 
   # ---------------------------------------------------------------------------
+  # Release-mode test lane: optimized build + full suite, catching optimizer-only and release-assert
+  # behavior the debug run misses (also the configuration the perf numbers + h2spec use).
+  # ---------------------------------------------------------------------------
+  release-test:
+    runs-on: macos-26
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Test (release)
+        run: swift test -c release --scratch-path "$SCRATCH"
+
+  # ---------------------------------------------------------------------------
   # Hard constraint (CLAUDE.md): SwiftNIO MUST NOT appear in the dependency graph.
   # ---------------------------------------------------------------------------
   no-swiftnio:
@@ -89,7 +104,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Assert the request path is trap-free
         run: |
-          targets="Sources/HTTPCore Sources/HTTP1 Sources/HTTP2 Sources/HPACK Sources/QPACK Sources/HTTP3 Sources/WebSocket Sources/HTTPServer Sources/HTTPTransport Sources/HTTPConcurrency"
+          targets="Sources/Core/HTTPCore Sources/Protocols/HTTP1 Sources/Protocols/HTTP2 Sources/Protocols/HPACK Sources/Protocols/QPACK Sources/Protocols/HTTP3 Sources/Protocols/WebSocket Sources/Server/HTTPServer Sources/Transport/HTTPTransport Sources/Core/HTTPConcurrency"
           pattern='(fatalError|preconditionFailure|assertionFailure)\(|(^|[^A-Za-z.])precondition\(|(^|[^A-Za-z])assert\(|\.unsafelyUnwrapped'
           hits="$(grep -rnE "$pattern" $targets --include='*.swift' 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)"
           if [ -n "$hits" ]; then
