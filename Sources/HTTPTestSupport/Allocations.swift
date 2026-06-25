@@ -18,9 +18,10 @@ public var allocationCountingAvailable: Bool { httptk_malloc_counting_available(
 
 /// Counts the heap allocations made during `body`.
 ///
-/// Run a SYNCHRONOUS body with no concurrent work (the count is process-wide) and WARM UP first (call
-/// the body once before measuring) so one-time lazy initialization doesn't skew the delta. Returns
-/// `nil` where counting is unavailable (the body still runs, for its side effects).
+/// Run a SYNCHRONOUS body and WARM UP first (call the body once before measuring) so one-time lazy
+/// initialization doesn't skew the delta. Counting is per measuring thread, so a concurrently running
+/// test does not inflate the count — but allocations the body makes on *other* threads are likewise not
+/// counted. Returns `nil` where counting is unavailable (the body still runs, for its side effects).
 public func mallocDelta(_ body: () -> Void) -> Int? {
     guard httptk_malloc_counting_available() != 0 else {
         body()
@@ -35,7 +36,8 @@ public func mallocDelta(_ body: () -> Void) -> Int? {
 ///
 /// A re-introduced copy / box / un-reserved growth on a hot path trips it. Warm up + measure
 /// synchronously (see ``mallocDelta(_:)``). Where counting is unavailable it runs the body and
-/// records nothing (no false failure); returns the measured count (`nil` if unavailable).
+/// records nothing (no false failure); returns the measured count (`nil` if unavailable). Counting is
+/// per-thread, so a suite running in parallel does not inflate the measurement.
 @discardableResult
 public func expectAllocations(
     noMoreThan limit: Int,
