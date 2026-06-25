@@ -9,7 +9,7 @@
 //
 
 internal import HTTP2
-public import HTTPCore
+internal import HTTPCore
 internal import HTTPTransport
 internal import Synchronization
 

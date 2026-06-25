@@ -125,18 +125,18 @@ enum POSIXSocket {
     /// (IPv4 RFC 791 / IPv6 RFC 4291) via `getnameinfo` — no per-family `inet_ntop` branching.
     static func peerAddress(from storage: sockaddr_storage) -> TransportAddress {
         var source = storage
-        var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-        var service = [CChar](repeating: 0, count: Int(NI_MAXSERV))
+        var hostBuffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+        var serviceBuffer = [CChar](repeating: 0, count: Int(NI_MAXSERV))
         let length = socklen_t(source.ss_len)
         let status = withUnsafePointer(to: &source) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
                 getnameinfo(
                     sockaddrPointer,
                     length,
-                    &host,
-                    socklen_t(host.count),
-                    &service,
-                    socklen_t(service.count),
+                    &hostBuffer,
+                    socklen_t(hostBuffer.count),
+                    &serviceBuffer,
+                    socklen_t(serviceBuffer.count),
                     NI_NUMERICHOST | NI_NUMERICSERV
                 )
             }
@@ -144,8 +144,15 @@ enum POSIXSocket {
         guard status == 0 else {
             return TransportAddress(host: "", port: 0)
         }
-        let port = UInt16(String(cString: service)) ?? 0
-        return TransportAddress(host: String(cString: host), port: port)
+        let service = string(fromCString: serviceBuffer)
+        return TransportAddress(host: string(fromCString: hostBuffer), port: UInt16(service) ?? 0)
+    }
+
+    /// Decodes a null-terminated `CChar` buffer to a UTF-8 `String`, trimming at the NUL — the
+    /// non-deprecated replacement for `String(cString:)`.
+    private static func string(fromCString buffer: [CChar]) -> String {
+        let bytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes, as: Unicode.UTF8.self)
     }
 
     /// Classifies an `accept()` failure (backs off briefly on fd exhaustion before retrying).
