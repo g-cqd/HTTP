@@ -81,6 +81,25 @@ public struct QPACKDynamicTable: Sendable, Equatable {
         field(atAbsolute: insertCount - 1 - relativeIndex)
     }
 
+    /// The absolute index of the newest entry exactly equal to `field`, or nil if none is held.
+    ///
+    /// RFC 9204 §3.2.4 — lets an encoder reuse an already-inserted field as a dynamic indexed reference.
+    /// Newest-first, so the most recently inserted match (highest absolute index) wins.
+    public func absoluteIndex(of field: HeaderField) -> Int? {
+        for (position, entry) in entries.enumerated() where entry == field {
+            return insertCount - 1 - position
+        }
+        return nil
+    }
+
+    /// Whether `field` would fit without evicting any existing entry (room within ``capacity``).
+    ///
+    /// A never-evicting encoder checks this before inserting, so it never displaces an entry that a
+    /// pending, unacknowledged section might still reference (RFC 9204 §2.1.3).
+    public func hasRoom(for field: HeaderField) -> Bool {
+        size + field.tableSize <= capacity
+    }
+
     /// Inserts `field` as the newest entry, first evicting the oldest entries to make room (§3.2.2).
     ///
     /// Returns false without inserting if `field` is larger than the whole capacity — a §3.2.2 error the
