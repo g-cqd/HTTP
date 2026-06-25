@@ -37,7 +37,7 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       eviction tests; no caching of uncacheable responses. ✓ 790 tests green; ASan clean. (Stale-entry
       revalidation deferred as a follow-up — see CacheMiddleware doc.)
 
-- [~] **P6 — Streaming bodies (keystone).** Additive `ResponseStream` + `ResponseBodyWriter`;
+- [x] **P6 — Streaming bodies (keystone).** Additive `ResponseStream` + `ResponseBodyWriter`;
       `ServerResponse.body` unchanged, `.stream`/`.serverSentEvents` opt-in. **P6a done:** native HTTP/1.1
       chunked streaming + SSE, middleware guards (Compression/Cache skip streams), h2/h3 finite-buffer
       fallback. ✓ 795 tests green (790 buffered unchanged), ASan clean.
@@ -66,8 +66,8 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       + conditional, large files streamed (P6a). _Gate:_ traversal rejected, validators, ranged/
       conditional/HEAD/index/streamed tests. ✓ 803 tests green; ASan clean.
 
-- [~] **P8 — Protocol depth.** _Research/design done (this session); implementation is deep, conformance/
-      security-sensitive work to do with fresh context, each feature fully tested._
+- [x] **P8 — Protocol depth.** _Complete: WebSocket permessage-deflate (S3), RFC 9218 priority (S1), and
+      the bidirectional QPACK dynamic table (S5) are all implemented, conformance-gated, and signed._
       - [x] **WebSocket permessage-deflate (RFC 7692) — S3 done.** `Sec-WebSocket-Extensions`
         negotiated + echoed (h1 `WebSocketHandshake`; RFC 8441 h2 `acceptTunnel`), `WebSocketFrame.rsv1`
         with the decoder allowing RSV1 only when negotiated — never on a control or continuation frame —
@@ -85,7 +85,7 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
         on-control rejected, bomb cap → close, negotiation accept/echo/decline/honor, +3 pmd fuzz; ASan
         clean. (Autobahn CI remains a P10 item.)
         ✓ 829.
-      - [~] **QPACK dynamic table (RFC 9204) — S5 foundation + S5a decoder done; S5b/S5c + wiring next.**
+      - [x] **QPACK dynamic table (RFC 9204) — S5 complete (bidirectional + blocked streams).**
         ✓ **S5 foundation:** `QPACKDynamicTable` — a separate-index-space FIFO with the §3.2.4–§3.2.6
         absolute / Base-relative / post-base / insert-point arithmetic (the known interop trap), §3.2.2
         eviction, Set Capacity, Duplicate — 9 unit tests. ✓ **S5a decoder-side dynamic:** the
@@ -97,12 +97,18 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
         representations. _Gate:_ 9 dynamic round-trip + fault tests (indexed/name-ref/post-base/evict/
         duplicate; RIC-beyond-inserts rejected; oversized Set Capacity → encoder-stream error; truncated
         instruction left unconsumed); no regression in the 51 QPACK / 71 HTTP3 tests; ASan clean.
-        **Remaining:** S5b blocked-stream buffering (decode a section whose RIC exceeds received inserts,
-        up to `QPACK_BLOCKED_STREAMS`); the connection wiring (execute inserts in `parseQpackStream`, emit
-        Section-Ack / Insert-Count-Increment on the decoder stream, raise the SETTINGS to enable it); and
-        S5c the response *encoder*'s insert heuristic + encoder-stream output (or keep it static-only —
-        valid, since each endpoint chooses its own encoder strategy). Static-only stays the operational
-        fallback until the wiring lands.
+        ✓ **S5b connection wiring + blocked streams:** the connection advertises
+        `SETTINGS_QPACK_MAX_TABLE_CAPACITY`/`QPACK_BLOCKED_STREAMS`, applies the peer's encoder-stream
+        inserts and emits Insert Count Increment (§4.4.3), Section-Acknowledges a request that used the
+        dynamic table (§4.4.1), and buffers a request whose Required Insert Count exceeds the received
+        inserts until the encoder stream unblocks it (§2.1.2), bounded by the advertised limit. ✓ **S5c
+        response encoder:** a conservative never-evict / never-block / insert-on-second-use encoder
+        (`QPACKEncoder.encodeSection`) inserts a repeated header on the QPACK encoder stream and references
+        it only once the peer's Insert Count Increment confirms receipt, so a section never blocks and the
+        table never evicts (§2.1.3 trivial); the peer's decoder-stream acknowledgments are processed
+        (`applyDecoderInstructions`). Static-only remains the fallback for a peer that disables the table
+        and for the streaming response path. _Gate:_ encoder→decoder end-to-end round-trips, engine
+        insert/ack/unblock tests, h3 conformance updated for the 4096 limit; 871 tests; ASan clean.
       - [x] **Priority scheduling (RFC 9218) — S1 done.** h2 `StreamRecord.urgency` cached from the
         request's `Priority` field at stream creation; `flushAll` orders ready streams by ascending
         urgency (ties → lower stream id) so a congested connection releases higher-priority DATA first
