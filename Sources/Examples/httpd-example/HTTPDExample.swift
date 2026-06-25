@@ -3,18 +3,21 @@
 //  httpd-example
 //
 //  A runnable example server — the library's end-to-end deliverable. It selects one of the four
-//  transport backbones, wires a small set of routes through a `ClosureResponder` (the result-builder
-//  routing DSL will replace this hand-written switch in a later milestone), and serves both HTTP/1.1
-//  and HTTP/2 cleartext (h2c, prior knowledge) on the same port — the server sniffs the protocol.
+//  transport backbones, wires its routes through the result-builder ``Router`` DSL behind a middleware
+//  chain (metrics, gzip, security headers, CORS, conditional GET, Range), and serves HTTP/1.1 and
+//  HTTP/2 cleartext (h2c, prior knowledge) on the same port — the server sniffs the protocol — plus
+//  HTTP/3 when run with `tls`.
 //
 //  Usage:
-//    swift run httpd-example [port] [backbone]
+//    swift run httpd-example [port] [backbone] [tls]
 //      port      — TCP port to bind (default 8080)
-//      backbone  — networkFramework | posixKqueue | posixDispatch | swiftSystem (default the first)
+//      backbone  — networkFramework | posixKqueue | posixDispatch | swiftSystem (default swiftSystem)
 //
 //  Then, in another shell:
 //    curl -v --http1.1 http://127.0.0.1:8080/
-//    curl -v --http2-prior-knowledge http://127.0.0.1:8080/
+//    curl -v http://127.0.0.1:8080/hello/world          # a :name path parameter
+//    curl -v --range 0-31 http://127.0.0.1:8080/large   # 206 Partial Content (RangeMiddleware)
+//    curl -v http://127.0.0.1:8080/metrics              # the HTTPMetrics seam
 //    curl -v --http2-prior-knowledge --data 'ping' http://127.0.0.1:8080/echo
 //
 
@@ -22,6 +25,7 @@ import Foundation
 import HTTPCore
 import HTTPServer
 import HTTPTransport
+import Synchronization
 import WebSocket
 
 @main
@@ -47,21 +51,24 @@ enum HTTPDExample {
         // HTTPD_QUIET drops the per-request access-log `print` (it dominates under load) — the fair
         // posture for the Bench/ comparison against logging-off reference servers.
         let quiet = ProcessInfo.processInfo.environment["HTTPD_QUIET"] != nil
+        let metrics = ExampleMetrics()  // the HTTPMetrics seam, surfaced at GET /metrics below
         var middlewares: [any HTTPMiddleware] = []
         if !quiet {
             middlewares.append(AccessLogMiddleware { print("httpd-example: \($0)") })
         }
         middlewares.append(
             contentsOf: [
+                MetricsMiddleware(metrics),  // RED signals over the whole chain (outermost timing)
                 CompressionMiddleware(),  // gzip the outgoing body
                 ServerHeaderMiddleware("httpd-example"),
                 DateHeaderMiddleware(),
                 SecurityHeadersMiddleware(),
                 CORSMiddleware(),
-                ConditionalRequestMiddleware()  // ETag on the raw body, If-None-Match → 304
+                ConditionalRequestMiddleware(),  // ETag on the raw body, If-None-Match → 304
+                RangeMiddleware()  // innermost: Range → 206 (§14)
             ] as [any HTTPMiddleware]
         )
-        let responder = MiddlewareChain(middlewares, terminatingAt: makeResponder())
+        let responder = MiddlewareChain(middlewares, terminatingAt: makeRouter(metrics: metrics))
         // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
         // QUIC/TLS); the server advertises it via Alt-Svc (RFC 7838) on the h1/h2 responses so a
         // browser upgrades to h3 on the next request.
@@ -130,30 +137,35 @@ enum HTTPDExample {
             }
     }
 
-    // MARK: Routing (a plain switch until the routing DSL lands)
+    // MARK: Routing (the result-builder DSL)
 
-    private static func makeResponder() -> ClosureResponder {
-        ClosureResponder { request, body in
-            // HEAD is GET without a body; the server strips the body, so route the two together
-            // (RFC 9110 §9.3.2).
-            let method: HTTPMethod = request.method == .head ? .get : request.method
-            switch (method, request.path) {
-                case (.get, "/"):
-                    return text(
-                        .ok, "Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 server.\n"
-                    )
-                case (.get, "/health"):
-                    return text(.ok, "OK\n")
-                case (.get, "/large"):
-                    // A large, compressible body to exercise the gzip middleware (curl --compressed).
-                    return text(
-                        .ok, String(repeating: "from-scratch swift http server. ", count: 256)
-                    )
-                case (.post, "/echo"):
-                    return ServerResponse(HTTPResponse(status: .ok), body: body)  // echo the body
-                default:
-                    return text(.notFound, "Not Found\n")
+    /// Builds the route table with the ``Router`` DSL — the real routing surface, replacing the old
+    /// hand-written switch.
+    ///
+    /// Demonstrates static routes, a `:name` path parameter, a body echo, and surfacing the metrics
+    /// seam. `HEAD` is served by the matching `GET` (RFC 9110 §9.3.2); an unknown path is 404 and a
+    /// known path with the wrong method is 405 — both folded by the router.
+    private static func makeRouter(metrics: ExampleMetrics) -> Router {
+        Router {
+            Route.get("/") { _, _, _ in
+                .text("Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 + HTTP/3 server.\n")
             }
+            Route.get("/health") { _, _, _ in .text("OK\n") }
+            // A `:name` path parameter (RFC 3986 §3.3), captured into RouteParameters.
+            Route.get("/hello/:name") { _, parameters, _ in
+                .text("Hello, \(parameters["name"] ?? "world")!\n")
+            }
+            // A large, compressible, range-able body — exercises CompressionMiddleware (curl
+            // --compressed) and RangeMiddleware (curl -r 0-31 → 206 Partial Content).
+            Route.get("/large") { _, _, _ in
+                .text(String(repeating: "from-scratch swift http server. ", count: 256))
+            }
+            // Echo the request body straight back.
+            Route.post("/echo") { _, _, body in
+                ServerResponse(HTTPResponse(status: .ok), body: body)
+            }
+            // Surfaces the HTTPMetrics seam the MetricsMiddleware feeds (rate + errors).
+            Route.get("/metrics") { _, _, _ in .text(metrics.snapshot()) }
         }
     }
 
@@ -171,16 +183,6 @@ enum HTTPDExample {
                         return []  // Ping is auto-answered by the engine; Pong/Close need no reply
                 }
             }
-        )
-    }
-
-    /// Builds a `text/plain` response (RFC 9110 §8.3) carrying `message`.
-    private static func text(_ status: HTTPStatus, _ message: String) -> ServerResponse {
-        var fields = HTTPFields()
-        fields.append("text/plain; charset=utf-8", for: .contentType)
-        return ServerResponse(
-            HTTPResponse(status: status, headerFields: fields),
-            body: Array(message.utf8)
         )
     }
 

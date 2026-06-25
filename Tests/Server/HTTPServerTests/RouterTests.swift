@@ -53,6 +53,14 @@ struct RouterTests {
         #expect(response.head.status == .methodNotAllowed)
     }
 
+    @Test("HEAD is served by the matching GET route, not 405 (RFC 9110 §9.3.2)")
+    func headFoldsToGet() async {
+        let router = Router { Route.get("/a") { _, _, _ in Self.ok("a") } }
+        // HEAD matches the GET route; the server omits the body downstream (the router returns it).
+        let response = await router.respond(to: request(.head, "/a"), body: [])
+        #expect(response.head.status == .ok)
+    }
+
     @Test("a trailing slash and a query string do not affect matching (RFC 3986)")
     func normalizesPath() async {
         let router = Router { Route.get("/a/b") { _, _, _ in Self.ok("hit") } }

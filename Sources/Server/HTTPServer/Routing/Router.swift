@@ -24,14 +24,19 @@ public struct Router: HTTPResponder {
     }
 
     /// Routes `request` to the first matching route, or a `404` / `405` (RFC 9110 §15.5).
+    ///
+    /// A `HEAD` is served by the matching `GET` route (the server omits the body, RFC 9110 §9.3.2).
     public func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
         let components = Self.pathComponents(of: request.path)
+        // HEAD is GET without a body (RFC 9110 §9.3.2): match it against GET routes and let the server
+        // strip the body, so a registered GET also answers HEAD instead of a spurious 405.
+        let matchMethod: HTTPMethod = request.method == .head ? .get : request.method
         var methodMismatch = false
         for route in routes {
             guard let parameters = route.match(components) else {
                 continue
             }
-            guard route.method == request.method else {
+            guard route.method == matchMethod else {
                 methodMismatch = true  // path matched, method did not — remember for a 405
                 continue
             }
