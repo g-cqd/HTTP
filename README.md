@@ -42,7 +42,7 @@ mapping exist as sans-I/O primitives; the connection/stream engine that drives t
 (Network.framework, RFC 9000/9001/9002), Structured Fields (8941), Cookies (6265bis), Priorities
 (9218), Alt-Svc (7838), WebSocket (6455 / 9220).
 
-Security hardening is traced to its RFC §/CVE in `Documentation/Security.md` (e.g. HTTP/2 Rapid
+Security hardening is traced to its RFC §/CVE in `Docs/Documentation/Security.md` (e.g. HTTP/2 Rapid
 Reset CVE-2023-44487, CONTINUATION flood CVE-2024-27316, request smuggling, decompression bombs).
 
 ## Requirements

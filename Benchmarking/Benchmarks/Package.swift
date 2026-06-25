@@ -21,7 +21,7 @@ let package = Package(
     name: "HTTPBenchmarks",
     platforms: [.macOS("15.6")],
     dependencies: [
-        .package(name: "HTTP", path: ".."),
+        .package(name: "HTTP", path: "../.."),
         .package(url: "https://github.com/ordo-one/benchmark", from: "1.33.0")
     ],
     targets: [

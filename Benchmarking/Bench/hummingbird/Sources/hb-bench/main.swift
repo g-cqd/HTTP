@@ -1,7 +1,7 @@
 //
 //  main.swift — hb-bench
 //
-//  The in-language SwiftNIO baseline for Bench/run.sh: a minimal Hummingbird server mirroring
+//  The in-language SwiftNIO baseline for Benchmarking/Bench/run.sh: a minimal Hummingbird server mirroring
 //  httpd-example's routes (`/`, `/health`) so the comparison is a same-workload, same-load-generator
 //  test. Logging is left at Hummingbird's default (quiet under load). Port comes from argv[1] (8083).
 //

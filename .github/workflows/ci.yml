@@ -58,7 +58,7 @@ jobs:
           bins=()
           while IFS= read -r b; do bins+=("$b/Contents/MacOS/$(basename "$b" .xctest)"); done < <(find "$SCRATCH" -name "*.xctest" -type d)
           objs=("${bins[0]}"); for o in "${bins[@]:1}"; do objs+=(-object "$o"); done
-          xcrun llvm-cov export -format=text -instr-profile="$prof" -ignore-filename-regex="Tests/|[.]build/|Benchmarks/|checkouts/" "${objs[@]}" > cov.json
+          xcrun llvm-cov export -format=text -instr-profile="$prof" -ignore-filename-regex="Tests/|[.]build/|Benchmarking/|checkouts/" "${objs[@]}" > cov.json
           python3 -c "import json,sys; p=json.load(open('cov.json'))['data'][0]['totals']['lines']['percent']; print('Sources line coverage: %.2f%%' % p); sys.exit(0 if p>=85 else 1)" || { echo '::error::Sources line coverage is below the 85% threshold'; exit 1; }
 
   # ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ jobs:
         run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
 
   # ---------------------------------------------------------------------------
-  # Benchmark smoke run (ordo-one/package-benchmark, isolated in Benchmarks/). Non-gating: it guards
+  # Benchmark smoke run (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). Non-gating: it guards
   # against the harness failing to build or a benchmark crashing — not perf drift (runner noise is
   # too high to gate on). Promote to a `benchmark baseline check` once a runner baseline is captured.
   # ---------------------------------------------------------------------------
@@ -126,13 +126,13 @@ jobs:
       - name: Toolchain
         run: swift --version
       - name: Benchmark smoke (build + run)
-        run: swift package --package-path Benchmarks --disable-sandbox benchmark
+        run: swift package --package-path Benchmarking/Benchmarks --disable-sandbox benchmark
 
   # ---------------------------------------------------------------------------
   # HTTP/2 conformance — h2spec (RFC 9113) against the live httpd-example over h2c. Gates on the
   # sections that pass 100% (frame format, streams & multiplexing, frame definitions, GOAWAY, message
   # exchanges, HPACK). Only the invalid-preface case (generic/http2-3, a benign h2c/HTTP-1 ambiguity) is
-  # excluded — see Standards/CONFORMANCE.md. The hard `timeout` turns any future hang into a failure.
+  # excluded — see Docs/Standards/CONFORMANCE.md. The hard `timeout` turns any future hang into a failure.
   # ---------------------------------------------------------------------------
   h2spec:
     runs-on: macos-26
@@ -166,7 +166,7 @@ jobs:
 # (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
 # and under the ASan/TSan matrix above — no separate lane needed.
 #
-# Tracked follow-ups (each blocked on a specific item, see Standards/CONFORMANCE.md):
+# Tracked follow-ups (each blocked on a specific item, see Docs/Standards/CONFORMANCE.md):
 #   • The streams section (http2/5) is now gated — the 5.1.2 hang and the 5.1.12 closed-stream nuance
 #     are fixed. Only generic/http2-3 stay out, for the invalid-preface GOAWAY (a benign ambiguity).
 #   • Autobahn (WebSocket, RFC 6455) — needs the crossbario/autobahn-testsuite Docker image; the CI

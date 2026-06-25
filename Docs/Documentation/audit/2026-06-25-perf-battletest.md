@@ -11,8 +11,8 @@ allocations, not wall-clock alone). It complements the security-focused
 
 ## 1. Method
 
-- **Harness:** `Bench/run.sh` (oha-driven) drives `httpd-example` and the reference servers on identical
-  routes, reporting rps + p50/p99/p99.9. Reproduce with `./Bench/run.sh` (see `Bench/README.md`).
+- **Harness:** `Benchmarking/Bench/run.sh` (oha-driven) drives `httpd-example` and the reference servers on identical
+  routes, reporting rps + p50/p99/p99.9. Reproduce with `./Benchmarking/Bench/run.sh` (see `Benchmarking/Bench/README.md`).
 - **Yardsticks:** **nginx** (the C throughput/latency ceiling), **Caddy** (modern Go, native h3),
   **Hummingbird** (the in-language SwiftNIO baseline — "are we competitive without NIO?").
 - **In-package micro-metrics:** ordo-one `package-benchmark` captures `instructions` + `mallocCountTotal`
@@ -26,8 +26,8 @@ allocations, not wall-clock alone). It complements the security-focused
 
 Every one of our backbones and HTTP-version variants against nginx + Caddy, captured **in one thermal
 sitting** so the cross-server comparison is apples-to-apples (the run-to-run *absolutes* still drift on a
-laptop — §7 — so read the **rankings**, not the digits). Reproduce: `BACKBONE=<b> ./Bench/run.sh` and
-`HTTP2=1 ./Bench/run.sh`.
+laptop — §7 — so read the **rankings**, not the digits). Reproduce: `BACKBONE=<b> ./Benchmarking/Bench/run.sh` and
+`HTTP2=1 ./Benchmarking/Bench/run.sh`.
 
 ### HTTP/1.1 cleartext
 
@@ -58,7 +58,7 @@ laptop — §7 — so read the **rankings**, not the digits). Reproduce: `BACKBO
   ngtcp2-built `h2load` or an h3-enabled `curl`.*
 - **Hummingbird (in-language NIO baseline):** still unbuildable here — `swift package resolve` silently
   no-ops on the `hummingbird` dependency in this SDK/toolchain (GitHub is reachable, so it is not a
-  network fault), producing no `Package.resolved`. Harness config (`Bench/hummingbird/`) is committed for
+  network fault), producing no `Package.resolved`. Harness config (`Benchmarking/Bench/hummingbird/`) is committed for
   a working toolchain. *Open tooling item.*
 
 **Result (the durable rankings):** nginx is the throughput **and** tail leader on both protocols — the C

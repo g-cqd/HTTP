@@ -18,7 +18,7 @@ This harness measures the whole socket-to-socket path: accept, parse, route, ser
 ```sh
 brew install oha            # required load generator (HTTP/1.1 + HTTP/2)
 brew install jq             # optional, for parsed tables
-./Bench/run.sh              # ours vs any installed reference servers, route / , 64 conns, 10s
+./Benchmarking/Bench/run.sh              # ours vs any installed reference servers, route / , 64 conns, 10s
 ```
 
 Useful knobs (all env vars):
@@ -38,14 +38,14 @@ Compare backbones (our four I/O strategies, same engine):
 
 ```sh
 for b in swiftSystem posixKqueue posixDispatch networkFramework; do
-  SERVERS=ours BACKBONE=$b ./Bench/run.sh
+  SERVERS=ours BACKBONE=$b ./Benchmarking/Bench/run.sh
 done
 ```
 
 Compare the modern HTTP/2-over-TLS path (needs `openssl` for the self-signed cert):
 
 ```sh
-HTTP2=1 SERVERS="ours nginx caddy" ./Bench/run.sh   # ours forced onto networkFramework (only TLS backbone)
+HTTP2=1 SERVERS="ours nginx caddy" ./Benchmarking/Bench/run.sh   # ours forced onto networkFramework (only TLS backbone)
 ```
 
 ## Reference servers (the yardsticks)
@@ -53,11 +53,11 @@ HTTP2=1 SERVERS="ours nginx caddy" ./Bench/run.sh   # ours forced onto networkFr
 | server | role | install | port |
 |---|---|---|---|
 | **ours** (`httpd-example`) | the subject | built from this repo (release) | 8080 |
-| **Hummingbird** | in-language SwiftNIO baseline — "are we competitive without NIO?" | `Bench/hummingbird/` (SwiftPM) | 8083 |
+| **Hummingbird** | in-language SwiftNIO baseline — "are we competitive without NIO?" | `Benchmarking/Bench/hummingbird/` (SwiftPM) | 8083 |
 | **nginx** | C throughput/latency ceiling | `brew install nginx` | 8081 |
 | **Caddy** | modern Go, native h1/h2/h3 | `brew install caddy` | 8082 |
 
-`run.sh` launches each present server on its port, mirrors the routes (`Bench/servers/*`), runs `oha`,
+`run.sh` launches each present server on its port, mirrors the routes (`Benchmarking/Bench/servers/*`), runs `oha`,
 parses the JSON, and prints a markdown table. Missing servers are skipped with a note — so it works
 with just `ours` out of the box.
 
@@ -75,11 +75,11 @@ with just `ours` out of the box.
   trips; `run.sh` launches us with `HTTPD_MAX_CONN=1000000`. Reference servers raise theirs too.
 - **Closed vs open loop.** Default is closed-loop (`-c N`): max throughput. For tail-latency claims,
   set `RATE` for an open-loop run that doesn't hide queueing delay (coordinated omission).
-- **h2 / h3.** `HTTP2=1 ./Bench/run.sh` automates the h2-over-TLS comparison: it generates a self-signed
+- **h2 / h3.** `HTTP2=1 ./Benchmarking/Bench/run.sh` automates the h2-over-TLS comparison: it generates a self-signed
   cert, fills it into `servers/nginx-tls.conf` + `servers/Caddyfile-tls`, launches ours on
   `networkFramework`+TLS, and drives `oha --http2 --insecure` against all three. (Cleartext h2c is
   prior-knowledge only — curl can, oha can't — so it is not benchmarked here.) h3 still needs an
   h3-capable client (a browser, or `h2load --npn h3`) and is not yet wired into `run.sh`.
 - **Warm up.** `oha -z` includes ramp; for tighter numbers raise `DURATION` and discard the first run.
 
-Results (raw `oha` JSON + each server's stdout/stderr) land in `Bench/results/` (git-ignored).
+Results (raw `oha` JSON + each server's stdout/stderr) land in `Benchmarking/Bench/results/` (git-ignored).

@@ -1,7 +1,7 @@
-# Bench/servers/Caddyfile — modern Go server (native h1/h2/h3), mirroring httpd-example's routes.
+# Benchmarking/Bench/servers/Caddyfile — modern Go server (native h1/h2/h3), mirroring httpd-example's routes.
 #
 # Run via:  caddy run --config <abs path>/Caddyfile --adapter caddyfile
-# Listens on 8082 (matches Bench/run.sh PORT_CADDY). Admin + auto-HTTPS off so the cleartext h1/h2
+# Listens on 8082 (matches Benchmarking/Bench/run.sh PORT_CADDY). Admin + auto-HTTPS off so the cleartext h1/h2
 # throughput is what we measure; for the h3 comparison, front it with TLS and add `protocols h1 h2 h3`.
 
 {

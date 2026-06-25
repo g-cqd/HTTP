@@ -1,6 +1,6 @@
-# Bench/servers/Caddyfile-tls — Caddy as an HTTP/2-over-TLS reference (template).
+# Benchmarking/Bench/servers/Caddyfile-tls — Caddy as an HTTP/2-over-TLS reference (template).
 #
-# Used by Bench/run.sh when HTTP2=1: the harness copies this file, substitutes __CERT__/__KEY__ with a
+# Used by Benchmarking/Bench/run.sh when HTTP2=1: the harness copies this file, substitutes __CERT__/__KEY__ with a
 # generated self-signed cert, and launches Caddy with it. The cleartext counterpart is Caddyfile.
 # Caddy serves h2 by default over TLS, so `oha --http2 --insecure` negotiates HTTP/2 via ALPN.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Bench/run.sh — comparative HTTP load battletest.
+# Benchmarking/Bench/run.sh — comparative HTTP load battletest.
 #
 # Drives our `httpd-example` and any installed reference servers (nginx, Caddy, Hummingbird) with the
 # same load generator (`oha`) on identical routes, and prints a side-by-side table of throughput and
@@ -12,9 +12,9 @@
 # coordinated-omission-free run, set RATE (oha's --rate) — see README.md.
 #
 # Usage:
-#   ./Bench/run.sh                       # default: route / , 64 conns, 10s, swiftSystem backbone
-#   ROUTE=/health CONNECTIONS=128 DURATION=20s ./Bench/run.sh
-#   SERVERS="ours nginx caddy hummingbird" ./Bench/run.sh
+#   ./Benchmarking/Bench/run.sh                       # default: route / , 64 conns, 10s, swiftSystem backbone
+#   ROUTE=/health CONNECTIONS=128 DURATION=20s ./Benchmarking/Bench/run.sh
+#   SERVERS="ours nginx caddy hummingbird" ./Benchmarking/Bench/run.sh
 #
 # Requires: oha (brew install oha). Optional: jq (nicer parsing), nginx, caddy, swift (Hummingbird).
 #
@@ -40,7 +40,7 @@ if [ "$HTTP2" = "1" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SCRATCH="${SCRATCH:-/tmp/swiftpm-build/HTTP-battletest}"
 RESULTS_DIR="${RESULTS_DIR:-$SCRIPT_DIR/results}"
 mkdir -p "$RESULTS_DIR"
@@ -156,7 +156,7 @@ for s in $SERVERS; do
                 [ -x "$HB_BIN" ] && run_server "hummingbird" "" "http://127.0.0.1:$PORT_HB$ROUTE" \
                     "$HB_BIN" "$PORT_HB" || echo "skip hummingbird (build failed)"
             else
-                echo "skip hummingbird (Bench/hummingbird not present)"
+                echo "skip hummingbird (Benchmarking/Bench/hummingbird not present)"
             fi
             ;;
     esac
