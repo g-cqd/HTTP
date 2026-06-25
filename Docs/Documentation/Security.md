@@ -13,7 +13,7 @@ or trap.
 ### Memory & control-flow safety
 | Defense | Mechanism | Reference |
 |---|---|---|
-| No out-of-bounds reads on adversarial input | `ByteReader` is `~Escapable` over a `RawSpan`; every accessor is bounds-checked | `Sources/HTTPCore/ByteReader.swift` |
+| No out-of-bounds reads on adversarial input | `ByteReader` is `~Escapable` over a `RawSpan`; every accessor is bounds-checked | `Sources/Core/HTTPCore/ByteReader.swift` |
 | No stack exhaustion | All parsers/decoders are iterative — no recursion | `Huffman.swift`, `HPACK*`, `HTTP1/*` |
 | No force-unwrap / force-cast / `try!` / `as Any` | Lint-enforced (SwiftLint `force_*`, `implicitly_unwrapped_optional`) | `.swiftlint.yml` |
 | Data-race safety | Swift 6 language mode, `Sendable` value types, `Mutex`/`Atomic`; ASan+TSan in CI | `Package.swift`, `.github/workflows/ci.yml` |
