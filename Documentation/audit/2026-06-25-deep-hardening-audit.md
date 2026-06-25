@@ -56,10 +56,11 @@ sub-agents).
 | F-WSUTF8 | **Non-incremental UTF-8** — text validated only after the whole (up to `maxMessageSize`) message buffered. | `WebSocketConnection` | RFC 6455 §8.1 |
 | F-BUDGETKNOB | Reset & control-frame budgets **shared one knob**. | `+AbuseBudget` | DoS tuning |
 
-### Deferred (task #10 — transport reliability; Medium; the primary Network.framework backbone is unaffected)
-`F-EMFILE` accept-error `usleep` on the shared queue · `F-IPV4` IPv4-only POSIX listener · `F-ALPN`
-no-overlap not rejected (ALPACA) · `T-F14` hardcoded listen backlog. Multi-file across the three
-BSD-socket backbones with thinner test coverage — split out to be done with care.
+### Deferred (task #10 — transport reliability; the primary Network.framework backbone is unaffected)
+`F-EMFILE` — the accept-error `usleep` sits on the shared kqueue/dispatch event-loop queue; a correct
+fix needs a timer-based re-arm (those synchronous accept loops can't `await`), so the bounded ~10 ms
+back-off stays as an acceptable interim. (`F-IPV4` dual-stack and `T-F14` listen backlog were resolved
+by the transport dual-stack/backlog work; `F-ALPN` is resolved in §3.)
 
 ---
 
@@ -74,10 +75,12 @@ BSD-socket backbones with thinner test coverage — split out to be done with ca
 | F-CORS | `.any` is credential-free; add `.allowList`; emit `Vary: Origin` on reflected origins. | wildcard-never-credentialed, allow-list reflect+Vary, deny |
 | F-CSWSH | Default Origin policy is now `origin == nil` (admit non-browser, reject browser origins until allowlisted). | default-policy reject-browser / admit-no-Origin |
 | F-WSUTF8 | `IncrementalUTF8Validator` (RFC 3629 DFA) validates each text fragment as it arrives; one-shot Close-reason check delegates to it. | scalar-split-across-fragments, fail-fast, partial-scalar-at-end |
+| F-ALPN | Over TLS, refuse a connection that negotiated neither `h2` nor `http/1.1` (incl. no ALPN) instead of silently serving h1; `TransportConnection.isSecure` distinguishes TLS from cleartext (RFC 7301 §3.2). | secure+http1.1 served / secure+nil refused / secure+unserved refused / cleartext+nil served |
 
 **Coherency / idiom (same branch):** unified the ~99%-identical `HTTP2RequestMapper`/`HTTP3RequestMapper`
 into a generic `HTTPCore.RequestMapper` (single validation source); built the M4 **routing result-builder
-DSL** (`Router`/`Route`/`RouteBuilder`, `:param` capture, 404/405); added `ServerResponse.text/.json/.status`.
+DSL** (`Router`/`Route`/`RouteBuilder`, `:param` capture, 404/405); added `ServerResponse.text/.json/.status`;
+added the `HTTPMetrics` observability seam + `MetricsMiddleware` (dependency-free, bridgeable to swift-metrics).
 
 ---
 

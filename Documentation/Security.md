@@ -121,12 +121,13 @@ These are **not yet enforced** — do not rely on them until the referenced mile
 
 | Gap | Attack | Plan |
 |---|---|---|
-| **transport**: strict ALPN no-overlap rejection (the platform does not send `no_application_protocol`) | ALPACA-class cross-protocol confusion | reject a TLS connection that resolved to a nil / unadvertised protocol (T-F6) |
 | **transport(kqueue)**: a parked read/write continuation leaks when the fd is closed mid-wait | task/memory leak via the Slowloris-timeout path | drain pending resumers in `KqueueEventLoop.closeDescriptor` (T-F7) |
-| **transport(posix)**: accept-error back-off (`EMFILE`/`ENFILE`) `usleep`s on the shared accept/event-loop queue | FD-pressure latency for all connections | move the back-off off the shared queue (T-F8; transport follow-up) |
-| **transport(posix)**: IPv4-only listener; hard-coded `listen` backlog | coherency vs the dual-stack Network.framework backbone | dual-stack `AF_INET6` + configurable backlog (T-F12/T-F14; transport follow-up) |
+| **transport(posix)**: accept-error back-off (`EMFILE`/`ENFILE`) `usleep`s on the shared kqueue/dispatch event-loop queue | FD-pressure latency for all connections | timer-based re-arm off the shared queue (T-F8 / F-EMFILE; the synchronous accept loops can't `await`, so the bounded back-off is the interim) |
 
 > Resolved since the first review (now implemented): per-client **and** global connection caps; the
 > CONTINUATION flood guard (CVE-2024-27316); the h1 header-accumulation cap; the HTTP/2 Rapid-Reset
 > *counter*, `maxConcurrentStreams`, and inbound flow control; TLS/ALPN with a TLS 1.3 floor **and**
-> pinned ceiling; decompression bounds (gzip middleware); and the 2026-06-22 audit-driven items above.
+> pinned ceiling, plus **strict ALPN rejection** over TLS (F-ALPN — refuse a connection that negotiated
+> neither `h2` nor `http/1.1`, ALPACA-class; RFC 7301 §3.2); **dual-stack IPv6 + configurable `listen`
+> backlog** on the POSIX backbones (T-F12/T-F14); decompression bounds (gzip middleware); and the
+> 2026-06-22 audit-driven items above.

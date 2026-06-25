@@ -40,6 +40,9 @@ A second-pass adversarial hardening of the stack; see
   fragments (RFC 6455 §8.1).
 - **Cookies:** validate `Domain`/`Path` octets + `__Host-`/`__Secure-` prefix invariants (CWE-113).
 - **CORS:** never pair a wildcard with credentials; emit `Vary: Origin` on a reflected origin (CWE-942).
+- **TLS ALPN (ALPACA):** over TLS, refuse a connection that negotiated neither `h2` nor `http/1.1`
+  (including no ALPN) instead of silently serving HTTP/1.1; `TransportConnection.isSecure` distinguishes
+  TLS from cleartext, which is unaffected (RFC 7301 §3.2).
 
 ### Changed
 - Unified the HTTP/2 and HTTP/3 request mappers into one generic `HTTPCore.RequestMapper` — a single
