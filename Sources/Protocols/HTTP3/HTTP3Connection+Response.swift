@@ -46,7 +46,7 @@ extension HTTP3Connection {
         // `:status` first (RFC 9114 §4.1); a cached string for the common codes avoids a per-response
         // `String(code)` allocation (the value also serves as the static-table lookup key).
         encoder.encode(
-            HeaderField(name: ":status", value: Self.statusString(response.status.code)),
+            HeaderField(name: ":status", value: response.status.decimalString),
             into: &output
         )
         for field in response.headerFields {
@@ -55,19 +55,5 @@ extension HTTP3Connection {
             )
         }
         return output
-    }
-
-    /// A cached decimal string for the common status codes, avoiding a per-response `String(code)` itoa
-    /// (these small literals are stored inline — no heap allocation); uncommon codes fall back.
-    private static let statusStrings: [UInt16: String] = [
-        200: "200", 201: "201", 204: "204", 206: "206",
-        301: "301", 302: "302", 304: "304",
-        400: "400", 401: "401", 403: "403", 404: "404", 405: "405", 429: "429",
-        500: "500", 503: "503"
-    ]
-
-    /// The decimal string for `code`, cached for the common codes (see ``statusStrings``).
-    private static func statusString(_ code: UInt16) -> String {
-        statusStrings[code] ?? String(code)
     }
 }

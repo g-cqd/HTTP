@@ -24,13 +24,22 @@ public struct HPACKEncoder {
     /// Encodes `fields` into a single HPACK header block (RFC 7541 §6).
     public mutating func encode(_ fields: [HPACKField]) -> [UInt8] {
         var output: [UInt8] = []
+        // Reserve once so the buffer does not realloc as fields append; the encoded form is ≤ name +
+        // value + a couple octets per field (table refs + Huffman only shrink it).
+        output.reserveCapacity(
+            fields.reduce(0) { $0 + $1.name.utf8.count + $1.value.utf8.count + 2 }
+        )
         for field in fields {
             encode(field, into: &output)
         }
         return output
     }
 
-    private mutating func encode(_ field: HPACKField, into output: inout [UInt8]) {
+    /// Encodes one field into `output` (RFC 7541 §6.1 indexed, or §6.2.1 literal w/ incremental index).
+    ///
+    /// Mutates the dynamic table (a literal is inserted so later occurrences index it), so it stays in
+    /// lock-step with the peer decoder. Call it directly to stream a block without a `[HPACKField]`.
+    public mutating func encode(_ field: HPACKField, into output: inout [UInt8]) {
         if let index = exactIndex(of: field) {
             // §6.1 — the whole field is in a table: a single indexed reference.
             HPACKInteger.encode(index, prefixBits: 7, firstByte: 0x80, into: &output)

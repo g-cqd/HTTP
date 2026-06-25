@@ -27,7 +27,7 @@ extension HTTP2Connection {
         let hasBody = !body.isEmpty
         // Advance the state machine before touching the encoder, so a bad state never desyncs HPACK.
         try record.stream.sendHeaders(endStream: !hasBody)
-        let block = encoder.encode(responseFields(response))
+        let block = encodeResponseSection(response)
         var headerFlags: HTTP2FrameFlags = [.endHeaders]
         if !hasBody { headerFlags.insert(.endStream) }
         writer.writeFrame(.headers, flags: headerFlags, streamID: streamID, payload: block)
@@ -41,12 +41,24 @@ extension HTTP2Connection {
         flushStream(streamID, &record)
     }
 
-    /// The HPACK fields for `response`: the `:status` pseudo-header first, then the regular fields.
-    private func responseFields(_ response: HTTPResponse) -> [HPACKField] {
-        var fields = [HPACKField(name: ":status", value: String(response.status.code))]
+    /// Encodes the response field section as an HPACK header block, `:status` first (RFC 9113 §8.3.2).
+    ///
+    /// Writes straight into a reserved buffer — no intermediate `[HPACKField]` array, no buffer
+    /// regrowth, no per-response status itoa. Names use the canonical (lower-cased) form: HTTP/2 field
+    /// names MUST be lowercase (§8.2.1), it is stored (so no per-field `rawName` materialization), and it
+    /// is the same spelling for the registered names a response uses. Internal so an allocation test can
+    /// measure it.
+    mutating func encodeResponseSection(_ response: HTTPResponse) -> [UInt8] {
+        var output: [UInt8] = []
+        output.reserveCapacity(512)
+        encoder.encode(
+            HPACKField(name: ":status", value: response.status.decimalString), into: &output
+        )
         for field in response.headerFields {
-            fields.append(HPACKField(name: field.name.rawName, value: field.value))
+            encoder.encode(
+                HPACKField(name: field.name.canonicalName, value: field.value), into: &output
+            )
         }
-        return fields
+        return output
     }
 }
