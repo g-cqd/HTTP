@@ -6,9 +6,10 @@
 //  states (the idle/half-closed/closed frame matrix), §5.1.1 identifiers, §5.1.2 concurrency, §5.3.1
 //  dependencies, §5.4.1 connection-error handling, and §5.5 extension frames.
 //
-//  F1 is now fixed: the engine tracks a bounded set of recently-closed stream ids, so a DATA/HEADERS
-//  frame on a closed stream is the §5.1 STREAM_CLOSED *stream* error (survivable) rather than a
-//  connection PROTOCOL_ERROR that tears down every multiplexed stream.
+//  F1 is now fixed: the engine tracks each recently-closed stream id with how it closed, so a late
+//  DATA — or a HEADERS on an RST-closed id — is the §5.1 STREAM_CLOSED *stream* error (survivable),
+//  not a connection PROTOCOL_ERROR that tears down every multiplexed stream. A HEADERS reusing an
+//  END_STREAM-closed id (which cannot reopen) is the §5.1 connection error STREAM_CLOSED (h2spec 5.1.12).
 //  A lone CONTINUATION on a half-closed/closed stream is a connection PROTOCOL_ERROR here (RFC 9113
 //  §6.10: a CONTINUATION with no open block has no stream context to scope to); h2spec's STREAM_CLOSED
 //  expectation for that sub-case is noted inline as a defensible divergence, not a bug.
@@ -127,18 +128,19 @@ struct H2SpecStreamTests {
         )
     }
 
-    @Test("5.1/closed — HEADERS after a completed response is a STREAM_CLOSED stream error (§5.1)")
-    func closedStreamHeadersIsStreamClosed() throws {
+    @Test("5.1/closed — HEADERS reusing an END_STREAM-closed stream is a connection STREAM_CLOSED")
+    func closedStreamHeadersIsConnectionError() throws {
         var connection = try H2Wire.handshaked()
         _ = try connection.receive(H2Wire.get(streamID: 1))
         _ = connection.outboundBytes()
         try connection.respond(to: HTTP2StreamID(1), HTTPResponse(status: .ok))
         _ = connection.outboundBytes()
-        H2Wire.expectStreamError(
+        // h2spec 5.1.12 (RFC 9113 §5.1): a HEADERS reusing a stream closed by END_STREAM cannot reopen
+        // it — a connection error STREAM_CLOSED + GOAWAY, not the lenient stream error of an RST close.
+        H2Wire.expectConnectionError(
             .streamClosed,
-            on: 1,
             feeding: H2Wire.headers(streamID: 1, fields: H2Wire.requestFields()),
-            connection: &connection
+            on: &connection
         )
     }
 

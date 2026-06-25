@@ -19,19 +19,19 @@ Measured 2026-06 (Apple Silicon, Swift 6.4, `posixKqueue` backbone):
 | generic | sanity / framing | 43 / 44 (1 fail — invalid preface, Finding 1) |
 | http2/3 | starting HTTP/2 (preface) | 1 / 2 (1 fail — invalid preface, Finding 1) |
 | http2/4 | frame format | **9 / 9** ✅ |
-| http2/5 | streams & multiplexing | **20 / 21** (1 fail — 5.1.12, Finding 2) — hang fixed |
+| http2/5 | streams & multiplexing | **21 / 21** ✅ (hang + 5.1.12 fixed) |
 | http2/6 | frame definitions | **42 / 42** ✅ |
 | http2/7 | GOAWAY | **2 / 2** ✅ |
 | http2/8 | HTTP message exchanges | **18 / 18** ✅ |
 | hpack | HPACK (RFC 7541) | **8 / 8** ✅ |
 
-**Summary:** **143 / 146 pass.** The 3 failures are the invalid-preface case (Finding 1, counted in
-both `generic` and `http2/3`) and one closed-stream nuance (Finding 2). The streams section, which
-formerly hung, now completes after the concurrency-cap fix below.
+**Summary:** **144 / 146 pass.** The only 2 failures are the invalid-preface case (Finding 1, counted in
+both `generic` and `http2/3`) — a benign h2c/HTTP-1 ambiguity. Every other section is 100%, including the
+streams section, which formerly hung and now passes fully (the two fixes below).
 
-**CI gate scope:** the `h2spec` job gates on `http2/4 http2/6 http2/7 http2/8 hpack` (79 tests, all
-passing, fast) under a hard `timeout`, so a regression there fails the build. `generic`, `http2/3`,
-and `http2/5` are excluded only because of Findings 1 & 2; fold them in once those land.
+**CI gate scope:** the `h2spec` job gates on `http2/4 http2/5 http2/6 http2/7 http2/8 hpack` (100 tests,
+all passing, fast) under a hard `timeout`, so a regression there fails the build. Only `generic` and
+`http2/3` are excluded, for the invalid-preface case (Finding 1).
 
 ### Fixed — `SETTINGS_MAX_CONCURRENT_STREAMS` advertised at a sane bound (was a DoS + a hang)
 
@@ -44,7 +44,7 @@ Fixed by giving `maxConcurrentStreams` a **secure, non-throttling default of 128
 recommends ≥100) while leaving the per-/global-connection ceilings tunable via the new `HTTPLimits`
 presets (`default` secure, `highThroughput` for benchmarks/trusted peers, `hardened` for public).
 Concurrency is across connections, not within one, so 128 streams/connection costs zero throughput.
-Result: `http2/5` completes at 20/21, the hang is gone, and the DoS bound holds. Regression test:
+Result: the hang is gone and the DoS bound holds. Regression test:
 `Tests/HTTP2Tests/HTTP2ConcurrencyTests.swift` (exact cap — at the cap allowed, one past refused).
 
 ### Finding 1 — no GOAWAY on an invalid connection preface (low — benign ambiguity)
@@ -61,18 +61,17 @@ was *meant* to be h2, and routing arbitrary non-h1 bytes to h2 would mis-handle 
 The connection *is* terminated; only the diagnostic frame differs. **Documented, not changed** — the
 505-then-close is defensible behavior.
 
-### Finding 2 — HEADERS on an END_STREAM-closed stream should be a connection error (medium)
+### Fixed — HEADERS reusing an END_STREAM-closed stream is now a connection error
 
 `h2spec http2/5.1.12` ("closed: Sends a HEADERS frame") closes a stream via END_STREAM, then sends a
-HEADERS frame on it. RFC 9113 §5.1 (closed state): a HEADERS/DATA frame after END_STREAM is a
-**connection** error of type `STREAM_CLOSED` (GOAWAY). The engine currently treats a HEADERS on a
-recently-closed stream as a **stream** error (`RST_STREAM(STREAM_CLOSED)`, the audit-F1 lenient path).
+HEADERS frame on it. RFC 9113 §5.1: a HEADERS reusing an END_STREAM-closed id (which cannot reopen) is a
+**connection** error `STREAM_CLOSED` (GOAWAY). The engine had treated it as the audit-F1 lenient *stream*
+error — correct only for an RST-closed id.
 
-To fix correctly the engine must track *how* a stream closed (RST_STREAM vs END_STREAM): a frame after
-RST may be ignored / stream-scoped (§5.1, "received after RST_STREAM"), but a frame after END_STREAM is
-connection-scoped. That distinction (a per-stream close-reason in the bounded closed-stream FIFO) is its
-own change with regression tests — tracked here rather than rushed. Surfaced only once the §5.1.2 hang
-above was cleared.
+Fixed by tracking *how* each stream closed in the bounded closed-stream FIFO (`HTTP2Connection`'s
+`StreamCloseReason` = `.endStream` / `.reset`): a HEADERS reuse of an END_STREAM-closed id is now a
+connection error, while an RST-closed id (and any late DATA on either) keeps the survivable stream error
+(F1). `http2/5` is now 21/21. Regression test: `H2SpecStreamTests.closedStreamHeadersIsConnectionError`.
 
 ## WebSocket — Autobahn TestSuite (RFC 6455)
 

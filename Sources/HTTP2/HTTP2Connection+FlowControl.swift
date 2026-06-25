@@ -132,7 +132,9 @@ extension HTTP2Connection {
         let fullyFlushed = record.pendingOffset >= record.pending.count
         guard !(fullyFlushed && record.stream.state == .closed) else {
             streams[streamID] = nil
-            markStreamClosed(streamID)  // a late frame on it is STREAM_CLOSED, not fatal (audit F1)
+            // Closed cleanly via END_STREAM: a late DATA is a survivable STREAM_CLOSED (audit F1), but a
+            // HEADERS reusing this id is a connection error — the id cannot reopen (RFC 9113 §5.1).
+            markStreamClosed(streamID, reason: .endStream)
             return
         }
         // Drop the octets already sent so a long-lived tunnel's queue stays bounded (RFC 8441 §5); a

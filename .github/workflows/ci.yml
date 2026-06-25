@@ -117,9 +117,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # HTTP/2 conformance — h2spec (RFC 9113) against the live httpd-example over h2c. Gates on the
-  # sections that pass 100% (frame format/definitions, GOAWAY, message exchanges, HPACK). The streams
-  # section (5.1.2 hang) and the invalid-preface case are tracked in Standards/CONFORMANCE.md and
-  # folded in once fixed. The hard `timeout` turns any future hang into a failure, not a stalled runner.
+  # sections that pass 100% (frame format, streams & multiplexing, frame definitions, GOAWAY, message
+  # exchanges, HPACK). Only the invalid-preface case (generic/http2-3, a benign h2c/HTTP-1 ambiguity) is
+  # excluded — see Standards/CONFORMANCE.md. The hard `timeout` turns any future hang into a failure.
   # ---------------------------------------------------------------------------
   h2spec:
     runs-on: macos-26
@@ -142,7 +142,7 @@ jobs:
             sleep 0.5
           done
           set +e
-          timeout 120 h2spec -h 127.0.0.1 -p 18080 --timeout 3 http2/4 http2/6 http2/7 http2/8 hpack
+          timeout 120 h2spec -h 127.0.0.1 -p 18080 --timeout 3 http2/4 http2/5 http2/6 http2/7 http2/8 hpack
           rc=$?
           set -e
           kill "$PID" 2>/dev/null || true
@@ -154,8 +154,8 @@ jobs:
 # and under the ASan/TSan matrix above — no separate lane needed.
 #
 # Tracked follow-ups (each blocked on a specific item, see Standards/CONFORMANCE.md):
-#   • Expand the h2spec gate to generic/http2-3/http2-5 once the invalid-preface GOAWAY and the
-#     SETTINGS_MAX_CONCURRENT_STREAMS (5.1.2) gaps are fixed.
+#   • The streams section (http2/5) is now gated — the 5.1.2 hang and the 5.1.12 closed-stream nuance
+#     are fixed. Only generic/http2-3 stay out, for the invalid-preface GOAWAY (a benign ambiguity).
 #   • Autobahn (WebSocket, RFC 6455) — needs the crossbario/autobahn-testsuite Docker image; the CI
 #     image has no Docker. In-house WebSocket + WebSocketFuzzTests cover framing/masking/close/UTF-8.
 #   • Coverage threshold gate — requires merging llvm-cov across the 11 per-target .xctest bundles
