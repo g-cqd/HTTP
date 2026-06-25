@@ -45,6 +45,11 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// `await`.
     private let connectionCounts = Mutex<ConnectionCounts>(ConnectionCounts())
 
+    /// In-flight connections being served, keyed by id, registered/unregistered around ``serve(_:)``.
+    ///
+    /// ``shutdown(within:)`` force-closes any that have not drained by the deadline.
+    let activeConnections = Mutex<[TransportConnectionID: any TransportConnection]>([:])
+
     /// Live connection accounting: a global total plus per-host counts.
     private struct ConnectionCounts {
         var total = 0
@@ -137,6 +142,8 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// seen the connection is committed to HTTP/2 even if the *full* preface then proves invalid (so
     /// the engine can answer with GOAWAY rather than mis-routing to HTTP/1).
     func serve(_ connection: any TransportConnection) async {
+        activeConnections.withLock { $0[connection.id] = connection }
+        defer { activeConnections.withLock { $0[connection.id] = nil } }
         // TLS ALPN (RFC 7301) settles the protocol before any byte is read: "h2" commits the
         // connection to HTTP/2 (RFC 9113 §3.3), so the engine — not the preface sniffer — drives it
         // (a malformed preface then earns a GOAWAY instead of mis-routing to HTTP/1.1). Any other

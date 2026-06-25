@@ -14,18 +14,29 @@ internal import HTTPTransport
 internal import Synchronization
 
 extension HTTPServer {
-    /// Begins a graceful shutdown: stops accepting new connections and signals every in-flight one to
-    /// drain, so ``run()`` returns once they close.
+    /// Begins a graceful shutdown, force-closing any connection still in flight after `deadline`.
     ///
-    /// The transport stops accepting — finishing the connection stream ``run()`` consumes — and each
-    /// in-flight connection finishes its current exchange before closing. Work that stalls is bounded
-    /// by the existing idle / keep-alive timeouts. Idempotent.
-    public func shutdown() async {
+    /// Stops accepting (the transport finishes the connection stream ``run()`` consumes) and flags a
+    /// drain: each in-flight connection finishes its current exchange and closes (HTTP/1 `Connection:
+    /// close`, HTTP/2 GOAWAY, RFC 9113 §6.8). A connection that has not drained within `deadline` is
+    /// force-closed, so a stalled peer cannot hold the process open past it. Idempotent; returns
+    /// immediately when nothing is in flight.
+    public func shutdown(within deadline: Duration = .seconds(10)) async {
         guard !isShuttingDown.exchange(true, ordering: .acquiringAndReleasing) else {
             return
         }
         await transport.shutdown()
         await quicTransport?.shutdown()
+        let inFlight = activeConnections.withLock { Array($0.values) }
+        guard !inFlight.isEmpty else {
+            return  // nothing in flight — the drain is already complete
+        }
+        // Give in-flight connections the deadline to drain on their own, then force-close stragglers.
+        try? await clock.sleep(until: clock.now.advanced(by: deadline), tolerance: nil)
+        let stragglers = activeConnections.withLock { Array($0.values) }
+        for connection in stragglers {
+            await connection.close()
+        }
     }
 
     /// On a draining HTTP/2 connection, queues the GOAWAY exactly once (RFC 9113 §6.8).

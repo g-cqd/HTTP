@@ -8,6 +8,7 @@
 //
 
 import HTTPCore
+import HTTPTestSupport
 import HTTPTransport
 import Testing
 
@@ -40,5 +41,38 @@ struct HTTPServerShutdownTests {
         let server = HTTPServer(transport: FakeTransport(), responder: responder)
         await server.shutdown()
         await server.shutdown()  // a second call must not trap or re-shut-down the transport
+    }
+
+    @Test(
+        "shutdown force-closes a connection still in flight past the deadline",
+        .timeLimit(.minutes(1)))
+    func forceClosesStragglerPastDeadline() async {
+        let clock = TestClock()
+        // Keep the idle watchdog far out, so the force-close — not a keep-alive timeout — closes it.
+        let limits = HTTPLimits(
+            headerReadTimeout: .seconds(3_600),
+            idleTimeout: .seconds(3_600),
+            keepAliveTimeout: .seconds(3_600)
+        )
+        let probe = AsyncEventProbe<TransportConnectionID>()
+        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let hanging = HangingConnection(id: TransportConnectionID(1), admissionProbe: probe)
+        let server = HTTPServer(
+            transport: FakeTransport(), responder: responder, limits: limits, clock: clock
+        )
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await server.serve(hanging) }  // registers, then blocks on receive
+            try? await probe.wait(forAtLeast: 1)  // the connection is registered and being served
+            group.addTask { await server.shutdown(within: .seconds(1)) }
+            group.addTask {
+                while !Task.isCancelled {
+                    try? await clock.waitForSleepers(atLeast: 1)
+                    clock.advance(by: .milliseconds(100))
+                }
+            }
+            await group.next()  // shutdown() returns once it has force-closed the straggler
+            group.cancelAll()  // unblock the hanging serve + stop the pump
+        }
+        #expect(await hanging.isClosed())
     }
 }
