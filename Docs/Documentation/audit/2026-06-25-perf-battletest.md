@@ -120,7 +120,7 @@ now measured and gate-locked:
 | QPACK decode (7-field request) | **6** | `expectAllocations` (CI, deterministic) |
 | `Date` header, warm same-second | **0** | per-second `DateCache` + `expectAllocations` |
 | HTTP/3 `FrameDecoder.nextFrame` | 1 | eager `Array(payload)` copy — P2 target |
-| HTTP/3 `Connection` receive-get | 24 | per-field `String`/`HeaderField` — open (decode side) |
+| HTTP/3 `Connection` receive-get | 24 | decode 6 + owned-request map 17 + frame copy 1 — near floor, deferred |
 | HTTP/3 `Connection` respond | **11** (was 32) | borrow-encode into a reserved buffer — done, gate-locked |
 
 ## 6. Locking the wins

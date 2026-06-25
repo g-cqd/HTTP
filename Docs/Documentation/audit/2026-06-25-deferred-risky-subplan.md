@@ -35,8 +35,18 @@ the count drops and every gate is green.
 **Status (2026-06-25): the encode half is DONE.** `HTTP3Connection.encodeResponseSection` now
 borrow-encodes into a reserved buffer (QPACK gained `beginSection(into:)` + a public `encode(_:into:)`),
 with a cached status string — **31 → 11 allocations**, pinned by `HTTP3ResponseAllocationTests`. Gate
-cleared: full suite + QPACK/h3 conformance + fuzz green, ASan clean (owned buffer, no escape). The riskier
-**decode-side** borrow (the 24-malloc receive path) remains open.
+cleared: full suite + QPACK/h3 conformance + fuzz green, ASan clean (owned buffer, no escape). The same
+borrow-encode was then mirrored onto the **HTTP/2** response path (HPACK), 58 → 41 allocations, sharing a
+new `HTTPStatus.decimalString` (HTTPCore) — same gate cleared.
+
+**Decode-side (2026-06-25): investigated — near the owned-request floor, no change forced.** The 24-malloc
+receive splits into decode 6 (already minimal — `QPACKAllocationTests`), the owned-`HTTPRequest` mapping 17
+(`RequestMapperAllocationTests` — its `HTTPFields` + pseudo-header values + struct, all of which *escape*
+to the responder), and the 1 eager frame-payload copy. `HTTPFieldName` already reuses an already-lowercase
+name, so there is no redundant lowercasing to cut. The remaining levers — the decoder producing
+`HTTPFields` directly (to drop the `[HeaderField]` intermediate) and a borrowed frame-payload span — are
+risky API / lifetime changes for a modest gain, so per the gate they stay **deferred**. The measure-first
+discipline did its job: it stopped a risky change that would not have paid off.
 
 ## 2. Inbound `Content-Encoding` decompression
 
