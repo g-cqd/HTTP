@@ -32,6 +32,12 @@ not outlive the buffer); HPACK/QPACK share code paths, so a regression could hit
 alloc count with `expectAllocations`, refactor to borrowing `encode(into:)`, re-measure, merge only if
 the count drops and every gate is green.
 
+**Status (2026-06-25): the encode half is DONE.** `HTTP3Connection.encodeResponseSection` now
+borrow-encodes into a reserved buffer (QPACK gained `beginSection(into:)` + a public `encode(_:into:)`),
+with a cached status string — **31 → 11 allocations**, pinned by `HTTP3ResponseAllocationTests`. Gate
+cleared: full suite + QPACK/h3 conformance + fuzz green, ASan clean (owned buffer, no escape). The riskier
+**decode-side** borrow (the 24-malloc receive path) remains open.
+
 ## 2. Inbound `Content-Encoding` decompression
 
 **Finding.** Not implemented — deliberately. It is net-new attack surface (decompression bombs,
@@ -72,5 +78,6 @@ unilaterally.
 
 Done + merged: the comparison matrix (§ perf-battletest), worktree/branch consolidation, the tiered
 repo layout (ADR 0003), the two complexity splits, the Router/Range/Metrics wiring + the Router HEAD
-fold, the F-EMFILE accept-backoff fix, and the CI trap-lint repair + release lane. These three items are
-the genuine remainder, each held behind the gate above.
+fold, the F-EMFILE accept-backoff fix, the CI trap-lint repair + release lane, and now the **h3 response
+encode** (item 1, encode half — 31 → 11 allocs). The h3 receive-side borrow, inbound decompression, and
+0-RTT early-data remain, each held behind the gate above.

@@ -68,8 +68,8 @@ trail its throughput (55k vs 65k) but **own the tail by ~4×** (p99.9 2.5 vs 10.
 signature across the whole matrix: **we trade peak throughput for tail discipline** — our `posixKqueue`
 (h1) and `networkFramework` (h2) hold the tightest non-nginx tails. Our h1 throughput reaches ~82–85 % of
 nginx; the wider h2 gap (~49 %) is explained by known engine debt — h2-over-TLS must use the
-`networkFramework` backbone (already the h1 laggard at 84k) and then pays TLS + HPACK + the per-response
-`[HPACKField]` rebuild (the 32-malloc `respond` path, §5 — a P2/P6-risky target), not transport contention.
+`networkFramework` backbone (already the h1 laggard at 84k) and then pays TLS + HPACK + a per-response
+HPACK field-block rebuild (the h2 analog of the h3 encode just optimized in §5), not transport contention.
 
 ## 3. The proven win — TCP_NODELAY on every backbone
 
@@ -120,8 +120,8 @@ now measured and gate-locked:
 | QPACK decode (7-field request) | **6** | `expectAllocations` (CI, deterministic) |
 | `Date` header, warm same-second | **0** | per-second `DateCache` + `expectAllocations` |
 | HTTP/3 `FrameDecoder.nextFrame` | 1 | eager `Array(payload)` copy — P2 target |
-| HTTP/3 `Connection` receive-get | 24 | per-field `String`/`HeaderField` — P2 target |
-| HTTP/3 `Connection` respond | 32 | `responseFields` rebuild — P2 target |
+| HTTP/3 `Connection` receive-get | 24 | per-field `String`/`HeaderField` — open (decode side) |
+| HTTP/3 `Connection` respond | **11** (was 32) | borrow-encode into a reserved buffer — done, gate-locked |
 
 ## 6. Locking the wins
 
@@ -146,7 +146,7 @@ now measured and gate-locked:
   a quiet, pinned host is still required for trustworthy tail absolutes.
 - macOS lacks per-thread PMU counters; `instructions` from `ri_instructions` is coarse — use `xctrace`
   ('CPU Counters') or a Linux `perf stat` runner for precise CPI / cache-miss attribution.
-- **Open perf items:** networkFramework zero-copy (needs profiling) and the HTTP/3 per-frame eager copy
-  and per-field String allocations (the 24/32-malloc paths above) — the latter is what gates the h2-TLS
-  throughput in §2. The h2-over-TLS comparison is now recorded (§2); the h3-over-TLS comparison and the
-  Hummingbird in-language baseline remain (both blocked on tooling, not on the server).
+- **Open perf items:** networkFramework zero-copy (needs profiling), the HTTP/3 per-frame eager copy, and
+  the h3 **receive** per-field String allocations (the 24-malloc decode path). The h3 **respond** path is
+  **done** (32 → 11, §5, gate-locked); the riskier decode-side borrow remains. The h2-over-TLS comparison
+  is recorded (§2); the h3-over-TLS comparison and the Hummingbird baseline remain (tooling, not server).
