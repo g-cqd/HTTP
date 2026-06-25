@@ -326,11 +326,13 @@ extension H3SpecTests {
                 _ = try? connection.receive(request, self.frame(.headers, [0x05, 0x00]), fin: true)
             },
             "a Set Dynamic Table Capacity above the limit": { connection in
-                _ = try? connection.receive(encoder, [0x02, 0x25], fin: false)
+                // Set Capacity 5000 > the advertised 4096 (a `001`-prefix integer, §4.3.1).
+                _ = try? connection.receive(encoder, [0x02, 0x3F, 0xE9, 0x26], fin: false)
             },
             "an encoder-stream instruction referencing an evicted entry": { connection in
-                // An insert with name reference — illegal at capacity 0.
-                _ = try? connection.receive(encoder, [0x02, 0x80], fin: false)
+                // Insert With Name Reference, dynamic index 5 (T=0) with an empty value — but the table
+                // holds no such entry, so the reference is invalid (§4.3.2).
+                _ = try? connection.receive(encoder, [0x02, 0x85, 0x00], fin: false)
             },
             "a critical (encoder) stream is closed": { connection in
                 _ = try? connection.receive(encoder, [0x02], fin: true)

@@ -46,6 +46,16 @@ public struct QPACKDecoder {
     /// insert count, which a Required Insert Count may not exceed.
     public var insertCount: Int { table.insertCount }
 
+    /// The Required Insert Count a field section's §4.5.1 prefix encodes — the number of dynamic-table
+    /// inserts it depends on (0 for a static-only section, RFC 9204 §4.5.1.1).
+    ///
+    /// The caller uses it to decide whether the section is *blocked* (RIC past the entries received) and
+    /// whether a Section Acknowledgment is owed (RIC > 0). Throws on a malformed prefix.
+    public func requiredInsertCount(of block: RawSpan) throws(QPACKError) -> Int {
+        var reader = ByteReader(block)
+        return try decodePrefix(&reader).requiredInsertCount
+    }
+
     /// Decodes a complete encoded field section into its fields (RFC 9204 §4.5).
     ///
     /// Fails closed with `QPACK_DECOMPRESSION_FAILED` on any malformed representation, a Required Insert

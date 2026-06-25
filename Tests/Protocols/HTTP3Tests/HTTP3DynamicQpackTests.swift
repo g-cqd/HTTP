@@ -1,0 +1,87 @@
+//
+//  HTTP3DynamicQpackTests.swift
+//  HTTP3Tests
+//
+//  RFC 9204 — the QPACK dynamic table wired through the HTTP/3 connection. The server advertises a
+//  non-zero `SETTINGS_QPACK_MAX_TABLE_CAPACITY`, applies the peer's encoder-stream inserts into the
+//  decoder's dynamic table and acknowledges them with an Insert Count Increment (§4.4.3), then decodes
+//  a request whose field section references the dynamic table and acknowledges that section (§4.4.1) —
+//  both emitted as role-addressed sends on the server's decoder stream.
+//
+
+import HTTPCore
+import QPACK
+import Testing
+
+@testable import HTTP3
+
+@Suite("RFC 9204 — QPACK dynamic table over the HTTP/3 connection")
+struct HTTP3DynamicQpackTests: HTTP3WireFixtures {
+    private static let encoderStream = QUICStreamID(6)
+    private static let requestStreamID = QUICStreamID(0)
+
+    @Test("encoder-stream inserts are acknowledged with an Insert Count Increment (§4.4.3)")
+    func insertsAreAcknowledged() throws {
+        var connection = HTTP3Connection()
+        _ = connection.outbound()  // drain the init actions (stream openers + server SETTINGS)
+        _ = try connection.receive(
+            Self.encoderStream,
+            [0x02] + insertLiteral("custom", "value"),
+            fin: false
+        )
+        // The decoder applied one insert → an Insert Count Increment of 1 on the decoder stream.
+        #expect(decoderStreamSend(&connection) == QPACKInstructions.insertCountIncrement(1))
+    }
+
+    @Test("a request referencing the dynamic table decodes and is Section-Acknowledged (§4.4.1)")
+    func dynamicRequestDecodesAndAcknowledges() throws {
+        var connection = HTTP3Connection()
+        _ = connection.outbound()
+        // Insert `:authority: dyn.example` (name reference to static index 0) into the dynamic table.
+        _ = try connection.receive(
+            Self.encoderStream,
+            [0x02] + insertNameReference(staticIndex: 0, "dyn.example"),
+            fin: false
+        )
+        _ = connection.outbound()  // drain the Insert Count Increment
+
+        // Request prefix RIC=1, Base=1: static :method/:scheme/:path + a dynamic indexed :authority.
+        let section: [UInt8] = [0x02, 0x00, 0xD1, 0xD7, 0xC1, 0x80]
+        let events = try connection.receive(Self.requestStreamID, requestStream(section), fin: true)
+        guard case .request(_, let request, _) = events.first else {
+            Issue.record("expected a request event")
+            return
+        }
+        #expect(request.method == .get)
+        #expect(request.authority == "dyn.example")  // resolved from the dynamic table
+        #expect(
+            decoderStreamSend(&connection)
+                == QPACKInstructions.sectionAcknowledgment(streamID: Self.requestStreamID.rawValue))
+    }
+
+    // MARK: Helpers
+
+    /// The bytes of the first role-addressed send on the QPACK decoder stream, if any.
+    private func decoderStreamSend(_ connection: inout HTTP3Connection) -> [UInt8]? {
+        for action in connection.outbound() {
+            if case .send(.role(.qpackDecoder), let bytes, _) = action {
+                return bytes
+            }
+        }
+        return nil
+    }
+
+    private func insertLiteral(_ name: String, _ value: String) -> [UInt8] {
+        var out: [UInt8] = []
+        QPACKString.encode(Array(name.utf8), prefixBits: 5, firstByte: 0x40, into: &out)  // 01
+        QPACKString.encode(Array(value.utf8), prefixBits: 7, into: &out)
+        return out
+    }
+
+    private func insertNameReference(staticIndex: Int, _ value: String) -> [UInt8] {
+        var out: [UInt8] = []
+        QPACKInteger.encode(staticIndex, prefixBits: 6, firstByte: 0xC0, into: &out)  // 1 T=1
+        QPACKString.encode(Array(value.utf8), prefixBits: 7, into: &out)
+        return out
+    }
+}

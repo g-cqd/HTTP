@@ -64,7 +64,19 @@ extension HTTP3Connection {
         guard !state.sawTrailers else {
             throw .connection(.h3FrameUnexpected, "a HEADERS frame after trailers")
         }
+        let usedDynamicTable = try requiredInsertCount(of: payload) > 0
         let fields = try decodeFieldSection(payload)
+        // A field section that depended on the dynamic table is acknowledged so the peer encoder learns
+        // its entries are no longer referenced and may be evicted (RFC 9204 §4.4.1).
+        if usedDynamicTable {
+            actions.append(
+                .send(
+                    stream: .role(.qpackDecoder),
+                    bytes: QPACKInstructions.sectionAcknowledgment(streamID: streamID.rawValue),
+                    fin: false
+                )
+            )
+        }
         if state.sawHeaders {
             // Trailers (RFC 9114 §4.3): validated — no pseudo-header fields, lowercase names only — then
             // discarded, not folded into the request. Shared with HTTP/2 so both engines apply the rule.
@@ -156,6 +168,21 @@ extension HTTP3Connection {
                         streamID, .h3MessageError, "content-length does not match the body"
                     )
                 }
+        }
+    }
+
+    /// The Required Insert Count a field section's prefix encodes (RFC 9204 §4.5.1), mapping a fault to
+    /// the connection-level QPACK_DECOMPRESSION_FAILED — used to decide whether the section is owed a
+    /// Section Acknowledgment.
+    private func requiredInsertCount(of payload: [UInt8]) throws(HTTP3Error) -> Int {
+        let result: Result<Int, QPACKError> = payload.withUnsafeBytes { raw in
+            Result { () throws(QPACKError) in try decoder.requiredInsertCount(of: raw.bytes) }
+        }
+        switch result {
+            case .success(let value):
+                return value
+            case .failure(let error):
+                throw .connection(qpack: error.code, error.reason)
         }
     }
 

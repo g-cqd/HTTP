@@ -187,3 +187,9 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   + §4.5.2–§4.5.5 dynamic representations. 9 dynamic round-trip/fault tests; 860 tests; ASan clean. S5b
   blocked streams + connection wiring (Section-Ack/ICI, SETTINGS) + S5c encoder remain; static-only stays
   the operational fallback.
+- 2026-06-25 — P8/S5b (wiring) done: QPACK dynamic decoder is now operational over the HTTP/3 connection
+  — advertises SETTINGS_QPACK_MAX_TABLE_CAPACITY=4096 (blocked-streams 0), applies the peer's
+  encoder-stream inserts in `parseQpackStream` and emits Insert Count Increment (§4.4.3), decodes a
+  request's dynamic field section and emits Section Acknowledgment (§4.4.1); the HTTP/3 driver forwards
+  these role-addressed sends on the server's decoder stream. Conformance drives updated for the 4096
+  limit. 862 tests; ASan clean. Blocked-stream buffering + the response encoder remain.

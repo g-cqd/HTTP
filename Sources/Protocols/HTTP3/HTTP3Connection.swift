@@ -114,6 +114,10 @@ public struct HTTP3Connection {
     /// neither Rapid Reset (CVE-2023-44487) nor MadeYouReset (CVE-2025-8671) can bypass the cap.
     var streamResetCount = 0
 
+    /// The dynamic QPACK table capacity advertised when the caller does not pin one (RFC 9204 §3.2.3) —
+    /// a modest default that lets a peer encoder compress requests without unbounded decoder memory.
+    static let defaultQpackMaxTableCapacity = 4_096
+
     /// Creates a connection advertising `localSettings`, queuing the control + QPACK streams (§3.2).
     ///
     /// `now` is the monotonic clock the Rapid-Reset / MadeYouReset rolling window is measured against;
@@ -123,17 +127,23 @@ public struct HTTP3Connection {
         limits: HTTPLimits = .default,
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
-        // v1 advertises a disabled QPACK dynamic table (RFC 9204 §3.2.2): pin capacity / blocked
-        // streams to 0 and surface the decode bound as MAX_FIELD_SECTION_SIZE.
+        // Advertise a dynamic QPACK table the peer encoder may populate (RFC 9204 §3.2); a caller can
+        // pin `qpackMaxTableCapacity` to 0 for static-only decoding. Blocked streams stay 0 in this step
+        // — the decoder rejects a section that depends on inserts not yet received rather than buffering
+        // it (§2.1.2); the decode bound is surfaced as MAX_FIELD_SECTION_SIZE.
         var advertised = localSettings
-        advertised.qpackMaxTableCapacity = 0
+        if advertised.qpackMaxTableCapacity == 0 {
+            advertised.qpackMaxTableCapacity = Self.defaultQpackMaxTableCapacity
+        }
         advertised.qpackBlockedStreams = 0
         if advertised.maxFieldSectionSize == nil {
             advertised.maxFieldSectionSize = limits.maxHeaderListSize
         }
         self.localSettings = advertised
         self.limits = limits
-        self.decoder = QPACKDecoder(limits: limits)
+        self.decoder = QPACKDecoder(
+            maxTableCapacity: advertised.qpackMaxTableCapacity, limits: limits
+        )
         self.encoder = QPACKEncoder()
         // Bound a single frame's payload; HEADERS is bounded by the field-section size, and DATA is
         // streamed in +Streams, so the header-list size is a safe ceiling for the control plane.

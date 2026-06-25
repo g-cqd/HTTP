@@ -31,8 +31,24 @@ public enum QPACKInstructions {
     /// The decoder-stream instructions this endpoint owes — always empty (RFC 9204 §4.4).
     ///
     /// Every received field section has Required Insert Count 0, so no Section Acknowledgment or Insert
-    /// Count Increment is ever owed.
+    /// Count Increment is ever owed. (The dynamic decoder uses the explicit generators below instead.)
     public static func decoderStreamOutput() -> [UInt8] { [] }
+
+    /// A Section Acknowledgment for `streamID` (RFC 9204 §4.4.1: `1` + a 7-bit prefix stream id) — sent
+    /// once a field section that depended on the dynamic table has been decoded.
+    public static func sectionAcknowledgment(streamID: UInt64) -> [UInt8] {
+        var output: [UInt8] = []
+        QPACKInteger.encode(Int(clamping: streamID), prefixBits: 7, firstByte: 0x80, into: &output)
+        return output
+    }
+
+    /// An Insert Count Increment of `increment` (RFC 9204 §4.4.3: `00` + a 6-bit prefix) — sent after
+    /// applying that many encoder-stream inserts, so the peer encoder learns the entries are usable.
+    public static func insertCountIncrement(_ increment: Int) -> [UInt8] {
+        var output: [UInt8] = []
+        QPACKInteger.encode(increment, prefixBits: 6, firstByte: 0x00, into: &output)
+        return output
+    }
 
     // MARK: Parsers (violation detection)
 

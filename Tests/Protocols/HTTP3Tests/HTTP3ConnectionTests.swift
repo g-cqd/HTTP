@@ -140,9 +140,10 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
     )
     func qpackEncoderViolation() {
         var connection = HTTP3Connection()
-        // [0x02] stream type (encoder); [0x25] Set Dynamic Table Capacity = 5 > 0.
+        // [0x02] stream type (encoder); Set Dynamic Table Capacity 5000 > the advertised 4096 limit
+        // (§4.3.1), encoded as the `001`-prefix integer 0x3F 0xE9 0x26.
         #expect(
-            errorCode(feeding: &connection, Self.qpackEncoder, [0x02, 0x25])
+            errorCode(feeding: &connection, Self.qpackEncoder, [0x02, 0x3F, 0xE9, 0x26])
                 == UInt64(QPACKError.Code.encoderStreamError.rawValue))
     }
 

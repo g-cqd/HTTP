@@ -183,19 +183,52 @@ extension HTTP3Connection {
     private mutating func parseQpackStream(
         _ streamID: QUICStreamID, isEncoder: Bool
     ) throws(HTTP3Error) {
+        if isEncoder {
+            try applyEncoderStream(streamID)
+        }
+        else {
+            try parseDecoderStream(streamID)
+        }
+    }
+
+    /// Applies the peer's encoder-stream inserts into the decoder's dynamic table (RFC 9204 §4.3) and
+    /// acknowledges them with an Insert Count Increment on our decoder stream (§4.4.3).
+    private mutating func applyEncoderStream(_ streamID: QUICStreamID) throws(HTTP3Error) {
         guard var state = streams[streamID] else {
             return
         }
-        let maxCapacity = localSettings.qpackMaxTableCapacity
+        let result: Result<(consumed: Int, inserts: Int), QPACKError> =
+            state.buffer.withUnsafeBytes { raw in
+                Result { () throws(QPACKError) in try decoder.applyEncoderInstructions(raw.bytes) }
+            }
+        switch result {
+            case .success(let applied):
+                state.buffer.removeFirst(applied.consumed)
+                streams[streamID] = state
+                if applied.inserts > 0 {
+                    actions.append(
+                        .send(
+                            stream: .role(.qpackDecoder),
+                            bytes: QPACKInstructions.insertCountIncrement(applied.inserts),
+                            fin: false
+                        )
+                    )
+                }
+            case .failure(let error):
+                throw .connection(qpack: error.code, error.reason)
+        }
+    }
+
+    /// Scans the peer's decoder stream for violations (RFC 9204 §4.4) — our field sections are static or
+    /// Required-Insert-Count-0, so a Section Acknowledgment / Insert Count Increment there is an error.
+    private mutating func parseDecoderStream(_ streamID: QUICStreamID) throws(HTTP3Error) {
+        guard var state = streams[streamID] else {
+            return
+        }
         let result: Result<Int, QPACKError> = state.buffer.withUnsafeBytes { raw in
             Result { () throws(QPACKError) in
                 var reader = ByteReader(raw)
-                if isEncoder {
-                    try QPACKInstructions.parseEncoderStream(&reader, maxCapacity: maxCapacity)
-                }
-                else {
-                    try QPACKInstructions.parseDecoderStream(&reader)
-                }
+                try QPACKInstructions.parseDecoderStream(&reader)
                 return reader.position
             }
         }

@@ -20,9 +20,26 @@ extension HTTPServer {
     /// Serializes the non-`Sendable` ``HTTP3Connection`` engine across a connection's concurrent streams.
     private actor Engine {
         private var connection: HTTP3Connection
+        /// The server's own unidirectional streams by role (control / QPACK encoder+decoder), so
+        /// role-addressed engine sends — QPACK Insert Count Increment / Section Acknowledgment on the
+        /// decoder stream (RFC 9204 §4.4) — reach the right stream.
+        private var roleStreams: [HTTP3StreamRole: any QUICStream] = [:]
 
         init(limits: HTTPLimits) {
             connection = HTTP3Connection(localSettings: HTTP3Settings(), limits: limits)
+        }
+
+        /// Records a freshly opened server uni stream so later role-addressed sends can find it.
+        func attachRoleStream(_ role: HTTP3StreamRole, _ stream: any QUICStream) {
+            roleStreams[role] = stream
+        }
+
+        /// Sends `bytes` on the stream opened for `role` (a no-op if it is not open yet).
+        func sendOnRole(_ role: HTTP3StreamRole, _ bytes: [UInt8], fin: Bool) async {
+            guard let stream = roleStreams[role] else {
+                return
+            }
+            try? await stream.send(bytes, fin: fin)
         }
 
         /// The actions queued so far (the init-time control/QPACK stream openers, then drained).
@@ -76,7 +93,9 @@ extension HTTPServer {
     func serveHTTP3(_ quic: any QUICConnection) async {
         let engine = Engine(limits: limits)
         let initialActions = await engine.pendingActions()
-        let serverStreams = Task { await self.holdServerStreams(from: initialActions, on: quic) }
+        let serverStreams = Task {
+            await self.holdServerStreams(from: initialActions, engine: engine, on: quic)
+        }
         defer { serverStreams.cancel() }
         await withDiscardingTaskGroup { group in
             for await stream in quic.inboundStreams() {
@@ -88,14 +107,15 @@ extension HTTPServer {
     /// Opens the server's unidirectional streams (writing each §6.2 preamble — the type byte, plus
     /// SETTINGS on the control stream) and holds them open until this connection's serving is cancelled.
     private func holdServerStreams(
-        from actions: [HTTP3Connection.Action], on quic: any QUICConnection
+        from actions: [HTTP3Connection.Action], engine: Engine, on quic: any QUICConnection
     ) async {
         var streams: [any QUICStream] = []
         for action in actions {
-            guard case .openUniStream(_, let preamble) = action,
+            guard case .openUniStream(let role, let preamble) = action,
                 let stream = try? await quic.openStream(direction: .unidirectional)
             else { continue }
             try? await stream.send(preamble, fin: false)
+            await engine.attachRoleStream(role, stream)  // so QPACK decoder-stream sends reach it
             streams.append(stream)
         }
         while !Task.isCancelled {
@@ -110,7 +130,7 @@ extension HTTPServer {
     ) async {
         while let chunk = try? await stream.receive() {
             let (events, actions) = await engine.receive(stream.id, chunk.bytes, fin: chunk.fin)
-            await applyHTTP3(actions, stream: stream, quic: quic)
+            await applyHTTP3(actions, stream: stream, engine: engine, quic: quic)
             for case .request(let id, let request, let body) in events {
                 let response = await responder.respond(to: request, body: body)
                 if let bodyStream = response.stream {
@@ -128,7 +148,7 @@ extension HTTPServer {
                     let responseActions = await engine.respond(
                         to: id, response.head, body: response.body
                     )
-                    await applyHTTP3(responseActions, stream: stream, quic: quic)
+                    await applyHTTP3(responseActions, stream: stream, engine: engine, quic: quic)
                 }
             }
             if chunk.fin { break }
@@ -199,18 +219,24 @@ extension HTTPServer {
 
     /// Performs the engine's outbound actions for `stream` (response sends, resets, connection close).
     private func applyHTTP3(
-        _ actions: [HTTP3Connection.Action], stream: any QUICStream, quic: any QUICConnection
+        _ actions: [HTTP3Connection.Action],
+        stream: any QUICStream,
+        engine: Engine,
+        quic: any QUICConnection
     ) async {
         for action in actions {
             switch action {
                 case .send(.id(let id), let bytes, let fin) where id == stream.id:
                     try? await stream.send(bytes, fin: fin)
+                case .send(.role(let role), let bytes, let fin):
+                    // QPACK Insert Count Increment / Section Acknowledgment on our decoder stream (§4.4).
+                    await engine.sendOnRole(role, bytes, fin: fin)
                 case .resetStream(let id, let code) where id == stream.id:
                     stream.reset(errorCode: code)
                 case .closeConnection(let code):
                     await quic.close(errorCode: code)
                 default:
-                    break  // openUniStream is handled at startup; other-id sends do not occur in v1
+                    break  // openUniStream is handled at startup; other-id sends do not occur here
             }
         }
     }
