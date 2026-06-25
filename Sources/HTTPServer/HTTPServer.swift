@@ -20,7 +20,7 @@ public import WebSocket
 /// uses the real ``ContinuousClock`` (via the convenience initializer); a test injects a
 /// deterministic clock, so the timeout paths run with zero real-time waiting.
 public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
-    private let transport: any ServerTransport
+    let transport: any ServerTransport
     /// An optional QUIC transport run alongside the TCP one to serve HTTP/3 (RFC 9114).
     let quicTransport: (any QUICServerTransport)?
     let responder: any HTTPResponder
@@ -30,6 +30,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     let clock: C
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
     let altSvc = Mutex<String?>(nil)
+
+    /// Set once ``shutdown()`` begins a graceful drain.
+    ///
+    /// The per-connection serve loops read it to finish the current exchange and then close (HTTP/1
+    /// with `Connection: close`, HTTP/2 with a GOAWAY, RFC 9113 §6.8) instead of awaiting another
+    /// request. The drain helpers live in `HTTPServer+Shutdown.swift`.
+    let isShuttingDown = Atomic<Bool>(false)
 
     /// Live connection counts: a global total (``HTTPLimits/maxConnections``) and a per-host map
     /// (``HTTPLimits/maxConnectionsPerClient``), guarded together.
@@ -165,71 +172,6 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         await connection.close()
     }
 
-    /// Drives the sans-I/O ``HTTP2Connection`` over `connection`: feed octets → events → respond →
-    /// flush, looping until EOF, a timeout, or a connection-level protocol error.
-    private func serveHTTP2(
-        _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
-        initialBytes: [UInt8]
-    ) async {
-        // Advertise Extended CONNECT (RFC 8441 §3) only when a WebSocket handler can service it.
-        var settings = HTTP2Settings()
-        settings.enableConnectProtocol = webSocketHandler != nil
-        var engine = HTTP2Connection(localSettings: settings, limits: limits)
-        // Per-stream WebSocket engines for active WebSocket-over-HTTP/2 tunnels (RFC 8441).
-        var webSockets: [HTTP2StreamID: WebSocketConnection] = [:]
-        var inbound = initialBytes
-        while true {
-            let events: [HTTP2Connection.Event]
-            do {
-                events = try engine.receive(inbound)
-            }
-            catch {
-                // Connection-level protocol error: the engine queued a GOAWAY (RFC 9113 §6.8) — send
-                // it best-effort so the peer learns the cause, then close.
-                let goAway = engine.outboundBytes()
-                if !goAway.isEmpty { try? await connection.send(goAway) }
-                break
-            }
-            inbound = []
-            for event in events {
-                if case .request(let streamID, let request, let body) = event {
-                    let response = await responder.respond(to: request, body: body)
-                    do {
-                        // `withAltSvc` advertises HTTP/3 (RFC 7838) when a QUIC listener is running.
-                        try engine.respond(
-                            to: streamID, withAltSvc(response.head), body: response.body
-                        )
-                    }
-                    catch {
-                        // A connection-level fault (e.g. responding to an unknown stream) is fatal:
-                        // flush the engine's queued GOAWAY (RFC 9113 §6.8) and close. A stream-level
-                        // fault is contained — the engine queued RST_STREAM, flushed with this batch
-                        // below — so other streams keep being served.
-                        if error.isConnectionError {
-                            let goAway = engine.outboundBytes()
-                            if !goAway.isEmpty { try? await connection.send(goAway) }
-                            return
-                        }
-                    }
-                }
-                else {
-                    await handleHTTP2Tunnel(event, engine: &engine, webSockets: &webSockets)
-                }
-            }
-            let outbound = engine.outboundBytes()
-            if !outbound.isEmpty {
-                do { try await connection.send(outbound) }
-                catch { break }
-            }
-            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
-            let chunk = try? await connection.receive(maxLength: 16_384)
-            deadline.disarm()
-            guard let chunk, !chunk.isEmpty else { break }
-            inbound = chunk
-        }
-    }
-
     /// Serves one request/response exchange.
     ///
     /// Returns `true` to keep the persistent connection open for a following request, `false` to
@@ -271,9 +213,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             return false
         }
         let response = await responder.respond(to: request, body: framed.parsed.body)
+        var head = withAltSvc(response.head)
+        // Graceful shutdown: signal this is the last exchange (RFC 9110 §7.6.1) and close after it.
+        let draining = applyHTTP1Drain(to: &head)
         // A response to HEAD repeats the GET header section but sends no body (RFC 9112 §6.3).
         let bytes = ResponseSerializer.serialize(
-            withAltSvc(response.head), body: response.body, omitBody: request.method == .head
+            head, body: response.body, omitBody: request.method == .head
         )
         do {
             try await connection.send(bytes)
@@ -281,8 +226,11 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         catch {
             return false
         }
+        if draining {
+            return false  // finished this exchange while draining — close the connection
+        }
         return !Self.shouldClose(
-            version: framed.parsed.version, request: request, response: response.head
+            version: framed.parsed.version, request: request, response: head
         )
     }
 

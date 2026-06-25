@@ -72,6 +72,38 @@ struct HTTPServerHTTP2Tests {
         #expect(try http2FrameTypes(out).contains(.goAway))
     }
 
+    @Test("a draining server sends GOAWAY after answering the in-flight request (RFC 9113 §6.8)")
+    func http2DrainsWithGoAway() async throws {
+        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
+        let block = encoder.encode([
+            HPACKField(name: ":method", value: "GET"),
+            HPACKField(name: ":scheme", value: "http"),
+            HPACKField(name: ":path", value: "/hi"),
+            HPACKField(name: ":authority", value: "x")
+        ])
+        var wire = HTTP2ConnectionPreface.client
+        var settings: [UInt8] = []
+        HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection)
+            .encode(into: &settings)
+        wire += settings
+        HTTP2FrameHeader(
+            payloadLength: block.count,
+            type: .headers,
+            flags: [.endHeaders, .endStream],
+            streamID: HTTP2StreamID(1)
+        )
+        .encode(into: &wire)
+        wire += block
+
+        let connection = FakeConnection(id: TransportConnectionID(1), inbound: wire)
+        let server = HTTPServer(transport: FakeTransport(), responder: responder)
+        await server.shutdown()  // begin draining before this connection is served
+        await server.serve(connection)
+
+        #expect(try http2FrameTypes(await connection.sentBytes()).contains(.goAway))
+    }
+
     /// The frame types present on the wire, in order (used to assert h2 framing in responses).
     private func http2FrameTypes(_ bytes: [UInt8]) throws -> [HTTP2FrameType] {
         var types: [HTTP2FrameType] = []
