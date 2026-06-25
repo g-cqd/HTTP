@@ -40,11 +40,20 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
 - [~] **P6 — Streaming bodies (keystone).** Additive `ResponseStream` + `ResponseBodyWriter`;
       `ServerResponse.body` unchanged, `.stream`/`.serverSentEvents` opt-in. **P6a done:** native HTTP/1.1
       chunked streaming + SSE, middleware guards (Compression/Cache skip streams), h2/h3 finite-buffer
-      fallback. ✓ 795 tests green (790 buffered unchanged), ASan clean. **P6b:** native h2/h3 streaming.
+      fallback. ✓ 795 tests green (790 buffered unchanged), ASan clean.
+      **P6b (deferred follow-up — native h2/h3 streaming):** h3 is tractable — per-stream tasks +
+      QUIC transport backpressure already exist; add `HTTP3Connection.respondHeaders`/`dataFrame`, a
+      per-stream `H3StreamWriter` (frames DATA, `stream.send(fin:false)`, FIN at end), plus a fake-QUIC
+      test harness. h2 is the hard one: native streaming inside the multiplexed serve loop deadlocks
+      (a producer running in an event handler can't read the `WINDOW_UPDATE` that reopens an exhausted
+      send window), so it needs a concurrent producer task + serialized (actor/lock) engine access +
+      window-coordinated backpressure. Deferred to its own focused, fully-tested effort rather than a
+      rushed change; P6a's finite-buffer fallback keeps h2/h3 correct meanwhile.
 
-- [ ] **P7 — Static file serving.** FileResponder: traversal-safe (CWE-22), MIME, Last-Modified/ETag
-      from mtime+size, Range + conditional (reuse P2), `.file` body. _Gate:_ traversal rejected,
-      validators correct, ranged/conditional/streamed-download tests.
+- [x] **P7 — Static file serving.** FileResponder: traversal-safe (CWE-22), content-type via the system
+      `UTType` registry, Last-Modified/ETag from mtime+size, native Range (reuse `RangeMiddleware.parse`)
+      + conditional, large files streamed (P6a). _Gate:_ traversal rejected, validators, ranged/
+      conditional/HEAD/index/streamed tests. ✓ 803 tests green; ASan clean.
 
 - [ ] **P8 — Protocol depth.** QPACK dynamic table (RFC 9204, encoder/decoder streams, eviction,
       blocked bound; static-only fallback), priority scheduling (RFC 9218), WebSocket permessage-deflate
@@ -81,4 +90,7 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   `Accept-Language`. 790 tests; ASan clean. Revalidation deferred.
 - 2026-06-25 — P6a done: additive ResponseStream + ResponseBodyWriter; native HTTP/1.1 chunked streaming
   + SSE (`.streaming`/`.serverSentEvents`), middleware guards, h2/h3 finite-buffer fallback. Buffered
-  path byte-identical (790 unchanged). 795 tests; ASan clean. P6b = native h2/h3 streaming.
+  path byte-identical (790 unchanged). 795 tests; ASan clean. P6b = native h2/h3 streaming (deferred).
+- 2026-06-25 — P7 done: FileResponder — traversal-safe (CWE-22), `UTType` content types, mtime/size
+  validators, conditional (304), native Range (206/416), index.html, large-file streaming via P6a.
+  803 tests; ASan clean.
