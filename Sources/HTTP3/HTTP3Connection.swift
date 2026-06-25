@@ -108,10 +108,8 @@ public struct HTTP3Connection {
     var maxPushID: UInt64?
     /// The injected monotonic clock the reset rolling window is measured against (RFC 9114 §8.1).
     let now: MonotonicNowProvider
-    /// The start of the current reset-budget window; the count decays each ``resetIntervalNanos``.
-    var resetWindowStart: MonotonicNanoseconds
-    /// The rolling-window length in nanoseconds (`limits.streamResetInterval`).
-    let resetIntervalNanos: MonotonicNanoseconds
+    /// The rolling window the reset budget decays over (`limits.streamResetInterval`).
+    var budgetWindow: RollingWindow
     /// Stream resets charged in the current window — peer RESET_STREAM and engine-emitted alike, so
     /// neither Rapid Reset (CVE-2023-44487) nor MadeYouReset (CVE-2025-8671) can bypass the cap.
     var streamResetCount = 0
@@ -141,8 +139,9 @@ public struct HTTP3Connection {
         // streamed in +Streams, so the header-list size is a safe ceiling for the control plane.
         self.frameDecoder = HTTP3FrameDecoder(maxFrameSize: limits.maxHeaderListSize)
         self.now = now
-        self.resetWindowStart = now()
-        self.resetIntervalNanos = limits.streamResetInterval.monotonicNanoseconds
+        self.budgetWindow = RollingWindow(
+            start: now(), interval: limits.streamResetInterval.monotonicNanoseconds
+        )
         // RFC 9114 §6.2.1 — the control stream opens with its type byte (0x00) then the SETTINGS frame;
         // §4.2 / RFC 9204 §4.2 — the QPACK encoder (0x02) and decoder (0x03) streams open with just
         // their type byte (v1 sends no instructions: the dynamic table is disabled).
@@ -217,9 +216,7 @@ public struct HTTP3Connection {
     /// engine-emitted resets too mirrors the HTTP/2 abuse budget — so neither Rapid Reset
     /// (CVE-2023-44487) nor MadeYouReset (CVE-2025-8671) can bypass it.
     mutating func chargeStreamReset() {
-        let timestamp = now()
-        if timestamp - resetWindowStart >= resetIntervalNanos {
-            resetWindowStart = timestamp
+        if budgetWindow.rolledOver(at: now()) {
             streamResetCount = 0
         }
         streamResetCount += 1

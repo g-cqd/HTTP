@@ -114,12 +114,12 @@ public struct HTTP2Connection {
     /// Monotonic clock and rolling-window start for the abuse budgets (Rapid-Reset / MadeYouReset
     /// rate limiting, RFC 9113).
     ///
-    /// The budgets reset every `resetIntervalNanos`, so a cap is a *rate* over `streamResetInterval`,
-    /// not a per-connection total — closing both the long-window bypass and the false positive against
-    /// a legitimately long-lived connection.
+    /// The budgets reset every `streamResetInterval`, so a cap is a *rate* over that interval, not a
+    /// per-connection total — closing both the long-window bypass and the false positive against a
+    /// legitimately long-lived connection.
     let now: MonotonicNowProvider
-    var windowStart: MonotonicNanoseconds
-    let resetIntervalNanos: MonotonicNanoseconds
+    /// The rolling window the reset + control-frame budgets decay over (`streamResetInterval`).
+    var budgetWindow: RollingWindow
     /// Leaky-bucket budget for ACK-generating control frames (PING / SETTINGS).
     ///
     /// Each charges it and a completed request drains it; a flood with no useful work in between
@@ -162,8 +162,9 @@ public struct HTTP2Connection {
         )
         self.frameDecoder = HTTP2FrameDecoder(maxFrameSize: advertised.maxFrameSize)
         self.now = now
-        self.windowStart = now()
-        self.resetIntervalNanos = limits.streamResetInterval.monotonicNanoseconds
+        self.budgetWindow = RollingWindow(
+            start: now(), interval: limits.streamResetInterval.monotonicNanoseconds
+        )
         writer.writeFrame(.settings, payload: advertised.encodePayload())
     }
 

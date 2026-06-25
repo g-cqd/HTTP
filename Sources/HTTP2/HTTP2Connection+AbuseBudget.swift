@@ -9,6 +9,7 @@
 //  MadeYouReset (CVE-2025-8671).
 //
 
+internal import HTTPConcurrency
 internal import HTTPCore
 
 extension HTTP2Connection {
@@ -44,11 +45,9 @@ extension HTTP2Connection {
     /// `streamResetInterval` rather than a monotonic per-connection total — fixing both the long-window
     /// bypass and the false positive on a legitimately long-lived connection.
     private mutating func decayBudgetsIfElapsed() {
-        let timestamp = now()
-        guard timestamp - windowStart >= resetIntervalNanos else {
+        guard budgetWindow.rolledOver(at: now()) else {
             return
         }
-        windowStart = timestamp
         activeStreamResets = 0
         controlFrameBudget = 0
     }
