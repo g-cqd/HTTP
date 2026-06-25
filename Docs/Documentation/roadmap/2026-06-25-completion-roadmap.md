@@ -70,8 +70,11 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
         insert-with/without-name-ref + duplicate, eviction, capacity, Required Insert Count / Base,
         blocked-stream bound. Keep the v1 static-only encoder/decoder as a fallback; gate on QPACK/h3
         conformance + fuzz + interop.
-      - **Priority scheduling (RFC 9218).** Track the already-parsed `HTTPPriority` per stream; order the
-        h2 `flushAll`/h3 flush by urgency (a priority queue over ready streams).
+      - [x] **Priority scheduling (RFC 9218) — S1 done.** h2 `StreamRecord.urgency` cached from the
+        request's `Priority` field at stream creation; `flushAll` orders ready streams by ascending
+        urgency (ties → lower stream id) so a congested connection releases higher-priority DATA first
+        (§4). h3 is out of scope (independent per-stream tasks → no shared flush to order). _Gate:_ 3
+        priority-order tests (later/earlier/equal-urgency); h2spec + full suite green; ASan clean. ✓ 806.
       _Gate (per feature):_ QPACK/h3 conformance + fuzz; a priority-order test; a pmd round-trip + bomb
       cap; h2spec still green.
 
@@ -109,3 +112,7 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
 - 2026-06-25 — P7 done: FileResponder — traversal-safe (CWE-22), `UTType` content types, mtime/size
   validators, conditional (304), native Range (206/416), index.html, large-file streaming via P6a.
   803 tests; ASan clean.
+- 2026-06-25 — P8/S1 done: RFC 9218 HTTP/2 priority scheduling — `StreamRecord.urgency` cached at stream
+  creation from the `Priority` field; `flushAll` ordered by ascending urgency (lower stream id breaks
+  ties) so a congested connection flushes higher-priority DATA first. h3 out of scope (per-stream tasks).
+  806 tests; ASan clean.

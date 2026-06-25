@@ -160,10 +160,19 @@ extension HTTP2Connection {
     }
 
     /// Flushes every stream that still has pending DATA — the connection send window just grew.
+    ///
+    /// RFC 9218 §4: the connection send window is a shared resource, so when it is the bottleneck a
+    /// server releases higher-priority responses first. The ready streams are ordered by ascending
+    /// urgency (0 = most urgent), ties broken by stream id for a deterministic order, before each is
+    /// drained — so a congested connection serves a more urgent response ahead of a less urgent one
+    /// competing for the same window. (HTTP/3 needs no equivalent: its streams are independent tasks
+    /// with per-stream transport backpressure, so there is no shared flush to order.)
     mutating func flushAll() {
-        for streamID in Array(streams.keys) {
-            guard var record = streams.removeValue(forKey: streamID) else { continue }
-            flushStream(streamID, &record)
+        let ordered = streams.map { (id: $0.key, urgency: $0.value.urgency) }
+            .sorted { $0.urgency != $1.urgency ? $0.urgency < $1.urgency : $0.id < $1.id }
+        for entry in ordered {
+            guard var record = streams.removeValue(forKey: entry.id) else { continue }
+            flushStream(entry.id, &record)
         }
     }
 

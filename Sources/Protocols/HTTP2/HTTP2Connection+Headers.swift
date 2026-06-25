@@ -112,6 +112,10 @@ extension HTTP2Connection {
             sendWindow: HTTP2FlowControlWindow(initialSize: remoteSettings.initialWindowSize),
             receiveWindow: localSettings.initialWindowSize
         )
+        // Cache the request's RFC 9218 §4 urgency now so a congested connection's flusher can release
+        // this stream's DATA ahead of less-urgent streams (HTTP2Connection+FlowControl.flushAll). An
+        // absent or unparseable `Priority` field falls back to the default urgency (§4.1).
+        record.urgency = request.priority?.urgency ?? HTTPPriority.defaultUrgency
         // An Extended CONNECT (RFC 8441 §4) opens a tunnel rather than a request: surface it for the
         // driver to accept, and route this stream's DATA as opaque tunnel bytes from here on.
         if let connectProtocol {

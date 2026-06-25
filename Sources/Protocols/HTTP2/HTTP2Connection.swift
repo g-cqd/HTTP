@@ -66,6 +66,10 @@ public struct HTTP2Connection {
         /// Whether this stream is an Extended CONNECT tunnel (RFC 8441 §5): its DATA carries opaque
         /// tunnel bytes (e.g. WebSocket frames) rather than an HTTP request/response body.
         var isTunnel = false
+        /// The stream's RFC 9218 §4 urgency (0 = most urgent … 7 = least; default 3), cached from the
+        /// request's `Priority` field at creation so the send-side flusher can release a congested
+        /// connection's higher-priority DATA first (see `flushAll`, HTTP2Connection+FlowControl).
+        var urgency = HTTPPriority.defaultUrgency
     }
 
     private var phase = Phase.awaitingPreface
