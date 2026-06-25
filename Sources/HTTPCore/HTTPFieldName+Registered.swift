@@ -64,6 +64,8 @@ extension HTTPFieldName {
     public static let location = HTTPFieldName(unchecked: "location")
     /// `Alt-Svc` (RFC 7838) — advertises alternative services such as HTTP/3.
     public static let altSvc = HTTPFieldName(unchecked: "alt-svc")
+    /// `Priority` (RFC 9218) — the client's stream urgency / incremental preference.
+    public static let priority = HTTPFieldName(unchecked: "priority")
 
     // MARK: Authentication & state
 
