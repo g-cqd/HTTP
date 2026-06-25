@@ -3,13 +3,18 @@
 //  Package.swift — `HTTP`
 //  A from-scratch, SwiftNIO-free HTTP/1.1 · HTTP/2 · HTTP/3 server library for Apple platforms.
 //
-//  Design north star (see Documentation/ and the approved plan):
+//  Design north star (see Docs/Documentation/ and the approved plan):
 //    • Sans-I/O protocol engines (pure, allocation-conscious state machines) — testable & fuzzable
 //      without sockets; Network.framework is isolated to the `HTTPTransport` target only.
 //    • Strict concurrency + strict memory; no force-unwrap / force-cast; no recursion in parsers.
 //    • Every parser/validator cites the exact RFC section it implements.
 //
-//  Targets are introduced milestone-by-milestone (TDD). M0 establishes HTTPCore + tooling.
+//  Source layout is tiered for navigability (module names — and therefore imports — are unchanged;
+//  only directory paths move, declared per target via `path:`):
+//    Sources/Core        — HTTPCore, HTTPConcurrency, CCRC32, CHTTPTestMalloc
+//    Sources/Protocols   — HTTP1, HTTP2, HTTP3, HPACK, QPACK, WebSocket
+//    Sources/Transport   — HTTPTransport      Sources/Server   — HTTPServer
+//    Sources/Testing     — HTTPTestSupport    Sources/Examples — httpd-example
 
 import PackageDescription
 
@@ -70,31 +75,36 @@ let package = Package(
         // Zero external dependencies, no I/O — the self-contained substrate every engine builds on.
         .target(
             name: "HTTPCore",
-            dependencies: ["CCRC32"]
+            dependencies: ["CCRC32"],
+            path: "Sources/Core/HTTPCore"
         ),
         .testTarget(
             name: "HTTPCoreTests",
-            dependencies: ["HTTPCore", "HTTPTestSupport"]
+            dependencies: ["HTTPCore", "HTTPTestSupport"],
+            path: "Tests/Core/HTTPCoreTests"
         ),
         // Shipped-safe concurrency seams: the `TaskProvider` (so untracked `Task { }` spawns become
         // injectable + settle-able) and the `MonotonicNowProvider` (so the HTTP/2 Rapid Reset window
         // is deterministically pinnable). Zero external dependencies, no I/O — reuse-safe.
         .target(
-            name: "HTTPConcurrency"
+            name: "HTTPConcurrency",
+            path: "Sources/Core/HTTPConcurrency"
         ),
         .testTarget(
             name: "HTTPConcurrencyTests",
-            dependencies: ["HTTPConcurrency", "HTTPTestSupport"]
+            dependencies: ["HTTPConcurrency", "HTTPTestSupport"],
+            path: "Tests/Core/HTTPConcurrencyTests"
         ),
         // A tiny C shim exposing process-wide heap-allocation counting (Darwin's `malloc_logger`
         // hook; a no-op elsewhere), backing the `expectAllocations` zero-allocation perf guard.
         // Test/tooling-only; never shipped in an app binary. No dependencies, default C settings.
-        .target(name: "CHTTPTestMalloc"),
+        .target(name: "CHTTPTestMalloc", path: "Sources/Core/CHTTPTestMalloc"),
         // A C shim exposing hardware/SWAR CRC-32 backends for the gzip integrity checksum: the ARMv8
         // CRC32 instructions, zlib's PCLMULQDQ-accelerated `crc32` (the correct x86 hardware path),
         // and a portable slicing-by-8 table. Links the system zlib. Default C settings.
         .target(
             name: "CCRC32",
+            path: "Sources/Core/CCRC32",
             linkerSettings: [.linkedLibrary("z")]
         ),
         // Test-only support: the deterministic async toolkit ported from ADTestKit (TestClock,
@@ -110,31 +120,37 @@ let package = Package(
                 "HTTPTransport",
                 "CHTTPTestMalloc",
                 .product(name: "HeapModule", package: "swift-collections")
-            ]
+            ],
+            path: "Sources/Testing/HTTPTestSupport"
         ),
         .testTarget(
             name: "HTTPTestSupportTests",
-            dependencies: ["HTTPTestSupport"]
+            dependencies: ["HTTPTestSupport"],
+            path: "Tests/Testing/HTTPTestSupportTests"
         ),
         // RFC 9112 — the sans-I/O HTTP/1.1 message parser & serializer (no sockets, no recursion).
         .target(
             name: "HTTP1",
-            dependencies: ["HTTPCore"]
+            dependencies: ["HTTPCore"],
+            path: "Sources/Protocols/HTTP1"
         ),
         .testTarget(
             name: "HTTP1Tests",
-            dependencies: ["HTTP1", "HTTPTestSupport"]
+            dependencies: ["HTTP1", "HTTPTestSupport"],
+            path: "Tests/Protocols/HTTP1Tests"
         ),
         // RFC 7541 — HPACK header compression for HTTP/2: §5.1 prefix integers, §5.2 string literals
         // (with the canonical Huffman code), the static (App. A) & dynamic (§4) tables, and the §6
         // field-representation codec. Sans-I/O; shared canonical Huffman lives in HTTPCore for QPACK.
         .target(
             name: "HPACK",
-            dependencies: ["HTTPCore"]
+            dependencies: ["HTTPCore"],
+            path: "Sources/Protocols/HPACK"
         ),
         .testTarget(
             name: "HPACKTests",
-            dependencies: ["HPACK", "HTTPTestSupport"]
+            dependencies: ["HPACK", "HTTPTestSupport"],
+            path: "Tests/Protocols/HPACKTests"
         ),
         // RFC 9204 — QPACK header compression for HTTP/3. Mirrors HPACK: the §4.1.1 prefix integers,
         // §4.1.2 string literals (the canonical Huffman code, shared from HTTPCore), the 99-entry
@@ -143,11 +159,13 @@ let package = Package(
         // §3.2.2) — static-table + literals only, so RIC is required to be 0. Sans-I/O.
         .target(
             name: "QPACK",
-            dependencies: ["HTTPCore"]
+            dependencies: ["HTTPCore"],
+            path: "Sources/Protocols/QPACK"
         ),
         .testTarget(
             name: "QPACKTests",
-            dependencies: ["QPACK", "HTTPTestSupport"]
+            dependencies: ["QPACK", "HTTPTestSupport"],
+            path: "Tests/Protocols/QPACKTests"
         ),
         // RFC 9113 — the sans-I/O HTTP/2 engine: frame layer (§4), connection preface (§3.4),
         // SETTINGS (§6.5), HEADERS field-block + request mapping (§6.2/§8.3) through HPACK, the stream
@@ -158,11 +176,13 @@ let package = Package(
         // receive-side flow control (advertising/replenishing the server's own inbound window).
         .target(
             name: "HTTP2",
-            dependencies: ["HTTPCore", "HPACK", "HTTPConcurrency"]
+            dependencies: ["HTTPCore", "HPACK", "HTTPConcurrency"],
+            path: "Sources/Protocols/HTTP2"
         ),
         .testTarget(
             name: "HTTP2Tests",
-            dependencies: ["HTTP2", "HPACK", "HTTPTestSupport"]
+            dependencies: ["HTTP2", "HPACK", "HTTPTestSupport"],
+            path: "Tests/Protocols/HTTP2Tests"
         ),
         // RFC 9114 — the sans-I/O HTTP/3 engine: the §7.1 frame layer (varint type+length), the §6.2
         // unidirectional stream-type layer, §7.2.4 SETTINGS (rejecting the reserved HTTP/2 ids), the
@@ -171,24 +191,28 @@ let package = Package(
         // (QUIC delivers per-stream bytes); the transport owns id allocation. Sans-I/O.
         .target(
             name: "HTTP3",
-            dependencies: ["HTTPCore", "QPACK", "HTTPConcurrency"]
+            dependencies: ["HTTPCore", "QPACK", "HTTPConcurrency"],
+            path: "Sources/Protocols/HTTP3"
         ),
         // M7 — the HTTP/3 conformance suite: the h3spec + RFC 9114/9204 catalog (pure data) plus the
         // engine-driven drive-and-assert cases that go live as the engine lands.
         .testTarget(
             name: "HTTP3Tests",
-            dependencies: ["HTTP3", "QPACK", "HTTPCore", "HTTPTestSupport"]
+            dependencies: ["HTTP3", "QPACK", "HTTPCore", "HTTPTestSupport"],
+            path: "Tests/Protocols/HTTP3Tests"
         ),
         // RFC 6455 — the sans-I/O WebSocket engine: the §5.2 frame layer (FIN/RSV/opcode, the
         // 7/16/64-bit payload length, §5.3 masking), close codes (§7.4), and — layered on later — the
         // §4 opening handshake over the HTTP/1.1 Upgrade (and RFC 9220 over HTTP/2). No sockets.
         .target(
             name: "WebSocket",
-            dependencies: ["HTTPCore"]
+            dependencies: ["HTTPCore"],
+            path: "Sources/Protocols/WebSocket"
         ),
         .testTarget(
             name: "WebSocketTests",
-            dependencies: ["WebSocket", "HTTPTestSupport"]
+            dependencies: ["WebSocket", "HTTPTestSupport"],
+            path: "Tests/Protocols/WebSocketTests"
         ),
         // M3 — the I/O boundary. Four switchable backbones (Network.framework + three POSIX-level
         // variants) behind one abstraction, each isolated in its own subfolder. The only target
@@ -199,11 +223,13 @@ let package = Package(
                 "HTTPCore",
                 "HTTPConcurrency",
                 .product(name: "SystemPackage", package: "swift-system")
-            ]
+            ],
+            path: "Sources/Transport/HTTPTransport"
         ),
         .testTarget(
             name: "HTTPTransportTests",
-            dependencies: ["HTTPTransport", "HTTPTestSupport"]
+            dependencies: ["HTTPTransport", "HTTPTestSupport"],
+            path: "Tests/Transport/HTTPTransportTests"
         ),
         // M4 — the server runtime: wires a transport backbone to the HTTP/1.1 and HTTP/2 engines via
         // an HTTPResponder, fanning connections out across cores and sniffing the protocol (HTTP/2
@@ -213,21 +239,24 @@ let package = Package(
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
                 "HTTPConcurrency"
-            ]
+            ],
+            path: "Sources/Server/HTTPServer"
         ),
         .testTarget(
             name: "HTTPServerTests",
             dependencies: [
                 "HTTPServer", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket", "HTTPTransport",
                 "HTTPTestSupport"
-            ]
+            ],
+            path: "Tests/Server/HTTPServerTests"
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with
         // `swift run httpd-example [port] [backbone]` and `curl --http1.1`.
         .executableTarget(
             name: "httpd-example",
-            dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport", "WebSocket"]
+            dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport", "WebSocket"],
+            path: "Sources/Examples/httpd-example"
         )
     ]
 )
