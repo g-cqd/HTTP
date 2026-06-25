@@ -48,7 +48,11 @@ A second-pass adversarial hardening of the stack; see
 - **TLS ALPN (ALPACA):** over TLS, refuse a connection that negotiated neither `h2` nor `http/1.1`
   (including no ALPN) instead of silently serving HTTP/1.1; `TransportConnection.isSecure` distinguishes
   TLS from cleartext, which is unaffected (RFC 7301 §3.2).
+- **HTTP/3 trailers:** validate a trailing HEADERS block (no pseudo-header fields, lowercase names only,
+  RFC 9114 §4.3/§4.2) — a malformed trailer is now `H3_MESSAGE_ERROR` instead of being silently accepted,
+  matching the HTTP/2 path.
 
 ### Changed
 - Unified the HTTP/2 and HTTP/3 request mappers into one generic `HTTPCore.RequestMapper` — a single
-  source of truth for the RFC 9113 §8.3 / RFC 9114 §4.3 pseudo-header + field validation.
+  source of truth for the RFC 9113 §8.3 / RFC 9114 §4.3 pseudo-header + field validation. Trailer
+  validation is likewise shared (`RequestMapper.validateTrailers`), so both engines apply one rule.

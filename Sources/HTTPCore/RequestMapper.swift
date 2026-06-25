@@ -177,4 +177,24 @@ public enum RequestMapper {
             throw malformed("invalid field value")
         }
     }
+
+    /// Validates a trailer section (RFC 9113 §8.1 / RFC 9114 §4.3): it carries no pseudo-header fields
+    /// and only lowercase field names — both are malformed, scoped by the caller as a stream error.
+    ///
+    /// Trailers are decoded for validity but never folded into the request, so this is the one gate that
+    /// stops a peer smuggling a pseudo-header or an uppercase name past the engine in a trailing block.
+    /// Shared verbatim by the HTTP/2 and HTTP/3 engines (the §8.1.2.1/§8.2.1 and §4.3/§4.2 rules match).
+    public static func validateTrailers<E: Error>(
+        _ fields: [HeaderField],
+        malformed: (String) -> E
+    ) throws(E) {
+        for field in fields {
+            guard !field.name.hasPrefix(":") else {
+                throw malformed("pseudo-header field in trailers")
+            }
+            guard !field.name.utf8.contains(where: { $0 >= 0x41 && $0 <= 0x5A }) else {
+                throw malformed("uppercase field name in trailers")
+            }
+        }
+    }
 }

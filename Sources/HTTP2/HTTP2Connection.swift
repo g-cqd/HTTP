@@ -449,13 +449,9 @@ public struct HTTP2Connection {
         }
         // Validate the accepted trailers: no pseudo-header fields, lowercase names only
         // (RFC 9113 §8.1.2.1 / §8.2.1) — a malformed trailer is a stream error, like the request path.
-        for field in fields {
-            guard !field.name.hasPrefix(":") else {
-                throw .stream(streamID, .protocolError, "pseudo-header field in trailers")
-            }
-            guard !field.name.contains(where: \.isUppercase) else {
-                throw .stream(streamID, .protocolError, "uppercase field name in trailers")
-            }
+        // Shared with HTTP/3 (`RequestMapper.validateTrailers`) so both engines apply the same rule.
+        try RequestMapper.validateTrailers(fields) { reason in
+            HTTP2Error.stream(streamID, .protocolError, reason)
         }
         streams[streamID] = record
         if endStream { try emitRequest(streamID, into: &events) }

@@ -66,7 +66,12 @@ extension HTTP3Connection {
         }
         let fields = try decodeFieldSection(payload)
         if state.sawHeaders {
-            state.sawTrailers = true  // trailers — decoded for validity, not added to the request
+            // Trailers (RFC 9114 §4.3): validated — no pseudo-header fields, lowercase names only — then
+            // discarded, not folded into the request. Shared with HTTP/2 so both engines apply the rule.
+            try RequestMapper.validateTrailers(fields) { reason in
+                HTTP3Error.stream(streamID, .h3MessageError, reason)
+            }
+            state.sawTrailers = true
             streams[streamID] = state
             return
         }
