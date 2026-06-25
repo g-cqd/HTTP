@@ -25,7 +25,7 @@ extension HTTP3Connection {
         guard streams.removeValue(forKey: streamID) != nil else {
             throw .connection(.h3InternalError, "response for an unknown stream")
         }
-        let headerBlock = encoder.encode(responseFields(response))
+        let headerBlock = encodeResponseSection(response)
         var bytes = HTTP3FrameWriter.frame(.headers, payload: headerBlock)
         if !body.isEmpty {
             HTTP3FrameWriter.append(.data, payload: body, to: &bytes)
@@ -33,13 +33,41 @@ extension HTTP3Connection {
         actions.append(.send(stream: .id(streamID), bytes: bytes, fin: true))
     }
 
-    /// The QPACK fields for `response`: the `:status` pseudo-header first, then the lowercased fields
-    /// (HTTP/3 field names MUST be lowercase, RFC 9114 §4.2).
-    private func responseFields(_ response: HTTPResponse) -> [HeaderField] {
-        var fields = [HeaderField(name: ":status", value: String(response.status.code))]
+    /// Encodes a response's QPACK field section into a reserved buffer (RFC 9114 §4.1).
+    ///
+    /// `:status` first, then the lowercased fields (§4.2): no intermediate `[HeaderField]` array, no
+    /// buffer regrowth, no per-response status itoa. Internal so an allocation test can measure it.
+    func encodeResponseSection(_ response: HTTPResponse) -> [UInt8] {
+        var output: [UInt8] = []
+        // Reserve once up front so the buffer does not realloc as fields append (a typical response
+        // header block fits; a larger one grows from here, still far fewer reallocs than from empty).
+        output.reserveCapacity(512)
+        encoder.beginSection(into: &output)
+        // `:status` first (RFC 9114 §4.1); a cached string for the common codes avoids a per-response
+        // `String(code)` allocation (the value also serves as the static-table lookup key).
+        encoder.encode(
+            HeaderField(name: ":status", value: Self.statusString(response.status.code)),
+            into: &output
+        )
         for field in response.headerFields {
-            fields.append(HeaderField(name: field.name.canonicalName, value: field.value))
+            encoder.encode(
+                HeaderField(name: field.name.canonicalName, value: field.value), into: &output
+            )
         }
-        return fields
+        return output
+    }
+
+    /// A cached decimal string for the common status codes, avoiding a per-response `String(code)` itoa
+    /// (these small literals are stored inline — no heap allocation); uncommon codes fall back.
+    private static let statusStrings: [UInt16: String] = [
+        200: "200", 201: "201", 204: "204", 206: "206",
+        301: "301", 302: "302", 304: "304",
+        400: "400", 401: "401", 403: "403", 404: "404", 405: "405", 429: "429",
+        500: "500", 503: "503"
+    ]
+
+    /// The decimal string for `code`, cached for the common codes (see ``statusStrings``).
+    private static func statusString(_ code: UInt16) -> String {
+        statusStrings[code] ?? String(code)
     }
 }

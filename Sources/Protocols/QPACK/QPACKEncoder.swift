@@ -25,15 +25,30 @@ public struct QPACKEncoder {
     /// The output begins with the §4.5.1 prefix (Required Insert Count 0, Base 0) and uses only
     /// static-table references and literals.
     public func encode(_ fields: [HeaderField]) -> [UInt8] {
-        // §4.5.1 prefix: Required Insert Count 0, then the Base sign bit (0) and Base 0.
-        var output: [UInt8] = [0x00, 0x00]
+        var output: [UInt8] = []
+        // Reserve once for the whole section so the buffer never reallocs as fields append; the encoded
+        // form is ≤ name + value + a couple octets per field (static refs + Huffman only shrink it).
+        output.reserveCapacity(
+            2 + fields.reduce(0) { $0 + $1.name.utf8.count + $1.value.utf8.count + 2 }
+        )
+        beginSection(into: &output)
         for field in fields {
             encode(field, into: &output)
         }
         return output
     }
 
-    private func encode(_ field: HeaderField, into output: inout [UInt8]) {
+    /// Writes the §4.5.1 field-section prefix (Required Insert Count 0, Base 0).
+    ///
+    /// Call once before encoding fields with ``encode(_:into:)`` to stream a section directly into a
+    /// buffer, without first materializing a `[HeaderField]`.
+    public func beginSection(into output: inout [UInt8]) {
+        output.append(0x00)  // Required Insert Count 0
+        output.append(0x00)  // Base sign bit 0 + Base 0
+    }
+
+    /// Encodes one field line into `output` (§4.5.2 indexed / §4.5.4 static name ref / §4.5.6 literal).
+    public func encode(_ field: HeaderField, into output: inout [UInt8]) {
         if let index = QPACKStaticTable.exactIndex[field] {
             // §4.5.2 — the whole field is in the static table: an indexed reference (T=1).
             QPACKInteger.encode(index, prefixBits: 6, firstByte: 0xC0, into: &output)
