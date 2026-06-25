@@ -32,9 +32,10 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       (`COMPRESSION_BROTLI`), gzip `FLG≠0` header parsing + CRC-32/ISIZE verification; same bomb caps
       (CWE-409). _Gate:_ per-codec round-trip + bomb fuzz never-traps; ASan clean. ✓ 781 tests green.
 
-- [ ] **P5 — RFC 9111 response caching.** CacheMiddleware + bounded LRU `ResponseCache`: Cache-Control,
-      freshness (§4.2), `Age` (§5.1), Vary key, revalidation. _Gate:_ freshness/Vary/eviction tests; no
-      caching of uncacheable responses.
+- [x] **P5 — RFC 9111 response caching.** CacheMiddleware + bounded LRU `ResponseCache`: Cache-Control
+      directives, freshness (§4.2), `Age` (§5.1), Vary key, byte-cap eviction. _Gate:_ freshness/Vary/
+      eviction tests; no caching of uncacheable responses. ✓ 790 tests green; ASan clean. (Stale-entry
+      revalidation deferred as a follow-up — see CacheMiddleware doc.)
 
 - [ ] **P6 — Streaming bodies (keystone).** Additive, source-compatible `ResponseBody`
       {bytes/stream/file}; h1 chunked send-loop, h2 fed from async source, h3 multi-DATA; middleware
@@ -75,3 +76,6 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
 - 2026-06-25 — P4 done: inbound `deflate` (raw + zlib) and `brotli` (`COMPRESSION_BROTLI`), gzip FLG
   header parsing + CRC-32/ISIZE verification; bomb caps unchanged, fuzz extended to all three decoders.
   781 tests; ASan clean.
+- 2026-06-25 — P5 done: CacheMiddleware + bounded-LRU ResponseCache + CacheControl parser — fresh-hit
+  with `Age`, Vary keying, no-store/private/no-cache handling, byte-cap eviction; registered `Age`,
+  `Accept-Language`. 790 tests; ASan clean. Revalidation deferred.
