@@ -76,15 +76,18 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
         negotiated + echoed (h1 `WebSocketHandshake`; RFC 8441 h2 `acceptTunnel`), `WebSocketFrame.rsv1`
         with the decoder allowing RSV1 only when negotiated — never on a control or continuation frame —
         and the encoder setting it, and `WebSocketConnection` compressing on send / inflating on receive
-        with the inflated size hard-capped (CWE-409). **Finding (supersedes the design note):** Apple's
-        Compression `compression_stream_*` *also* cannot emit a `Z_SYNC_FLUSH` (flags 0 buffers
-        everything — 0 bytes out; only FINALIZE flushes, with BFINAL), proven by probe. So
-        `no_context_takeover` is realized as a fresh per-message FINALIZE stream, decompressed per §7.2.2
-        by appending `00 00 FF FF` + inflating; the decoder is lenient on malformed DEFLATE (caught
-        downstream by the §8.1 UTF-8 screen + the size cap). Context-takeover and strict
-        `Z_SYNC_FLUSH`/Autobahn interop (would need zlib) are deferred to P10. _Gate:_ codec + engine
-        round-trip (text/binary/empty/50 KiB), RSV1 without-negotiation / on-continuation / on-control
-        rejected, bomb cap → close, negotiation accept/echo/decline, +3 pmd fuzz exercises; ASan clean.
+        with the inflated size hard-capped (CWE-409). **S3+ upgrade (bit-exact, done):** Apple's
+        Compression `compression_stream_*` cannot emit a `Z_SYNC_FLUSH` (flags 0 buffers everything — 0
+        bytes out; only FINALIZE flushes, with BFINAL — proven by probe), so the codec now drives raw
+        DEFLATE through a `CWSDeflate` zlib C shim (zlib was already linked by CCRC32) — bit-exact RFC
+        7692 §7.2.1 (`Z_SYNC_FLUSH`, strip `00 00 FF FF`) / §7.2.2 (re-append + inflate), with strict
+        rejection of malformed DEFLATE. **Context-takeover** is now supported and negotiated per direction
+        (`PermessageDeflateParameters`, honoring the client's `server`/`client_no_context_takeover`);
+        a stateful per-connection codec carries the LZ77 window across messages. _Gate:_ bit-exact codec
+        round-trip (text/binary/empty/50 KiB) + context-takeover (repeat compresses smaller) +
+        no_context_takeover independence, engine receive/send, RSV1 without-negotiation / on-continuation /
+        on-control rejected, bomb cap → close, negotiation accept/echo/decline/honor, +3 pmd fuzz; ASan
+        clean. (Autobahn CI remains a P10 item.)
         ✓ 829.
       - [~] **QPACK dynamic table (RFC 9204) — S5: foundation done, integration deferred.** Landed the
         `QPACKDynamicTable` data structure — a separate-index-space FIFO with the §3.2.4–§3.2.6
@@ -170,3 +173,9 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   eviction, capacity, Duplicate) with 9 unit tests pinning the interop-trap arithmetic. Encoder/decoder/
   connection integration (inserts, dynamic refs, RIC, Section-Ack/ICI, blocked streams) deferred and
   recorded; static-only QPACK retained operational as the mandated fallback. 843 tests; ASan clean.
+- 2026-06-25 — fix: deterministic Network.framework `boundPort` (captured at `.ready`), removing the rare
+  BackboneConformanceTests "bound no port" flake under concurrent full-suite load.
+- 2026-06-25 — P8/S3+ done: permessage-deflate is now bit-exact RFC 7692 over a new `CWSDeflate` zlib C
+  shim (raw DEFLATE + `Z_SYNC_FLUSH`; zlib was already linked by CCRC32), replacing the Compression
+  FINALIZE backend, with **context-takeover** negotiated per direction (`PermessageDeflateParameters`).
+  846 tests; ASan clean.

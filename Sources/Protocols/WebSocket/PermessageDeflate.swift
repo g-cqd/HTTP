@@ -2,130 +2,135 @@
 //  PermessageDeflate.swift
 //  WebSocket
 //
-//  RFC 7692 — per-message DEFLATE, scoped to `no_context_takeover` (§7.1.1.1 / §7.1.1.2): each message
-//  is (de)compressed with its own fresh DEFLATE stream, so no LZ77 history carries between messages.
-//  Built over Apple's Compression framework (`COMPRESSION_ZLIB` is raw RFC 1951 DEFLATE, no zlib
-//  wrapper), which has no `Z_SYNC_FLUSH`: `compression_stream_process` either buffers everything
-//  (flags 0 emits nothing until more input) or finalizes (a BFINAL block). So a message is compressed
-//  as a *finalized* fresh stream — which IS no_context_takeover — and decompressed per §7.2.2 by
-//  appending the `00 00 FF FF` empty-block tail and inflating, with the inflated size hard-capped
-//  against a decompression bomb (CWE-409). Context-takeover would need a real `Z_SYNC_FLUSH` (only
-//  zlib exposes it) and is out of scope; full RFC 7692 / browser interop is validated under P10.
+//  RFC 7692 — per-connection permessage-deflate, bit-exact, over the `CWSDeflate` zlib shim. zlib is the
+//  only DEFLATE backend exposing `Z_SYNC_FLUSH` (Apple's Compression cannot, proven by probe), so a
+//  message compresses as raw DEFLATE flushed with the empty `00 00 FF FF` block, which §7.2.1 strips;
+//  decompression re-appends it and inflates (§7.2.2). The compressor/decompressor streams persist their
+//  LZ77 history across messages for context-takeover; a `no_context_takeover` direction resets its
+//  stream per message. The inflated size is hard-capped against a decompression bomb (CWE-409).
+//
+//  Stateful (it owns two `z_stream`s), so a final class with a deinit that frees them. One instance per
+//  connection, driven on that connection's single task — never shared across tasks.
 //
 
-internal import Compression
+internal import CWSDeflate
 
-/// Per-message permessage-deflate over Apple Compression (RFC 7692, `no_context_takeover`).
-enum PermessageDeflate {
-    /// The empty-uncompressed DEFLATE block (`00 00 FF FF`) a decompressor appends before inflating
-    /// (RFC 7692 §7.2.2) — the sync-flush boundary the on-the-wire form omits.
+/// A per-connection RFC 7692 permessage-deflate codec backed by zlib (raw DEFLATE + `Z_SYNC_FLUSH`).
+final class PermessageDeflate {
+    /// The empty-uncompressed DEFLATE block a sync flush ends with — stripped on compress (§7.2.1) and
+    /// re-appended on decompress (§7.2.2).
     static let syncTail: [UInt8] = [0x00, 0x00, 0xFF, 0xFF]
 
-    /// The output window size; each `compression_stream_process` pass fills at most this many octets,
-    /// so the decode bomb cap overshoots by at most one window before failing closed.
-    private static let windowSize = 16 << 10
+    /// The full 15-bit DEFLATE window (RFC 7692 §7.1.2; this endpoint does not negotiate a smaller one).
+    private static let windowBits: Int32 = 15
 
-    /// Compresses one message as an independent finalized raw-DEFLATE stream (`no_context_takeover`).
-    ///
-    /// Returns nil on a Compression-framework error; the caller then sends the message uncompressed.
-    static func compress(_ message: [UInt8]) -> [UInt8]? {
-        process(message, operation: COMPRESSION_STREAM_ENCODE, finalize: true, maxOutput: nil)
+    /// The output window size; each `*_run` pass fills at most this, bounding the bomb-cap overshoot.
+    private static let chunk = 16 << 10
+
+    private let compressor: OpaquePointer
+    private let decompressor: OpaquePointer
+    private let serverNoContextTakeover: Bool
+    private let clientNoContextTakeover: Bool
+
+    /// Creates a codec for the negotiated `parameters`, or nil if zlib initialization fails (OOM).
+    init?(parameters: PermessageDeflateParameters) {
+        guard let compressor = cws_deflate_new(Self.windowBits) else {
+            return nil
+        }
+        guard let decompressor = cws_inflate_new(Self.windowBits) else {
+            cws_deflate_free(compressor)
+            return nil
+        }
+        self.compressor = compressor
+        self.decompressor = decompressor
+        self.serverNoContextTakeover = parameters.serverNoContextTakeover
+        self.clientNoContextTakeover = parameters.clientNoContextTakeover
     }
 
-    /// Decompresses one message (RFC 7692 §7.2.2): append the `00 00 FF FF` tail, inflate, and bound the
-    /// output to `maxSize` octets — the CWE-409 decompression-bomb defense.
+    deinit {
+        cws_deflate_free(compressor)
+        cws_inflate_free(decompressor)
+    }
+
+    /// Compresses one outbound message to bit-exact RFC 7692 §7.2.1 framing.
     ///
-    /// Returns nil only when the inflated output would exceed `maxSize` (fail closed — never a partial
-    /// message). Note: Apple's Compression decoder is *lenient* on a malformed DEFLATE stream — it
-    /// returns best-effort (often empty) output rather than erroring — so a corrupt frame yields a short
-    /// or empty message rather than a hard reject here; a compressed *text* message that inflates to
-    /// non-UTF-8 is still rejected by the caller's §8.1 screen, and the size cap still bounds a bomb.
-    static func decompress(_ message: [UInt8], maxSize: Int) -> [UInt8]? {
+    /// Deflates with `Z_SYNC_FLUSH` then strips the trailing `00 00 FF FF`, resetting the compressor
+    /// first under `server_no_context_takeover`. Returns nil on a zlib stream error; the caller then
+    /// sends the message uncompressed.
+    func compress(_ message: [UInt8]) -> [UInt8]? {
+        if serverNoContextTakeover {
+            _ = cws_deflate_reset(compressor)
+        }
+        guard let output = pumpCompress(message), output.count >= Self.syncTail.count else {
+            return nil
+        }
+        return Array(output.dropLast(Self.syncTail.count))
+    }
+
+    /// Decompresses one inbound message per RFC 7692 §7.2.2, bounding the output to `maxSize` (CWE-409).
+    ///
+    /// Appends the `00 00 FF FF` boundary and inflates, resetting the decompressor first under
+    /// `client_no_context_takeover`. Returns nil on a malformed stream or output exceeding `maxSize`.
+    func decompress(_ message: [UInt8], maxSize: Int) -> [UInt8]? {
         guard maxSize > 0 else {
             return nil
         }
-        return process(
-            message + syncTail,
-            operation: COMPRESSION_STREAM_DECODE,
-            finalize: false,
-            maxOutput: maxSize
-        )
-    }
-
-    /// Runs one fresh `compression_stream` over `source` to completion, accumulating its output.
-    ///
-    /// `finalize` ends an encode stream (BFINAL); a decode stream is not finalized — the appended tail
-    /// leaves the inflate stream open, so it stops once input is drained and output stalls. Returns nil
-    /// on a process error or when the output would exceed `maxOutput` (the decode bomb cap, CWE-409).
-    private static func process(
-        _ source: [UInt8],
-        operation: compression_stream_operation,
-        finalize: Bool,
-        maxOutput: Int?
-    ) -> [UInt8]? {
-        var window = [UInt8](repeating: 0, count: windowSize)
-        return window.withUnsafeMutableBufferPointer { out -> [UInt8]? in
-            guard let dst = out.baseAddress else {
-                return nil
-            }
-            return source.withUnsafeBufferPointer { src -> [UInt8]? in
-                // A valid non-null src pointer is required even for an empty message; the window's base
-                // is a zero-length placeholder (`src_size == 0` is never dereferenced) — no force-unwrap.
-                var stream = compression_stream(
-                    dst_ptr: dst,
-                    dst_size: out.count,
-                    src_ptr: src.baseAddress ?? UnsafePointer(dst),
-                    src_size: src.count,
-                    state: nil
-                )
-                guard
-                    compression_stream_init(&stream, operation, COMPRESSION_ZLIB)
-                        == COMPRESSION_STATUS_OK
-                else { return nil }
-                defer { compression_stream_destroy(&stream) }
-                // `init` may reset the buffer fields, so (re)point src after it (dst is set per pass).
-                stream.src_ptr = src.baseAddress ?? UnsafePointer(dst)
-                stream.src_size = src.count
-                return drain(
-                    &stream, dst: dst, capacity: out.count, finalize: finalize, max: maxOutput
-                )
-            }
+        if clientNoContextTakeover {
+            _ = cws_inflate_reset(decompressor)
         }
+        return pumpInflate(message + Self.syncTail, maxSize: maxSize)
     }
 
-    /// Pumps `stream` window by window into the accumulated output until it ends, stalls, or overflows.
-    private static func drain(
-        _ stream: inout compression_stream,
-        dst: UnsafeMutablePointer<UInt8>,
-        capacity: Int,
-        finalize: Bool,
-        max maxOutput: Int?
-    ) -> [UInt8]? {
-        let flags = finalize ? Int32(COMPRESSION_STREAM_FINALIZE.rawValue) : 0
+    /// Drives the compressor over `message` window by window, accumulating the full sync-flushed output.
+    private func pumpCompress(_ message: [UInt8]) -> [UInt8]? {
         var output: [UInt8] = []
-        while true {
-            stream.dst_ptr = dst
-            stream.dst_size = capacity
-            let status = compression_stream_process(&stream, flags)
-            let produced = capacity - stream.dst_size
-            if produced > 0 {
-                if let maxOutput, output.count + produced > maxOutput {
-                    return nil
+        var window = [UInt8](repeating: 0, count: Self.chunk)
+        let ok = message.withUnsafeBufferPointer { src -> Bool in
+            cws_deflate_input(compressor, src.baseAddress, src.count)
+            while true {
+                var done: Int32 = 0
+                let written = window.withUnsafeMutableBufferPointer {
+                    cws_deflate_run(compressor, $0.baseAddress, $0.count, &done)
                 }
-                output.append(contentsOf: UnsafeBufferPointer(start: dst, count: produced))
-            }
-            switch status {
-                case COMPRESSION_STATUS_END:
-                    return output
-                case COMPRESSION_STATUS_OK:
-                    // A decode stream has no BFINAL: stop once input is drained and output stalls.
-                    if !finalize, stream.src_size == 0, produced == 0 {
-                        return output
-                    }
-                    continue
-                default:
-                    return nil  // COMPRESSION_STATUS_ERROR
+                if written < 0 {
+                    return false
+                }
+                if written > 0 {
+                    output.append(contentsOf: window.prefix(written))
+                }
+                if done != 0 || written == 0 {
+                    return true
+                }
             }
         }
+        return ok ? output : nil
+    }
+
+    /// Drives the decompressor over `input` (message + sync tail), bounding the output to `maxSize`.
+    private func pumpInflate(_ input: [UInt8], maxSize: Int) -> [UInt8]? {
+        var output: [UInt8] = []
+        var window = [UInt8](repeating: 0, count: Self.chunk)
+        let ok = input.withUnsafeBufferPointer { src -> Bool in
+            cws_inflate_input(decompressor, src.baseAddress, src.count)
+            while true {
+                var done: Int32 = 0
+                let written = window.withUnsafeMutableBufferPointer {
+                    cws_inflate_run(decompressor, $0.baseAddress, $0.count, &done)
+                }
+                if written < 0 {
+                    return false
+                }
+                if written > 0 {
+                    guard output.count + written <= maxSize else {
+                        return false  // CWE-409 decompression-bomb cap
+                    }
+                    output.append(contentsOf: window.prefix(written))
+                }
+                if done != 0 || written == 0 {
+                    return true
+                }
+            }
+        }
+        return ok ? output : nil
     }
 }

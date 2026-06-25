@@ -56,13 +56,16 @@ struct WebSocketFuzzTests {
     }
 
     private func feedPMDConnection(_ bytes: [UInt8]) {
-        var connection = WebSocketConnection(permessageDeflate: true)
+        var connection = WebSocketConnection(permessageDeflate: PermessageDeflateParameters())
         _ = try? connection.receive(bytes)
     }
 
     private func exercisePMDCodec(_ bytes: [UInt8]) {
-        _ = PermessageDeflate.decompress(bytes, maxSize: 1 << 20)
-        _ = PermessageDeflate.compress(bytes)
+        guard let codec = PermessageDeflate(parameters: PermessageDeflateParameters()) else {
+            return
+        }
+        _ = codec.decompress(bytes, maxSize: 1 << 20)
+        _ = codec.compress(bytes)
     }
 
     // MARK: Random bytes

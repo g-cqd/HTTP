@@ -62,7 +62,7 @@ extension HTTPServer {
             return
         }
         // The 101 already echoed permessage-deflate when offered; enable it on the engine too (§5.1).
-        let permessageDeflate = WebSocketHandshake.negotiatesPermessageDeflate(request.headerFields)
+        let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(request.headerFields)
         await driveWebSocket(
             connection,
             deadline: deadline,
@@ -79,7 +79,7 @@ extension HTTPServer {
         deadline: IdleDeadline<C.Instant>,
         handler: any WebSocketHandler,
         carryover: [UInt8],
-        permessageDeflate: Bool
+        permessageDeflate: PermessageDeflateParameters?
     ) async {
         var engine = WebSocketConnection(
             maxMessageSize: limits.maxBodySize,
@@ -133,13 +133,12 @@ extension HTTPServer {
                 else { return }
                 // Negotiate permessage-deflate over the RFC 8441 tunnel: echo it on the 200 and enable
                 // it on the engine when the Extended CONNECT offered it (RFC 7692 §5.1 / RFC 9220).
-                let permessageDeflate = WebSocketHandshake.negotiatesPermessageDeflate(
+                let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(
                     request.headerFields
                 )
                 try? engine.acceptTunnel(  // 200, no END_STREAM (RFC 8441 §5)
                     streamID,
-                    secWebSocketExtensions: permessageDeflate
-                        ? WebSocketHandshake.extensionResponse : nil
+                    secWebSocketExtensions: permessageDeflate?.headerValue
                 )
                 webSockets[streamID] = WebSocketConnection(
                     maxMessageSize: limits.maxBodySize,

@@ -80,23 +80,41 @@ struct WebSocketHandshakeTests {
 
     // MARK: permessage-deflate negotiation (RFC 7692 §5.1)
 
-    @Test("a permessage-deflate offer is accepted and echoed in the 101 (RFC 7692 §5.1)")
+    @Test("a permessage-deflate offer is accepted and echoed (context-takeover, RFC 7692 §5.1)")
     func permessageDeflateOfferEchoed() throws {
         var fields = handshakeFields()
         _ = fields.append(
             "permessage-deflate; client_max_window_bits", for: .secWebSocketExtensions
         )
         let response = try WebSocketHandshake.response(to: upgradeRequest(fields))
+        // No no_context_takeover offered → both directions use context-takeover; the echo omits them.
+        #expect(response.headerFields[.secWebSocketExtensions] == "permessage-deflate")
+        let parameters = try #require(WebSocketHandshake.negotiatePermessageDeflate(fields))
+        #expect(!parameters.serverNoContextTakeover)
+        #expect(!parameters.clientNoContextTakeover)
+    }
+
+    @Test("the offered no_context_takeover parameters are honored and echoed (RFC 7692 §7.1.1)")
+    func permessageDeflateContextTakeoverHonored() throws {
+        var fields = handshakeFields()
+        _ = fields.append(
+            "permessage-deflate; server_no_context_takeover; client_no_context_takeover",
+            for: .secWebSocketExtensions
+        )
+        let response = try WebSocketHandshake.response(to: upgradeRequest(fields))
         #expect(
-            response.headerFields[.secWebSocketExtensions] == WebSocketHandshake.extensionResponse)
-        #expect(WebSocketHandshake.negotiatesPermessageDeflate(fields))
+            response.headerFields[.secWebSocketExtensions]
+                == "permessage-deflate; server_no_context_takeover; client_no_context_takeover")
+        let parameters = try #require(WebSocketHandshake.negotiatePermessageDeflate(fields))
+        #expect(parameters.serverNoContextTakeover)
+        #expect(parameters.clientNoContextTakeover)
     }
 
     @Test("no permessage-deflate offer leaves the 101 without the extension (RFC 7692 §5.1)")
     func noPermessageDeflateOffer() throws {
         let response = try WebSocketHandshake.response(to: upgradeRequest())
         #expect(response.headerFields[.secWebSocketExtensions] == nil)
-        #expect(!WebSocketHandshake.negotiatesPermessageDeflate(handshakeFields()))
+        #expect(WebSocketHandshake.negotiatePermessageDeflate(handshakeFields()) == nil)
     }
 
     @Test("an offer constraining the server window is declined (RFC 7692 §7.1.2.1)")
@@ -105,7 +123,7 @@ struct WebSocketHandshakeTests {
         _ = fields.append(
             "permessage-deflate; server_max_window_bits=10", for: .secWebSocketExtensions
         )
-        #expect(!WebSocketHandshake.negotiatesPermessageDeflate(fields))
+        #expect(WebSocketHandshake.negotiatePermessageDeflate(fields) == nil)
     }
 
     // MARK: Fixtures

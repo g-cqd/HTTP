@@ -31,9 +31,13 @@ public struct WebSocketConnection {
     private let decoder: WebSocketFrameDecoder
     private let encoder = WebSocketFrameEncoder()
     private let maxMessageSize: Int
-    /// Whether permessage-deflate was negotiated (RFC 7692 §5.1): outbound messages are compressed with
-    /// RSV1 set, and an inbound RSV1 message is inflated before delivery.
+    /// Whether permessage-deflate was negotiated (RFC 7692 §5.1) — true iff ``codec`` is present.
+    ///
+    /// Outbound messages are then compressed with RSV1 set, and an inbound RSV1 message is inflated
+    /// before delivery.
     private let permessageDeflate: Bool
+    /// The permessage-deflate codec for this connection (RFC 7692), or nil when not negotiated.
+    private let codec: PermessageDeflate?
     private var inbound: [UInt8] = []
     private var output: [UInt8] = []
     private var closeSent = false
@@ -52,20 +56,24 @@ public struct WebSocketConnection {
     /// Creates a server connection, requiring masked client frames (RFC 6455 §5.1).
     ///
     /// Bounds a single frame to `maxFrameSize` and a reassembled message to `maxMessageSize`
-    /// (resource-exhaustion guards); set `permessageDeflate` when that extension was negotiated
-    /// (RFC 7692 §5.1).
+    /// (resource-exhaustion guards); pass the negotiated `permessageDeflate` parameters to enable that
+    /// extension (RFC 7692 §5.1), or nil for an uncompressed connection.
     public init(
         maxFrameSize: Int = 1 << 20,
         maxMessageSize: Int = 16 << 20,
-        permessageDeflate: Bool = false
+        permessageDeflate: PermessageDeflateParameters? = nil
     ) {
+        // The codec owns zlib state; if it fails to initialize (OOM), fall back to no compression so the
+        // connection stays well-formed rather than half-enabled.
+        let codec = permessageDeflate.flatMap { PermessageDeflate(parameters: $0) }
         self.decoder = WebSocketFrameDecoder(
             maxPayloadLength: maxFrameSize,
             requireMaskedFrames: true,
-            permessageDeflate: permessageDeflate
+            permessageDeflate: codec != nil
         )
         self.maxMessageSize = maxMessageSize
-        self.permessageDeflate = permessageDeflate
+        self.permessageDeflate = codec != nil
+        self.codec = codec
     }
 
     /// Whether the engine has sent a Close frame; the driver should flush and close once it has.
@@ -113,7 +121,7 @@ public struct WebSocketConnection {
     /// (RFC 7692 §6, `no_context_takeover`); falls back to an uncompressed frame when the extension is
     /// off or compression fails (which the spec permits — RSV1 then stays clear).
     private mutating func queueDataMessage(opcode: WebSocketOpcode, payload: [UInt8]) {
-        guard permessageDeflate, let compressed = PermessageDeflate.compress(payload) else {
+        guard let codec, let compressed = codec.compress(payload) else {
             queue(WebSocketFrame(opcode: opcode, payload: payload))
             return
         }
@@ -237,7 +245,7 @@ public struct WebSocketConnection {
         deflated: [UInt8],
         into events: inout [Event]
     ) throws(WebSocketError) {
-        guard let payload = PermessageDeflate.decompress(deflated, maxSize: maxMessageSize) else {
+        guard let codec, let payload = codec.decompress(deflated, maxSize: maxMessageSize) else {
             throw .invalidCompressedData
         }
         guard opcode != .text || Self.isValidUTF8(payload) else { throw .invalidTextEncoding }

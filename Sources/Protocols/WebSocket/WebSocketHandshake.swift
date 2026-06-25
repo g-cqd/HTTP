@@ -41,27 +41,25 @@ public enum WebSocketHandshake {
         _ = fields.append("websocket", for: .upgrade)
         _ = fields.append("Upgrade", for: .connection)
         _ = fields.append(accept(for: key), for: .secWebSocketAccept)
-        // RFC 7692 §5.1 — accept a permessage-deflate offer we can satisfy by echoing our chosen
-        // parameters in the 101; the same predicate tells the driver to enable it on the connection.
-        if negotiatesPermessageDeflate(request.headerFields) {
-            _ = fields.append(extensionResponse, for: .secWebSocketExtensions)
+        // RFC 7692 §5.1 — accept a permessage-deflate offer we can satisfy by echoing our negotiated
+        // parameters in the 101; the same call tells the driver to enable it on the connection.
+        if let parameters = negotiatePermessageDeflate(request.headerFields) {
+            _ = fields.append(parameters.headerValue, for: .secWebSocketExtensions)
         }
         return HTTPResponse(status: .switchingProtocols, headerFields: fields)
     }
 
-    /// The `Sec-WebSocket-Extensions` value we accept a permessage-deflate offer with (RFC 7692 §5.1):
-    /// `no_context_takeover` in both directions, so every message is an independent DEFLATE stream.
-    public static let extensionResponse =
-        "permessage-deflate; server_no_context_takeover; client_no_context_takeover"
-
-    /// Whether the client's `Sec-WebSocket-Extensions` offers a permessage-deflate we can satisfy with a
-    /// full (15-bit) window and `no_context_takeover` (RFC 7692 §5.1 / §7.1).
+    /// Negotiates permessage-deflate against the client's `Sec-WebSocket-Extensions` offer, or nil if
+    /// none is offered or it cannot be satisfied (RFC 7692 §5.1 / §7.1).
     ///
-    /// An offer that pins `server_max_window_bits` to a smaller window is declined (Apple's Compression
-    /// uses a fixed 15-bit window, RFC 7692 §7.1.2.1), falling back to an uncompressed connection;
-    /// `client_max_window_bits` — the common browser offer — is accepted (it only permits the client a
-    /// smaller window, which `client_no_context_takeover` already supersedes).
-    public static func negotiatesPermessageDeflate(_ fields: HTTPFields) -> Bool {
+    /// We use a full (15-bit) window, so an offer that pins `server_max_window_bits` smaller is declined
+    /// (falling back to an uncompressed connection). The context-takeover knobs are honored: the
+    /// client's `server_no_context_takeover` forces our compressor to reset per message, and its
+    /// `client_no_context_takeover` is echoed (our decompressor resets per message); absent both, each
+    /// direction uses context-takeover. `client_max_window_bits` — the common browser offer — is ignored.
+    public static func negotiatePermessageDeflate(
+        _ fields: HTTPFields
+    ) -> PermessageDeflateParameters? {
         for value in fields.values(for: .secWebSocketExtensions) {
             for offer in value.split(separator: ",") {
                 var params = offer.split(separator: ";")
@@ -69,10 +67,13 @@ public enum WebSocketHandshake {
                 guard params.first == "permessage-deflate" else { continue }
                 params.removeFirst()
                 if params.contains(where: { $0.hasPrefix("server_max_window_bits") }) { continue }
-                return true
+                return PermessageDeflateParameters(
+                    serverNoContextTakeover: params.contains("server_no_context_takeover"),
+                    clientNoContextTakeover: params.contains("client_no_context_takeover")
+                )
             }
         }
-        return false
+        return nil
     }
 
     /// `Sec-WebSocket-Accept` for a client key: base64(SHA-1(key ‖ GUID)) (RFC 6455 §4.2.2).

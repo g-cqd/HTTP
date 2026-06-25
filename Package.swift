@@ -107,6 +107,14 @@ let package = Package(
             path: "Sources/Core/CCRC32",
             linkerSettings: [.linkedLibrary("z")]
         ),
+        // A C shim over the system zlib for RFC 7692 permessage-deflate: raw DEFLATE with `Z_SYNC_FLUSH`
+        // (the flush mode that frames a WebSocket message, which Apple's Compression cannot express).
+        // Keeps the unsafe `z_stream` plumbing in auditable C, like CCRC32. Links the system zlib.
+        .target(
+            name: "CWSDeflate",
+            path: "Sources/Protocols/CWSDeflate",
+            linkerSettings: [.linkedLibrary("z")]
+        ),
         // Test-only support: the deterministic async toolkit ported from ADTestKit (TestClock,
         // AsyncEventProbe, AsyncGate, ThreadGate, TaskProviderSpy) plus shared fakes, seeded fuzzing,
         // constrained-stack recursion guards, oracles, and the allocation counter. Linked by every
@@ -206,7 +214,7 @@ let package = Package(
         // §4 opening handshake over the HTTP/1.1 Upgrade (and RFC 9220 over HTTP/2). No sockets.
         .target(
             name: "WebSocket",
-            dependencies: ["HTTPCore"],
+            dependencies: ["HTTPCore", "CWSDeflate"],
             path: "Sources/Protocols/WebSocket"
         ),
         .testTarget(
