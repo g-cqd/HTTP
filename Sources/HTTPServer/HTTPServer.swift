@@ -303,6 +303,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         var pending: PendingRequest?  // the head, parsed once, then reused as the body arrives
         // Resumable chunked-body decode kept across reads — O(n), not O(n²) (audit H1-F1).
         var chunked = ChunkedProgress()
+        var expectHandled = false  // honor `Expect: 100-continue` once, before the body is read
         while true {
             switch assemble(buffer, scanOffset: &scanOffset, pending: &pending, chunked: &chunked) {
                 case .request(let framed):
@@ -316,6 +317,14 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                         buffer.count > limits.maxRequestLineLength + limits.maxHeaderListSize
                     {
                         throw HTTP1ParseError.headerSectionTooLarge
+                    }
+                    // Head parsed, body still arriving: honor `Expect` once before the (possibly
+                    // waiting) peer sends the body (RFC 9110 §10.1.1).
+                    if !expectHandled, let head = pending?.head {
+                        expectHandled = true
+                        if await handleExpect(head, on: connection) {
+                            return .cleanClose  // a 417 was sent — the expectation cannot be met
+                        }
                     }
                 case .failed(let error):
                     throw error
@@ -384,23 +393,6 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             case .failed(let error):
                 return .failed(error)
         }
-    }
-
-    /// The deadline for the next receive, chosen by request phase (the ``HTTPLimits`` Slowloris knobs).
-    private func receiveTimeout(
-        _ buffer: [UInt8],
-        headersParsed: Bool,
-        _ headerDeadline: inout C.Instant?
-    ) -> Duration {
-        if buffer.isEmpty {
-            return limits.keepAliveTimeout  // idle, awaiting the next request
-        }
-        if headersParsed {
-            return limits.idleTimeout  // body phase
-        }
-        let deadline = headerDeadline ?? clock.now.advanced(by: limits.headerReadTimeout)
-        headerDeadline = deadline  // cumulative across the whole header section
-        return max(.zero, clock.now.duration(to: deadline))
     }
 
     /// One framed request plus the byte count it consumed (so a pipelined remainder survives).

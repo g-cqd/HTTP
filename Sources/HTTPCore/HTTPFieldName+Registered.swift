@@ -19,6 +19,8 @@ extension HTTPFieldName {
     public static let transferEncoding = HTTPFieldName(unchecked: "transfer-encoding")
     /// `Upgrade` (RFC 9110 §7.8) — used by the WebSocket handshake.
     public static let upgrade = HTTPFieldName(unchecked: "upgrade")
+    /// `Expect` (RFC 9110 §10.1.1) — `100-continue` lets a client await approval before a body.
+    public static let expect = HTTPFieldName(unchecked: "expect")
 
     // MARK: Representation metadata
 
