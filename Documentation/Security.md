@@ -105,12 +105,13 @@ Traced in `Documentation/audit/2026-06-25-deep-hardening-audit.md`:
   multi-origin; a reflected origin carries `Vary: Origin` (Fetch §3.2; CWE-942; `CORSMiddleware.swift`).
 - **`Expect: 100-continue`** handled: an interim `100 Continue` (or `417` for an unsupported
   expectation) is sent before the body, so a compliant client no longer stalls (RFC 9110 §10.1.1).
-- **HTTP/2 cross-stream body budget (post-audit).** The receive window replenishes *while a body is
-  still buffering* (§6.9), so the per-stream `maxBodySize` cap alone let a peer that opens many
-  concurrent streams accumulate up to `maxConcurrentStreams × maxBodySize` of un-dispatched request body
-  per connection. The engine now bounds the *sum* of buffered body across a connection's streams and
-  releases each body the moment it is dispatched, so pipelining is unaffected (RFC 9113 §6.9; CWE-400/770;
-  `HTTP2Connection+FlowControl.swift`).
+- **HTTP/2 & HTTP/3 cross-stream body budget (post-audit).** The HTTP/2 receive window replenishes
+  *while a body is still buffering* (§6.9), so the per-stream `maxBodySize` cap alone let a peer that
+  opens many concurrent streams accumulate up to `maxConcurrentStreams × maxBodySize` of un-dispatched
+  request body per connection. Both engines now bound the *sum* of buffered body across a connection's
+  streams and release each body the moment it is dispatched, so pipelining is unaffected (RFC 9113 §6.9 /
+  RFC 9114 §4.1; CWE-400/770; `HTTP2Connection+FlowControl.swift`, `HTTP3Connection+Request.swift`). The
+  HTTP/3 over-budget DATA is `H3_EXCESSIVE_LOAD` — the sibling of HTTP/2's `ENHANCE_YOUR_CALM`.
 
 Single-source-of-truth refactor: the HTTP/2 and HTTP/3 request mappers were unified into one
 `HTTPCore.RequestMapper`, so the §8.3 / §4.3 pseudo-header + field validation lives in exactly one place.

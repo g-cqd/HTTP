@@ -28,9 +28,10 @@ A second-pass adversarial hardening of the stack; see
 - **HTTP/2 DoS:** charge server-emitted `REFUSED_STREAM` and the zero-length-DATA / PRIORITY /
   `WINDOW_UPDATE`-on-closed / SETTINGS-ACK floods; split the reset vs control-frame budgets
   (CVE-2025-8671, CVE-2023-44487, CVE-2019-9513, CVE-2019-9518).
-- **HTTP/2 DoS (memory):** bound the cross-stream sum of un-dispatched request body per connection — the
-  receive window replenishes during buffering, so the per-stream `maxBodySize` cap alone allowed up to
-  `maxConcurrentStreams × maxBodySize`; the body is released on dispatch so pipelining is unaffected
+- **HTTP/2 & HTTP/3 DoS (memory):** bound the cross-stream sum of un-dispatched request body per
+  connection — the HTTP/2 receive window replenishes during buffering, so the per-stream `maxBodySize`
+  cap alone allowed up to `maxConcurrentStreams × maxBodySize`; the body is released on dispatch so
+  pipelining is unaffected. HTTP/3 carries the same bound (over-budget DATA → `H3_EXCESSIVE_LOAD`)
   (CWE-400/770).
 - **HTTP/1.1 DoS:** bound a CRLF-less chunk-size / chunk-ext / trailer line (CWE-400/770).
 - **WebSocket:** secure-by-default `Origin` (CWE-346/1385); incremental UTF-8 validation across
