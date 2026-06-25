@@ -19,19 +19,16 @@
 
 public import HTTPCore
 
-/// Parsers and (stub) generators for the QPACK encoder/decoder instruction streams (RFC 9204 §4.3/§4.4).
+/// Parsers and generators for the QPACK encoder/decoder instruction streams (RFC 9204 §4.3/§4.4).
 public enum QPACKInstructions {
-    // MARK: Generators (stubs — nothing is owed at capacity 0)
+    // MARK: Generators
 
-    /// The encoder-stream instructions this endpoint owes — always empty (RFC 9204 §4.3).
-    ///
-    /// The dynamic table is disabled, so no entry is ever inserted and no instruction is generated.
+    /// The unsolicited encoder-stream instructions owed when idle — always empty (RFC 9204 §4.3); the
+    /// dynamic encoder emits its inserts per-section via the explicit generators below.
     public static func encoderStreamOutput() -> [UInt8] { [] }
 
-    /// The decoder-stream instructions this endpoint owes — always empty (RFC 9204 §4.4).
-    ///
-    /// Every received field section has Required Insert Count 0, so no Section Acknowledgment or Insert
-    /// Count Increment is ever owed. (The dynamic decoder uses the explicit generators below instead.)
+    /// The unsolicited decoder-stream instructions owed when idle — always empty (RFC 9204 §4.4); the
+    /// dynamic decoder emits Section Acknowledgment / Insert Count Increment via the generators below.
     public static func decoderStreamOutput() -> [UInt8] { [] }
 
     /// A Section Acknowledgment for `streamID` (RFC 9204 §4.4.1: `1` + a 7-bit prefix stream id) — sent
@@ -47,6 +44,32 @@ public enum QPACKInstructions {
     public static func insertCountIncrement(_ increment: Int) -> [UInt8] {
         var output: [UInt8] = []
         QPACKInteger.encode(increment, prefixBits: 6, firstByte: 0x00, into: &output)
+        return output
+    }
+
+    /// A Set Dynamic Table Capacity instruction (RFC 9204 §4.3.1: the `001` pattern + a 5-bit prefix) —
+    /// sent once before the first insert to size the encoder's dynamic table.
+    public static func setDynamicTableCapacity(_ capacity: Int) -> [UInt8] {
+        var output: [UInt8] = []
+        QPACKInteger.encode(capacity, prefixBits: 5, firstByte: 0x20, into: &output)
+        return output
+    }
+
+    /// An Insert With Name Reference to the static table (RFC 9204 §4.3.2: the `1` + `T=1` pattern, a
+    /// 6-bit-prefix static name index, then the literal value).
+    public static func insertWithStaticName(index: Int, value: [UInt8]) -> [UInt8] {
+        var output: [UInt8] = []
+        QPACKInteger.encode(index, prefixBits: 6, firstByte: 0xC0, into: &output)  // 1, T=1
+        QPACKString.encode(value, prefixBits: 7, into: &output)
+        return output
+    }
+
+    /// An Insert With Literal Name (RFC 9204 §4.3.3: the `01` pattern, a 5-bit-prefix literal name — the
+    /// H bit is set by the string codec — then the literal value).
+    public static func insertWithLiteralName(name: [UInt8], value: [UInt8]) -> [UInt8] {
+        var output: [UInt8] = []
+        QPACKString.encode(name, prefixBits: 5, firstByte: 0x40, into: &output)  // 01, + H
+        QPACKString.encode(value, prefixBits: 7, into: &output)
         return output
     }
 

@@ -159,6 +159,43 @@ struct QPACKDynamicDecoderTests {
         #expect(decoder.insertCount == 1)
     }
 
+    // MARK: Encoder-stream generators (RFC 9204 §4.3)
+
+    @Test("the QPACKInstructions encoder-stream generators emit the exact §4.3 wire form")
+    func instructionGeneratorsWireForm() {
+        let host = Array("example.com".utf8)
+        let name = Array("x-custom".utf8)
+        let value = Array("v1".utf8)
+        #expect(QPACKInstructions.setDynamicTableCapacity(4_096) == setCapacity(4_096))
+        #expect(
+            QPACKInstructions.insertWithStaticName(index: 0, value: host)
+                == insertNameReference(staticIndex: 0, "example.com"))
+        #expect(
+            QPACKInstructions.insertWithLiteralName(name: name, value: value)
+                == insertLiteral("x-custom", "v1"))
+    }
+
+    @Test("the encoder-stream generators round-trip through the decoder's dynamic table (§4.3)")
+    func instructionGeneratorsRoundTrip() throws {
+        var decoder = makeDecoder()
+        let host = Array("example.com".utf8)
+        let name = Array("x-custom".utf8)
+        let value = Array("v1".utf8)
+        var stream = QPACKInstructions.setDynamicTableCapacity(4_096)
+        stream += QPACKInstructions.insertWithStaticName(index: 0, value: host)
+        stream += QPACKInstructions.insertWithLiteralName(name: name, value: value)
+        let inserts = try apply(&decoder, stream)
+        #expect(inserts == 2)
+        // After two inserts (base 2): relative 0 = the newest (x-custom=v1), relative 1 = :authority.
+        let representations = dynamicIndexed(relativeIndex: 0) + dynamicIndexed(relativeIndex: 1)
+        let fields = try decodeSection(decoder, section(ric: 2, base: 2, representations))
+        #expect(
+            fields == [
+                HeaderField(name: "x-custom", value: "v1"),
+                HeaderField(name: ":authority", value: "example.com")
+            ])
+    }
+
     // MARK: Encoder-stream instruction builders (RFC 9204 §4.3)
 
     private func insertLiteral(_ name: String, _ value: String) -> [UInt8] {
