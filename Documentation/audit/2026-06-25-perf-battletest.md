@@ -22,7 +22,9 @@ allocations, not wall-clock alone). It complements the security-focused
   durable findings. Loopback isolates framing/IO/allocation cost — it excludes NIC and TLS-handshake
   time, where a different profile applies.
 
-## 2. Headline — vs the best (HTTP/1.1, loopback, 64 connections)
+## 2. Headline — vs the best
+
+### HTTP/1.1 cleartext (loopback, 64 connections)
 
 | server | rps | p50 | p99 | p99.9 |
 |---|---:|---:|---:|---:|
@@ -33,9 +35,34 @@ allocations, not wall-clock alone). It complements the security-focused
 
 **Result:** our best-balanced backbone (`posixKqueue`) **beats Caddy on both throughput and tail** and
 reaches **~83 % of nginx's throughput** with a p99.9 within ~2× of nginx — competitive with the C
-ceiling. `swiftSystem` has the highest throughput but a thread-per-connection tail. (Hummingbird/h2/h3
-comparisons are pending a clean toolchain for the NIO build / a TLS load client; the harness supports
-them.)
+ceiling. `swiftSystem` has the highest throughput but a thread-per-connection tail.
+
+### HTTP/2 over TLS (loopback, 64 multiplexed connections)
+
+The modern browser path: ALPN-negotiated h2 over TLS. Ours rides the `networkFramework` backbone
+(the only one with TLS); nginx and Caddy use a generated self-signed cert; all three load via
+`oha --http2 --insecure`. Reproduce with `HTTP2=1 ./Bench/run.sh` (warm 2 s, measure 10 s).
+
+| server | rps | p50 | p99 | p99.9 |
+|---|---:|---:|---:|---:|
+| **ours** (`networkFramework` + TLS) | ~12.5k | 4.3 ms | 9.4 ms | 12.8 ms |
+| nginx | **~27k** | **2.1 ms** | **6.2 ms** | 18.5 ms |
+| Caddy | ~14k | 2.2 ms | 36 ms | 71 ms |
+
+**Result (robust — throughput ranking):** nginx leads at **~2.2× our throughput**; Caddy and ours are
+close (Caddy marginally ahead). This *ranking* held across every run; the *absolutes* did not (±3× swing
+between runs — see §7). Our gap is fully explained and points straight at known debt: h2-over-TLS *must*
+use `networkFramework` (already the cleartext laggard at 89k, §3), then pays TLS crypto, HPACK, and the
+per-response `[HPACKField]` rebuild (the 32-malloc `respond` path in §5, a P2 target). It is a
+per-request-work gap, **not** a transport-contention one.
+
+**On the tail (not robust):** on loopback all three sit in a single-to-low-double-digit-ms p99 band, and
+**run-to-run variance exceeded the inter-server gaps** — ours and nginx traded the best h2 p99 between
+runs (e.g. an earlier short run put ours lowest at 2.8 ms and nginx at 8.7 ms; this longer warm run
+reversed them). This harness on this host therefore does **not** support an h2 tail ranking; only Caddy's
+wider, noisier tail was consistent. Settling h2 tails needs a quiet, thermally-stable host — recorded as
+an open item, not a claim. (Hummingbird, the in-language NIO baseline, is still pending a clean toolchain
+for its SwiftPM resolve; its harness config is committed.)
 
 ## 3. The proven win — TCP_NODELAY on every backbone
 
@@ -104,7 +131,15 @@ now measured and gate-locked:
 ## 7. Caveats & follow-ups
 
 - Numbers are loopback + machine-specific; a NIC-bound and TLS-handshake profile is a separate exercise.
+- **Absolutes are soft; rankings are firm.** On this (laptop) host, repeated runs of the *same* config
+  swung up to ~3× in absolute rps with sustained-load thermal drift — so every absolute here is an
+  order-of-magnitude anchor, not a precise figure. What reproduced across runs is the **within-run
+  ranking** and the **before/after deltas** (both measured back-to-back under one thermal state). The
+  harness now warms up before measuring (`WARMUP`, default 2 s) to drop the cold-handshake transient;
+  a quiet, pinned host is still required for trustworthy tail absolutes.
 - macOS lacks per-thread PMU counters; `instructions` from `ri_instructions` is coarse — use `xctrace`
   ('CPU Counters') or a Linux `perf stat` runner for precise CPI / cache-miss attribution.
-- **Open perf items:** networkFramework zero-copy (needs profiling), the HTTP/3 per-frame eager copy and
-  per-field String allocations (the 24/32-malloc paths above), and the h2/h3-over-TLS comparison.
+- **Open perf items:** networkFramework zero-copy (needs profiling) and the HTTP/3 per-frame eager copy
+  and per-field String allocations (the 24/32-malloc paths above) — the latter is what gates the h2-TLS
+  throughput in §2. The h2-over-TLS comparison is now recorded (§2); the h3-over-TLS comparison and the
+  Hummingbird in-language baseline remain (both blocked on tooling, not on the server).
