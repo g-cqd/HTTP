@@ -47,6 +47,19 @@ jobs:
         run: swift build --scratch-path "$SCRATCH"
       - name: Test (with coverage)
         run: swift test --scratch-path "$SCRATCH" --enable-code-coverage
+      # Coverage gate. SwiftPM emits a per-target .xctest bundle, so a single-binary llvm-cov export
+      # under-reports the modules that bundle does not link; merging the merged profdata across every
+      # bundle gives the true Sources line coverage. Threshold 85% (Sources are ~92% today) — a floor
+      # against a module losing its tests, with headroom for normal churn; raise it as coverage grows.
+      - name: Coverage gate (Sources lines ≥ 85%)
+        run: |
+          set -euo pipefail
+          prof="$(find "$SCRATCH" -name default.profdata | head -1)"
+          bins=()
+          while IFS= read -r b; do bins+=("$b/Contents/MacOS/$(basename "$b" .xctest)"); done < <(find "$SCRATCH" -name "*.xctest" -type d)
+          objs=("${bins[0]}"); for o in "${bins[@]:1}"; do objs+=(-object "$o"); done
+          xcrun llvm-cov export -format=text -instr-profile="$prof" -ignore-filename-regex="Tests/|[.]build/|Benchmarks/|checkouts/" "${objs[@]}" > cov.json
+          python3 -c "import json,sys; p=json.load(open('cov.json'))['data'][0]['totals']['lines']['percent']; print('Sources line coverage: %.2f%%' % p); sys.exit(0 if p>=85 else 1)" || { echo '::error::Sources line coverage is below the 85% threshold'; exit 1; }
 
   # ---------------------------------------------------------------------------
   # Hard constraint (CLAUDE.md): SwiftNIO MUST NOT appear in the dependency graph.
@@ -158,8 +171,6 @@ jobs:
 #     are fixed. Only generic/http2-3 stay out, for the invalid-preface GOAWAY (a benign ambiguity).
 #   • Autobahn (WebSocket, RFC 6455) — needs the crossbario/autobahn-testsuite Docker image; the CI
 #     image has no Docker. In-house WebSocket + WebSocketFuzzTests cover framing/masking/close/UTF-8.
-#   • Coverage threshold gate — requires merging llvm-cov across the 11 per-target .xctest bundles
-#     (single-binary export under-reports); wire once a robust multi-object merge is scripted.
 #   • Benchmark baseline gate — capture a runner baseline, then promote the smoke job to a check.
 #   • UBSan (-sanitize=undefined) — the UBSan runtime fails to link the test bundles on the current
 #     6.4 toolchain; revisit when the toolchain ships a linkable UBSan runtime.
