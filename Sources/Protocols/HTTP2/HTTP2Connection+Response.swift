@@ -126,6 +126,21 @@ extension HTTP2Connection {
         return record.pending.count - record.pendingOffset
     }
 
+    /// Aborts a streaming response with RST_STREAM (RFC 9113 §6.4), discarding any buffered DATA.
+    ///
+    /// Used when the body producer fails partway, so the peer sees an incomplete response rather than a
+    /// truncated-but-clean one. A no-op for an unknown stream.
+    public mutating func abortResponse(
+        to streamID: HTTP2StreamID,
+        code: HTTP2ErrorCode = .internalError
+    ) {
+        guard streams.removeValue(forKey: streamID) != nil else {
+            return
+        }
+        writer.writeRstStream(streamID, code: code)
+        markStreamClosed(streamID, reason: .reset)
+    }
+
     /// Encodes the response field section as an HPACK header block, `:status` first (RFC 9113 §8.3.2).
     ///
     /// Writes straight into a reserved buffer — no intermediate `[HPACKField]` array, no buffer

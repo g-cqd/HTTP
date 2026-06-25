@@ -44,25 +44,17 @@ extension HTTPServer {
             inbound = []
             for event in events {
                 if case .request(let streamID, let request, let body) = event {
-                    let response = await responder.respond(to: request, body: body)
-                    // HTTP/2 has no native streaming yet: collapse a finite stream to a buffer (P6).
-                    let buffered = await bufferedResponse(response)
-                    do {
-                        // `withAltSvc` advertises HTTP/3 (RFC 7838) when a QUIC listener is running.
-                        try engine.respond(
-                            to: streamID, withAltSvc(buffered.head), body: buffered.body
-                        )
-                    }
-                    catch {
-                        // A connection-level fault (e.g. responding to an unknown stream) is fatal:
-                        // flush the engine's queued GOAWAY (RFC 9113 §6.8) and close. A stream-level
-                        // fault is contained — the engine queued RST_STREAM, flushed with this batch
-                        // below — so other streams keep being served.
-                        if error.isConnectionError {
-                            let goAway = engine.outboundBytes()
-                            if !goAway.isEmpty { try? await connection.send(goAway) }
-                            return
-                        }
+                    // Native streaming (P6b) when the response has a body stream, else buffered; either
+                    // returns true on a connection-fatal fault (GOAWAY queued + flushed), so close.
+                    if await respondToRequest(
+                        streamID: streamID,
+                        request: request,
+                        body: body,
+                        engine: &engine,
+                        connection: connection,
+                        deadline: deadline
+                    ) {
+                        return
                     }
                 }
                 else {

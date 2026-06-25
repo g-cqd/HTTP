@@ -47,23 +47,19 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       backpressure, so the producer drives the stream inline with no flow-control deadlock. _Gate:_ 6
       engine framing tests (respondHeaders/dataFrame/round-trip/untrack) + a real-QUIC loopback streaming
       integration test (no fake-QUIC harness exists, so the Network.framework loopback is the integration
-      mirror); h3 conformance + full suite green; ASan clean. **S4 (h2) — engine API done, server
-      adoption deferred (fallback retained).** The sans-I/O engine now has the incremental DATA API —
-      `respondHeaders` (HEADERS, no END_STREAM), `sendBodyChunk` (append + window-bounded flush),
-      `endStream` (final or empty END_STREAM DATA), `pendingBacklog` (backpressure signal) — proven
-      deadlock-free and bounded by deterministic engine tests (a forced window stall across 20 chunks
-      holds the backlog ≤ one chunk). The *server* stays on P6a's finite-buffer fallback: native wire
-      streaming needs a producer task feeding the engine across a bounded handoff with the serve loop
-      interleaving inbound reads, and the in-memory transport can't stage a late `WINDOW_UPDATE` to
-      *prove* the orchestration deadlock-free — so per the highest-risk-phase rule the design is recorded
-      and the fallback kept rather than rushing concurrent code into the "failsafe" runtime. **Recorded
-      design:** run `stream.produce` in a child task that `put`s chunks into a 1-slot rendezvous
-      (backpressure = producer ≤1 chunk ahead); the single serve loop `take`s a chunk only when
-      `pendingBacklog == 0`, `sendBodyChunk` + flushes, and when window-blocked drains inbound
-      (WINDOW_UPDATE → flush) until the backlog clears — single-threaded engine access (no actor/race),
-      one-chunk-bounded, deadlock-free since the loop always reads inbound when blocked. Open risks:
-      rendezvous continuation cleanup on early cancel; concurrent streaming on sibling streams (v1 would
-      buffer those).
+      mirror); h3 conformance + full suite green; ASan clean. ✓ **S4 (h2) done — native server
+      streaming.** Engine incremental DATA API (`respondHeaders` / `sendBodyChunk` / `endStream` /
+      `pendingBacklog` / `abortResponse`) plus the server orchestration: `stream.produce` runs in a child
+      task that `offer`s chunks into a one-slot Sendable `AsyncHandoff` (1-chunk backpressure); the single
+      serve task owns the engine and `next`s a chunk only when `pendingBacklog == 0`, and while
+      window-blocked reads inbound so a WINDOW_UPDATE drains the backlog (answering a concurrent request
+      buffered, stopping on this stream's RST). **Single-threaded engine access (no actor/race),
+      one-chunk-bounded, deadlock-free** — the loop always reads inbound when blocked. _Gate:_ 5 engine
+      stall tests + 4 `AsyncHandoff` tests + a `ControllableConnection` integration test that feeds a
+      *late* WINDOW_UPDATE only after the producer stalls (50-octet body, 5-octet window) and asserts the
+      complete body + END_STREAM within the time limit; **TSan clean** on the producer/handoff/loop;
+      h2spec + full suite + ASan green. v1 limitation (documented): one streamed response at a time —
+      a sibling request is answered buffered between this stream's chunks.
 
 - [x] **P7 — Static file serving.** FileResponder: traversal-safe (CWE-22), content-type via the system
       `UTType` registry, Last-Modified/ETag from mtime+size, native Range (reuse `RangeMiddleware.parse`)
@@ -179,3 +175,8 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   shim (raw DEFLATE + `Z_SYNC_FLUSH`; zlib was already linked by CCRC32), replacing the Compression
   FINALIZE backend, with **context-takeover** negotiated per direction (`PermessageDeflateParameters`).
   846 tests; ASan clean.
+- 2026-06-25 — P6b/S4+ done: native HTTP/2 *server* streaming — the producer runs in a child task feeding
+  a one-slot `AsyncHandoff`; the single serve task pulls a chunk only when `pendingBacklog == 0` and
+  drains inbound (WINDOW_UPDATE) while window-blocked. Engine gained `abortResponse`. New
+  `ControllableConnection` test feeds a late WINDOW_UPDATE after the producer stalls. 851 tests; TSan +
+  ASan clean; h2spec green. (v1: one streamed response at a time; siblings answered buffered.)
