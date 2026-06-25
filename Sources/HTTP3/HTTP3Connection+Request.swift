@@ -94,6 +94,20 @@ extension HTTP3Connection {
         guard state.body.count <= limits.maxBodySize else {
             throw .stream(streamID, .h3RequestRejected, "request body exceeds the maximum")
         }
+        // Bound the connection's *total* buffered (un-dispatched) request body across all streams, not
+        // just per-stream: as in HTTP/2, the engine would otherwise buffer up to the concurrent-stream
+        // count × maxBodySize before any stream's FIN dispatches it — a memory-exhaustion vector. Sum the
+        // other streams plus this stream's running total (RFC 9114 §4.1; CWE-400/770).
+        let otherStreamsBuffered = streams.reduce(0) { sum, entry in
+            entry.key == streamID ? sum : sum + entry.value.body.count
+        }
+        guard otherStreamsBuffered + state.body.count <= limits.maxBodySize else {
+            throw .stream(
+                streamID,
+                .h3ExcessiveLoad,
+                "connection request-body buffer exceeds the maximum"
+            )
+        }
         streams[streamID] = state
     }
 
@@ -115,6 +129,9 @@ extension HTTP3Connection {
         try validateContentLength(request, bodyCount: state.body.count, streamID: streamID)
         streams[streamID]?.requestEmitted = true
         events.append(.request(streamID: streamID, request: request, body: state.body))
+        // The body now belongs to the dispatched event; drop the engine's copy so it no longer counts
+        // against the connection buffered-body budget (handleRequestData) — mirrors the HTTP/2 engine.
+        streams[streamID]?.body = []
     }
 
     /// RFC 9114 §4.1.2 — a declared content-length must equal the DATA length; absent is fine.
