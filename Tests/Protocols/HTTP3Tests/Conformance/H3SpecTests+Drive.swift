@@ -322,8 +322,13 @@ extension H3SpecTests {
                 )
             },
             "a Required Insert Count beyond the blocked-streams limit": { connection in
-                // A non-zero Required Insert Count in the §4.5.1 prefix.
-                _ = try? connection.receive(request, self.frame(.headers, [0x05, 0x00]), fin: true)
+                // 17 request streams each blocked on a Required Insert Count of 4 (the §4.5.1 prefix
+                // [0x05, 0x00]) — one past the advertised 16-stream limit, so the last trips the bound.
+                for raw in stride(from: UInt64(0), through: 64, by: 4) {
+                    _ = try? connection.receive(
+                        QUICStreamID(raw), self.frame(.headers, [0x05, 0x00]), fin: false
+                    )
+                }
             },
             "a Set Dynamic Table Capacity above the limit": { connection in
                 // Set Capacity 5000 > the advertised 4096 (a `001`-prefix integer, §4.3.1).

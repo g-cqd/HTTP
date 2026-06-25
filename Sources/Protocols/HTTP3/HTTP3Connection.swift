@@ -81,6 +81,10 @@ public struct HTTP3Connection {
         /// The request being assembled on a request stream, and its body.
         var request: HTTPRequest?
         var body: [UInt8] = []
+        /// A request HEADERS section referencing dynamic-table entries not yet received, buffered with
+        /// its Required Insert Count until the encoder stream delivers those inserts and the stream
+        /// decodes once `insertCount ≥ RIC` (RFC 9204 §2.1.2 blocked stream).
+        var blockedSection: (payload: [UInt8], requiredInsertCount: Int)?
     }
 
     let localSettings: HTTP3Settings
@@ -118,6 +122,10 @@ public struct HTTP3Connection {
     /// a modest default that lets a peer encoder compress requests without unbounded decoder memory.
     static let defaultQpackMaxTableCapacity = 4_096
 
+    /// The number of streams that may be blocked on not-yet-received inserts at once (RFC 9204 §2.1.2 /
+    /// SETTINGS_QPACK_BLOCKED_STREAMS) — a bound on the buffered-blocked-section memory.
+    static let defaultQpackBlockedStreams = 16
+
     /// Creates a connection advertising `localSettings`, queuing the control + QPACK streams (§3.2).
     ///
     /// `now` is the monotonic clock the Rapid-Reset / MadeYouReset rolling window is measured against;
@@ -128,14 +136,14 @@ public struct HTTP3Connection {
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // Advertise a dynamic QPACK table the peer encoder may populate (RFC 9204 §3.2); a caller can
-        // pin `qpackMaxTableCapacity` to 0 for static-only decoding. Blocked streams stay 0 in this step
-        // — the decoder rejects a section that depends on inserts not yet received rather than buffering
-        // it (§2.1.2); the decode bound is surfaced as MAX_FIELD_SECTION_SIZE.
+        // pin `qpackMaxTableCapacity` to 0 for static-only decoding. With blocked streams permitted
+        // (§2.1.2) the decoder buffers a request that references inserts not yet received and decodes it
+        // once they arrive; the decode bound is surfaced as MAX_FIELD_SECTION_SIZE.
         var advertised = localSettings
         if advertised.qpackMaxTableCapacity == 0 {
             advertised.qpackMaxTableCapacity = Self.defaultQpackMaxTableCapacity
+            advertised.qpackBlockedStreams = Self.defaultQpackBlockedStreams
         }
-        advertised.qpackBlockedStreams = 0
         if advertised.maxFieldSectionSize == nil {
             advertised.maxFieldSectionSize = limits.maxHeaderListSize
         }
@@ -154,7 +162,8 @@ public struct HTTP3Connection {
         )
         // RFC 9114 §6.2.1 — the control stream opens with its type byte (0x00) then the SETTINGS frame;
         // §4.2 / RFC 9204 §4.2 — the QPACK encoder (0x02) and decoder (0x03) streams open with just
-        // their type byte (v1 sends no instructions: the dynamic table is disabled).
+        // their type byte. We send no encoder-stream instructions yet (our *response* encoder is still
+        // static-only); the peer's encoder may use the dynamic table we advertised, decoded inbound.
         let settingsFrame = HTTP3FrameWriter.frame(.settings, payload: advertised.encodePayload())
         actions.append(.openUniStream(role: .control, preamble: [0x00] + settingsFrame))
         actions.append(.openUniStream(role: .qpackEncoder, preamble: [0x02]))
@@ -267,7 +276,7 @@ public struct HTTP3Connection {
             case .control:
                 try processControlStream(streamID, into: &events)
             case .qpackEncoder:
-                try processQpackEncoderStream(streamID)
+                try processQpackEncoderStream(streamID, into: &events)
             case .qpackDecoder:
                 try processQpackDecoderStream(streamID)
             case .reserved:

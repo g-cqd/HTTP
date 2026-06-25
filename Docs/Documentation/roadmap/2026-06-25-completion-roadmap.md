@@ -193,3 +193,11 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   request's dynamic field section and emits Section Acknowledgment (§4.4.1); the HTTP/3 driver forwards
   these role-addressed sends on the server's decoder stream. Conformance drives updated for the 4096
   limit. 862 tests; ASan clean. Blocked-stream buffering + the response encoder remain.
+- 2026-06-25 — P8/S5b (blocked streams) done: the HTTP/3 connection now advertises
+  SETTINGS_QPACK_BLOCKED_STREAMS=16 and buffers a request HEADERS section whose Required Insert Count
+  exceeds the current insert count (RFC 9204 §2.1.2) instead of rejecting it — DATA may follow the
+  buffered HEADERS, FIN is held, and when the encoder stream raises the insert count the buffered
+  sections decode, surface their request, and are Section-Acknowledged. More blocked streams than the
+  advertised limit is a QPACK_DECOMPRESSION_FAILED connection error; a malformed unblocked request
+  resets only its own stream. Conformance "RIC beyond the blocked-streams limit" now drives 17 blocked
+  streams. 864 tests; ASan clean. Only the response encoder's dynamic inserts (S5c) remain.

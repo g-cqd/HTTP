@@ -164,8 +164,10 @@ extension HTTP3Connection {
     // MARK: QPACK streams (RFC 9204 §4.2)
 
     /// Scans the peer's QPACK encoder stream for violations; its closure is a critical-stream error.
-    mutating func processQpackEncoderStream(_ streamID: QUICStreamID) throws(HTTP3Error) {
-        try parseQpackStream(streamID, isEncoder: true)
+    mutating func processQpackEncoderStream(
+        _ streamID: QUICStreamID, into events: inout [Event]
+    ) throws(HTTP3Error) {
+        try applyEncoderStream(streamID, into: &events)
         if streams[streamID]?.finReceived == true {
             throw .connection(.h3ClosedCriticalStream, "the QPACK encoder stream was closed")
         }
@@ -173,27 +175,18 @@ extension HTTP3Connection {
 
     /// Scans the peer's QPACK decoder stream for violations; its closure is a critical-stream error.
     mutating func processQpackDecoderStream(_ streamID: QUICStreamID) throws(HTTP3Error) {
-        try parseQpackStream(streamID, isEncoder: false)
+        try parseDecoderStream(streamID)
         if streams[streamID]?.finReceived == true {
             throw .connection(.h3ClosedCriticalStream, "the QPACK decoder stream was closed")
         }
     }
 
-    /// Drains complete QPACK instructions, mapping a violation to its RFC 9204 §6 connection error.
-    private mutating func parseQpackStream(
-        _ streamID: QUICStreamID, isEncoder: Bool
+    /// Applies the peer's encoder-stream inserts into the decoder's dynamic table (RFC 9204 §4.3),
+    /// acknowledges them with an Insert Count Increment on our decoder stream (§4.4.3), then decodes any
+    /// request sections those inserts just unblocked (§2.1.2).
+    private mutating func applyEncoderStream(
+        _ streamID: QUICStreamID, into events: inout [Event]
     ) throws(HTTP3Error) {
-        if isEncoder {
-            try applyEncoderStream(streamID)
-        }
-        else {
-            try parseDecoderStream(streamID)
-        }
-    }
-
-    /// Applies the peer's encoder-stream inserts into the decoder's dynamic table (RFC 9204 §4.3) and
-    /// acknowledges them with an Insert Count Increment on our decoder stream (§4.4.3).
-    private mutating func applyEncoderStream(_ streamID: QUICStreamID) throws(HTTP3Error) {
         guard var state = streams[streamID] else {
             return
         }
@@ -205,15 +198,17 @@ extension HTTP3Connection {
             case .success(let applied):
                 state.buffer.removeFirst(applied.consumed)
                 streams[streamID] = state
-                if applied.inserts > 0 {
-                    actions.append(
-                        .send(
-                            stream: .role(.qpackDecoder),
-                            bytes: QPACKInstructions.insertCountIncrement(applied.inserts),
-                            fin: false
-                        )
-                    )
+                guard applied.inserts > 0 else {
+                    return
                 }
+                actions.append(
+                    .send(
+                        stream: .role(.qpackDecoder),
+                        bytes: QPACKInstructions.insertCountIncrement(applied.inserts),
+                        fin: false
+                    )
+                )
+                try unblockBlockedSections(into: &events)
             case .failure(let error):
                 throw .connection(qpack: error.code, error.reason)
         }

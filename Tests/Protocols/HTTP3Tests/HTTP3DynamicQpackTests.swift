@@ -59,6 +59,53 @@ struct HTTP3DynamicQpackTests: HTTP3WireFixtures {
                 == QPACKInstructions.sectionAcknowledgment(streamID: Self.requestStreamID.rawValue))
     }
 
+    @Test("a request blocked on a not-yet-received insert is buffered, then unblocked (§2.1.2)")
+    func blockedRequestUnblocksOnInsert() throws {
+        var connection = HTTP3Connection()
+        _ = connection.outbound()
+
+        // The request indexes a dynamic :authority (RIC=1) before the insert arrives — it must buffer,
+        // surfacing no request and acknowledging nothing yet.
+        let section: [UInt8] = [0x02, 0x00, 0xD1, 0xD7, 0xC1, 0x80]
+        let blocked = try connection.receive(
+            Self.requestStreamID, requestStream(section), fin: true
+        )
+        #expect(blocked.isEmpty)
+        #expect(decoderStreamSends(&connection).isEmpty)
+
+        // The encoder delivers `:authority: dyn.example`; the buffered request now decodes and surfaces
+        // from the *encoder* stream's receive (RFC 9204 §2.1.2).
+        let events = try connection.receive(
+            Self.encoderStream,
+            [0x02] + insertNameReference(staticIndex: 0, "dyn.example"),
+            fin: false
+        )
+        guard case .request(_, let request, _) = events.first else {
+            Issue.record("expected the unblocked request event")
+            return
+        }
+        #expect(request.authority == "dyn.example")
+        // The decoder stream now carries both the Insert Count Increment and the Section Acknowledgment.
+        let sends = decoderStreamSends(&connection)
+        let ack = QPACKInstructions.sectionAcknowledgment(streamID: Self.requestStreamID.rawValue)
+        #expect(sends.contains(QPACKInstructions.insertCountIncrement(1)))
+        #expect(sends.contains(ack))
+    }
+
+    @Test("more blocked streams than the limit is QPACK_DECOMPRESSION_FAILED (§2.1.2)")
+    func blockedStreamLimitEnforced() {
+        var connection = HTTP3Connection()
+        _ = connection.outbound()
+        // 17 request streams each blocked on RIC=4 (the §4.5.1 prefix [0x05, 0x00]) — one past the
+        // advertised 16-stream limit, so the last is a connection error.
+        for raw in stride(from: UInt64(0), through: 64, by: 4) {
+            _ = try? connection.receive(QUICStreamID(raw), requestStream([0x05, 0x00]), fin: false)
+        }
+        #expect(
+            closeConnectionCode(&connection)
+                == UInt64(QPACKError.Code.decompressionFailed.rawValue))
+    }
+
     // MARK: Helpers
 
     /// The bytes of the first role-addressed send on the QPACK decoder stream, if any.
@@ -69,6 +116,17 @@ struct HTTP3DynamicQpackTests: HTTP3WireFixtures {
             }
         }
         return nil
+    }
+
+    /// Every role-addressed send queued on the QPACK decoder stream, drained in order.
+    private func decoderStreamSends(_ connection: inout HTTP3Connection) -> [[UInt8]] {
+        var sends: [[UInt8]] = []
+        for action in connection.outbound() {
+            if case .send(.role(.qpackDecoder), let bytes, _) = action {
+                sends.append(bytes)
+            }
+        }
+        return sends
     }
 
     private func insertLiteral(_ name: String, _ value: String) -> [UInt8] {
