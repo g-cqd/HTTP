@@ -86,10 +86,22 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
         round-trip (text/binary/empty/50 KiB), RSV1 without-negotiation / on-continuation / on-control
         rejected, bomb cap → close, negotiation accept/echo/decline, +3 pmd fuzz exercises; ASan clean.
         ✓ 829.
-      - **QPACK dynamic table (RFC 9204).** Major: encoder/decoder unidirectional streams,
-        insert-with/without-name-ref + duplicate, eviction, capacity, Required Insert Count / Base,
-        blocked-stream bound. Keep the v1 static-only encoder/decoder as a fallback; gate on QPACK/h3
-        conformance + fuzz + interop.
+      - [~] **QPACK dynamic table (RFC 9204) — S5: foundation done, integration deferred.** Landed the
+        `QPACKDynamicTable` data structure — a separate-index-space FIFO with the §3.2.4–§3.2.6
+        absolute-index / Base-relative / post-base / insert-point arithmetic (the known QPACK interop
+        trap), §3.2.2 eviction (oldest-first, absolute indices preserved), capacity / Set Capacity, and
+        Duplicate — with 9 unit tests pinning each conversion. The encoder/decoder/connection *integration*
+        (encoder insert heuristic + encoder-stream instructions; decoder dynamic indexed/post-base refs,
+        Required Insert Count validation, Section-Ack / Insert-Count-Increment; executing encoder-stream
+        inserts in `parseQpackStream`; raising the SETTINGS) is the interop-sensitive remainder, deferred
+        like S4: it touches the working, conformant static-only h3 decode path, and blocked-stream
+        buffering / eviction-with-outstanding-references (§2.1.3) are the hardest HTTP/3 sub-problems —
+        so the v1 static-only encoder/decoder stays operational as the mandated fallback, gated on
+        QPACK/h3 conformance + fuzz + interop before it flips on. **Recorded integration plan:** advertise
+        a non-zero `SETTINGS_QPACK_MAX_TABLE_CAPACITY` with `QPACK_BLOCKED_STREAMS = 0` first (no
+        blocked-stream buffering — reject a section whose RIC exceeds received inserts), enhance only the
+        *decoder* to consume a peer's dynamic-table usage (browsers compress requests), and keep our
+        response *encoder* static-only (valid: each endpoint chooses its own encoder strategy).
       - [x] **Priority scheduling (RFC 9218) — S1 done.** h2 `StreamRecord.urgency` cached from the
         request's `Priority` field at stream creation; `flushAll` orders ready streams by ascending
         urgency (ties → lower stream id) so a congested connection releases higher-priority DATA first
@@ -153,3 +165,8 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   rule: the in-memory transport can't stage a late WINDOW_UPDATE to prove the producer/loop orchestration
   deadlock-free, so the P6a finite-buffer fallback is retained and the single-task rendezvous design is
   recorded in P6b. 834 tests; ASan clean; h2spec green.
+- 2026-06-25 — P8/S5 partial: QPACK dynamic-table *foundation* landed — `QPACKDynamicTable` (RFC 9204
+  §3.2: separate index space, absolute / Base-relative / post-base / insert-point arithmetic, §3.2.2
+  eviction, capacity, Duplicate) with 9 unit tests pinning the interop-trap arithmetic. Encoder/decoder/
+  connection integration (inserts, dynamic refs, RIC, Section-Ack/ICI, blocked streams) deferred and
+  recorded; static-only QPACK retained operational as the mandated fallback. 843 tests; ASan clean.
