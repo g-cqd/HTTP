@@ -12,6 +12,7 @@
 //
 
 internal import Darwin
+internal import Dispatch
 internal import Synchronization
 
 /// The BSD-sockets + hand-rolled kqueue transport backbone.
@@ -25,6 +26,9 @@ public final class POSIXKqueueTransport: ServerTransport {
     private let configuration: TransportConfiguration
     private let state = Mutex<State>(State())
     private let connectionIDs = ConnectionIDAllocator()
+    /// A side queue used only to re-arm accept after fd exhaustion, so the backoff delay never runs on
+    /// the shared ``KqueueEventLoop`` (which also drives every connection's I/O) — audit F-EMFILE.
+    private let backoffQueue = DispatchQueue(label: "http.transport.kqueue.accept-backoff")
 
     private struct State {
         var eventLoop: KqueueEventLoop?
@@ -122,7 +126,7 @@ public final class POSIXKqueueTransport: ServerTransport {
         guard state.withLock(\.isRunning) else {
             return
         }
-        while true {
+        drain: while true {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
@@ -131,8 +135,19 @@ public final class POSIXKqueueTransport: ServerTransport {
                 }
             }
             if clientFD < 0 {
-                if case .retry = POSIXSocket.classifyAcceptError(errno) { continue }
-                break  // drained (wouldBlock) or the listener was closed
+                switch POSIXSocket.classifyAcceptError(errno) {
+                    case .retry:
+                        continue
+                    case .backoff:
+                        // fd exhaustion: re-arm after a brief delay on the side queue and return now,
+                        // leaving the event loop free to service live connections (audit F-EMFILE).
+                        scheduleAcceptBackoff(
+                            listenFD: listenFD, eventLoop: eventLoop, continuation: continuation
+                        )
+                        return
+                    case .wouldBlock, .stop:
+                        break drain  // drained, or the listener was closed
+                }
             }
             POSIXSocket.setNonBlocking(clientFD)
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
@@ -148,5 +163,23 @@ public final class POSIXKqueueTransport: ServerTransport {
             )
         }
         armAccept(listenFD: listenFD, eventLoop: eventLoop, continuation: continuation)
+    }
+
+    /// Re-arms accept after the fd-exhaustion backoff, scheduled on ``backoffQueue`` so the wait never
+    /// occupies the event loop. ``KqueueEventLoop/waitReadable(_:_:)`` is safe to call off-loop (its
+    /// registry is mutex-guarded and `kevent` add is thread-safe), so the next readiness still fires
+    /// ``acceptPending(listenFD:eventLoop:continuation:)`` back on the loop.
+    private func scheduleAcceptBackoff(
+        listenFD: Int32,
+        eventLoop: KqueueEventLoop,
+        continuation: AsyncStream<any TransportConnection>.Continuation
+    ) {
+        let delay = DispatchTimeInterval.milliseconds(POSIXSocket.acceptBackoffMilliseconds)
+        backoffQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, state.withLock(\.isRunning) else {
+                return
+            }
+            armAccept(listenFD: listenFD, eventLoop: eventLoop, continuation: continuation)
+        }
     }
 }

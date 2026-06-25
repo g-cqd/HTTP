@@ -99,7 +99,7 @@ public final class SwiftSystemTransport: ServerTransport {
         listenDescriptor: FileDescriptor,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        while state.withLock(\.isRunning) {
+        drain: while state.withLock(\.isRunning) {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
@@ -108,8 +108,19 @@ public final class SwiftSystemTransport: ServerTransport {
                 }
             }
             if clientFD < 0 {
-                if case .retry = POSIXSocket.classifyAcceptError(errno) { continue }
-                break  // a closed descriptor (shutdown) or unrecoverable error stops the loop
+                switch POSIXSocket.classifyAcceptError(errno) {
+                    case .retry:
+                        continue
+                    case .backoff:
+                        // fd exhaustion: this loop owns a dedicated accept thread (no connection I/O
+                        // runs on it), so a brief sleep is the right backoff — it delays only new
+                        // accepts, never live traffic (audit F-EMFILE).
+                        usleep(useconds_t(POSIXSocket.acceptBackoffMilliseconds * 1_000))
+                        continue
+                    case .wouldBlock, .stop:
+                        // A closed descriptor (shutdown) or an unrecoverable error stops the loop.
+                        break drain
+                }
             }
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
             POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)

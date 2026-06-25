@@ -56,11 +56,14 @@ sub-agents).
 | F-WSUTF8 | **Non-incremental UTF-8** — text validated only after the whole (up to `maxMessageSize`) message buffered. | `WebSocketConnection` | RFC 6455 §8.1 |
 | F-BUDGETKNOB | Reset & control-frame budgets **shared one knob**. | `+AbuseBudget` | DoS tuning |
 
-### Deferred (task #10 — transport reliability; the primary Network.framework backbone is unaffected)
-`F-EMFILE` — the accept-error `usleep` sits on the shared kqueue/dispatch event-loop queue; a correct
-fix needs a timer-based re-arm (those synchronous accept loops can't `await`), so the bounded ~10 ms
-back-off stays as an acceptable interim. (`F-IPV4` dual-stack and `T-F14` listen backlog were resolved
-by the transport dual-stack/backlog work; `F-ALPN` is resolved in §3.)
+### Resolved follow-up (task #10 — transport reliability; the primary Network.framework backbone is unaffected)
+`F-EMFILE` — **resolved.** `POSIXSocket.classifyAcceptError` is now a pure mapping that returns a
+`.backoff` outcome on `EMFILE`/`ENFILE` rather than sleeping inline; each accept loop then backs off
+without blocking an I/O-bearing queue — kqueue re-arms after the delay on a dedicated side queue (the
+event loop stays free to service live connections), dispatch suspends and resumes its accept read
+source, and swiftSystem sleeps only on its dedicated accept thread. `POSIXAcceptErrorTests` pins the
+no-sleep contract. (`F-IPV4` dual-stack and `T-F14` listen backlog were resolved by the transport
+dual-stack/backlog work; `F-ALPN` is resolved in §3.)
 
 ---
 

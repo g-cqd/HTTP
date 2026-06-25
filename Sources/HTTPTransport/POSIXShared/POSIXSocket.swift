@@ -19,11 +19,21 @@ enum POSIXSocket {
     enum AcceptOutcome {
         /// `EAGAIN`/`EWOULDBLOCK` — no connection is pending right now (a non-blocking socket is drained).
         case wouldBlock
-        /// Transient (`EINTR`/`ECONNABORTED`) or recoverable resource pressure — try again.
+        /// Transient (`EINTR`/`ECONNABORTED`) — retry immediately.
         case retry
+        /// File-descriptor exhaustion (`EMFILE`/`ENFILE`) — back off briefly, then accept again.
+        ///
+        /// The *delay* is the caller's job, not this helper's: a `usleep` here would block whatever
+        /// queue the accept loop runs on, and on the kqueue backbone that queue also drives every
+        /// connection's I/O — so a shared sleep stalls live traffic (audit F-EMFILE). Each loop backs
+        /// off in a way that never blocks an I/O-bearing queue.
+        case backoff
         /// The listening descriptor is gone (`EBADF`/`EINVAL`) or unrecoverable — stop accepting.
         case stop
     }
+
+    /// How long an accept loop waits out file-descriptor exhaustion before retrying (~10 ms).
+    static let acceptBackoffMilliseconds = 10
 
     /// Creates, binds, and listens on a POSIX.1-2017 stream socket for IPv4 (RFC 791) or IPv6
     /// (RFC 4291), returning the descriptor and the OS-assigned port.
@@ -155,7 +165,11 @@ enum POSIXSocket {
         return String(decoding: bytes, as: Unicode.UTF8.self)
     }
 
-    /// Classifies an `accept()` failure (backs off briefly on fd exhaustion before retrying).
+    /// Classifies an `accept()` failure into the action its loop should take.
+    ///
+    /// Pure classification — it never sleeps. `EMFILE`/`ENFILE` map to ``AcceptOutcome/backoff`` so the
+    /// caller can delay off its I/O-bearing queue (audit F-EMFILE); the previous inline `usleep` here
+    /// blocked the kqueue event loop and stalled every live connection.
     static func classifyAcceptError(_ error: Int32) -> AcceptOutcome {
         switch error {
             case EAGAIN, EWOULDBLOCK:
@@ -163,8 +177,7 @@ enum POSIXSocket {
             case EINTR, ECONNABORTED:
                 return .retry
             case EMFILE, ENFILE:
-                usleep(10_000)  // fd exhaustion — back off ~10 ms, then retry
-                return .retry
+                return .backoff  // fd exhaustion — the caller backs off without blocking its I/O
             default:
                 return .stop  // EBADF / EINVAL or unrecoverable
         }

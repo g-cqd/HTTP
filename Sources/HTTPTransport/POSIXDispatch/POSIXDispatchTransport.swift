@@ -112,7 +112,7 @@ public final class POSIXDispatchTransport: ServerTransport {
         listenFD: Int32,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        while state.withLock(\.isRunning) {
+        drain: while state.withLock(\.isRunning) {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
@@ -121,8 +121,17 @@ public final class POSIXDispatchTransport: ServerTransport {
                 }
             }
             if clientFD < 0 {
-                if case .retry = POSIXSocket.classifyAcceptError(errno) { continue }
-                break  // wouldBlock (drained) or stop
+                switch POSIXSocket.classifyAcceptError(errno) {
+                    case .retry:
+                        continue
+                    case .backoff:
+                        // fd exhaustion: suspend accept readiness and resume after a brief delay, so the
+                        // accept queue neither busy-retries nor blocks on a sleep (audit F-EMFILE).
+                        suspendAcceptForBackoff()
+                        return
+                    case .wouldBlock, .stop:
+                        break drain  // drained, or the listener was closed
+                }
             }
             POSIXSocket.setNonBlocking(clientFD)
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
@@ -143,6 +152,23 @@ public final class POSIXDispatchTransport: ServerTransport {
                     queue: connectionQueue
                 )
             )
+        }
+    }
+
+    /// Suspends the accept read source and resumes it after the fd-exhaustion backoff (audit F-EMFILE).
+    ///
+    /// `suspend()` and the deferred `resume()` are balanced 1:1: the resume captures the source
+    /// strongly and always runs, so a suspended source is never deallocated (which would trap), and
+    /// resuming a source that ``shutdown()`` has since cancelled is harmless. While suspended the
+    /// source delivers no readiness, so the accept queue idles instead of busy-retrying `EMFILE`.
+    private func suspendAcceptForBackoff() {
+        guard let source = state.withLock(\.acceptSource) else {
+            return
+        }
+        source.suspend()
+        let delay = DispatchTimeInterval.milliseconds(POSIXSocket.acceptBackoffMilliseconds)
+        acceptQueue.asyncAfter(deadline: .now() + delay) {
+            source.resume()
         }
     }
 }
