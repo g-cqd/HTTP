@@ -66,6 +66,16 @@ CWE-409) with **no current consumer**; the outbound gzip path is already bounded
 enforced and reviewed. **Recommendation: keep deferred** until a consumer needs it — adding surface
 without demand fails the project's own "defer net-new surface" bar. This design makes it ready on demand.
 
+**Status (2026-06-25): implemented (opt-in) — gate cleared.** `DecompressionMiddleware` gunzips a
+`Content-Encoding: gzip` request body before the responder, off by default. Bomb defense (CWE-409): the
+output is capped both absolutely (`HTTPLimits.maxDecompressedBodySize`) and by ratio
+(`maxDecompressionRatio`) — `Inflate.gunzip` decodes into a `cap+1` buffer and rejects on overflow, so a
+malformed/oversized/over-ratio member fails closed with `413` and a bomb is never buffered. Covered by
+`DecompressionMiddlewareTests` (round-trip, the three rejection paths, passthrough) and
+`DecompressionFuzzTests` (random + mutated-gzip, never traps); ASan clean. Wired into `httpd-example` to
+demonstrate it. Non-gzip encodings (deflate/br) are left untouched for the app; CRC/ISIZE verification is
+a possible follow-up (the DEFLATE decode + the size cap are the security-relevant checks).
+
 ## 3. HTTP/3 0-RTT early-data policy
 
 **Finding.** Owned by the `m7-http3` sibling worktree (the live QUIC/h3 transport). 0-RTT early data is

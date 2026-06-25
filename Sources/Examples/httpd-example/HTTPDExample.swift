@@ -59,6 +59,7 @@ enum HTTPDExample {
         middlewares.append(
             contentsOf: [
                 MetricsMiddleware(metrics),  // RED signals over the whole chain (outermost timing)
+                DecompressionMiddleware(),  // inbound: gunzip a gzip body (bomb-capped)
                 CompressionMiddleware(),  // gzip the outgoing body
                 ServerHeaderMiddleware("httpd-example"),
                 DateHeaderMiddleware(),
