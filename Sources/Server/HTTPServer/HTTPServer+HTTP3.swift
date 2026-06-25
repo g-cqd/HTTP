@@ -45,6 +45,15 @@ extension HTTPServer {
             try? connection.respond(to: id, response, body: body)
             return connection.outbound()
         }
+
+        /// Encodes a *streaming* response's HEADERS on `id` (no FIN), untracking the stream.
+        ///
+        /// Returns the frame bytes for the driver to send and FIN itself, or nil if the engine rejects
+        /// it (an unknown stream — not expected for a just-emitted request). The body DATA + FIN follow
+        /// off-actor, framed by ``HTTP3Connection/dataFrame(_:)``.
+        func respondHeaders(to id: QUICStreamID, _ head: HTTPResponse) -> [UInt8]? {
+            try? connection.respondHeaders(to: id, head)
+        }
     }
 
     /// Runs the QUIC listener: advertise `Alt-Svc` (RFC 7838), then serve each connection as HTTP/3.
@@ -104,14 +113,61 @@ extension HTTPServer {
             await applyHTTP3(actions, stream: stream, quic: quic)
             for case .request(let id, let request, let body) in events {
                 let response = await responder.respond(to: request, body: body)
-                // HTTP/3 has no native streaming yet: collapse a finite stream to a buffer (P6).
-                let buffered = await bufferedResponse(response)
-                let responseActions = await engine.respond(
-                    to: id, buffered.head, body: buffered.body
-                )
-                await applyHTTP3(responseActions, stream: stream, quic: quic)
+                if let bodyStream = response.stream {
+                    // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
+                    await streamHTTP3Response(
+                        response.head,
+                        body: bodyStream,
+                        omitBody: request.method == .head,
+                        id: id,
+                        engine: engine,
+                        on: stream
+                    )
+                }
+                else {
+                    let responseActions = await engine.respond(
+                        to: id, response.head, body: response.body
+                    )
+                    await applyHTTP3(responseActions, stream: stream, quic: quic)
+                }
             }
             if chunk.fin { break }
+        }
+    }
+
+    /// Streams a response natively on a QUIC request stream (RFC 9114 §4.1).
+    ///
+    /// The QPACK HEADERS frame goes first (`fin:false`), then each body chunk as a DATA frame as the
+    /// producer yields it, then an empty FIN ends the stream; a HEAD request sends the headers with FIN
+    /// and no body (RFC 9110 §9.3.2). QUIC streams are independent with transport-level backpressure
+    /// (`stream.send` suspends until the transport accepts the bytes), so — unlike HTTP/2's shared,
+    /// window-coupled connection — the producer drives the stream inline with no flow-control deadlock.
+    /// A producer or transport fault mid-body resets the stream with H3_REQUEST_INCOMPLETE (§8.1) so the
+    /// client sees a truncated response rather than a silently short one.
+    private func streamHTTP3Response(
+        _ head: HTTPResponse,
+        body: ResponseStream,
+        omitBody: Bool,
+        id: QUICStreamID,
+        engine: Engine,
+        on stream: any QUICStream
+    ) async {
+        guard let headerBytes = await engine.respondHeaders(to: id, head) else {
+            stream.reset(errorCode: HTTP3ErrorCode.h3InternalError.rawValue)
+            return
+        }
+        do {
+            guard !omitBody else {
+                // HEAD: the header section with FIN and no body (RFC 9110 §9.3.2).
+                try await stream.send(headerBytes, fin: true)
+                return
+            }
+            try await stream.send(headerBytes, fin: false)
+            try await body.produce(H3StreamWriter(stream: stream))
+            try await stream.send([], fin: true)  // end-of-body (RFC 9114 §4.1)
+        }
+        catch {
+            stream.reset(errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue)
         }
     }
 
@@ -125,6 +181,20 @@ extension HTTPServer {
         // Use the registered constant (no per-response token re-validation / canonicalName build).
         advertised.headerFields.append(value, for: .altSvc)
         return advertised
+    }
+
+    /// Writes HTTP/3 response-body chunks as DATA frames (RFC 9114 §7.2.1), one `send` per chunk so the
+    /// QUIC stream's flow control is the backpressure point — no engine round-trip, since the body of an
+    /// independent QUIC stream needs no connection state (RFC 9000 §2).
+    private struct H3StreamWriter: ResponseBodyWriter {
+        let stream: any QUICStream
+
+        func write(_ chunk: [UInt8]) async throws {
+            guard !chunk.isEmpty else {
+                return
+            }
+            try await stream.send(HTTP3Connection.dataFrame(chunk), fin: false)
+        }
     }
 
     /// Performs the engine's outbound actions for `stream` (response sends, resets, connection close).

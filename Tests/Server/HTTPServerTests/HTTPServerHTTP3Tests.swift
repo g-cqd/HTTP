@@ -30,7 +30,8 @@ struct HTTPServerHTTP3Tests {
                 configuration: TransportConfiguration(
                     host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls
                 )
-            )
+            ),
+            responder: helloResponder()
         )
         #expect(status == "200")
         #expect(body == Array("hello h3".utf8))
@@ -48,22 +49,54 @@ struct HTTPServerHTTP3Tests {
                 configuration: TransportConfiguration(
                     host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls
                 )
-            )
+            ),
+            responder: helloResponder()
         )
         #expect(status == "200")
         #expect(body == Array("hello h3".utf8))
     }
 
-    /// Starts `transport`, drives the HTTP/3 server over it, and performs one GET, returning the reply.
-    private func serveAndGet(
-        transport: any QUICServerTransport
-    ) async throws -> (status: String?, body: [UInt8]) {
-        let connections = try await transport.start()
-        let port = transport.boundPort
-        let responder = ClosureResponder { request, _ in
+    @Test(
+        "a native HTTP/3 streamed response is delivered chunk-by-chunk over QUIC (P6b)",
+        .timeLimit(.minutes(1)))
+    func http3StreamingLegacy() async throws {
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        // A `.streaming` responder drives the native path (respondHeaders → H3StreamWriter DATA frames
+        // → empty FIN); the client reassembles the two chunks into the full body.
+        let streaming = ClosureResponder { request, _ in
+            #expect(request.method == .get)
+            return .streaming(contentType: "text/plain") { writer in
+                try await writer.write(Array("hello ".utf8))
+                try await writer.write(Array("h3".utf8))
+            }
+        }
+        let (status, body) = try await serveAndGet(
+            transport: LegacyQUICTransport(
+                configuration: TransportConfiguration(
+                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls
+                )
+            ),
+            responder: streaming
+        )
+        #expect(status == "200")
+        #expect(body == Array("hello h3".utf8))
+    }
+
+    /// A buffered responder returning `hello h3` — the default for the plain-GET acceptance tests.
+    private func helloResponder() -> any HTTPResponder {
+        ClosureResponder { request, _ in
             #expect(request.method == .get)
             return ServerResponse(HTTPResponse(status: .ok), body: Array("hello h3".utf8))
         }
+    }
+
+    /// Starts `transport`, drives the HTTP/3 server over it, and performs one GET, returning the reply.
+    private func serveAndGet(
+        transport: any QUICServerTransport,
+        responder: any HTTPResponder
+    ) async throws -> (status: String?, body: [UInt8]) {
+        let connections = try await transport.start()
+        let port = transport.boundPort
         let server = HTTPServer(
             transport: TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
             responder: responder

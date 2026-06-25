@@ -33,6 +33,35 @@ extension HTTP3Connection {
         actions.append(.send(stream: .id(streamID), bytes: bytes, fin: true))
     }
 
+    /// Encodes a streaming response's QPACK HEADERS frame on `streamID` and removes the stream from
+    /// engine tracking — **without** FIN, and without queuing a body (RFC 9114 §4.1).
+    ///
+    /// The driver sends the returned bytes (with `fin:false` for a body, or `fin:true` for a HEAD
+    /// request), then pumps body DATA frames built by ``dataFrame(_:)`` and FINs the stream itself. This
+    /// is the native-streaming counterpart to ``respond(to:_:body:)``: the head is framed here, but the
+    /// body and end-of-stream are deferred so a `ResponseStream` can drive the wire chunk by chunk.
+    /// Because QUIC streams are independent with transport-level backpressure (RFC 9000 §2), the engine
+    /// keeps no state for the streamed body — unlike HTTP/2's window-coupled connection. Throws
+    /// H3_INTERNAL_ERROR if the stream is unknown.
+    public mutating func respondHeaders(
+        to streamID: QUICStreamID,
+        _ response: HTTPResponse
+    ) throws(HTTP3Error) -> [UInt8] {
+        guard streams.removeValue(forKey: streamID) != nil else {
+            throw .connection(.h3InternalError, "streaming response for an unknown stream")
+        }
+        return HTTP3FrameWriter.frame(.headers, payload: encodeResponseSection(response))
+    }
+
+    /// Wraps `chunk` as an HTTP/3 DATA frame (RFC 9114 §7.2.1) for incremental response streaming.
+    ///
+    /// Static and pure: a streamed body's DATA needs no connection state — QUIC streams are independent
+    /// (RFC 9000 §2) — so the driver frames and sends each chunk directly, off the serializing actor,
+    /// with the transport's per-stream flow control as the backpressure point.
+    public static func dataFrame(_ chunk: [UInt8]) -> [UInt8] {
+        HTTP3FrameWriter.frame(.data, payload: chunk)
+    }
+
     /// Encodes a response's QPACK field section into a reserved buffer (RFC 9114 §4.1).
     ///
     /// `:status` first, then the lowercased fields (§4.2): no intermediate `[HeaderField]` array, no

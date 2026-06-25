@@ -41,14 +41,17 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       `ServerResponse.body` unchanged, `.stream`/`.serverSentEvents` opt-in. **P6a done:** native HTTP/1.1
       chunked streaming + SSE, middleware guards (Compression/Cache skip streams), h2/h3 finite-buffer
       fallback. ✓ 795 tests green (790 buffered unchanged), ASan clean.
-      **P6b (deferred follow-up — native h2/h3 streaming):** h3 is tractable — per-stream tasks +
-      QUIC transport backpressure already exist; add `HTTP3Connection.respondHeaders`/`dataFrame`, a
-      per-stream `H3StreamWriter` (frames DATA, `stream.send(fin:false)`, FIN at end), plus a fake-QUIC
-      test harness. h2 is the hard one: native streaming inside the multiplexed serve loop deadlocks
-      (a producer running in an event handler can't read the `WINDOW_UPDATE` that reopens an exhausted
-      send window), so it needs a concurrent producer task + serialized (actor/lock) engine access +
-      window-coordinated backpressure. Deferred to its own focused, fully-tested effort rather than a
-      rushed change; P6a's finite-buffer fallback keeps h2/h3 correct meanwhile.
+      **P6b — native h2/h3 streaming:** ✓ **S2 (h3) done** — `HTTP3Connection.respondHeaders`/`dataFrame`
+      + a per-stream `H3StreamWriter` (frames DATA, `stream.send(fin:false)`, empty FIN at end); HEAD
+      sends headers+FIN; buffered path unchanged. QUIC streams are independent tasks with transport-level
+      backpressure, so the producer drives the stream inline with no flow-control deadlock. _Gate:_ 6
+      engine framing tests (respondHeaders/dataFrame/round-trip/untrack) + a real-QUIC loopback streaming
+      integration test (no fake-QUIC harness exists, so the Network.framework loopback is the integration
+      mirror); h3 conformance + full suite green; ASan clean. **S4 (h2) remaining:** native streaming
+      inside the multiplexed serve loop deadlocks (a producer in an event handler can't read the
+      `WINDOW_UPDATE` that reopens an exhausted send window), so it needs a concurrent producer task +
+      serialized (actor/lock) engine access + window-coordinated backpressure; P6a's finite-buffer
+      fallback keeps h2 correct meanwhile.
 
 - [x] **P7 — Static file serving.** FileResponder: traversal-safe (CWE-22), content-type via the system
       `UTType` registry, Last-Modified/ETag from mtime+size, native Range (reuse `RangeMiddleware.parse`)
@@ -116,3 +119,8 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   creation from the `Priority` field; `flushAll` ordered by ascending urgency (lower stream id breaks
   ties) so a congested connection flushes higher-priority DATA first. h3 out of scope (per-stream tasks).
   806 tests; ASan clean.
+- 2026-06-25 — P6b/S2 done: native HTTP/3 response streaming — `HTTP3Connection.respondHeaders` (QPACK
+  HEADERS, no FIN, untracks the stream) + static `dataFrame`; `serveHTTP3Stream` drives a `ResponseStream`
+  via an `H3StreamWriter` (DATA frames `fin:false`, then empty FIN), HEAD = headers+FIN. Buffered path
+  unchanged. 6 engine framing tests + a real-QUIC loopback streaming integration test. 813 tests; ASan
+  clean; h3 conformance green. (S4 native h2 streaming remains.)
