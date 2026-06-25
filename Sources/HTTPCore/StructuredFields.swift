@@ -156,4 +156,19 @@ public enum StructuredFields {
         /// An inner-list item was not delimited by a space or closing paren (§4.2.1.2).
         case invalidInnerList
     }
+
+    /// Why serializing a value to a Structured Field string failed (RFC 8941 §4.1) — a value the model
+    /// can hold but the wire grammar cannot represent.
+    public enum SerializeError: Error, Sendable, Equatable {
+        /// An integer was outside ±(10¹⁵ − 1) (§4.1.3.1).
+        case integerOutOfRange
+        /// A decimal's integer component exceeded 12 digits, or it was not finite (§4.1.3.2).
+        case invalidDecimal
+        /// A string held a non-printable / non-ASCII octet (§4.1.3.3).
+        case invalidStringCharacter
+        /// A token did not match the token grammar (§4.1.3.4).
+        case invalidToken
+        /// A key did not match the key grammar (§4.1.1.3).
+        case invalidKey
+    }
 }
