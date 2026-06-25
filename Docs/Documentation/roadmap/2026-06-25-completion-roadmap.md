@@ -60,15 +60,20 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
 
 - [~] **P8 — Protocol depth.** _Research/design done (this session); implementation is deep, conformance/
       security-sensitive work to do with fresh context, each feature fully tested._
-      - **WebSocket permessage-deflate (RFC 7692).** Touches `WebSocketHandshake` (parse/negotiate
-        `Sec-WebSocket-Extensions`, emit in the 101), `WebSocketFrame` (+`rsv1`), the frame
-        encoder/decoder (set/allow RSV1 only when negotiated), and `WebSocketConnection` (per-message
-        compress on send / decompress on receive, with a decompressed-size cap against bombs, CWE-409),
-        plus the h1 + RFC 8441 h2/h3 upgrade paths. **Key finding:** the one-shot
-        `compression_encode_buffer`/`decode_buffer` can't be used — RFC 7692 frames a message as a
-        `Z_SYNC_FLUSH` DEFLATE block (no `BFINAL`) with the trailing `00 00 FF FF` stripped/re-appended,
-        so even `no_context_takeover` needs the **streaming `compression_stream_*` API**. Start with
-        `no_context_takeover`; defer context-takeover.
+      - [x] **WebSocket permessage-deflate (RFC 7692) — S3 done.** `Sec-WebSocket-Extensions`
+        negotiated + echoed (h1 `WebSocketHandshake`; RFC 8441 h2 `acceptTunnel`), `WebSocketFrame.rsv1`
+        with the decoder allowing RSV1 only when negotiated — never on a control or continuation frame —
+        and the encoder setting it, and `WebSocketConnection` compressing on send / inflating on receive
+        with the inflated size hard-capped (CWE-409). **Finding (supersedes the design note):** Apple's
+        Compression `compression_stream_*` *also* cannot emit a `Z_SYNC_FLUSH` (flags 0 buffers
+        everything — 0 bytes out; only FINALIZE flushes, with BFINAL), proven by probe. So
+        `no_context_takeover` is realized as a fresh per-message FINALIZE stream, decompressed per §7.2.2
+        by appending `00 00 FF FF` + inflating; the decoder is lenient on malformed DEFLATE (caught
+        downstream by the §8.1 UTF-8 screen + the size cap). Context-takeover and strict
+        `Z_SYNC_FLUSH`/Autobahn interop (would need zlib) are deferred to P10. _Gate:_ codec + engine
+        round-trip (text/binary/empty/50 KiB), RSV1 without-negotiation / on-continuation / on-control
+        rejected, bomb cap → close, negotiation accept/echo/decline, +3 pmd fuzz exercises; ASan clean.
+        ✓ 829.
       - **QPACK dynamic table (RFC 9204).** Major: encoder/decoder unidirectional streams,
         insert-with/without-name-ref + duplicate, eviction, capacity, Required Insert Count / Base,
         blocked-stream bound. Keep the v1 static-only encoder/decoder as a fallback; gate on QPACK/h3
@@ -124,3 +129,9 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   via an `H3StreamWriter` (DATA frames `fin:false`, then empty FIN), HEAD = headers+FIN. Buffered path
   unchanged. 6 engine framing tests + a real-QUIC loopback streaming integration test. 813 tests; ASan
   clean; h3 conformance green. (S4 native h2 streaming remains.)
+- 2026-06-25 — P8/S3 done: WebSocket permessage-deflate (RFC 7692, `no_context_takeover`) — negotiate +
+  echo `Sec-WebSocket-Extensions` (h1 + RFC 8441 h2), `WebSocketFrame.rsv1` (decoder allows RSV1 only
+  when negotiated, never on control/continuation; encoder sets it), compress on send / inflate on receive
+  with a CWE-409 size cap. New `PermessageDeflate` over Apple Compression: per-message FINALIZE stream
+  (Compression cannot `Z_SYNC_FLUSH` — probed), decompress = append `00 00 FF FF` + inflate. 829 tests;
+  ASan clean. Context-takeover + zlib-exact `Z_SYNC_FLUSH`/Autobahn interop deferred to P10.

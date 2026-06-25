@@ -14,12 +14,24 @@ internal import HTTPCore
 extension HTTP2Connection {
     /// Accepts an Extended CONNECT tunnel on `streamID` (RFC 8441 §5): a `200` response with no
     /// END_STREAM, leaving the stream open as a bidirectional byte tunnel.
-    public mutating func acceptTunnel(_ streamID: HTTP2StreamID) throws(HTTP2Error) {
+    ///
+    /// When `secWebSocketExtensions` is supplied, it is echoed on the `200` — the WebSocket-over-HTTP/2
+    /// path's permessage-deflate acceptance (RFC 7692 §5.1 over RFC 9220).
+    public mutating func acceptTunnel(
+        _ streamID: HTTP2StreamID,
+        secWebSocketExtensions: String? = nil
+    ) throws(HTTP2Error) {
         guard var record = streams[streamID], record.isTunnel else {
             throw .connection(.internalError, "acceptTunnel for a non-tunnel stream")
         }
         try record.stream.sendHeaders(endStream: false)
-        let block = encoder.encode([HPACKField(name: ":status", value: "200")])
+        var fields = [HPACKField(name: ":status", value: "200")]
+        if let secWebSocketExtensions {
+            fields.append(
+                HPACKField(name: "sec-websocket-extensions", value: secWebSocketExtensions)
+            )
+        }
+        let block = encoder.encode(fields)
         writer.writeFrame(.headers, flags: .endHeaders, streamID: streamID, payload: block)
         streams[streamID] = record
     }

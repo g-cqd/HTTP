@@ -40,6 +40,31 @@ struct WebSocketFuzzTests {
         _ = try? connection.receive(bytes)
     }
 
+    /// The permessage-deflate paths (RFC 7692): the RSV1-permitting decoder, the inflate/deflate codec
+    /// (a decompression bomb must fail closed, never trap — CWE-409), and the negotiated connection.
+    private func drainPMDFrames(_ bytes: [UInt8]) {
+        bytes.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            let decoder = WebSocketFrameDecoder(requireMaskedFrames: true, permessageDeflate: true)
+            do {
+                while let frame = try decoder.nextFrame(&reader) { _ = frame }
+            }
+            catch {
+                // a typed WebSocketError is fine — only a trap, hang, or OOM fails the run
+            }
+        }
+    }
+
+    private func feedPMDConnection(_ bytes: [UInt8]) {
+        var connection = WebSocketConnection(permessageDeflate: true)
+        _ = try? connection.receive(bytes)
+    }
+
+    private func exercisePMDCodec(_ bytes: [UInt8]) {
+        _ = PermessageDeflate.decompress(bytes, maxSize: 1 << 20)
+        _ = PermessageDeflate.compress(bytes)
+    }
+
     // MARK: Random bytes
 
     @Test("the frame decoder tolerates arbitrary random bytes")
@@ -55,6 +80,30 @@ struct WebSocketFuzzTests {
         var rng = SeededRNG(named: "websocket.connection.random")
         for _ in 0 ..< iterations {
             feedConnection(Self.randomBytes(&rng))
+        }
+    }
+
+    @Test("the permessage-deflate decoder tolerates arbitrary random bytes (RFC 7692)")
+    func pmdDecoderRandom() {
+        var rng = SeededRNG(named: "websocket.pmd.decoder.random")
+        for _ in 0 ..< iterations {
+            drainPMDFrames(Self.randomBytes(&rng))
+        }
+    }
+
+    @Test("permessage-deflate inflate/deflate never trap on arbitrary bytes (CWE-409)")
+    func pmdCodecRandom() {
+        var rng = SeededRNG(named: "websocket.pmd.codec.random")
+        for _ in 0 ..< iterations {
+            exercisePMDCodec(Self.randomBytes(&rng))
+        }
+    }
+
+    @Test("the permessage-deflate connection engine tolerates arbitrary random bytes")
+    func pmdConnectionRandom() {
+        var rng = SeededRNG(named: "websocket.pmd.connection.random")
+        for _ in 0 ..< iterations {
+            feedPMDConnection(Self.randomBytes(&rng))
         }
     }
 

@@ -50,12 +50,16 @@ public enum WebSocketError: Error, Sendable, Equatable {
     /// A text message (or Close reason) was not valid UTF-8 (RFC 6455 §8.1).
     case invalidTextEncoding
 
+    /// A permessage-deflate message failed to inflate, or its inflated size exceeded the message cap
+    /// (RFC 7692 §7.2.2; the cap is the CWE-409 decompression-bomb defense).
+    case invalidCompressedData
+
     /// The Close status code to report for this violation before closing (RFC 6455 §7.4.1).
     public var closeCode: WebSocketCloseCode {
         switch self {
             case .payloadTooLong, .messageTooLarge:
                 .messageTooBig  // 1009
-            case .invalidTextEncoding:
+            case .invalidTextEncoding, .invalidCompressedData:
                 .invalidPayloadData  // 1007
             default:
                 .protocolError  // 1002

@@ -92,6 +92,11 @@ extension HTTPFieldName {
     public static let secWebSocketAccept = HTTPFieldName(unchecked: "sec-websocket-accept")
     /// `Sec-WebSocket-Version` (RFC 6455 §4.1) — the negotiated WebSocket version (13).
     public static let secWebSocketVersion = HTTPFieldName(unchecked: "sec-websocket-version")
+    /// `Sec-WebSocket-Extensions` (RFC 6455 §4.1 / RFC 7692 §5) — offered/accepted extensions, carrying
+    /// the permessage-deflate negotiation.
+    public static let secWebSocketExtensions = HTTPFieldName(
+        unchecked: "sec-websocket-extensions"
+    )
 
     // MARK: CORS (WHATWG Fetch — Cross-Origin Resource Sharing)
 

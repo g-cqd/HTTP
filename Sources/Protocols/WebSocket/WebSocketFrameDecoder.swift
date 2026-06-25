@@ -17,11 +17,20 @@ public struct WebSocketFrameDecoder {
     /// Whether every frame must be masked (RFC 6455 §5.1) — true for a server reading client frames.
     private let requireMaskedFrames: Bool
 
+    /// Whether permessage-deflate was negotiated (RFC 7692 §5.1); only then is RSV1 a legal bit.
+    private let permessageDeflate: Bool
+
     /// Creates a decoder rejecting payloads larger than `maxPayloadLength`; set `requireMaskedFrames`
-    /// for the server role, which MUST receive masked frames (RFC 6455 §5.1).
-    public init(maxPayloadLength: Int = 1 << 20, requireMaskedFrames: Bool = false) {
+    /// for the server role, which MUST receive masked frames (RFC 6455 §5.1), and `permessageDeflate`
+    /// when that extension was negotiated, which makes RSV1 a legal compressed-message marker (§6).
+    public init(
+        maxPayloadLength: Int = 1 << 20,
+        requireMaskedFrames: Bool = false,
+        permessageDeflate: Bool = false
+    ) {
         self.maxPayloadLength = maxPayloadLength
         self.requireMaskedFrames = requireMaskedFrames
+        self.permessageDeflate = permessageDeflate
     }
 
     /// Pulls the next complete frame from `reader`, advancing it; returns nil if one is still arriving.
@@ -36,11 +45,7 @@ public struct WebSocketFrameDecoder {
             return nil
         }
 
-        let isFinal = byte0 & 0x80 != 0
-        guard byte0 & 0x70 == 0 else { throw .reservedBitsSet }  // RSV1–RSV3, no extensions
-        let opcode = WebSocketOpcode(rawValue: byte0)
-        guard opcode.isDefined else { throw .reservedOpcode(byte0 & 0x0F) }
-
+        let (isFinal, rsv1, opcode) = try decodeFirstByte(byte0)
         let isMasked = byte1 & 0x80 != 0
         guard isMasked || !requireMaskedFrames else { throw .maskingRequired }  // §5.1
         if opcode.isControl {
@@ -73,7 +78,22 @@ public struct WebSocketFrameDecoder {
                 }
                 return Array(source)
             }
-        return WebSocketFrame(isFinal: isFinal, opcode: opcode, payload: payload)
+        return WebSocketFrame(isFinal: isFinal, rsv1: rsv1, opcode: opcode, payload: payload)
+    }
+
+    /// Decodes and validates the first header octet (RFC 6455 §5.2 / RFC 7692 §6): FIN, RSV1, opcode.
+    ///
+    /// RSV2/RSV3 are always illegal; RSV1 is legal only when permessage-deflate was negotiated and
+    /// never on a control frame (compressed messages are data frames). An undefined opcode is rejected.
+    private func decodeFirstByte(
+        _ byte0: UInt8
+    ) throws(WebSocketError) -> (isFinal: Bool, rsv1: Bool, opcode: WebSocketOpcode) {
+        let rsv1 = byte0 & 0x40 != 0
+        guard byte0 & 0x30 == 0, permessageDeflate || !rsv1 else { throw .reservedBitsSet }
+        let opcode = WebSocketOpcode(rawValue: byte0)
+        guard opcode.isDefined else { throw .reservedOpcode(byte0 & 0x0F) }
+        guard !rsv1 || !opcode.isControl else { throw .reservedBitsSet }
+        return (byte0 & 0x80 != 0, rsv1, opcode)
     }
 
     /// Resolves the payload length from the 7-bit field (RFC 6455 §5.2): inline, or the next 2 or 8

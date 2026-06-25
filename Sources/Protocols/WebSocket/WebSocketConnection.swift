@@ -31,24 +31,41 @@ public struct WebSocketConnection {
     private let decoder: WebSocketFrameDecoder
     private let encoder = WebSocketFrameEncoder()
     private let maxMessageSize: Int
+    /// Whether permessage-deflate was negotiated (RFC 7692 §5.1): outbound messages are compressed with
+    /// RSV1 set, and an inbound RSV1 message is inflated before delivery.
+    private let permessageDeflate: Bool
     private var inbound: [UInt8] = []
     private var output: [UInt8] = []
     private var closeSent = false
     /// The opcode of the message currently being reassembled, or nil when none is open (RFC 6455 §5.4).
     private var fragmentOpcode: WebSocketOpcode?
     private var fragments: [UInt8] = []
+    /// Whether the message currently being reassembled was flagged compressed by RSV1 on its first
+    /// frame (RFC 7692 §6) — so its fragments are inflated, not UTF-8-validated, until reassembled.
+    private var messageCompressed = false
     /// Incremental UTF-8 state for the in-flight text message, so an invalid sequence is rejected at the
     /// first bad octet across fragments rather than after the whole message buffers (RFC 6455 §8.1).
+    ///
+    /// Bypassed for a compressed message, whose fragments are ciphertext until inflated (RFC 7692 §7.2).
     private var textValidator = IncrementalUTF8Validator()
 
-    /// Creates a server connection: it requires masked client frames (§5.1) and bounds a single frame
-    /// to `maxFrameSize` and a reassembled message to `maxMessageSize` (resource-exhaustion guards).
-    public init(maxFrameSize: Int = 1 << 20, maxMessageSize: Int = 16 << 20) {
+    /// Creates a server connection, requiring masked client frames (RFC 6455 §5.1).
+    ///
+    /// Bounds a single frame to `maxFrameSize` and a reassembled message to `maxMessageSize`
+    /// (resource-exhaustion guards); set `permessageDeflate` when that extension was negotiated
+    /// (RFC 7692 §5.1).
+    public init(
+        maxFrameSize: Int = 1 << 20,
+        maxMessageSize: Int = 16 << 20,
+        permessageDeflate: Bool = false
+    ) {
         self.decoder = WebSocketFrameDecoder(
             maxPayloadLength: maxFrameSize,
-            requireMaskedFrames: true
+            requireMaskedFrames: true,
+            permessageDeflate: permessageDeflate
         )
         self.maxMessageSize = maxMessageSize
+        self.permessageDeflate = permessageDeflate
     }
 
     /// Whether the engine has sent a Close frame; the driver should flush and close once it has.
@@ -84,12 +101,23 @@ public struct WebSocketConnection {
 
     /// Queues a text message (RFC 6455 §5.6); ignored once a Close has been sent (§5.5.1).
     public mutating func send(text: String) {
-        queue(WebSocketFrame(opcode: .text, payload: Array(text.utf8)))
+        queueDataMessage(opcode: .text, payload: Array(text.utf8))
     }
 
     /// Queues a binary message (RFC 6455 §5.6); ignored once a Close has been sent (§5.5.1).
     public mutating func send(binary: [UInt8]) {
-        queue(WebSocketFrame(opcode: .binary, payload: binary))
+        queueDataMessage(opcode: .binary, payload: binary)
+    }
+
+    /// Queues a data message, compressing it with RSV1 set when permessage-deflate was negotiated
+    /// (RFC 7692 §6, `no_context_takeover`); falls back to an uncompressed frame when the extension is
+    /// off or compression fails (which the spec permits — RSV1 then stays clear).
+    private mutating func queueDataMessage(opcode: WebSocketOpcode, payload: [UInt8]) {
+        guard permessageDeflate, let compressed = PermessageDeflate.compress(payload) else {
+            queue(WebSocketFrame(opcode: opcode, payload: payload))
+            return
+        }
+        queue(WebSocketFrame(rsv1: true, opcode: opcode, payload: compressed))
     }
 
     /// Queues a Ping with an optional application payload (RFC 6455 §5.5.2).
@@ -152,29 +180,68 @@ public struct WebSocketConnection {
     ) throws(WebSocketError) {
         if frame.opcode == .continuation {
             guard let opcode = fragmentOpcode else { throw .unexpectedContinuation }  // §5.4
-            try appendFragment(frame.payload, isText: opcode == .text)
+            guard !frame.rsv1 else { throw .reservedBitsSet }  // RSV1 only on the first frame (§6)
+            try appendFragment(frame.payload, isText: opcode == .text && !messageCompressed)
             guard frame.isFinal else {
                 return
             }
-            // §8.1 — a completed text message must end on a scalar boundary (no trailing partial scalar).
-            guard opcode != .text || textValidator.isComplete else { throw .invalidTextEncoding }
-            let message = fragments
-            fragmentOpcode = nil
-            fragments = []
-            events.append(.message(opcode: opcode, payload: message))
+            try finishFragmentedMessage(opcode: opcode, into: &events)
             return
         }
         guard fragmentOpcode == nil else { throw .interleavedDataFrame }  // §5.4
         if frame.isFinal {
-            try emitUnfragmented(opcode: frame.opcode, payload: frame.payload, into: &events)
+            // A single-frame message: inflate it when RSV1 marks it compressed, else the fast path.
+            if frame.rsv1 {
+                try emitDecompressed(opcode: frame.opcode, deflated: frame.payload, into: &events)
+            }
+            else {
+                try emitUnfragmented(opcode: frame.opcode, payload: frame.payload, into: &events)
+            }
         }
         else {
             fragmentOpcode = frame.opcode
-            if frame.opcode == .text {
-                textValidator = IncrementalUTF8Validator()  // reset for the new text message
+            // RSV1 on the first frame marks the whole message compressed (RFC 7692 §6).
+            messageCompressed = frame.rsv1
+            if frame.opcode == .text, !frame.rsv1 {
+                textValidator = IncrementalUTF8Validator()  // reset for the new (uncompressed) text
             }
-            try appendFragment(frame.payload, isText: frame.opcode == .text)  // open the message
+            try appendFragment(frame.payload, isText: frame.opcode == .text && !frame.rsv1)
         }
+    }
+
+    /// Completes a reassembled fragmented message: inflate it when RSV1 marked it compressed (RFC 7692
+    /// §7.2.2), else apply the §8.1 final UTF-8 boundary check, then emit it.
+    private mutating func finishFragmentedMessage(
+        opcode: WebSocketOpcode,
+        into events: inout [Event]
+    ) throws(WebSocketError) {
+        let deflated = fragments
+        let compressed = messageCompressed
+        fragmentOpcode = nil
+        fragments = []
+        messageCompressed = false
+        if compressed {
+            try emitDecompressed(opcode: opcode, deflated: deflated, into: &events)
+            return
+        }
+        // §8.1 — a completed text message must end on a scalar boundary (no trailing partial scalar).
+        guard opcode != .text || textValidator.isComplete else { throw .invalidTextEncoding }
+        events.append(.message(opcode: opcode, payload: deflated))
+    }
+
+    /// Inflates a permessage-deflate message under the message cap (CWE-409), validates a text payload
+    /// as UTF-8 *after* inflation (RFC 7692 §7.2.2 / RFC 6455 §8.1 — the compressed octets are not
+    /// themselves text), and emits it.
+    private func emitDecompressed(
+        opcode: WebSocketOpcode,
+        deflated: [UInt8],
+        into events: inout [Event]
+    ) throws(WebSocketError) {
+        guard let payload = PermessageDeflate.decompress(deflated, maxSize: maxMessageSize) else {
+            throw .invalidCompressedData
+        }
+        guard opcode != .text || Self.isValidUTF8(payload) else { throw .invalidTextEncoding }
+        events.append(.message(opcode: opcode, payload: payload))
     }
 
     private mutating func appendFragment(_ payload: [UInt8], isText: Bool) throws(WebSocketError) {

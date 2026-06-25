@@ -61,7 +61,15 @@ extension HTTPServer {
         guard (try? await connection.send(ResponseSerializer.serialize(accepted))) != nil else {
             return
         }
-        await driveWebSocket(connection, deadline: deadline, handler: handler, carryover: carryover)
+        // The 101 already echoed permessage-deflate when offered; enable it on the engine too (§5.1).
+        let permessageDeflate = WebSocketHandshake.negotiatesPermessageDeflate(request.headerFields)
+        await driveWebSocket(
+            connection,
+            deadline: deadline,
+            handler: handler,
+            carryover: carryover,
+            permessageDeflate: permessageDeflate
+        )
     }
 
     /// Pumps the ``WebSocketConnection`` over `connection`: receive → events → handler actions →
@@ -70,9 +78,13 @@ extension HTTPServer {
         _ connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>,
         handler: any WebSocketHandler,
-        carryover: [UInt8]
+        carryover: [UInt8],
+        permessageDeflate: Bool
     ) async {
-        var engine = WebSocketConnection(maxMessageSize: limits.maxBodySize)
+        var engine = WebSocketConnection(
+            maxMessageSize: limits.maxBodySize,
+            permessageDeflate: permessageDeflate
+        )
         var inbound = carryover
         while true {
             var failed = false
@@ -119,8 +131,20 @@ extension HTTPServer {
                 guard proto == "websocket", handler.shouldUpgrade(request),
                     handler.isOriginAllowed(request.headerFields[.origin])
                 else { return }
-                try? engine.acceptTunnel(streamID)  // 200, no END_STREAM (RFC 8441 §5)
-                webSockets[streamID] = WebSocketConnection(maxMessageSize: limits.maxBodySize)
+                // Negotiate permessage-deflate over the RFC 8441 tunnel: echo it on the 200 and enable
+                // it on the engine when the Extended CONNECT offered it (RFC 7692 §5.1 / RFC 9220).
+                let permessageDeflate = WebSocketHandshake.negotiatesPermessageDeflate(
+                    request.headerFields
+                )
+                try? engine.acceptTunnel(  // 200, no END_STREAM (RFC 8441 §5)
+                    streamID,
+                    secWebSocketExtensions: permessageDeflate
+                        ? WebSocketHandshake.extensionResponse : nil
+                )
+                webSockets[streamID] = WebSocketConnection(
+                    maxMessageSize: limits.maxBodySize,
+                    permessageDeflate: permessageDeflate
+                )
             case .tunnelData(let streamID, let bytes):
                 guard var socket = webSockets[streamID] else {
                     return

@@ -19,7 +19,8 @@ public struct WebSocketFrameEncoder {
         var out: [UInt8] = []
         // 2–10 header octets plus the payload, in a single allocation.
         out.reserveCapacity(10 + frame.payload.count)
-        out.append((frame.isFinal ? 0x80 : 0) | frame.opcode.rawValue)
+        // FIN | RSV1 (permessage-deflate compressed, RFC 7692 §6) | opcode; RSV2/RSV3 stay clear.
+        out.append((frame.isFinal ? 0x80 : 0) | (frame.rsv1 ? 0x40 : 0) | frame.opcode.rawValue)
         Self.appendLength(frame.payload.count, into: &out)
         out.append(contentsOf: frame.payload)
         return out
