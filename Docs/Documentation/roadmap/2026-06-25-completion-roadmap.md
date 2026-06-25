@@ -55,10 +55,25 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       + conditional, large files streamed (P6a). _Gate:_ traversal rejected, validators, ranged/
       conditional/HEAD/index/streamed tests. ✓ 803 tests green; ASan clean.
 
-- [ ] **P8 — Protocol depth.** QPACK dynamic table (RFC 9204, encoder/decoder streams, eviction,
-      blocked bound; static-only fallback), priority scheduling (RFC 9218), WebSocket permessage-deflate
-      (RFC 7692, bomb-capped). _Gate:_ QPACK/h3 conformance + fuzz, priority-order test, pmd round-trip;
-      h2spec still green.
+- [~] **P8 — Protocol depth.** _Research/design done (this session); implementation is deep, conformance/
+      security-sensitive work to do with fresh context, each feature fully tested._
+      - **WebSocket permessage-deflate (RFC 7692).** Touches `WebSocketHandshake` (parse/negotiate
+        `Sec-WebSocket-Extensions`, emit in the 101), `WebSocketFrame` (+`rsv1`), the frame
+        encoder/decoder (set/allow RSV1 only when negotiated), and `WebSocketConnection` (per-message
+        compress on send / decompress on receive, with a decompressed-size cap against bombs, CWE-409),
+        plus the h1 + RFC 8441 h2/h3 upgrade paths. **Key finding:** the one-shot
+        `compression_encode_buffer`/`decode_buffer` can't be used — RFC 7692 frames a message as a
+        `Z_SYNC_FLUSH` DEFLATE block (no `BFINAL`) with the trailing `00 00 FF FF` stripped/re-appended,
+        so even `no_context_takeover` needs the **streaming `compression_stream_*` API**. Start with
+        `no_context_takeover`; defer context-takeover.
+      - **QPACK dynamic table (RFC 9204).** Major: encoder/decoder unidirectional streams,
+        insert-with/without-name-ref + duplicate, eviction, capacity, Required Insert Count / Base,
+        blocked-stream bound. Keep the v1 static-only encoder/decoder as a fallback; gate on QPACK/h3
+        conformance + fuzz + interop.
+      - **Priority scheduling (RFC 9218).** Track the already-parsed `HTTPPriority` per stream; order the
+        h2 `flushAll`/h3 flush by urgency (a priority queue over ready streams).
+      _Gate (per feature):_ QPACK/h3 conformance + fuzz; a priority-order test; a pmd round-trip + bomb
+      cap; h2spec still green.
 
 - [ ] **P9 — Observability bridges.** New `Sources/Observability/` module(s): swift-log access/structured
       sink + swift-distributed-tracing span-per-request over `HTTPMetrics`. Deps isolated to the bridge.
