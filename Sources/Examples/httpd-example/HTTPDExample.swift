@@ -152,9 +152,10 @@ enum HTTPDExample {
                 .text("Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 + HTTP/3 server.\n")
             }
             Route.get("/health") { _, _, _ in .text("OK\n") }
-            // A `:name` path parameter (RFC 3986 §3.3), captured into RouteParameters.
-            Route.get("/hello/:name") { _, parameters, _ in
-                .text("Hello, \(parameters["name"] ?? "world")!\n")
+            // A `:name` path parameter (RFC 3986 §3.3) plus an optional `?greeting=` query parameter.
+            Route.get("/hello/:name") { request, parameters, _ in
+                let greeting = request.query["greeting"] ?? "Hello"
+                return .text("\(greeting), \(parameters["name"] ?? "world")!\n")
             }
             // A large, compressible, range-able body — exercises CompressionMiddleware (curl
             // --compressed) and RangeMiddleware (curl -r 0-31 → 206 Partial Content).
@@ -167,6 +168,20 @@ enum HTTPDExample {
             }
             // Surfaces the HTTPMetrics seam the MetricsMiddleware feeds (rate + errors).
             Route.get("/metrics") { _, _, _ in .text(metrics.snapshot()) }
+            // A trailing `*path` catch-all capturing the remaining path (RFC 3986 §3.3).
+            Route.get("/files/*path") { _, parameters, _ in
+                .text("would serve: \(parameters["path"] ?? "")\n")
+            }
+            // A route group: `/api/*` share a prefix and a scoped access log (per-group middleware).
+            RouteGroup(
+                "/api",
+                middleware: [AccessLogMiddleware { print("httpd-example[api]: \($0)") }]
+            ) {
+                Route.get("/ping") { _, _, _ in .text("pong\n") }
+                Route.get("/echo/:message") { _, parameters, _ in
+                    .text("\(parameters["message"] ?? "")\n")
+                }
+            }
         }
     }
 

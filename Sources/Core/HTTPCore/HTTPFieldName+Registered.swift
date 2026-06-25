@@ -60,6 +60,8 @@ extension HTTPFieldName {
     public static let date = HTTPFieldName(unchecked: "date")
     /// `Server` (RFC 9110 §10.2.4).
     public static let server = HTTPFieldName(unchecked: "server")
+    /// `Allow` (RFC 9110 §10.2.1) — the methods a resource supports; required on a `405`.
+    public static let allow = HTTPFieldName(unchecked: "allow")
     /// `Location` (RFC 9110 §10.2.2).
     public static let location = HTTPFieldName(unchecked: "location")
     /// `Alt-Svc` (RFC 7838) — advertises alternative services such as HTTP/3.

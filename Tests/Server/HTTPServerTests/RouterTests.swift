@@ -93,4 +93,104 @@ struct RouterTests {
         let response = await router.respond(to: request(.get, "/users/me"), body: [])
         #expect(response.body == Array("param:me".utf8))
     }
+
+    @Test("a route group prefixes child paths and scopes its middleware to the subtree")
+    func routeGroup() async {
+        let router = Router {
+            Route.get("/open") { _, _, _ in Self.ok("open") }
+            RouteGroup("/api", middleware: [ServerHeaderMiddleware("grouped")]) {
+                Route.get("/ping") { _, _, _ in Self.ok("pong") }
+            }
+        }
+        // The child path is prefixed, and the group middleware ran (Server stamped) inside the group.
+        let grouped = await router.respond(to: request(.get, "/api/ping"), body: [])
+        #expect(grouped.body == Array("pong".utf8))
+        #expect(grouped.head.headerFields[.server] == "grouped")
+        // The middleware did not run outside the group...
+        let open = await router.respond(to: request(.get, "/open"), body: [])
+        #expect(open.head.headerFields[.server] == nil)
+        // ...and the un-prefixed child path does not match.
+        let bare = await router.respond(to: request(.get, "/ping"), body: [])
+        #expect(bare.head.status == .notFound)
+    }
+
+    @Test("nested groups compose their prefixes")
+    func nestedGroups() async {
+        let router = Router {
+            RouteGroup("/api") {
+                RouteGroup("/v1") {
+                    Route.get("/health") { _, _, _ in Self.ok("ok") }
+                }
+            }
+        }
+        let response = await router.respond(to: request(.get, "/api/v1/health"), body: [])
+        #expect(response.head.status == .ok)
+    }
+
+    @Test("a trailing catch-all captures the remaining path (RFC 3986 §3.3)")
+    func catchAll() async {
+        let router = Router {
+            Route.get("/files/*path") { _, parameters, _ in Self.ok(parameters["path"] ?? "") }
+        }
+        let response = await router.respond(to: request(.get, "/files/css/site.css"), body: [])
+        #expect(response.body == Array("css/site.css".utf8))
+    }
+
+    @Test("an unnamed catch-all captures under \"*\"")
+    func unnamedCatchAll() async {
+        let router = Router {
+            Route.get("/assets/*") { _, parameters, _ in Self.ok(parameters["*"] ?? "") }
+        }
+        let response = await router.respond(to: request(.get, "/assets/a/b"), body: [])
+        #expect(response.body == Array("a/b".utf8))
+    }
+
+    @Test("OPTIONS to a known path is auto-answered with 204 + Allow (RFC 9110 §9.3.7)")
+    func optionsAutoResponds() async {
+        let router = Router {
+            Route.get("/a") { _, _, _ in Self.ok("a") }
+            Route.post("/a") { _, _, _ in Self.ok("a") }
+        }
+        let response = await router.respond(to: request(.options, "/a"), body: [])
+        #expect(response.head.status == .noContent)
+        #expect(response.head.headerFields[.allow] == "GET, HEAD, POST, OPTIONS")
+    }
+
+    @Test("405 carries an Allow header listing the path's methods (RFC 9110 §15.5.6)")
+    func methodNotAllowedAllow() async {
+        let router = Router { Route.get("/a") { _, _, _ in Self.ok("a") } }
+        let response = await router.respond(to: request(.delete, "/a"), body: [])
+        #expect(response.head.status == .methodNotAllowed)
+        #expect(response.head.headerFields[.allow] == "GET, HEAD, OPTIONS")
+    }
+
+    @Test("an explicit OPTIONS route overrides the automatic response")
+    func explicitOptionsWins() async {
+        let router = Router {
+            Route.get("/a") { _, _, _ in Self.ok("a") }
+            Route.options("/a") { _, _, _ in Self.ok("custom") }
+        }
+        let response = await router.respond(to: request(.options, "/a"), body: [])
+        #expect(response.body == Array("custom".utf8))
+    }
+
+    @Test("OPTIONS * reports the server-wide method set (RFC 9110 §9.3.7)")
+    func optionsAsterisk() async {
+        let router = Router {
+            Route.get("/a") { _, _, _ in Self.ok("a") }
+            Route.post("/b") { _, _, _ in Self.ok("b") }
+        }
+        let response = await router.respond(to: request(.options, "*"), body: [])
+        #expect(response.head.status == .noContent)
+        #expect(response.head.headerFields[.allow] == "GET, HEAD, POST, OPTIONS")
+    }
+
+    @Test("dynamic-member access reads a captured parameter")
+    func parameterDynamicMember() async {
+        let router = Router {
+            Route.get("/users/:id") { _, parameters, _ in Self.ok(parameters.id ?? "?") }
+        }
+        let response = await router.respond(to: request(.get, "/users/7"), body: [])
+        #expect(response.body == Array("7".utf8))
+    }
 }
