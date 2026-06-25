@@ -23,6 +23,9 @@ A second-pass adversarial hardening of the stack; see
 - `HTTPLimits.highThroughput` and `HTTPLimits.hardened` presets, and `maxControlFramesPerInterval`.
 - `Expect: 100-continue` handling (interim `100`, or `417` for an unsupported expectation).
 - `HTTPFieldName.expect`, `HTTPStatus.expectationFailed`.
+- Observability seam: the `HTTPMetrics` protocol + `MetricsMiddleware` record one per-response metric
+  (method, path, status, monotonic duration). Dependency-free — bridge it to swift-metrics /
+  swift-distributed-tracing downstream; costs nothing when not installed.
 
 ### Fixed (security)
 - **HTTP/2 DoS:** charge server-emitted `REFUSED_STREAM` and the zero-length-DATA / PRIORITY /
