@@ -15,6 +15,16 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark.defaultConfiguration.metrics = [
         .instructions, .mallocCountTotal, .cpuTotal, .wallClock, .throughput, .peakMemoryResident
     ]
+    // Per-metric tolerances for `swift package benchmark baseline compare`: only the deterministic,
+    // machine-independent metrics are gated — mallocs are exact (no drift allowed), instructions get
+    // a small tolerance for libc/runtime variance. wall-clock / CPU / throughput stay captured for
+    // attribution but are too machine-dependent to gate portably (no threshold → never fail a compare).
+    // (The exact per-op allocation ceilings on the hot paths are locked deterministically in the test
+    // suite via `expectAllocations`, which runs in the existing `swift test` CI gate.)
+    Benchmark.defaultConfiguration.thresholds = [
+        .mallocCountTotal: .init(absolute: [.p90: 0, .p99: 0]),
+        .instructions: .init(relative: [.p90: 5.0, .p99: 5.0])
+    ]
 
     registerCoreBenchmarks()  // HTTPCore — byte primitives, validation, fields
     registerHTTP1Benchmarks()  // HTTP/1.1 — request/header/chunked parsers + serializer
