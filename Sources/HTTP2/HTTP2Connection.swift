@@ -522,6 +522,10 @@ public struct HTTP2Connection {
         try validateContentLength(record)
         controlFrameBudget = max(0, controlFrameBudget - 1)  // useful work drains the flood budget
         events.append(.request(streamID: streamID, request: record.request, body: record.body))
+        // The body now belongs to the dispatched event; drop the engine's copy so a half-closed stream
+        // awaiting its response holds no duplicate and the connection body budget
+        // (HTTP2Connection+FlowControl) counts only still-accumulating streams, not dispatched ones.
+        streams[streamID]?.body = []
     }
 
     /// A declared `content-length` must match the body received; absent is fine, anything else is a
