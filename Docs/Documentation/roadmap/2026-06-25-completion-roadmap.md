@@ -47,11 +47,23 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       backpressure, so the producer drives the stream inline with no flow-control deadlock. _Gate:_ 6
       engine framing tests (respondHeaders/dataFrame/round-trip/untrack) + a real-QUIC loopback streaming
       integration test (no fake-QUIC harness exists, so the Network.framework loopback is the integration
-      mirror); h3 conformance + full suite green; ASan clean. **S4 (h2) remaining:** native streaming
-      inside the multiplexed serve loop deadlocks (a producer in an event handler can't read the
-      `WINDOW_UPDATE` that reopens an exhausted send window), so it needs a concurrent producer task +
-      serialized (actor/lock) engine access + window-coordinated backpressure; P6a's finite-buffer
-      fallback keeps h2 correct meanwhile.
+      mirror); h3 conformance + full suite green; ASan clean. **S4 (h2) — engine API done, server
+      adoption deferred (fallback retained).** The sans-I/O engine now has the incremental DATA API —
+      `respondHeaders` (HEADERS, no END_STREAM), `sendBodyChunk` (append + window-bounded flush),
+      `endStream` (final or empty END_STREAM DATA), `pendingBacklog` (backpressure signal) — proven
+      deadlock-free and bounded by deterministic engine tests (a forced window stall across 20 chunks
+      holds the backlog ≤ one chunk). The *server* stays on P6a's finite-buffer fallback: native wire
+      streaming needs a producer task feeding the engine across a bounded handoff with the serve loop
+      interleaving inbound reads, and the in-memory transport can't stage a late `WINDOW_UPDATE` to
+      *prove* the orchestration deadlock-free — so per the highest-risk-phase rule the design is recorded
+      and the fallback kept rather than rushing concurrent code into the "failsafe" runtime. **Recorded
+      design:** run `stream.produce` in a child task that `put`s chunks into a 1-slot rendezvous
+      (backpressure = producer ≤1 chunk ahead); the single serve loop `take`s a chunk only when
+      `pendingBacklog == 0`, `sendBodyChunk` + flushes, and when window-blocked drains inbound
+      (WINDOW_UPDATE → flush) until the backlog clears — single-threaded engine access (no actor/race),
+      one-chunk-bounded, deadlock-free since the loop always reads inbound when blocked. Open risks:
+      rendezvous continuation cleanup on early cancel; concurrent streaming on sibling streams (v1 would
+      buffer those).
 
 - [x] **P7 — Static file serving.** FileResponder: traversal-safe (CWE-22), content-type via the system
       `UTType` registry, Last-Modified/ETag from mtime+size, native Range (reuse `RangeMiddleware.parse`)
@@ -135,3 +147,9 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   with a CWE-409 size cap. New `PermessageDeflate` over Apple Compression: per-message FINALIZE stream
   (Compression cannot `Z_SYNC_FLUSH` — probed), decompress = append `00 00 FF FF` + inflate. 829 tests;
   ASan clean. Context-takeover + zlib-exact `Z_SYNC_FLUSH`/Autobahn interop deferred to P10.
+- 2026-06-25 — P6b/S4 partial: native HTTP/2 streaming *engine* API landed — `HTTP2Connection`
+  `respondHeaders` / `sendBodyChunk` / `endStream` / `pendingBacklog` (sans-I/O, deadlock-free; a forced
+  20-chunk window stall keeps the backlog ≤ one chunk). Server adoption deferred per the highest-risk-phase
+  rule: the in-memory transport can't stage a late WINDOW_UPDATE to prove the producer/loop orchestration
+  deadlock-free, so the P6a finite-buffer fallback is retained and the single-task rendezvous design is
+  recorded in P6b. 834 tests; ASan clean; h2spec green.
