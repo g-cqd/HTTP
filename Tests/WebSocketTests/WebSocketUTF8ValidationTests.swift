@@ -23,6 +23,15 @@ struct WebSocketUTF8ValidationTests {
         return wire
     }
 
+    /// A masked client frame with an explicit FIN bit and opcode (for fragmented-message tests).
+    private func maskedFrame(fin: Bool, opcode: UInt8, _ payload: [UInt8]) -> [UInt8] {
+        let key: [UInt8] = [0x1A, 0x2B, 0x3C, 0x4D]
+        var wire: [UInt8] = [(fin ? 0x80 : 0x00) | opcode, 0x80 | UInt8(payload.count)]
+        wire.append(contentsOf: key)
+        for (offset, byte) in payload.enumerated() { wire.append(byte ^ key[offset & 3]) }
+        return wire
+    }
+
     static let valid: [[UInt8]] = [
         [],  // empty payload
         Array("hello".utf8),  // ASCII
@@ -60,6 +69,39 @@ struct WebSocketUTF8ValidationTests {
         var connection = WebSocketConnection()
         var thrown: WebSocketError?
         do { _ = try connection.receive(maskedTextFrame(payload)) }
+        catch { thrown = error }
+        #expect(thrown == .invalidTextEncoding)
+    }
+
+    // MARK: Incremental validation across fragments (F-WSUTF8)
+
+    @Test("a multi-byte scalar split across fragments is accepted (incremental UTF-8, §8.1)")
+    func acceptsScalarSplitAcrossFragments() throws {
+        var connection = WebSocketConnection()
+        // "é" = 0xC3 0xA9, split: text(FIN=0)[0xC3] then continuation(FIN=1)[0xA9].
+        var wire = maskedFrame(fin: false, opcode: 0x1, [0xC3])
+        wire += maskedFrame(fin: true, opcode: 0x0, [0xA9])
+        #expect(try connection.receive(wire) == [.message(opcode: .text, payload: [0xC3, 0xA9])])
+    }
+
+    @Test("invalid UTF-8 in the opening fragment fails fast, before FIN (§8.1)")
+    func rejectsInvalidInFirstFragment() {
+        var connection = WebSocketConnection()
+        // An invalid lead byte in the opening (non-final) text fragment — rejected now, not after FIN.
+        var thrown: WebSocketError?
+        do { _ = try connection.receive(maskedFrame(fin: false, opcode: 0x1, [0xFF])) }
+        catch { thrown = error }
+        #expect(thrown == .invalidTextEncoding)
+    }
+
+    @Test("a text message ending on a partial scalar is rejected (§8.1)")
+    func rejectsTruncatedScalarAtEnd() {
+        var connection = WebSocketConnection()
+        // The "é" lead byte only, then FIN with no continuation → the scalar never completes.
+        var wire = maskedFrame(fin: false, opcode: 0x1, [0xC3])
+        wire += maskedFrame(fin: true, opcode: 0x0, [])
+        var thrown: WebSocketError?
+        do { _ = try connection.receive(wire) }
         catch { thrown = error }
         #expect(thrown == .invalidTextEncoding)
     }

@@ -37,6 +37,9 @@ public struct WebSocketConnection {
     /// The opcode of the message currently being reassembled, or nil when none is open (RFC 6455 §5.4).
     private var fragmentOpcode: WebSocketOpcode?
     private var fragments: [UInt8] = []
+    /// Incremental UTF-8 state for the in-flight text message, so an invalid sequence is rejected at the
+    /// first bad octet across fragments rather than after the whole message buffers (RFC 6455 §8.1).
+    private var textValidator = IncrementalUTF8Validator()
 
     /// Creates a server connection: it requires masked client frames (§5.1) and bounds a single frame
     /// to `maxFrameSize` and a reassembled message to `maxMessageSize` (resource-exhaustion guards).
@@ -149,37 +152,47 @@ public struct WebSocketConnection {
     ) throws(WebSocketError) {
         if frame.opcode == .continuation {
             guard let opcode = fragmentOpcode else { throw .unexpectedContinuation }  // §5.4
-            try appendFragment(frame.payload)
+            try appendFragment(frame.payload, isText: opcode == .text)
             guard frame.isFinal else {
                 return
             }
+            // §8.1 — a completed text message must end on a scalar boundary (no trailing partial scalar).
+            guard opcode != .text || textValidator.isComplete else { throw .invalidTextEncoding }
             let message = fragments
             fragmentOpcode = nil
             fragments = []
-            try emitMessage(opcode: opcode, payload: message, into: &events)
+            events.append(.message(opcode: opcode, payload: message))
             return
         }
         guard fragmentOpcode == nil else { throw .interleavedDataFrame }  // §5.4
         if frame.isFinal {
-            try emitMessage(opcode: frame.opcode, payload: frame.payload, into: &events)
+            try emitUnfragmented(opcode: frame.opcode, payload: frame.payload, into: &events)
         }
         else {
             fragmentOpcode = frame.opcode
-            try appendFragment(frame.payload)  // open a fragmented message
+            if frame.opcode == .text {
+                textValidator = IncrementalUTF8Validator()  // reset for the new text message
+            }
+            try appendFragment(frame.payload, isText: frame.opcode == .text)  // open the message
         }
     }
 
-    private mutating func appendFragment(_ payload: [UInt8]) throws(WebSocketError) {
+    private mutating func appendFragment(_ payload: [UInt8], isText: Bool) throws(WebSocketError) {
         guard fragments.count + payload.count <= maxMessageSize else { throw .messageTooLarge }
+        // §8.1 — validate text incrementally so an invalid sequence is rejected at the first bad octet,
+        // not after the whole (up to `maxMessageSize`) message has been buffered.
+        if isText {
+            guard textValidator.consume(payload) else { throw .invalidTextEncoding }
+        }
         fragments.append(contentsOf: payload)
     }
 
-    private func emitMessage(
+    /// Emits an unfragmented (single-frame) message, validating a text payload as UTF-8 (RFC 6455 §8.1).
+    private func emitUnfragmented(
         opcode: WebSocketOpcode,
         payload: [UInt8],
         into events: inout [Event]
     ) throws(WebSocketError) {
-        // A text message MUST be valid UTF-8 (RFC 6455 §8.1).
         guard opcode != .text || Self.isValidUTF8(payload) else { throw .invalidTextEncoding }
         events.append(.message(opcode: opcode, payload: payload))
     }
@@ -235,68 +248,13 @@ public struct WebSocketConnection {
         return (code, reason)
     }
 
-    /// Whether `bytes` is well-formed UTF-8 (RFC 3629 / Unicode Table 3-7), allocation-free.
+    /// Whether `bytes` is well-formed UTF-8 (RFC 3629), allocation-free.
     ///
-    /// A single forward pass over the well-formed byte-sequence ranges — rejecting overlong forms,
-    /// UTF-16 surrogates (U+D800…U+DFFF), and code points above U+10FFFF — instead of round-tripping
-    /// through a `String`, which allocates and decodes the payload twice.
+    /// A one-shot wrapper over ``IncrementalUTF8Validator`` for a complete payload (e.g. a Close
+    /// reason): the whole input must consume cleanly *and* leave no trailing partial scalar.
     private static func isValidUTF8(_ bytes: [UInt8]) -> Bool {
-        var index = 0
-        let count = bytes.count
-        while index < count {
-            let lead = bytes[index]
-            if lead < 0x80 {  // ASCII — the common case
-                index += 1
-                continue
-            }
-            guard let sequence = utf8Sequence(forLead: lead) else {
-                return false
-            }
-            guard index + sequence.length <= count else {
-                return false  // truncated
-            }
-            let second = bytes[index + 1]
-            guard second >= sequence.secondLow, second <= sequence.secondHigh else {
-                return false
-            }
-            var continuation = index + 2
-            while continuation < index + sequence.length {
-                guard bytes[continuation] >= 0x80, bytes[continuation] <= 0xBF else {
-                    return false
-                }
-                continuation += 1
-            }
-            index += sequence.length
-        }
-        return true
-    }
-
-    /// For a non-ASCII lead byte (RFC 3629), the sequence length and the legal range for the *first*
-    /// continuation byte — which encodes the overlong / surrogate / max-code-point exclusions — or
-    /// nil when `lead` is `0x80…0xC1` or `0xF5…0xFF`, which can never begin a sequence.
-    private static func utf8Sequence(
-        forLead lead: UInt8
-    ) -> (length: Int, secondLow: UInt8, secondHigh: UInt8)? {
-        switch lead {
-            case 0xC2 ... 0xDF:
-                (2, 0x80, 0xBF)
-            case 0xE0:
-                (3, 0xA0, 0xBF)  // reject overlong
-            case 0xE1 ... 0xEC:
-                (3, 0x80, 0xBF)
-            case 0xED:
-                (3, 0x80, 0x9F)  // reject surrogates
-            case 0xEE ... 0xEF:
-                (3, 0x80, 0xBF)
-            case 0xF0:
-                (4, 0x90, 0xBF)  // reject overlong
-            case 0xF1 ... 0xF3:
-                (4, 0x80, 0xBF)
-            case 0xF4:
-                (4, 0x80, 0x8F)  // reject > U+10FFFF
-            default:
-                nil
-        }
+        var validator = IncrementalUTF8Validator()
+        return validator.consume(bytes) && validator.isComplete
     }
 
     // MARK: Frame decoding
