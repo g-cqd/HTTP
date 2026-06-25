@@ -33,6 +33,12 @@ streams section, which formerly hung and now passes fully (the two fixes below).
 all passing, fast) under a hard `timeout`, so a regression there fails the build. Only `generic` and
 `http2/3` are excluded, for the invalid-preface case (Finding 1).
 
+**Backbone parity:** the gated 100-test set passes **100/100 against all four transport backbones**
+(`networkFramework`, `posixKqueue`, `posixDispatch`, `swiftSystem`) — the sans-I/O engine is shared, and
+each backbone's distinct flush/close timing still delivers correct framing, resets, and GOAWAY
+(`networkFramework` serves h2c with no TLS). The CI gate runs one backbone (`posixKqueue`) for speed;
+conformance is transport-independent.
+
 ### Fixed — `SETTINGS_MAX_CONCURRENT_STREAMS` advertised at a sane bound (was a DoS + a hang)
 
 The engine already advertised and enforced the cap (`HTTP2Connection` init + the `REFUSED_STREAM`
