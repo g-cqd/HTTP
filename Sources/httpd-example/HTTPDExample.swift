@@ -87,12 +87,42 @@ enum HTTPDExample {
             )
             print("httpd-example: curl -vk --http2 https://127.0.0.1:\(port)/  (h3: a browser)")
         }
+        // Graceful shutdown: SIGTERM/SIGINT stop accepting and drain in-flight connections before the
+        // process exits. The prefork master forwards SIGTERM to workers via killpg (Prefork.swift), so
+        // each worker drains cleanly; a standalone run drains directly.
+        let signalSources = installGracefulShutdown(server)
+        defer {
+            for source in signalSources { source.cancel() }
+        }
         do {
             try await server.run()
         }
         catch {
             print("httpd-example: stopped — \(error)")
         }
+    }
+
+    // MARK: Lifecycle
+
+    /// Installs SIGTERM/SIGINT → graceful shutdown, returning the dispatch sources to keep alive.
+    ///
+    /// The worker (or a standalone run) drains in-flight connections before exiting; the prefork master
+    /// already forwards SIGTERM to workers via `killpg` (``Prefork``), so each worker shuts down cleanly.
+    private static func installGracefulShutdown(
+        _ server: HTTPServer<ContinuousClock>
+    ) -> [any DispatchSourceSignal] {
+        [SIGTERM, SIGINT]
+            .map { number in
+                // Disable the default terminate disposition; the dispatch source handles the signal.
+                signal(number, SIG_IGN)
+                let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
+                source.setEventHandler {
+                    print("httpd-example: signal \(number) — graceful shutdown")
+                    Task { await server.shutdown() }
+                }
+                source.resume()
+                return source
+            }
     }
 
     // MARK: Routing (a plain switch until the routing DSL lands)
