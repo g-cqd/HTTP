@@ -84,6 +84,14 @@ off-limits to this campaign). **Recommendation:** land the default-disable postu
 state; schedule the `425`-gating enhancement with the sibling. Do not modify main's QUIC/h3 transport
 unilaterally.
 
+**Status (2026-06-25): resolved by investigation — the safe posture already holds, now documented.** With
+the `m7-http3` worktree removed this is no longer sibling-gated. Network.framework's QUIC TLS (`QUIC.TLS`)
+exposes **no early-data control** to the application — unlike TCP's `Network.TLS.earlyDataEnabled(_:)` —
+and neither QUIC backbone enables 0-RTT, so no request is processed from replayable early data, with
+nothing to toggle. Both transports now carry the policy comment. The `425 Too Early` (RFC 8470) gate
+remains the required defense *if* a future framework API ever enables QUIC 0-RTT — it is not wireable
+today (the transport surfaces no early-data flag) and is moot while 0-RTT is off.
+
 ## Status of everything else
 
 Done + merged: the comparison matrix (§ perf-battletest), worktree/branch consolidation, the tiered

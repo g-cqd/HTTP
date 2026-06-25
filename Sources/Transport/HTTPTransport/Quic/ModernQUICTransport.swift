@@ -52,6 +52,12 @@ public final class ModernQUICTransport: QUICServerTransport {
         let alpn = tls.applicationProtocols
         let maxBidirectional = limits.maxConcurrentStreams
         let listener = try Network.NetworkListener {
+            // 0-RTT early data is replayable (RFC 9001 §9.2). Network.framework's QUIC TLS (`QUIC.TLS`)
+            // exposes no early-data control to the application — unlike TCP's `Network.TLS`, which has
+            // `earlyDataEnabled(_:)` — and our configuration never enables 0-RTT, so no request is
+            // processed from early data (the safe posture, with nothing to toggle here). Were a future
+            // API to enable QUIC 0-RTT, the required defense is to reject a non-idempotent method
+            // arriving in early data with 425 Too Early (RFC 8470); see the deferred-risky sub-plan.
             Network.QUIC(alpn: alpn)
                 .tls.localIdentity(identity)
                 .initialMaxBidirectionalStreams(maxBidirectional)

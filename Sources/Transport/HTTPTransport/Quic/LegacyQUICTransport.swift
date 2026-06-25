@@ -83,6 +83,9 @@ public final class LegacyQUICTransport: QUICServerTransport {
         guard let tls = configuration.tls else {
             throw TransportError.tlsConfigurationFailed("QUIC requires a TLS identity")
         }
+        // 0-RTT early data: `NWProtocolQUIC.Options` exposes no early-data knob, and we do not enable
+        // it, so no request is processed from replayable early data (RFC 9001 §9.2) — see
+        // ModernQUICTransport for the full policy + the 425 Too Early (RFC 8470) defense if ever enabled.
         let options = NWProtocolQUIC.Options(alpn: tls.applicationProtocols)
         let identity = try NetworkFrameworkTLS.identity(
             pkcs12: tls.pkcs12,
