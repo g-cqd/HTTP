@@ -33,6 +33,10 @@ public final class NetworkFrameworkTransport: ServerTransport {
         var isReady = false
         var failure: TransportError?
         var readyContinuation: CheckedContinuation<Void, any Error>?
+        /// The bound port captured at the `.ready` transition (RFC-agnostic; NF assigns the ephemeral
+        /// port by then), so reads never race a live `listener.port` that can be transiently nil under
+        /// concurrent load.
+        var boundPort: UInt16 = 0
     }
 
     /// Creates a Network.framework transport for `configuration`.
@@ -46,8 +50,11 @@ public final class NetworkFrameworkTransport: ServerTransport {
 
     /// The actual bound port (meaningful after ``start()`` returns; resolves port `0` to the
     /// ephemeral port the OS chose).
+    ///
+    /// Returns the value captured at the listener's `.ready` transition; falls back to a live
+    /// `listener.port` read only if that capture is somehow still 0 (belt-and-suspenders).
     public var boundPort: UInt16 {
-        state.withLock { $0.listener?.port?.rawValue ?? 0 }
+        state.withLock { $0.boundPort != 0 ? $0.boundPort : ($0.listener?.port?.rawValue ?? 0) }
     }
 
     /// Binds the listener and begins accepting, returning a stream of inbound connections.
@@ -159,6 +166,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
             switch newState {
                 case .ready:
                     current.isReady = true
+                    // Capture the now-bound ephemeral port on the NW queue, where `.ready` guarantees
+                    // it is assigned, so later cross-thread reads don't race a transient nil.
+                    current.boundPort = current.listener?.port?.rawValue ?? 0
                     current.readyContinuation?.resume()
                     current.readyContinuation = nil
                 case .failed(let error):
