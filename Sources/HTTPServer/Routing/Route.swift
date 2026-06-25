@@ -68,27 +68,27 @@ public struct Route: Sendable {
     }
 
     /// A `GET` route (RFC 9110 §9.3.1).
-    public static func get(_ pattern: String, handler: @escaping Handler) -> Route {
-        Route(.get, pattern, handler: handler)
+    public static func get(_ pattern: String, handler: @escaping Handler) -> Self {
+        Self(.get, pattern, handler: handler)
     }
 
     /// A `POST` route (RFC 9110 §9.3.3).
-    public static func post(_ pattern: String, handler: @escaping Handler) -> Route {
-        Route(.post, pattern, handler: handler)
+    public static func post(_ pattern: String, handler: @escaping Handler) -> Self {
+        Self(.post, pattern, handler: handler)
     }
 
     /// A `PUT` route (RFC 9110 §9.3.4).
-    public static func put(_ pattern: String, handler: @escaping Handler) -> Route {
-        Route(.put, pattern, handler: handler)
+    public static func put(_ pattern: String, handler: @escaping Handler) -> Self {
+        Self(.put, pattern, handler: handler)
     }
 
     /// A `DELETE` route (RFC 9110 §9.3.5).
-    public static func delete(_ pattern: String, handler: @escaping Handler) -> Route {
-        Route(.delete, pattern, handler: handler)
+    public static func delete(_ pattern: String, handler: @escaping Handler) -> Self {
+        Self(.delete, pattern, handler: handler)
     }
 
     /// A `PATCH` route (RFC 5789).
-    public static func patch(_ pattern: String, handler: @escaping Handler) -> Route {
-        Route(.patch, pattern, handler: handler)
+    public static func patch(_ pattern: String, handler: @escaping Handler) -> Self {
+        Self(.patch, pattern, handler: handler)
     }
 }
