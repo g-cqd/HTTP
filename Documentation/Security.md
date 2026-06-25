@@ -59,7 +59,9 @@ ordering/dedup, lowercase field-name enforcement (§8.2.1), forbidden connection
 (§8.2.2), `TE: trailers` only (`HTTP2RequestMapper.swift`); §5.1 stream state machine
 (`HTTP2Stream.swift`); and the **CONTINUATION flood guard (CVE-2024-27316)** — caps on
 CONTINUATION-frame count and cumulative block size → ENHANCE_YOUR_CALM
-(`HTTP2HeaderBlockAccumulator.swift`). Request body bounded by `maxBodySize` (`HTTP2Connection.swift`).
+(`HTTP2HeaderBlockAccumulator.swift`). Request body bounded per stream **and per connection** by
+`maxBodySize` — the cross-stream sum of un-dispatched body is capped, so concurrent partial uploads
+cannot exhaust memory (`HTTP2Connection+FlowControl.swift`; see the deep-hardening note below).
 Rapid-Reset *counter*, `maxConcurrentStreams` enforcement (→ REFUSED_STREAM), and inbound flow control
 are implemented, now with a time-windowed rolling budget (see the audit-hardening note below).
 
@@ -103,6 +105,12 @@ Traced in `Documentation/audit/2026-06-25-deep-hardening-audit.md`:
   multi-origin; a reflected origin carries `Vary: Origin` (Fetch §3.2; CWE-942; `CORSMiddleware.swift`).
 - **`Expect: 100-continue`** handled: an interim `100 Continue` (or `417` for an unsupported
   expectation) is sent before the body, so a compliant client no longer stalls (RFC 9110 §10.1.1).
+- **HTTP/2 cross-stream body budget (post-audit).** The receive window replenishes *while a body is
+  still buffering* (§6.9), so the per-stream `maxBodySize` cap alone let a peer that opens many
+  concurrent streams accumulate up to `maxConcurrentStreams × maxBodySize` of un-dispatched request body
+  per connection. The engine now bounds the *sum* of buffered body across a connection's streams and
+  releases each body the moment it is dispatched, so pipelining is unaffected (RFC 9113 §6.9; CWE-400/770;
+  `HTTP2Connection+FlowControl.swift`).
 
 Single-source-of-truth refactor: the HTTP/2 and HTTP/3 request mappers were unified into one
 `HTTPCore.RequestMapper`, so the §8.3 / §4.3 pseudo-header + field validation lives in exactly one place.
