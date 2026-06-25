@@ -26,10 +26,12 @@ A second-pass adversarial hardening of the stack; see
 - Observability seam: the `HTTPMetrics` protocol + `MetricsMiddleware` record one per-response metric
   (method, path, status, monotonic duration). Dependency-free — bridge it to swift-metrics /
   swift-distributed-tracing downstream; costs nothing when not installed.
-- RFC 8941 Structured Fields parser (`StructuredFields.parseItem` / `.parseList` / `.parseDictionary`)
-  — all six bare-item types, parameters, and inner lists; fail-closed (typed `ParseError`), bounded,
-  non-recursive. The substrate for RFC 9218 `Priority` and other Structured-Field headers.
-  Serialization (§4.1) and the `Priority` wiring are follow-ups.
+- RFC 8941 Structured Fields **codec** (`StructuredFields.parseItem` / `.parseList` / `.parseDictionary`
+  and `.serialize(…)`) — all six bare-item types, parameters, and inner lists; fail-closed (typed
+  `ParseError` / `SerializeError`), bounded, non-recursive. The substrate for Structured-Field headers.
+- RFC 9218 `Priority`: `HTTPPriority` parses the field into a typed urgency/incremental pair (defaults
+  for absent / out-of-range / unparseable input) and serializes back, omitting defaults;
+  `HTTPRequest.priority` reads it. Adds the `HTTPFieldName.priority` registered name.
 
 ### Fixed (security)
 - **HTTP/2 DoS:** charge server-emitted `REFUSED_STREAM` and the zero-length-DATA / PRIORITY /
