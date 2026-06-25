@@ -111,6 +111,7 @@ public final class SwiftSystemTransport: ServerTransport {
                 break  // a closed descriptor (shutdown) or unrecoverable error stops the loop
             }
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
             let id = connectionIDs.next()
             continuation.yield(
                 SwiftSystemConnection(

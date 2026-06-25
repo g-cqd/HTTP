@@ -125,6 +125,7 @@ public final class POSIXDispatchTransport: ServerTransport {
             }
             POSIXSocket.setNonBlocking(clientFD)
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
             let id = connectionIDs.next()
             // A per-connection *serial* queue targeting the shared concurrent pool: it serializes this
             // connection's read/write readiness handling and close (so a close never races a syscall on

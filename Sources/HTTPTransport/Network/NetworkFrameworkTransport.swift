@@ -99,8 +99,12 @@ public final class NetworkFrameworkTransport: ServerTransport {
     /// TLS `NWParameters` when ``TransportConfiguration/tls`` is set (advertising ALPN so a client can
     /// pick `"h2"`, RFC 9113 §3.3), otherwise a cleartext TCP listener (h1 / h2c).
     private func makeParameters() throws -> NWParameters {
+        // Disable Nagle's algorithm so a sub-MSS response flushes immediately instead of waiting to
+        // coalesce — Nagle + delayed-ACK inflates the tail latency the Bench/ comparison exposed.
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
         guard let tls = configuration.tls else {
-            return .tcp
+            return NWParameters(tls: nil, tcp: tcp)  // cleartext TCP (h1 / h2c)
         }
         let identity = try NetworkFrameworkTLS.identity(
             pkcs12: tls.pkcs12,
@@ -112,7 +116,7 @@ public final class NetworkFrameworkTransport: ServerTransport {
             minVersion: tls.minVersion,
             maxVersion: tls.maxVersion
         )
-        return NWParameters(tls: options)
+        return NWParameters(tls: options, tcp: tcp)
     }
 
     private func handleNewConnection(

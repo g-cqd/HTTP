@@ -94,6 +94,17 @@ enum POSIXSocket {
         _ = setsockopt(rawFD, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
     }
 
+    /// Disables Nagle's algorithm via `TCP_NODELAY` so a sub-MSS response flushes immediately,
+    /// not after the ~40 ms delayed-ACK coalesce window.
+    ///
+    /// Nagle inflates tail latency on the small / keep-alive responses HTTP serves (the p99.9 the
+    /// Bench/ comparison exposed). Set on every accepted client socket (RFC 9293); per-connection,
+    /// since the listen socket carries no data.
+    static func setNoDelay(_ rawFD: Int32) {
+        var on: Int32 = 1
+        _ = setsockopt(rawFD, IPPROTO_TCP, TCP_NODELAY, &on, socklen_t(MemoryLayout<Int32>.size))
+    }
+
     /// Reads the OS-assigned port via `getsockname()`.
     static func readBoundPort(of rawFD: Int32) -> UInt16 {
         var address = sockaddr_in()
