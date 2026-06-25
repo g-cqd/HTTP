@@ -104,8 +104,10 @@ extension HTTPServer {
             await applyHTTP3(actions, stream: stream, quic: quic)
             for case .request(let id, let request, let body) in events {
                 let response = await responder.respond(to: request, body: body)
+                // HTTP/3 has no native streaming yet: collapse a finite stream to a buffer (P6).
+                let buffered = await bufferedResponse(response)
                 let responseActions = await engine.respond(
-                    to: id, response.head, body: response.body
+                    to: id, buffered.head, body: buffered.body
                 )
                 await applyHTTP3(responseActions, stream: stream, quic: quic)
             }

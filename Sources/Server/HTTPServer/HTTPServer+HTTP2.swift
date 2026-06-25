@@ -45,10 +45,12 @@ extension HTTPServer {
             for event in events {
                 if case .request(let streamID, let request, let body) = event {
                     let response = await responder.respond(to: request, body: body)
+                    // HTTP/2 has no native streaming yet: collapse a finite stream to a buffer (P6).
+                    let buffered = await bufferedResponse(response)
                     do {
                         // `withAltSvc` advertises HTTP/3 (RFC 7838) when a QUIC listener is running.
                         try engine.respond(
-                            to: streamID, withAltSvc(response.head), body: response.body
+                            to: streamID, withAltSvc(buffered.head), body: buffered.body
                         )
                     }
                     catch {

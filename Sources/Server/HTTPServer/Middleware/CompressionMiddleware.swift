@@ -33,6 +33,10 @@ public struct CompressionMiddleware: HTTPMiddleware {
         next: any HTTPResponder
     ) async -> ServerResponse {
         var response = await next.respond(to: request, body: body)
+        // A streamed body is not transformed here (no streaming compression yet, P6).
+        guard response.stream == nil else {
+            return response
+        }
         guard acceptsGzip(request) else {
             return response
         }

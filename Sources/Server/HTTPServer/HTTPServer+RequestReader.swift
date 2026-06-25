@@ -60,7 +60,20 @@ extension HTTPServer where C.Duration == Duration {
         var head = withAltSvc(response.head)
         // Graceful shutdown: signal this is the last exchange (RFC 9110 §7.6.1) and close after it.
         let draining = applyHTTP1Drain(to: &head)
-        // A response to HEAD repeats the GET header section but sends no body (RFC 9112 §6.3).
+        // A streamed body is pumped to the wire chunk by chunk (chunked transfer-coding); a buffered
+        // body is serialized in one shot. A response to HEAD repeats the header section but sends no
+        // body (RFC 9112 §6.3).
+        if let stream = response.stream {
+            let sent = await sendStreamedResponse(
+                head, stream: stream, omitBody: request.method == .head, on: connection
+            )
+            guard sent, !draining else {
+                return false
+            }
+            return !Self.shouldClose(
+                version: framed.parsed.version, request: request, response: head
+            )
+        }
         let bytes = ResponseSerializer.serialize(
             head, body: response.body, omitBody: request.method == .head
         )

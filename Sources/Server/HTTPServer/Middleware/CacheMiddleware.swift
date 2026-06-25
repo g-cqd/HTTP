@@ -60,8 +60,8 @@ public struct CacheMiddleware: HTTPMiddleware {
         _ response: ServerResponse,
         now: Int
     ) -> ResponseCache.Entry? {
-        guard response.head.status == .ok else {
-            return nil
+        guard response.stream == nil, response.head.status == .ok else {
+            return nil  // a streamed body has no buffered bytes to store (P6)
         }
         let directives = CacheControl(response.head.headerFields[.cacheControl])
         guard !directives.noStore, !directives.isPrivate,

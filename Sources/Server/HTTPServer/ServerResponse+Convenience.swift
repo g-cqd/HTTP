@@ -24,6 +24,29 @@ extension ServerResponse {
         ServerResponse(HTTPResponse(status: status))
     }
 
+    /// A streaming response with the given `contentType`.
+    ///
+    /// HTTP/1.1 frames it chunked unless a `contentLength` is supplied; the producer pushes body chunks
+    /// to the engine's writer.
+    public static func streaming(
+        contentType: String,
+        status: HTTPStatus = .ok,
+        contentLength: Int? = nil,
+        _ produce: @escaping @Sendable (any ResponseBodyWriter) async throws -> Void
+    ) -> ServerResponse {
+        var fields = HTTPFields()
+        _ = fields.setValue(contentType, for: .contentType)
+        let head = HTTPResponse(status: status, headerFields: fields)
+        return ServerResponse(head, stream: ResponseStream(contentLength: contentLength, produce))
+    }
+
+    /// A Server-Sent Events stream (`text/event-stream`), pushing events as the producer yields them.
+    public static func serverSentEvents(
+        _ produce: @escaping @Sendable (any ResponseBodyWriter) async throws -> Void
+    ) -> ServerResponse {
+        streaming(contentType: "text/event-stream", produce)
+    }
+
     /// Builds a response with a single `Content-Type` field and a body.
     private static func make(
         _ status: HTTPStatus,
