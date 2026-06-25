@@ -24,10 +24,20 @@ set -uo pipefail
 DURATION="${DURATION:-10s}"          # oha -z: wall-clock duration of each run
 CONNECTIONS="${CONNECTIONS:-64}"     # oha -c: concurrent connections (closed loop)
 RATE="${RATE:-}"                     # oha -q per-worker rate; set for an open-loop, CO-free run
+WARMUP="${WARMUP:-2s}"               # throwaway pre-measurement pass to warm TLS/caches; set 0 to skip
 ROUTE="${ROUTE:-/}"                  # path to hit on every server
 BACKBONE="${BACKBONE:-swiftSystem}"  # our transport backbone: swiftSystem|posixKqueue|posixDispatch|networkFramework
 SERVERS="${SERVERS:-ours nginx caddy hummingbird}"  # which to run if present
-HTTP2="${HTTP2:-0}"                  # 1 → add oha --http2 (needs TLS; see README, h2c is not oha-drivable)
+HTTP2="${HTTP2:-0}"                  # 1 → HTTP/2-over-TLS run; 0 → HTTP/1.1 cleartext
+
+# HTTP/2 here means h2-over-TLS (ALPN): oha can't drive prior-knowledge h2c, and the browser path is
+# h2/TLS anyway. Derive the scheme and force our only TLS-capable backbone (the POSIX backbones are
+# cleartext-only; TLS rides networkFramework).
+SCHEME=http
+if [ "$HTTP2" = "1" ]; then
+    SCHEME=https
+    BACKBONE=networkFramework
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -48,7 +58,7 @@ trap cleanup EXIT INT TERM
 # Wait until a server answers on $1 (url), up to ~5s; return 1 if it never comes up.
 wait_ready() {
     for _ in $(seq 1 50); do
-        curl -fsS -o /dev/null --max-time 1 "$1" 2>/dev/null && return 0
+        curl -fksS -o /dev/null --max-time 1 "$1" 2>/dev/null && return 0  # -k: accept the self-signed cert
         sleep 0.1
     done
     return 1
@@ -59,7 +69,14 @@ bench_one() {
     local url="$1" label="$2" json="$RESULTS_DIR/$2.json"
     local args=(-z "$DURATION" -c "$CONNECTIONS" --no-tui --output-format json)
     [ -n "$RATE" ] && args+=(-q "$RATE")
-    [ "$HTTP2" = "1" ] && args+=(--http2)
+    [ "$HTTP2" = "1" ] && args+=(--http2 --insecure)  # ALPN-negotiated h2; --insecure for the self-signed cert
+    # Warm up first (discarded): a freshly-launched server pays TLS handshakes, connection setup, and a
+    # cold instruction/data cache — over a short window that storm dominates and understates steady state.
+    if [ "$WARMUP" != "0" ]; then
+        local warm_args=(-z "$WARMUP" -c "$CONNECTIONS" --no-tui)
+        [ "$HTTP2" = "1" ] && warm_args+=(--http2 --insecure)
+        oha "${warm_args[@]}" "$url" >/dev/null 2>&1 || true
+    fi
     oha "${args[@]}" "$url" > "$json" 2>/dev/null || { echo "  $label: oha failed" >&2; return 1; }
     if [ "$HAVE_JQ" = "1" ]; then
         # oha latency percentiles are in seconds; convert to ms. Field name has varied across versions.
@@ -91,6 +108,21 @@ swift build -c release --package-path "$REPO_ROOT" --scratch-path "$SCRATCH" --p
     >"$RESULTS_DIR/_build.log" 2>&1 || { echo "error: build failed (see _build.log)" >&2; exit 1; }
 OURS_BIN="$SCRATCH/release/httpd-example"
 
+# --- TLS material for the h2 run (self-signed; reused across runs, regenerated only if absent) -------
+NGINX_CONF="$SCRIPT_DIR/servers/nginx.conf"; CADDY_CONF="$SCRIPT_DIR/servers/Caddyfile"
+if [ "$HTTP2" = "1" ]; then
+    command -v openssl >/dev/null || { echo "error: 'openssl' needed for the h2-TLS run" >&2; exit 1; }
+    CERT="$RESULTS_DIR/dev-cert.pem"; KEY="$RESULTS_DIR/dev-key.pem"
+    if [ ! -s "$CERT" ] || [ ! -s "$KEY" ]; then
+        openssl req -x509 -newkey rsa:2048 -keyout "$KEY" -out "$CERT" -days 365 -nodes \
+            -subj "/CN=localhost" >/dev/null 2>&1 || { echo "error: cert generation failed" >&2; exit 1; }
+    fi
+    # nginx/Caddy configs need an absolute cert path: fill the template placeholders into run-local copies.
+    NGINX_CONF="$RESULTS_DIR/nginx-tls.conf"; CADDY_CONF="$RESULTS_DIR/Caddyfile-tls"
+    sed -e "s#__CERT__#$CERT#g" -e "s#__KEY__#$KEY#g" "$SCRIPT_DIR/servers/nginx-tls.conf" >"$NGINX_CONF"
+    sed -e "s#__CERT__#$CERT#g" -e "s#__KEY__#$KEY#g" "$SCRIPT_DIR/servers/Caddyfile-tls" >"$CADDY_CONF"
+fi
+
 : > "$RESULTS_DIR/_table.tsv"
 echo "route=$ROUTE  connections=$CONNECTIONS  duration=$DURATION  rate=${RATE:-closed-loop}  http2=$HTTP2"
 echo
@@ -98,20 +130,21 @@ echo
 for s in $SERVERS; do
     case "$s" in
         ours)
-            run_server "ours($BACKBONE)" "" "http://127.0.0.1:$PORT_OURS$ROUTE" \
-                env HTTPD_MAX_CONN=1000000 HTTPD_QUIET=1 "$OURS_BIN" "$PORT_OURS" "$BACKBONE"
+            ours_cmd=(env HTTPD_MAX_CONN=1000000 HTTPD_QUIET=1 "$OURS_BIN" "$PORT_OURS" "$BACKBONE")
+            [ "$HTTP2" = "1" ] && ours_cmd+=(tls)
+            run_server "ours($BACKBONE)" "" "$SCHEME://127.0.0.1:$PORT_OURS$ROUTE" "${ours_cmd[@]}"
             ;;
         nginx)
-            command -v nginx >/dev/null && run_server "nginx" "" "http://127.0.0.1:$PORT_NGINX$ROUTE" \
-                nginx -c "$SCRIPT_DIR/servers/nginx.conf" -g "daemon off;" \
+            command -v nginx >/dev/null && run_server "nginx" "" "$SCHEME://127.0.0.1:$PORT_NGINX$ROUTE" \
+                nginx -c "$NGINX_CONF" -g "daemon off;" \
                 || echo "skip nginx (not installed)"
             ;;
         caddy)
             if command -v caddy >/dev/null; then
                 mkdir -p "$RESULTS_DIR/caddy-home"
-                run_server "caddy" "" "http://127.0.0.1:$PORT_CADDY$ROUTE" \
+                run_server "caddy" "" "$SCHEME://127.0.0.1:$PORT_CADDY$ROUTE" \
                     env HOME="$RESULTS_DIR/caddy-home" XDG_DATA_HOME="$RESULTS_DIR/caddy-home" \
-                    caddy run --config "$SCRIPT_DIR/servers/Caddyfile" --adapter caddyfile
+                    caddy run --config "$CADDY_CONF" --adapter caddyfile
             else
                 echo "skip caddy (not installed)"
             fi
