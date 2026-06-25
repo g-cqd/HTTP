@@ -63,7 +63,8 @@ public final class SwiftSystemTransport: ServerTransport {
             host: configuration.host,
             port: configuration.port,
             nonBlocking: false,
-            reusePort: configuration.reusePort
+            reusePort: configuration.reusePort,
+            backlog: configuration.backlog
         )
         let descriptor = FileDescriptor(rawValue: listener.descriptor)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()

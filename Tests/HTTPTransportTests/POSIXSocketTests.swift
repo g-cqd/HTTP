@@ -46,7 +46,8 @@ struct POSIXSocketTests {
         let (fd, _) = try POSIXSocket.makeListenSocket(
             host: "127.0.0.1",
             port: 0,
-            nonBlocking: true
+            nonBlocking: true,
+            backlog: 128
         )
         defer { close(fd) }
 
@@ -70,5 +71,18 @@ struct POSIXSocketTests {
         // macOS reports the internal TCP flag (TF_NODELAY = 4), not a normalized 1 — non-zero is
         // "enabled", so assert enabled rather than a specific value.
         #expect(value != 0, "TCP_NODELAY must be enabled (Nagle off so small responses flush)")
+    }
+
+    @Test("makeListenSocket honors a custom backlog (listen succeeds)")
+    func listenSocketAcceptsCustomBacklog() throws {
+        let (fd, port) = try POSIXSocket.makeListenSocket(
+            host: "127.0.0.1",
+            port: 0,
+            nonBlocking: true,
+            backlog: 2_048
+        )
+        defer { close(fd) }
+        #expect(fd >= 0)
+        #expect(port > 0)
     }
 }

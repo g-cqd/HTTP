@@ -56,7 +56,8 @@ public final class POSIXKqueueTransport: ServerTransport {
             host: configuration.host,
             port: configuration.port,
             nonBlocking: true,
-            reusePort: configuration.reusePort
+            reusePort: configuration.reusePort,
+            backlog: configuration.backlog
         )
         let eventLoop = KqueueEventLoop()
         eventLoop.start()
