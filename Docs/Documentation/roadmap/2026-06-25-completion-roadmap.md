@@ -85,22 +85,24 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
         on-control rejected, bomb cap → close, negotiation accept/echo/decline/honor, +3 pmd fuzz; ASan
         clean. (Autobahn CI remains a P10 item.)
         ✓ 829.
-      - [~] **QPACK dynamic table (RFC 9204) — S5: foundation done, integration deferred.** Landed the
-        `QPACKDynamicTable` data structure — a separate-index-space FIFO with the §3.2.4–§3.2.6
-        absolute-index / Base-relative / post-base / insert-point arithmetic (the known QPACK interop
-        trap), §3.2.2 eviction (oldest-first, absolute indices preserved), capacity / Set Capacity, and
-        Duplicate — with 9 unit tests pinning each conversion. The encoder/decoder/connection *integration*
-        (encoder insert heuristic + encoder-stream instructions; decoder dynamic indexed/post-base refs,
-        Required Insert Count validation, Section-Ack / Insert-Count-Increment; executing encoder-stream
-        inserts in `parseQpackStream`; raising the SETTINGS) is the interop-sensitive remainder, deferred
-        like S4: it touches the working, conformant static-only h3 decode path, and blocked-stream
-        buffering / eviction-with-outstanding-references (§2.1.3) are the hardest HTTP/3 sub-problems —
-        so the v1 static-only encoder/decoder stays operational as the mandated fallback, gated on
-        QPACK/h3 conformance + fuzz + interop before it flips on. **Recorded integration plan:** advertise
-        a non-zero `SETTINGS_QPACK_MAX_TABLE_CAPACITY` with `QPACK_BLOCKED_STREAMS = 0` first (no
-        blocked-stream buffering — reject a section whose RIC exceeds received inserts), enhance only the
-        *decoder* to consume a peer's dynamic-table usage (browsers compress requests), and keep our
-        response *encoder* static-only (valid: each endpoint chooses its own encoder strategy).
+      - [~] **QPACK dynamic table (RFC 9204) — S5 foundation + S5a decoder done; S5b/S5c + wiring next.**
+        ✓ **S5 foundation:** `QPACKDynamicTable` — a separate-index-space FIFO with the §3.2.4–§3.2.6
+        absolute / Base-relative / post-base / insert-point arithmetic (the known interop trap), §3.2.2
+        eviction, Set Capacity, Duplicate — 9 unit tests. ✓ **S5a decoder-side dynamic:** the
+        `QPACKDecoder` is now additive — capacity 0 is byte-identical static-only, while a non-zero
+        capacity applies the peer's encoder-stream instructions (`applyEncoderInstructions`: Set Capacity
+        §4.3.1, Insert With Name Reference §4.3.2, Insert With Literal Name §4.3.3, Duplicate §4.3.4,
+        incremental/truncation-aware) and decodes field sections through the §4.5.1 Required Insert Count /
+        Base prefix arithmetic and the §4.5.2–§4.5.5 dynamic indexed / name-reference / post-base
+        representations. _Gate:_ 9 dynamic round-trip + fault tests (indexed/name-ref/post-base/evict/
+        duplicate; RIC-beyond-inserts rejected; oversized Set Capacity → encoder-stream error; truncated
+        instruction left unconsumed); no regression in the 51 QPACK / 71 HTTP3 tests; ASan clean.
+        **Remaining:** S5b blocked-stream buffering (decode a section whose RIC exceeds received inserts,
+        up to `QPACK_BLOCKED_STREAMS`); the connection wiring (execute inserts in `parseQpackStream`, emit
+        Section-Ack / Insert-Count-Increment on the decoder stream, raise the SETTINGS to enable it); and
+        S5c the response *encoder*'s insert heuristic + encoder-stream output (or keep it static-only —
+        valid, since each endpoint chooses its own encoder strategy). Static-only stays the operational
+        fallback until the wiring lands.
       - [x] **Priority scheduling (RFC 9218) — S1 done.** h2 `StreamRecord.urgency` cached from the
         request's `Priority` field at stream creation; `flushAll` orders ready streams by ascending
         urgency (ties → lower stream id) so a congested connection releases higher-priority DATA first
@@ -180,3 +182,8 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   drains inbound (WINDOW_UPDATE) while window-blocked. Engine gained `abortResponse`. New
   `ControllableConnection` test feeds a late WINDOW_UPDATE after the producer stalls. 851 tests; TSan +
   ASan clean; h2spec green. (v1: one streamed response at a time; siblings answered buffered.)
+- 2026-06-25 — P8/S5a done: QPACK decoder-side dynamic table — `QPACKDecoder` (additive; capacity 0 stays
+  static-only) now applies encoder-stream inserts (`applyEncoderInstructions`) and decodes §4.5.1 RIC/Base
+  + §4.5.2–§4.5.5 dynamic representations. 9 dynamic round-trip/fault tests; 860 tests; ASan clean. S5b
+  blocked streams + connection wiring (Section-Ack/ICI, SETTINGS) + S5c encoder remain; static-only stays
+  the operational fallback.
