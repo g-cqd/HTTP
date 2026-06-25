@@ -2,14 +2,15 @@
 //  DecompressionMiddlewareTests.swift
 //  HTTPServerTests
 //
-//  RFC 9110 §8.4 — inbound gzip decompression with a decompression-bomb cap (CWE-409). The middleware
-//  must round-trip a gzip body to the responder as identity (Content-Encoding stripped), leave a
-//  non-gzip / absent encoding untouched, and fail closed with 413 on a malformed member, an over-ratio
-//  body, or one past the absolute cap — never buffering a bomb. The responder echoes what it received
-//  (the body as the response body, the request headers as the response headers) so each test inspects
-//  the returned response to see what actually reached the responder.
+//  RFC 9110 §8.4 — inbound decompression (gzip, deflate, Brotli) with a decompression-bomb cap
+//  (CWE-409). The middleware round-trips a coded body to the responder as identity (Content-Encoding
+//  stripped), leaves an unsupported / absent encoding untouched, and fails closed with 413 on a
+//  malformed member, an over-ratio body, or one past the absolute cap — never buffering a bomb. The
+//  responder echoes what it received (body and request headers) so each test inspects the returned
+//  response to see what reached the responder.
 //
 
+import Compression
 import HTTPCore
 import Testing
 
@@ -54,12 +55,50 @@ struct DecompressionMiddlewareTests {
         #expect(response.head.headerFields[.contentLength] == String(original.count))
     }
 
-    @Test("a non-gzip Content-Encoding is left untouched for the responder")
-    func nonGzipPassesThrough() async {
-        let body = Array("brotli-or-whatever".utf8)
-        let response = await respond("br", body)
+    @Test("an unsupported Content-Encoding is left untouched for the responder")
+    func unsupportedEncodingPassesThrough() async {
+        let body = Array("zstd-or-whatever".utf8)
+        let response = await respond("zstd", body)
         #expect(response.body == body)
-        #expect(response.head.headerFields[.contentEncoding] == "br")
+        #expect(response.head.headerFields[.contentEncoding] == "zstd")
+    }
+
+    @Test("a raw deflate body is decompressed to identity (RFC 1951)")
+    func decompressesDeflate() async {
+        let original = Array(String(repeating: "deflate test. ", count: 50).utf8)
+        let coded = compress(original, using: COMPRESSION_ZLIB)
+        let response = await respond("deflate", coded, ratio: 1_000)
+        #expect(response.body == original)
+        #expect(response.head.headerFields[.contentEncoding] == nil)
+    }
+
+    @Test("a Brotli body is decompressed to identity (RFC 7932)")
+    func decompressesBrotli() async {
+        let original = Array(String(repeating: "brotli test. ", count: 50).utf8)
+        let coded = compress(original, using: COMPRESSION_BROTLI)
+        let response = await respond("br", coded, ratio: 1_000)
+        #expect(response.body == original)
+        #expect(response.head.headerFields[.contentEncoding] == nil)
+    }
+
+    @Test("a gzip member carrying a name (FLG set) still decodes (RFC 1952 §2.3.1)")
+    func decompressesGzipWithName() async throws {
+        let original = Array("named gzip member".utf8)
+        let plain = try #require(Gzip.compress(original))
+        var named = Array(plain[0 ..< 10])
+        named[3] = 0x08  // FLG = FNAME
+        named.append(contentsOf: Array("file.txt".utf8))
+        named.append(0)
+        named.append(contentsOf: plain[10...])
+        #expect(await respond("gzip", named, ratio: 1_000).body == original)
+    }
+
+    @Test("a gzip member with a corrupt CRC is rejected, not mis-decoded (RFC 1952)")
+    func rejectsCorruptGzipCRC() async throws {
+        let original = Array("integrity matters".utf8)
+        var corrupt = try #require(Gzip.compress(original))
+        corrupt[corrupt.count - 8] ^= 0xff  // flip a CRC-32 trailer byte
+        #expect(await respond("gzip", corrupt, ratio: 1_000).head.status == .contentTooLarge)
     }
 
     @Test("a body with no Content-Encoding is left untouched")
@@ -92,5 +131,24 @@ struct DecompressionMiddlewareTests {
     func malformedGzipRejected() async {
         let response = await respond("gzip", Array("not a gzip member at all".utf8))
         #expect(response.head.status == .contentTooLarge)
+    }
+
+    /// Compresses `input` with a Compression-framework `algorithm` (raw DEFLATE for `COMPRESSION_ZLIB`,
+    /// a Brotli stream for `COMPRESSION_BROTLI`) — the test mirror of the production decoders' input.
+    private func compress(_ input: [UInt8], using algorithm: compression_algorithm) -> [UInt8] {
+        let capacity = input.count + input.count / 2 + 128
+        var destination = [UInt8](repeating: 0, count: capacity)
+        let written = input.withUnsafeBufferPointer { source -> Int in
+            destination.withUnsafeMutableBufferPointer { output -> Int in
+                guard let source = source.baseAddress, let output = output.baseAddress else {
+                    return 0
+                }
+                return compression_encode_buffer(
+                    output, capacity, source, input.count, nil, algorithm
+                )
+            }
+        }
+        destination.removeLast(destination.count - written)
+        return destination
     }
 }

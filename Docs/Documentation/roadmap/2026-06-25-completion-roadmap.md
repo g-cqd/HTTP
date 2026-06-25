@@ -28,9 +28,9 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       signed cookie via CryptoKit, tamper-rejecting). _Gate:_ limit-trip + request-id + session
       sign/verify/tamper tests. ✓ 777 tests green; ASan clean.
 
-- [ ] **P4 — Inbound decompression breadth.** `deflate` (raw zlib) + `brotli` (`COMPRESSION_BROTLI`),
-      gzip `FLG≠0`, optional CRC/ISIZE; same bomb caps (CWE-409). _Gate:_ per-codec round-trip + bomb
-      fuzz never-traps; ASan clean.
+- [x] **P4 — Inbound decompression breadth.** `deflate` (raw + zlib-wrapped) + `brotli`
+      (`COMPRESSION_BROTLI`), gzip `FLG≠0` header parsing + CRC-32/ISIZE verification; same bomb caps
+      (CWE-409). _Gate:_ per-codec round-trip + bomb fuzz never-traps; ASan clean. ✓ 781 tests green.
 
 - [ ] **P5 — RFC 9111 response caching.** CacheMiddleware + bounded LRU `ResponseCache`: Cache-Control,
       freshness (§4.2), `Age` (§5.1), Vary key, revalidation. _Gate:_ freshness/Vary/eviction tests; no
@@ -72,3 +72,6 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
 - 2026-06-25 — P3 done: RateLimitMiddleware (429 + Retry-After, bounded `RollingWindow` store),
   RequestIDMiddleware (mint/propagate, unsafe-id stripped), SessionMiddleware (HMAC-SHA256 signed
   cookie via CryptoKit, tamper-rejecting). Reuses `HTTPTestSupport.TestClock`. 777 tests; ASan clean.
+- 2026-06-25 — P4 done: inbound `deflate` (raw + zlib) and `brotli` (`COMPRESSION_BROTLI`), gzip FLG
+  header parsing + CRC-32/ISIZE verification; bomb caps unchanged, fuzz extended to all three decoders.
+  781 tests; ASan clean.

@@ -2,11 +2,11 @@
 //  DecompressionFuzzTests.swift
 //  HTTPServerTests
 //
-//  Deterministic fuzzing for the inbound gzip decoder (RFC 1952 / CWE-409) — fuzz parity with the
-//  protocol decoders. It reads an untrusted, attacker-controlled body and slices a gzip envelope before
-//  decoding, so it must NEVER trap (the 10-octet header / 8-octet trailer arithmetic and the buffer
-//  sizing are the overflow-prone spots) and only ever returns a capped body or nil. Random bytes and a
-//  mutated valid gzip member exercise both the envelope check and the DEFLATE decode.
+//  Deterministic fuzzing for the inbound decoders — gzip, deflate, and Brotli (RFC 1952 / 1951 / 7932,
+//  CWE-409). Each reads an untrusted, attacker-controlled body and parses an envelope before decoding,
+//  so it must NEVER trap (the gzip header/trailer + FLG-field arithmetic and the buffer sizing are the
+//  overflow-prone spots) and only ever returns a capped body or nil. Random bytes and a mutated valid
+//  gzip member exercise the envelope parsing and the DEFLATE/Brotli decode on every path.
 //
 
 import HTTPTestSupport
@@ -16,6 +16,8 @@ import Testing
 
 private func fuzzInflate(_ bytes: [UInt8]) {
     _ = Inflate.gunzip(bytes, maxOutput: 64 * 1_024)
+    _ = Inflate.decompress(bytes, encoding: "deflate", maxOutput: 64 * 1_024)
+    _ = Inflate.decompress(bytes, encoding: "br", maxOutput: 64 * 1_024)
 }
 
 @Suite("Fuzzing — the gzip decoder never traps (RFC 1952 / CWE-409)", .tags(.fuzz))
