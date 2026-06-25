@@ -201,3 +201,12 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
   advertised limit is a QPACK_DECOMPRESSION_FAILED connection error; a malformed unblocked request
   resets only its own stream. Conformance "RIC beyond the blocked-streams limit" now drives 17 blocked
   streams. 864 tests; ASan clean. Only the response encoder's dynamic inserts (S5c) remain.
+- 2026-06-25 — P8/S5c done: the HTTP/3 response encoder uses the QPACK dynamic table. When the peer's
+  SETTINGS advertises a non-zero QPACK capacity the connection enables the encoder (bounded by our own
+  limit); a buffered response then inserts a repeated header on our QPACK encoder stream and references
+  it once the peer's Insert Count Increment confirms receipt — so a section's Required Insert Count never
+  exceeds what the peer holds (never blocks) and the table never evicts (§2.1.3 trivial). The peer's
+  decoder-stream Insert Count Increment / Section Acknowledgment / Stream Cancellation are now processed
+  rather than rejected. The streaming response path stays static. This completes the bidirectional QPACK
+  dynamic table (S5). 871 tests; ASan clean. Gate: encoder round-trips through the decoder end-to-end;
+  the engine inserts on a repeated response header after the peer advertises capacity.

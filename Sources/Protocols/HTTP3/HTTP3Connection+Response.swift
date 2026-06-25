@@ -25,7 +25,7 @@ extension HTTP3Connection {
         guard streams.removeValue(forKey: streamID) != nil else {
             throw .connection(.h3InternalError, "response for an unknown stream")
         }
-        let headerBlock = encodeResponseSection(response)
+        let headerBlock = encodeBufferedResponse(response)
         var bytes = HTTP3FrameWriter.frame(.headers, payload: headerBlock)
         if !body.isEmpty {
             HTTP3FrameWriter.append(.data, payload: body, to: &bytes)
@@ -84,5 +84,35 @@ extension HTTP3Connection {
             )
         }
         return output
+    }
+
+    /// Encodes a buffered response's field section, using the dynamic table when the peer enabled it
+    /// (RFC 9204 §4.3) and queuing any encoder-stream inserts on our QPACK encoder stream.
+    ///
+    /// Only the buffered ``respond(to:_:body:)`` path encodes dynamically: its caller drains the queued
+    /// actions, so the encoder-stream inserts reach the peer alongside the response. The streaming
+    /// ``respondHeaders(to:_:)`` path stays static (its bytes are returned to the driver directly, with no
+    /// action drain), and the encoder never references a fresh insert, so deferring them is harmless.
+    private mutating func encodeBufferedResponse(_ response: HTTPResponse) -> [UInt8] {
+        guard encoder.dynamicTableEnabled else {
+            return encodeResponseSection(response)
+        }
+        let (section, encoderStream) = encoder.encodeSection(responseFields(response))
+        if !encoderStream.isEmpty {
+            actions.append(.send(stream: .role(.qpackEncoder), bytes: encoderStream, fin: false))
+        }
+        return section
+    }
+
+    /// Materializes a response's field list (`:status` first, then the lowercased fields) for the dynamic
+    /// encoder, which needs the whole section before it can size the §4.5.1 prefix.
+    private func responseFields(_ response: HTTPResponse) -> [HeaderField] {
+        var fields: [HeaderField] = []
+        fields.reserveCapacity(response.headerFields.count + 1)
+        fields.append(HeaderField(name: ":status", value: response.status.decimalString))
+        for field in response.headerFields {
+            fields.append(HeaderField(name: field.name.canonicalName, value: field.value))
+        }
+        return fields
     }
 }

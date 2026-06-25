@@ -214,18 +214,17 @@ extension HTTP3Connection {
         }
     }
 
-    /// Scans the peer's decoder stream for violations (RFC 9204 §4.4) — our field sections are static or
-    /// Required-Insert-Count-0, so a Section Acknowledgment / Insert Count Increment there is an error.
+    /// Applies the peer decoder's acknowledgments to our response encoder (RFC 9204 §4.4): an Insert
+    /// Count Increment advances the encoder's known-received count; Section Acknowledgment and Stream
+    /// Cancellation are consumed.
+    ///
+    /// An Increment of 0, or one beyond what we inserted, is a critical-stream error.
     private mutating func parseDecoderStream(_ streamID: QUICStreamID) throws(HTTP3Error) {
         guard var state = streams[streamID] else {
             return
         }
         let result: Result<Int, QPACKError> = state.buffer.withUnsafeBytes { raw in
-            Result { () throws(QPACKError) in
-                var reader = ByteReader(raw)
-                try QPACKInstructions.parseDecoderStream(&reader)
-                return reader.position
-            }
+            Result { () throws(QPACKError) in try encoder.applyDecoderInstructions(raw.bytes) }
         }
         switch result {
             case .success(let consumed):
@@ -285,5 +284,10 @@ extension HTTP3Connection {
             }
         }
         remoteSettings = try result.get()
+        // The peer's advertised QPACK capacity enables our response encoder's dynamic table, bounded by
+        // our own memory limit. The encoder references only acknowledged inserts, so it never blocks the
+        // peer regardless of the peer's blocked-streams limit (RFC 9204 §3.2.3 / §2.1.2).
+        let cap = min(remoteSettings.qpackMaxTableCapacity, Self.defaultQpackMaxTableCapacity)
+        encoder.enableDynamicTable(capacity: cap)
     }
 }

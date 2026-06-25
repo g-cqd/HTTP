@@ -139,4 +139,77 @@ extension QPACKEncoder {
         QPACKInteger.encode(encodedInsertCount, prefixBits: 8, into: &output)
         QPACKInteger.encode(base - ric, prefixBits: 7, firstByte: 0x00, into: &output)  // S=0
     }
+
+    // MARK: Decoder-stream acknowledgments (RFC 9204 §4.4)
+
+    /// Applies the peer decoder's instruction stream, advancing the known-received count from each Insert
+    /// Count Increment (RFC 9204 §4.4.3) and consuming Section Acknowledgments / Stream Cancellations.
+    ///
+    /// Returns the octets consumed; a partial trailing instruction is left for the next call. An Increment
+    /// of 0, or one beyond the inserts actually made, is a QPACK_DECODER_STREAM_ERROR (§4.4.3).
+    public mutating func applyDecoderInstructions(_ span: RawSpan) throws(QPACKError) -> Int {
+        var reader = ByteReader(span)
+        var committed = reader.position
+        while let first = reader.peek() {
+            guard try applyOneDecoderInstruction(&reader, first: first) else {
+                break  // truncated — stop at the last complete instruction
+            }
+            committed = reader.position
+        }
+        return committed
+    }
+
+    /// Applies one decoder-stream instruction, advancing `reader` on success; false (unmoved) if truncated.
+    private mutating func applyOneDecoderInstruction(
+        _ reader: inout ByteReader, first: UInt8
+    ) throws(QPACKError) -> Bool {
+        if first & 0x80 != 0 {
+            return try consumeAckStreamID(&reader, prefixBits: 7)  // §4.4.1 Section Acknowledgment
+        }
+        if first & 0x40 != 0 {
+            return try consumeAckStreamID(&reader, prefixBits: 6)  // §4.4.2 Stream Cancellation
+        }
+        return try applyInsertCountIncrement(&reader)  // §4.4.3
+    }
+
+    /// RFC 9204 §4.4.3 — Insert Count Increment: advance the known-received count, or fault if it is 0 or
+    /// would exceed the inserts actually made.
+    private mutating func applyInsertCountIncrement(
+        _ reader: inout ByteReader
+    ) throws(QPACKError) -> Bool {
+        var probe = reader
+        switch QPACKInteger.decode(&probe, prefixBits: 6) {
+            case .value(let increment):
+                guard increment > 0 else {
+                    throw .decoderStreamError("Insert Count Increment of 0")
+                }
+                guard knownReceivedCount + increment <= table.insertCount else {
+                    throw .decoderStreamError("Insert Count Increment beyond the inserts made")
+                }
+                acknowledgeInserts(increment)  // validated above, so the clamp is a no-op
+                reader = probe
+                return true
+            case .incomplete:
+                return false
+            case .overflow:
+                throw .decoderStreamError("invalid Insert Count Increment")
+        }
+    }
+
+    /// Consumes a Section Acknowledgment / Stream Cancellation stream id (RFC 9204 §4.4.1/§4.4.2) — the
+    /// never-evict encoder keeps no per-section state, so the id is validated and discarded.
+    private func consumeAckStreamID(
+        _ reader: inout ByteReader, prefixBits: Int
+    ) throws(QPACKError) -> Bool {
+        var probe = reader
+        switch QPACKInteger.decode(&probe, prefixBits: prefixBits) {
+            case .value:
+                reader = probe
+                return true
+            case .incomplete:
+                return false
+            case .overflow:
+                throw .decoderStreamError("invalid acknowledgment stream id")
+        }
+    }
 }

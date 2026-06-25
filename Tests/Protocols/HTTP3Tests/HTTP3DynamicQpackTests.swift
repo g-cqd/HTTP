@@ -19,6 +19,7 @@ import Testing
 struct HTTP3DynamicQpackTests: HTTP3WireFixtures {
     private static let encoderStream = QUICStreamID(6)
     private static let requestStreamID = QUICStreamID(0)
+    private static let control = QUICStreamID(2)
 
     @Test("encoder-stream inserts are acknowledged with an Insert Count Increment (§4.4.3)")
     func insertsAreAcknowledged() throws {
@@ -106,7 +107,49 @@ struct HTTP3DynamicQpackTests: HTTP3WireFixtures {
                 == UInt64(QPACKError.Code.decompressionFailed.rawValue))
     }
 
+    @Test("the response encoder uses the dynamic table once the peer advertises capacity (§4.3)")
+    func responseEncoderInsertsOnRepeatedHeader() throws {
+        var connection = HTTP3Connection()
+        _ = connection.outbound()
+        // The peer advertises a QPACK dynamic-table capacity → our response encoder enables.
+        _ = try connection.receive(Self.control, controlPreamble([(0x01, 4_096)]), fin: false)
+
+        var fields = HTTPFields()
+        fields.append("Frobnicator/9.9", for: .server)  // a value the static table does not hold
+        let response = HTTPResponse(status: .ok, headerFields: fields)
+
+        let setCapacity = QPACKInstructions.setDynamicTableCapacity(4_096)
+        // First response → only the one-time Set Capacity (insert-on-second-use defers the insert).
+        try answer(&connection, on: QUICStreamID(0), response)
+        #expect(encoderStreamSends(&connection) == [setCapacity])
+
+        // Second response with the same header → the encoder inserts it on its QPACK encoder stream.
+        try answer(&connection, on: QUICStreamID(4), response)
+        let sends = encoderStreamSends(&connection)
+        #expect(sends.count == 1)
+        #expect(sends.first != setCapacity)
+    }
+
     // MARK: Helpers
+
+    /// Feeds a minimal request on `stream`, then answers it with `response` (no body).
+    private func answer(
+        _ connection: inout HTTP3Connection, on stream: QUICStreamID, _ response: HTTPResponse
+    ) throws {
+        _ = try connection.receive(stream, requestStream(requestFieldSection()), fin: true)
+        try connection.respond(to: stream, response, body: [])
+    }
+
+    /// Every role-addressed send queued on the QPACK encoder stream, drained in order.
+    private func encoderStreamSends(_ connection: inout HTTP3Connection) -> [[UInt8]] {
+        var sends: [[UInt8]] = []
+        for action in connection.outbound() {
+            if case .send(.role(.qpackEncoder), let bytes, _) = action {
+                sends.append(bytes)
+            }
+        }
+        return sends
+    }
 
     /// The bytes of the first role-addressed send on the QPACK decoder stream, if any.
     private func decoderStreamSend(_ connection: inout HTTP3Connection) -> [UInt8]? {
