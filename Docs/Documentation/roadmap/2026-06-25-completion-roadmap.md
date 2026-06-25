@@ -23,9 +23,10 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       `206 multipart/byteranges`. _Gate:_ precedence + multi-range tests; no 304/206/416 regression.
       ✓ 767 tests green; `HTTPDate.parse` added (Foundation-free, 25× faster than `DateFormatter`).
 
-- [ ] **P3 — Operational middleware.** RateLimit (RFC 6585, 429 + Retry-After over `RollingWindow`),
-      RequestID (X-Request-ID propagate/mint), Session (signed cookie via CryptoKit HMAC). _Gate:_
-      limit-trip + request-id round-trip + session sign/verify/tamper tests.
+- [x] **P3 — Operational middleware.** RateLimit (RFC 6585, 429 + Retry-After over `RollingWindow`,
+      bounded store), RequestID (X-Request-ID propagate/mint, unsafe-id stripped), Session (HMAC-SHA256
+      signed cookie via CryptoKit, tamper-rejecting). _Gate:_ limit-trip + request-id + session
+      sign/verify/tamper tests. ✓ 777 tests green; ASan clean.
 
 - [ ] **P4 — Inbound decompression breadth.** `deflate` (raw zlib) + `brotli` (`COMPRESSION_BROTLI`),
       gzip `FLG≠0`, optional CRC/ISIZE; same bomb caps (CWE-409). _Gate:_ per-codec round-trip + bomb
@@ -68,3 +69,6 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
 - 2026-06-25 — P2 done: full §13.2.2 conditional precedence (If-Match/If-Unmodified-Since→412,
   If-Modified-Since→304, If-Range), `Last-Modified`; multi-range `multipart/byteranges` (CVE-2011-3192
   cap); new `HTTPDate.parse` + shared `EntityTag`. 767 tests; ASan clean.
+- 2026-06-25 — P3 done: RateLimitMiddleware (429 + Retry-After, bounded `RollingWindow` store),
+  RequestIDMiddleware (mint/propagate, unsafe-id stripped), SessionMiddleware (HMAC-SHA256 signed
+  cookie via CryptoKit, tamper-rejecting). Reuses `HTTPTestSupport.TestClock`. 777 tests; ASan clean.

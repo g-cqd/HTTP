@@ -150,4 +150,14 @@ extension HTTPFieldName {
     public static let referrerPolicy = HTTPFieldName(unchecked: "referrer-policy")
     /// `Content-Security-Policy` (W3C CSP) — restricts the resources a page may load.
     public static let contentSecurityPolicy = HTTPFieldName(unchecked: "content-security-policy")
+
+    // MARK: Correlation, sessions & rate limiting
+
+    /// `Retry-After` (RFC 9110 §10.2.3) — how long to wait before retrying (e.g. after a 429 / 503).
+    public static let retryAfter = HTTPFieldName(unchecked: "retry-after")
+    /// `X-Request-ID` (de-facto convention) — a per-request correlation id for tracing and logging.
+    public static let xRequestID = HTTPFieldName(unchecked: "x-request-id")
+    /// `X-Session-ID` — the verified session id ``SessionMiddleware`` asserts for the handler; any
+    /// client-supplied value is stripped, so it is server-asserted and never trusted from the wire.
+    public static let xSessionID = HTTPFieldName(unchecked: "x-session-id")
 }
