@@ -85,4 +85,41 @@ struct POSIXSocketTests {
         #expect(fd >= 0)
         #expect(port > 0)
     }
+
+    @Test("makeListenSocket binds IPv6 loopback (::1); accept + peerAddress report it (T-F12)")
+    func ipv6LoopbackRoundTrip() throws {
+        let (listenFD, port) = try POSIXSocket.makeListenSocket(
+            host: "::1",
+            port: 0,
+            nonBlocking: false,
+            backlog: 16
+        )
+        defer { close(listenFD) }
+        #expect(port > 0, "the IPv6 listener must report its ephemeral port")
+
+        let clientFD = socket(AF_INET6, SOCK_STREAM, 0)
+        #expect(clientFD >= 0)
+        defer { close(clientFD) }
+        var target = sockaddr_in6()
+        target.sin6_family = sa_family_t(AF_INET6)
+        target.sin6_port = port.bigEndian
+        _ = "::1".withCString { inet_pton(AF_INET6, $0, &target.sin6_addr) }
+        let connected = withUnsafePointer(to: &target) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(clientFD, $0, socklen_t(MemoryLayout<sockaddr_in6>.size))
+            }
+        }
+        #expect(connected == 0, "the client must connect to the IPv6 listener")
+
+        var storage = sockaddr_storage()
+        var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
+        let serverFD = withUnsafeMutablePointer(to: &storage) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                accept(listenFD, $0, &length)
+            }
+        }
+        #expect(serverFD >= 0)
+        defer { close(serverFD) }
+        #expect(POSIXSocket.peerAddress(from: storage).host == "::1")
+    }
 }

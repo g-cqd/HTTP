@@ -6,8 +6,9 @@
 //  create/bind/listen a TCP socket, toggle non-blocking mode, resolve the peer, and classify
 //  accept() failures. Keeps the three backbones DRY and consistent.
 //
-//  Standards: socket()/setsockopt()/bind()/listen()/getsockname()/fcntl()/inet_pton()/inet_ntop()
-//  per POSIX.1-2017 (IEEE Std 1003.1-2017). TCP (RFC 9293) over IPv4 (RFC 791).
+//  Standards: socket()/setsockopt()/bind()/listen()/getsockname()/fcntl()/getaddrinfo()/getnameinfo()
+//  per POSIX.1-2017 (IEEE Std 1003.1-2017). TCP (RFC 9293) over IPv4 (RFC 791) or IPv6 (RFC 4291) —
+//  the family is chosen from the host literal, matching Network.framework's reach (audit T-F12).
 //
 
 internal import Darwin
@@ -24,13 +25,26 @@ enum POSIXSocket {
         case stop
     }
 
-    /// Creates, binds (IPv4, RFC 791), and listens (TCP, RFC 9293) on a POSIX.1-2017 stream socket,
-    /// returning the descriptor and the OS-assigned port.
+    /// Creates, binds, and listens on a POSIX.1-2017 stream socket for IPv4 (RFC 791) or IPv6
+    /// (RFC 4291), returning the descriptor and the OS-assigned port.
+    ///
+    /// The address family is resolved from `host` by `getaddrinfo` (a colon-bearing literal is IPv6),
+    /// so a POSIX backbone reaches both families like Network.framework does (audit T-F12).
     static func makeListenSocket(
         // swiftlint:disable:next discouraged_default_parameter - reusePort is prefork opt-in
         host: String, port: UInt16, nonBlocking: Bool, reusePort: Bool = false, backlog: Int32
     ) throws -> (descriptor: Int32, port: UInt16) {
-        let rawFD = socket(AF_INET, SOCK_STREAM, 0)
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC  // IPv4 or IPv6, chosen from the host literal
+        hints.ai_socktype = SOCK_STREAM
+        hints.ai_flags = AI_PASSIVE  // a bindable (server) address
+        var resolved: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, String(port), &hints, &resolved) == 0, let info = resolved else {
+            throw TransportError.bindFailed("getaddrinfo(\(host)) failed")
+        }
+        defer { freeaddrinfo(resolved) }
+        let ai = info.pointee
+        let rawFD = socket(ai.ai_family, ai.ai_socktype, ai.ai_protocol)
         guard rawFD >= 0 else { throw TransportError.bindFailed("socket() errno \(errno)") }
 
         var reuse: Int32 = 1
@@ -50,20 +64,7 @@ enum POSIXSocket {
         setNoSIGPIPE(rawFD)
         if nonBlocking { setNonBlocking(rawFD) }
 
-        var address = sockaddr_in()
-        address.sin_family = sa_family_t(AF_INET)
-        address.sin_port = port.bigEndian
-        guard host.withCString({ inet_pton(AF_INET, $0, &address.sin_addr) }) == 1 else {
-            close(rawFD)
-            throw TransportError.bindFailed("invalid IPv4 host \(host)")
-        }
-
-        let bindStatus = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(rawFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
-            }
-        }
-        guard bindStatus == 0 else {
+        guard bind(rawFD, ai.ai_addr, ai.ai_addrlen) == 0 else {
             let captured = errno
             close(rawFD)
             throw TransportError.bindFailed("bind() errno \(captured)")
@@ -105,30 +106,46 @@ enum POSIXSocket {
         _ = setsockopt(rawFD, IPPROTO_TCP, TCP_NODELAY, &on, socklen_t(MemoryLayout<Int32>.size))
     }
 
-    /// Reads the OS-assigned port via `getsockname()`.
+    /// Reads the OS-assigned port via `getsockname()` (either address family).
     static func readBoundPort(of rawFD: Int32) -> UInt16 {
-        var address = sockaddr_in()
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        _ = withUnsafeMutablePointer(to: &address) { pointer in
+        var storage = sockaddr_storage()
+        var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
+        let ok = withUnsafeMutablePointer(to: &storage) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                getsockname(rawFD, $0, &length)
+                getsockname(rawFD, $0, &length) == 0
             }
         }
-        return UInt16(bigEndian: address.sin_port)
+        guard ok else {
+            return 0
+        }
+        return peerAddress(from: storage).port
     }
 
-    /// Resolves the peer's IPv4 address from a `sockaddr_in` (RFC 791) via `inet_ntop`.
-    static func peerAddress(from address: sockaddr_in) -> TransportAddress {
-        var source = address
-        var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
-        withUnsafePointer(to: &source.sin_addr) { addressPointer in
-            _ = inet_ntop(AF_INET, addressPointer, &buffer, socklen_t(INET_ADDRSTRLEN))
+    /// Resolves the peer's numeric host and port from an accepted `sockaddr_storage` of either family
+    /// (IPv4 RFC 791 / IPv6 RFC 4291) via `getnameinfo` — no per-family `inet_ntop` branching.
+    static func peerAddress(from storage: sockaddr_storage) -> TransportAddress {
+        var source = storage
+        var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+        var service = [CChar](repeating: 0, count: Int(NI_MAXSERV))
+        let length = socklen_t(source.ss_len)
+        let status = withUnsafePointer(to: &source) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                getnameinfo(
+                    sockaddrPointer,
+                    length,
+                    &host,
+                    socklen_t(host.count),
+                    &service,
+                    socklen_t(service.count),
+                    NI_NUMERICHOST | NI_NUMERICSERV
+                )
+            }
         }
-        let host = String(
-            decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
-            as: Unicode.UTF8.self
-        )
-        return TransportAddress(host: host, port: UInt16(bigEndian: address.sin_port))
+        guard status == 0 else {
+            return TransportAddress(host: "", port: 0)
+        }
+        let port = UInt16(String(cString: service)) ?? 0
+        return TransportAddress(host: String(cString: host), port: port)
     }
 
     /// Classifies an `accept()` failure (backs off briefly on fd exhaustion before retrying).

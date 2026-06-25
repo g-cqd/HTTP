@@ -100,8 +100,8 @@ public final class SwiftSystemTransport: ServerTransport {
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
         while state.withLock(\.isRunning) {
-            var address = sockaddr_in()
-            var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+            var address = sockaddr_storage()
+            var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                     accept(listenDescriptor.rawValue, $0, &length)
