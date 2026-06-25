@@ -44,7 +44,8 @@ struct POSIXSocketTests {
         let (fd, _) = try POSIXSocket.makeListenSocket(
             host: "127.0.0.1",
             port: 0,
-            nonBlocking: true
+            nonBlocking: true,
+            backlog: 256
         )
         defer { close(fd) }
 

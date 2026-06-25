@@ -61,6 +61,7 @@ public final class POSIXDispatchTransport: ServerTransport {
             host: configuration.host,
             port: configuration.port,
             nonBlocking: true,
+            backlog: configuration.backlog,
             reusePort: configuration.reusePort
         )
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()

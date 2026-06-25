@@ -28,7 +28,7 @@ enum POSIXSocket {
     /// returning the descriptor and the OS-assigned port.
     static func makeListenSocket(
         // swiftlint:disable:next discouraged_default_parameter - reusePort is prefork opt-in
-        host: String, port: UInt16, nonBlocking: Bool, reusePort: Bool = false
+        host: String, port: UInt16, nonBlocking: Bool, backlog: Int32, reusePort: Bool = false
     ) throws -> (descriptor: Int32, port: UInt16) {
         let rawFD = socket(AF_INET, SOCK_STREAM, 0)
         guard rawFD >= 0 else { throw TransportError.bindFailed("socket() errno \(errno)") }
@@ -68,7 +68,7 @@ enum POSIXSocket {
             close(rawFD)
             throw TransportError.bindFailed("bind() errno \(captured)")
         }
-        guard listen(rawFD, 128) == 0 else {
+        guard listen(rawFD, backlog) == 0 else {
             let captured = errno
             close(rawFD)
             throw TransportError.bindFailed("listen() errno \(captured)")

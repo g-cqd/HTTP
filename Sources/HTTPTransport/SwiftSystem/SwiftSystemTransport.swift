@@ -63,6 +63,7 @@ public final class SwiftSystemTransport: ServerTransport {
             host: configuration.host,
             port: configuration.port,
             nonBlocking: false,
+            backlog: configuration.backlog,
             reusePort: configuration.reusePort
         )
         let descriptor = FileDescriptor(rawValue: listener.descriptor)
