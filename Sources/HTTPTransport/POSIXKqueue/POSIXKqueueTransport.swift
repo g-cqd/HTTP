@@ -56,8 +56,8 @@ public final class POSIXKqueueTransport: ServerTransport {
             host: configuration.host,
             port: configuration.port,
             nonBlocking: true,
-            backlog: configuration.backlog,
-            reusePort: configuration.reusePort
+            reusePort: configuration.reusePort,
+            backlog: configuration.backlog
         )
         let eventLoop = KqueueEventLoop()
         eventLoop.start()
@@ -123,8 +123,8 @@ public final class POSIXKqueueTransport: ServerTransport {
             return
         }
         while true {
-            var address = sockaddr_in()
-            var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+            var address = sockaddr_storage()
+            var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                     accept(listenFD, $0, &length)
@@ -136,6 +136,7 @@ public final class POSIXKqueueTransport: ServerTransport {
             }
             POSIXSocket.setNonBlocking(clientFD)
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
             let id = connectionIDs.next()
             continuation.yield(
                 POSIXKqueueConnection(

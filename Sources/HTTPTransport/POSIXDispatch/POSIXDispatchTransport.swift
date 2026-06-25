@@ -61,8 +61,8 @@ public final class POSIXDispatchTransport: ServerTransport {
             host: configuration.host,
             port: configuration.port,
             nonBlocking: true,
-            backlog: configuration.backlog,
-            reusePort: configuration.reusePort
+            reusePort: configuration.reusePort,
+            backlog: configuration.backlog
         )
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
 
@@ -113,8 +113,8 @@ public final class POSIXDispatchTransport: ServerTransport {
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
         while state.withLock(\.isRunning) {
-            var address = sockaddr_in()
-            var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+            var address = sockaddr_storage()
+            var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                     accept(listenFD, $0, &length)
@@ -126,6 +126,7 @@ public final class POSIXDispatchTransport: ServerTransport {
             }
             POSIXSocket.setNonBlocking(clientFD)
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
             let id = connectionIDs.next()
             // A per-connection *serial* queue targeting the shared concurrent pool: it serializes this
             // connection's read/write readiness handling and close (so a close never races a syscall on

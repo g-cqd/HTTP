@@ -28,10 +28,11 @@ public struct TransportConfiguration: Sendable {
     /// across them. Off by default — see ``POSIXSocket/makeListenSocket(host:port:nonBlocking:reusePort:)``.
     public var reusePort: Bool
 
-    /// The `listen()` backlog — the kernel's pending-connection queue depth (POSIX backbones only).
+    /// The `listen(2)` backlog — the depth of the accepted-but-not-yet-`accept()`ed connection queue.
     ///
-    /// Default 256; the OS clamps it to its own maximum (`kern.ipc.somaxconn`), so raising that sysctl
-    /// lets a higher value take effect. Replaces a previously hard-coded `128` (audit T-F14).
+    /// macOS caps the effective value at `kern.ipc.somaxconn` (128 by default), so raising it past 128
+    /// takes effect only on a tuned host (or matters per-worker under SO_REUSEPORT); the default is a
+    /// sane ceiling either way, replacing the former hard-coded 128 (audit T-F14).
     public var backlog: Int32
 
     /// Creates a transport configuration.
@@ -41,7 +42,7 @@ public struct TransportConfiguration: Sendable {
         backbone: TransportBackbone,
         tls: TransportTLS? = nil,
         reusePort: Bool = false,
-        backlog: Int32 = 256
+        backlog: Int32 = 1_024
     ) {
         self.host = host
         self.port = port

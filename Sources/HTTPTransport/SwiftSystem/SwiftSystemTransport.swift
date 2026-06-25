@@ -63,8 +63,8 @@ public final class SwiftSystemTransport: ServerTransport {
             host: configuration.host,
             port: configuration.port,
             nonBlocking: false,
-            backlog: configuration.backlog,
-            reusePort: configuration.reusePort
+            reusePort: configuration.reusePort,
+            backlog: configuration.backlog
         )
         let descriptor = FileDescriptor(rawValue: listener.descriptor)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
@@ -100,8 +100,8 @@ public final class SwiftSystemTransport: ServerTransport {
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
         while state.withLock(\.isRunning) {
-            var address = sockaddr_in()
-            var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+            var address = sockaddr_storage()
+            var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                     accept(listenDescriptor.rawValue, $0, &length)
@@ -112,6 +112,7 @@ public final class SwiftSystemTransport: ServerTransport {
                 break  // a closed descriptor (shutdown) or unrecoverable error stops the loop
             }
             POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
             let id = connectionIDs.next()
             continuation.yield(
                 SwiftSystemConnection(
