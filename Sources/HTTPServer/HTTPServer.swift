@@ -156,6 +156,16 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             return
         }
 
+        // ALPACA hardening (RFC 7301 §3.2): over TLS we advertised our ALPN protocols, so the
+        // handshake must have settled on one we serve. "h2" is handled above; "http/1.1" is the only
+        // other value we serve. Anything else — including no ALPN at all — is refused (closed) rather
+        // than silently downgraded to HTTP/1.1. Cleartext (`isSecure == false`) is unaffected: it is
+        // routed by h2c-preface sniffing / prior knowledge below.
+        if connection.isSecure, connection.negotiatedApplicationProtocol != "http/1.1" {
+            await connection.close()
+            return
+        }
+
         await withIdleWatchdog(connection) { deadline in
             var buffer: [UInt8] = []
             // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).

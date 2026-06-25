@@ -124,6 +124,7 @@ public final class NetworkFrameworkTransport: ServerTransport {
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
         let id = connectionIDs.next()
+        let isSecure = configuration.tls != nil  // a TLS listener advertised ALPN; enforce it below
         // Surface the connection only once the handshake settles (`.ready`), so its negotiated ALPN
         // protocol (RFC 7301) is known and the server can commit to h2 vs h1 without sniffing. For a
         // cleartext listener `.ready` is just the completed TCP connect and ALPN resolves to nil.
@@ -136,7 +137,8 @@ public final class NetworkFrameworkTransport: ServerTransport {
                         NetworkFrameworkConnection(
                             id: id,
                             connection: nwConnection,
-                            negotiatedApplicationProtocol: alpn
+                            negotiatedApplicationProtocol: alpn,
+                            isSecure: isSecure
                         )
                     )
                 case .failed, .cancelled:

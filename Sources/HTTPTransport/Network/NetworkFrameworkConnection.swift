@@ -24,17 +24,22 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
     /// The ALPN-negotiated protocol (RFC 7301), captured once the handshake reached `.ready`.
     public let negotiatedApplicationProtocol: String?
 
+    /// Whether this connection arrived over TLS (so ALPN was advertised and is enforced).
+    public let isSecure: Bool
+
     private let connection: NWConnection
 
     /// Wraps a connection that has reached `.ready`, recording its negotiated ALPN protocol.
     init(
         id: TransportConnectionID,
         connection: NWConnection,
-        negotiatedApplicationProtocol: String?
+        negotiatedApplicationProtocol: String?,
+        isSecure: Bool
     ) {
         self.id = id
         self.peer = Self.address(of: connection.endpoint)
         self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
+        self.isSecure = isSecure
         self.connection = connection
     }
 

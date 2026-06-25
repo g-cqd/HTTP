@@ -17,6 +17,9 @@ public actor FakeConnection: TransportConnection {
     /// The ALPN-negotiated protocol to report (RFC 7301), injected for routing tests.
     nonisolated public let negotiatedApplicationProtocol: String?
 
+    /// Whether to report the connection as TLS-secured — drives ALPN-enforcement routing tests.
+    nonisolated public let isSecure: Bool
+
     private var inbound: ArraySlice<UInt8>
     private var output: [UInt8] = []
     private var closed = false
@@ -26,11 +29,13 @@ public actor FakeConnection: TransportConnection {
         id: TransportConnectionID,
         peer: TransportAddress = TransportAddress(host: "fake", port: 0),
         negotiatedApplicationProtocol: String? = nil,
+        isSecure: Bool = false,
         inbound: [UInt8] = []
     ) {
         self.id = id
         self.peer = peer
         self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
+        self.isSecure = isSecure
         self.inbound = inbound[...]
     }
 

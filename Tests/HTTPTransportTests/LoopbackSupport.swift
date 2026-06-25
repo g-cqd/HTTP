@@ -39,7 +39,8 @@ func assertLoopbackEcho(
     let bridged = NetworkFrameworkConnection(
         id: TransportConnectionID(0),
         connection: client,
-        negotiatedApplicationProtocol: nil
+        negotiatedApplicationProtocol: nil,
+        isSecure: false
     )
     client.start(queue: .global())
 

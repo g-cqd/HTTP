@@ -25,6 +25,14 @@ public protocol TransportConnection: Sendable {
     /// drives the HTTP/2 engine without preface sniffing; cleartext connections (`nil`) are sniffed.
     var negotiatedApplicationProtocol: String? { get }
 
+    /// Whether transport-level encryption (TLS / QUIC) is active on this connection.
+    ///
+    /// When `true` the peer reached us over TLS, so the server advertised its ALPN protocols
+    /// (RFC 7301) and requires the handshake to have settled on one it serves; a connection that
+    /// negotiated none is refused rather than silently treated as HTTP/1.1 (ALPACA hardening,
+    /// RFC 7301 §3.2). When `false` (cleartext) the protocol is decided by prior knowledge / sniffing.
+    var isSecure: Bool { get }
+
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
     func receive(maxLength: Int) async throws -> [UInt8]?
 
@@ -39,4 +47,7 @@ extension TransportConnection {
     /// Cleartext and pre-handshake connections negotiate no application protocol; TLS backbones
     /// override this once ALPN (RFC 7301) resolves.
     public var negotiatedApplicationProtocol: String? { nil }
+
+    /// Cleartext by default; a TLS-capable backbone overrides this to `true`.
+    public var isSecure: Bool { false }
 }
