@@ -123,10 +123,16 @@ extension HTTPFieldName {
 
     // MARK: Conditional requests (RFC 9110 §13)
 
+    /// `If-Match` (RFC 9110 §13.1.1) — run the method only if a current validator strong-matches.
+    public static let ifMatch = HTTPFieldName(unchecked: "if-match")
     /// `If-None-Match` (RFC 9110 §13.1.2) — the validators a cache holds; matches make a 304.
     public static let ifNoneMatch = HTTPFieldName(unchecked: "if-none-match")
     /// `If-Modified-Since` (RFC 9110 §13.1.3).
     public static let ifModifiedSince = HTTPFieldName(unchecked: "if-modified-since")
+    /// `If-Unmodified-Since` (RFC 9110 §13.1.4).
+    public static let ifUnmodifiedSince = HTTPFieldName(unchecked: "if-unmodified-since")
+    /// `If-Range` (RFC 9110 §13.1.5) — serve the range only if the validator still matches.
+    public static let ifRange = HTTPFieldName(unchecked: "if-range")
     /// `Last-Modified` (RFC 9110 §8.8.2).
     public static let lastModified = HTTPFieldName(unchecked: "last-modified")
 

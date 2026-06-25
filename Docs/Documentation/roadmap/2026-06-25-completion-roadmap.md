@@ -18,9 +18,10 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       OPTIONS auto-handling + `Allow` (on `OPTIONS` and `405`), `.options`/`.head` factories, typed
       query/cookie accessors. _Gate:_ RouterTests for each; example builds + serves. ✓ 752 tests green.
 
-- [ ] **P2 — Conditional + Range completeness.** `If-Match`/`If-Unmodified-Since` (→412),
+- [x] **P2 — Conditional + Range completeness.** `If-Match`/`If-Unmodified-Since` (→412),
       `If-Modified-Since` (→304), `If-Range`, `Last-Modified`, §13.2.2 precedence; multi-range
       `206 multipart/byteranges`. _Gate:_ precedence + multi-range tests; no 304/206/416 regression.
+      ✓ 767 tests green; `HTTPDate.parse` added (Foundation-free, 25× faster than `DateFormatter`).
 
 - [ ] **P3 — Operational middleware.** RateLimit (RFC 6585, 429 + Retry-After over `RollingWindow`),
       RequestID (X-Request-ID propagate/mint), Session (signed cookie via CryptoKit HMAC). _Gate:_
@@ -64,3 +65,6 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
 - 2026-06-25 — P0 scaffold created; battletest worktree removed; roadmap approved.
 - 2026-06-25 — P1 done: route groups + per-group middleware, catch-all, auto-OPTIONS/Allow (+405 Allow),
   `.options`/`.head` factories, typed `query`/`cookies` accessors + `@dynamicMemberLookup`. 752 tests.
+- 2026-06-25 — P2 done: full §13.2.2 conditional precedence (If-Match/If-Unmodified-Since→412,
+  If-Modified-Since→304, If-Range), `Last-Modified`; multi-range `multipart/byteranges` (CVE-2011-3192
+  cap); new `HTTPDate.parse` + shared `EntityTag`. 767 tests; ASan clean.

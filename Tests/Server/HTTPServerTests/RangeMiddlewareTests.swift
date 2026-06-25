@@ -3,9 +3,10 @@
 //  HTTPServerTests
 //
 //  Range requests (RFC 9110 §14): the byte-range parser (single / suffix / open-ended / unsatisfiable
-//  / ignored forms) and the middleware behavior — 206 with Content-Range + sliced body, 416 for a
-//  range past the body, Accept-Ranges advertised on a range-able 200, and fail-open to the full 200
-//  for multi-range / non-bytes / non-GET.
+//  / ignored forms) and the middleware behavior — 206 with Content-Range + sliced body, a
+//  206 multipart/byteranges envelope for several ranges, 416 for a range past the body, If-Range
+//  validation, the CVE-2011-3192 range-count cap, Accept-Ranges on a range-able 200, and fail-open to
+//  the full 200 for non-bytes / non-GET.
 //
 
 import HTTPCore
@@ -71,10 +72,49 @@ struct RangeMiddlewareTests {
         #expect(response.body == Array("hello".utf8))
     }
 
-    @Test("a multi-range request is ignored — the full 200 is served (RFC 9110 §14.2)")
-    func multiRangeServesFull() async {
+    @Test("a multi-range request returns 206 multipart/byteranges (RFC 9110 §14.6)")
+    func multiRangeMultipart() async {
         let response = await served("0123456789")
             .respond(to: request(range: "bytes=0-1,4-5"), body: [])
+        #expect(response.head.status == .partialContent)
+        let contentType = response.head.headerFields[.contentType] ?? ""
+        #expect(contentType.hasPrefix("multipart/byteranges; boundary="))
+        let text = String(decoding: response.body, as: Unicode.UTF8.self)
+        #expect(text.contains("Content-Range: bytes 0-1/10"))
+        #expect(text.contains("Content-Range: bytes 4-5/10"))
+        #expect(text.contains("01"))  // the first part's two bytes
+        #expect(text.contains("45"))  // the second part's two bytes
+    }
+
+    @Test("a multi-range entirely past the body is 416")
+    func multiRangeAllUnsatisfiable() async {
+        let response = await served("0123456789")
+            .respond(to: request(range: "bytes=20-21,30-31"), body: [])
+        #expect(response.head.status == .rangeNotSatisfiable)
+    }
+
+    @Test("a flood of ranges is ignored — the full 200 is served (CVE-2011-3192)")
+    func tooManyRangesServesFull() async {
+        let many = (0 ..< 20).map { "\($0)-\($0)" }.joined(separator: ",")
+        let response = await served("0123456789")
+            .respond(to: request(range: "bytes=\(many)"), body: [])
+        #expect(response.head.status == .ok)
+        #expect(response.body == Array("0123456789".utf8))
+    }
+
+    @Test("If-Range with a matching ETag serves the range (RFC 9110 §13.1.5)")
+    func ifRangeMatchServesRange() async {
+        let etag = EntityTag.crc(for: Array("0123456789".utf8))
+        let response = await served("0123456789")
+            .respond(to: request(range: "bytes=0-3", ifRange: etag), body: [])
+        #expect(response.head.status == .partialContent)
+        #expect(response.body == Array("0123".utf8))
+    }
+
+    @Test("If-Range with a stale validator serves the full 200, not the range")
+    func ifRangeMismatchServesFull() async {
+        let response = await served("0123456789")
+            .respond(to: request(range: "bytes=0-3", ifRange: "\"stale\""), body: [])
         #expect(response.head.status == .ok)
         #expect(response.body == Array("0123456789".utf8))
     }
@@ -95,9 +135,14 @@ struct RangeMiddlewareTests {
         .wrapped(by: RangeMiddleware())
     }
 
-    private func request(range: String? = nil, method: HTTPMethod = .get) -> HTTPRequest {
+    private func request(
+        range: String? = nil,
+        method: HTTPMethod = .get,
+        ifRange: String? = nil
+    ) -> HTTPRequest {
         var fields = HTTPFields()
         if let range { _ = fields.append(range, for: .range) }
+        if let ifRange { _ = fields.append(ifRange, for: .ifRange) }
         return HTTPRequest(
             method: method, scheme: "https", authority: "x", path: "/", headerFields: fields
         )
