@@ -77,6 +77,8 @@ extension HTTPFieldName {
 
     /// `Authorization` (RFC 9110 §11.6.2).
     public static let authorization = HTTPFieldName(unchecked: "authorization")
+    /// `WWW-Authenticate` (RFC 9110 §11.6.1) — the challenge a `401` carries (`Basic` / `Bearer`).
+    public static let wwwAuthenticate = HTTPFieldName(unchecked: "www-authenticate")
     /// `Cookie` (RFC 6265 §5.4).
     public static let cookie = HTTPFieldName(unchecked: "cookie")
     /// `Set-Cookie` (RFC 6265 §5.2).
@@ -169,4 +171,7 @@ extension HTTPFieldName {
     /// `X-Session-ID` — the verified session id ``SessionMiddleware`` asserts for the handler; any
     /// client-supplied value is stripped, so it is server-asserted and never trusted from the wire.
     public static let xSessionID = HTTPFieldName(unchecked: "x-session-id")
+    /// `X-Auth-Subject` — the verified principal (a Basic username or a JWT `sub`) the auth middlewares
+    /// assert for the handler; any client-supplied value is stripped (server-asserted, never trusted).
+    public static let xAuthSubject = HTTPFieldName(unchecked: "x-auth-subject")
 }

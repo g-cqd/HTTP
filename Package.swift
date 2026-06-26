@@ -59,6 +59,7 @@ let package = Package(
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
         .library(name: "HTTPObservability", targets: ["HTTPObservability"]),
+        .library(name: "HTTPAuth", targets: ["HTTPAuth"]),
         .executable(name: "httpd-example", targets: ["httpd-example"])
     ],
     dependencies: [
@@ -79,7 +80,12 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-metrics.git", from: "2.4.0"),
         .package(url: "https://github.com/swift-server/swift-prometheus.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.1.0"),
-        .package(url: "https://github.com/apple/swift-service-context.git", from: "1.1.0")
+        .package(url: "https://github.com/apple/swift-service-context.git", from: "1.1.0"),
+        // apple/swift-crypto (gap G7) — JWT signature verification in the isolated `HTTPAuth` module:
+        // HS256 via `Crypto`'s HMAC, ES256 via P256, RS256 via `_CryptoExtras`' `_RSA`. Confined to
+        // `HTTPAuth`, so a bare-server consumer never resolves it (`_CryptoExtras` pulls a BoringSSL
+        // graph). apple/* — allowed by CLAUDE.md.
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0")
     ],
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
@@ -308,6 +314,27 @@ let package = Package(
                 .product(name: "ServiceContextModule", package: "swift-service-context")
             ],
             path: "Tests/Server/HTTPObservabilityTests"
+        ),
+        // G7 — opt-in auth middlewares (Basic / JWT-Bearer / Forward). ISOLATED so swift-crypto (and its
+        // `_CryptoExtras` BoringSSL graph) stays out of a bare-server consumer's resolved graph; it
+        // depends on HTTPServer one-way.
+        .target(
+            name: "HTTPAuth",
+            dependencies: [
+                "HTTPServer",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "_CryptoExtras", package: "swift-crypto")
+            ],
+            path: "Sources/HTTPAuth"
+        ),
+        .testTarget(
+            name: "HTTPAuthTests",
+            dependencies: [
+                "HTTPAuth", "HTTPServer", "HTTPCore",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "_CryptoExtras", package: "swift-crypto")
+            ],
+            path: "Tests/Server/HTTPAuthTests"
         )
     ]
 )

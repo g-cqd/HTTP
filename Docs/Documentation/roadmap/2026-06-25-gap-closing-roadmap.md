@@ -75,17 +75,25 @@ We decode `br`/`deflate`/`gzip` inbound (P4) but only *emit* gzip. Close the asy
       traversal-safe + off-by-default + HTML-escaped, fallback resolves; HEAD/range/conditional/403 unaffected.
       ✓ green: `FileResponderTests` — 14 cases (8 prior + 6 new); ASan + lint clean.
 
-### [ ] G7 — Auth building blocks · Effort M · Risk ■
+### [x] G7 — Auth building blocks · Effort M · Risk ■ — *new isolated `HTTPAuth` module*
 We ship signed sessions only. Add the verification primitives (keep OAuth/OIDC *flows* out — app concern).
-- [ ] **`BasicAuthMiddleware`** (RFC 7617): realm, constant-time credential verify closure, `401` +
-      `WWW-Authenticate`, never logs credentials.
-- [ ] **`BearerAuth`/`JWTMiddleware`**: verify HS256/RS256/ES256 via swift-crypto/CryptoKit, validate
-      `exp`/`nbf`/`aud`/`iss`, pluggable key source (static JWKS now; remote JWKS fetch optional later),
-      surface verified claims on the request context.
-- [ ] **`ForwardAuthMiddleware`** (the `auth_request`/`forward_auth` escape hatch): subrequest to an
-      external authz URL, propagate decision + selected upstream headers.
+All three live in a new isolated **`HTTPAuth`** module so swift-crypto (and its `_CryptoExtras` BoringSSL
+graph) stays out of a bare-server consumer's resolved graph. Surfaces the verified principal on the new
+`.xAuthSubject` field (a richer claims-context object is a separate enhancement — the request is
+header-only).
+- [x] **`BasicAuthMiddleware`** (RFC 7617): realm, constant-time verify (closure or a bundled fixed
+      credential via double-HMAC), `401` + `WWW-Authenticate: Basic`, never logs credentials.
+- [x] **`JWTMiddleware`** + the `JWT` verify core: **HS256/ES256/RS256** via swift-crypto, validates
+      `exp`/`nbf`/`aud`/`iss`; the verifier is bound to one algorithm, so `alg:"none"` and an algorithm
+      mismatch are rejected before any key is touched (the confusion defense). Static key (D4 — static
+      first; remote JWKS deferred). Asserts `sub` on `.xAuthSubject`.
+- [x] **`ForwardAuthMiddleware`** (`auth_request`/`forward_auth` escape hatch): an **injected closure**
+      decides allow (propagating chosen headers) / deny — the app owns the subrequest (the server has no
+      HTTP client).
 - _Gate:_ basic accept/reject + constant-time, JWT valid/expired/bad-sig/wrong-aud + alg-confusion (`none`/
       HS-vs-RS) rejected, forward-auth allow/deny + header propagation; no credential leakage in logs.
+      ✓ green: `HTTPAuthTests` — 21 cases (HS/ES/RS256, exp/nbf/aud/iss, `none` + HS-vs-ES confusion,
+      Basic, forward-auth); ASan + lint clean.
 
 ### [x] G1 — Observability bridges · Effort M · Risk ● — *continues completion-roadmap P9*
 A clean `HTTPMetrics` seam + closure logging exist; ship the exporters as an isolated module.
@@ -244,3 +252,10 @@ in the project docs.)
   adapted from ADServe's `planStaticFile`), a `try_files` SPA fallback, and an opt-in HTML-escaped
   directory autoindex (off by default). No new dependency. **sendfile deferred** to a transport-layer
   phase (architectural). 896 tests (+6), ASan + lint clean. **W1 remaining: G7.**
+- 2026-06-26 — **G7 shipped — Wave W1 complete**: a new **isolated `HTTPAuth`** module with
+  `BasicAuthMiddleware` (RFC 7617, constant-time), a `JWT` verify core + `JWTMiddleware` (HS256/ES256/RS256
+  via apple/swift-crypto, `exp`/`nbf`/`aud`/`iss`, `alg:none` + algorithm-confusion rejected), and
+  `ForwardAuthMiddleware` (injected-closure escape hatch). `.wwwAuthenticate`/`.xAuthSubject` added to the
+  HTTPCore registry. swift-crypto (+ `_CryptoExtras`/BoringSSL) confined to `HTTPAuth` — core targets'
+  deps unchanged. 917 tests (+21), ASan + lint clean. **W1 (G2, G5, G7, G1) done; next: W2 (G3/G4 TLS),
+  W3 (G0 Linux), W4 (G6 protocol tail).**
