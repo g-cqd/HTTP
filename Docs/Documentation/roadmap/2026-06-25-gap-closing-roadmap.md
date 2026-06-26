@@ -116,15 +116,19 @@ A clean `HTTPMetrics` seam + closure logging exist; ship the exporters as an iso
 
 ## W2 — Transport & TLS hardening
 
-### [ ] G3 — mTLS / client certificates · Effort M · Risk ■
+### [~] G3 — mTLS / client certificates · Effort M · Risk ■ — *Darwin shipped; `.optional` + SAN/chain → G0*
 Network.framework exposes client-cert challenge + verify blocks; surface them.
-- [ ] `TransportTLS.clientAuth`: `.none` / `.optional` / `.required`; a trust-evaluation hook (custom CA /
-      pinning).
-- [ ] Surface the **verified client identity** (subject, SAN, cert chain) on the request context for
-      handlers/middleware (zero-trust, service-to-service).
-- [ ] `SecurityHeadersMiddleware`/docs note on pairing mTLS with auth.
-- _Gate:_ required-auth rejects no-cert + untrusted-cert, optional-auth allows both with identity present/
-      absent, pinning hook honored; loopback integration test with a generated client cert.
+- [x] `TransportTLS.clientAuth`: `.none` / `.required` + a `verifyPeer` trust-evaluation hook over the DER
+      chain (custom CA / pinning), expressed backbone-agnostically (raw DER, leaf-first) so it ports to the
+      G0 BoringSSL path. `.optional` deferred to G0 (Network.framework cleanly does require/none only).
+- [x] Surface the **verified client identity** (leaf subject) as the server-asserted `.xClientCertSubject`
+      header — the connection→request seam the stack already uses for `.xRequestID`/`.xAuthSubject`,
+      stripping any inbound spoof. Full SAN / cert chain is a documented header-only limitation (richer
+      request-scoped context → G0, same shape as G7's claims).
+- [ ] `SecurityHeadersMiddleware`/docs note on pairing mTLS with auth (follow-up).
+- _Gate:_ ✓ required-auth rejects no-cert + pin-rejected cert; pinning hook honored over the DER chain;
+      real-loopback integration test with a `DevTLSIdentity` client surfaces its subject; server-stamp test
+      strips a spoofed subject and rejects a CR/LF-injecting one (CWE-93). (`.optional` allow-both → G0.)
 
 ### [ ] G4 — Graceful config & certificate reload · Effort L · Risk ■
 Today a cert rotation or route change needs a restart. Make both hot.
@@ -259,3 +263,16 @@ in the project docs.)
   HTTPCore registry. swift-crypto (+ `_CryptoExtras`/BoringSSL) confined to `HTTPAuth` — core targets'
   deps unchanged. 917 tests (+21), ASan + lint clean. **W1 (G2, G5, G7, G1) done; next: W2 (G3/G4 TLS),
   W3 (G0 Linux), W4 (G6 protocol tail).**
+- 2026-06-26 — **G3 shipped on Darwin (W2 begins)**: mutual TLS / client certificates on the
+  Network.framework backbone. `TransportTLS` gains `clientAuth` (`.none`/`.required`; `.optional` → G0)
+  and a backbone-agnostic `verifyPeer` trust/pinning hook over the **DER chain** (leaf-first, portable to
+  G0). `NetworkFrameworkTLS.options` now sets `peer_authentication_required` + a `verify_block` that
+  extracts the chain via `sec_protocol_metadata_access_peer_certificate_chain` → `SecCertificateCopyData`
+  and calls the hook (failing the handshake on `false`); the leaf subject is captured at `.ready`
+  (`SecCertificateCopySubjectSummary`) and surfaced as `TransportConnection.tlsPeerSubject`. The HTTP/1 +
+  HTTP/2 dispatch paths stamp it as the **server-asserted** `.xClientCertSubject` (new HTTPCore field),
+  stripping any inbound spoof and rejecting a CR/LF-injecting subject via `field-value` validation
+  (CWE-93). Full SAN/chain is a documented header-only limitation (richer context → G0). 925 tests (+8):
+  real-loopback mTLS handshakes (subject surfaced, no-cert + pin-rejected fail, DER chain delivered
+  leaf-first) through `NetworkFrameworkTransport` + `DevTLSIdentity`, plus server-level stamp/strip/inject
+  tests. ASan + swift-format/SwiftLint `--strict` clean. **W2 remaining: G4 (hot responder + cert reload).**

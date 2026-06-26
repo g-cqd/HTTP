@@ -20,6 +20,10 @@ public actor FakeConnection: TransportConnection {
     /// Whether to report the connection as TLS-secured — drives ALPN-enforcement routing tests.
     nonisolated public let isSecure: Bool
 
+    /// The verified mutual-TLS client-certificate subject to report, injected for client-cert
+    /// (G3) stamping tests; `nil` (the default) models a connection with no client certificate.
+    nonisolated public let tlsPeerSubject: String?
+
     private var inbound: ArraySlice<UInt8>
     private var output: [UInt8] = []
     private var closed = false
@@ -30,12 +34,14 @@ public actor FakeConnection: TransportConnection {
         peer: TransportAddress = TransportAddress(host: "fake", port: 0),
         negotiatedApplicationProtocol: String? = nil,
         isSecure: Bool = false,
+        tlsPeerSubject: String? = nil,
         inbound: [UInt8] = []
     ) {
         self.id = id
         self.peer = peer
         self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
         self.isSecure = isSecure
+        self.tlsPeerSubject = tlsPeerSubject
         self.inbound = inbound[...]
     }
 

@@ -27,19 +27,26 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
     /// Whether this connection arrived over TLS (so ALPN was advertised and is enforced).
     public let isSecure: Bool
 
+    /// The verified client-certificate subject (mutual TLS), captured at `.ready`, or `nil` when no
+    /// client certificate was presented.
+    public let tlsPeerSubject: String?
+
     private let connection: NWConnection
 
-    /// Wraps a connection that has reached `.ready`, recording its negotiated ALPN protocol.
+    /// Wraps a connection that has reached `.ready`, recording its negotiated ALPN protocol and, for
+    /// mutual TLS, the verified client-certificate subject.
     init(
         id: TransportConnectionID,
         connection: NWConnection,
         negotiatedApplicationProtocol: String?,
-        isSecure: Bool
+        isSecure: Bool,
+        tlsPeerSubject: String? = nil
     ) {
         self.id = id
         self.peer = Self.address(of: connection.endpoint)
         self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
         self.isSecure = isSecure
+        self.tlsPeerSubject = tlsPeerSubject
         self.connection = connection
     }
 

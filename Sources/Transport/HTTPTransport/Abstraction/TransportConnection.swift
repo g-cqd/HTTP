@@ -33,6 +33,15 @@ public protocol TransportConnection: Sendable {
     /// RFC 7301 §3.2). When `false` (cleartext) the protocol is decided by prior knowledge / sniffing.
     var isSecure: Bool { get }
 
+    /// The subject summary of the peer's verified client certificate (mutual TLS), or `nil` when no
+    /// client certificate was presented — cleartext, one-way TLS, or before the handshake settles.
+    ///
+    /// Populated only by a TLS backbone configured for ``TransportTLS/ClientAuth/required``, captured
+    /// once the handshake reaches `.ready`. The server asserts it onto the request as the
+    /// server-controlled `X-Client-Cert-Subject` field for handlers and middleware (zero-trust /
+    /// service-to-service identity).
+    var tlsPeerSubject: String? { get }
+
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
     func receive(maxLength: Int) async throws -> [UInt8]?
 
@@ -50,4 +59,8 @@ extension TransportConnection {
 
     /// Cleartext by default; a TLS-capable backbone overrides this to `true`.
     public var isSecure: Bool { false }
+
+    /// No client certificate by default; a TLS backbone doing mutual TLS overrides this once the
+    /// handshake settles.
+    public var tlsPeerSubject: String? { nil }
 }

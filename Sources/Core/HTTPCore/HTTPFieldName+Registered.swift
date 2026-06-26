@@ -174,4 +174,10 @@ extension HTTPFieldName {
     /// `X-Auth-Subject` — the verified principal (a Basic username or a JWT `sub`) the auth middlewares
     /// assert for the handler; any client-supplied value is stripped (server-asserted, never trusted).
     public static let xAuthSubject = HTTPFieldName(unchecked: "x-auth-subject")
+    /// `X-Client-Cert-Subject` — the subject of the verified TLS client certificate (mutual TLS) the
+    /// server asserts for the handler; any client-supplied value is stripped (server-asserted, never
+    /// trusted).
+    ///
+    /// Present only on a connection that completed a `.required` client-auth handshake.
+    public static let xClientCertSubject = HTTPFieldName(unchecked: "x-client-cert-subject")
 }

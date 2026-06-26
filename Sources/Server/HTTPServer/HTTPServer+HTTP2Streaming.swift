@@ -41,7 +41,9 @@ extension HTTPServer {
         connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>
     ) async -> Bool {
-        let response = await responder.respond(to: request, body: body)
+        // Stamp the verified mutual-TLS client identity (G3) before dispatch, like the HTTP/1 path.
+        let stamped = Self.stampingClientCertSubject(request, from: connection)
+        let response = await responder.respond(to: stamped, body: body)
         if let bodyStream = response.stream {
             return await streamHTTP2Response(
                 withAltSvc(response.head),
@@ -173,7 +175,7 @@ extension HTTPServer {
             if case .streamReset(let id, _) = event, id == streamID {
                 return .streamDone  // the peer cancelled this stream — stop, connection continues
             }
-            await applyConcurrentEvent(event, engine: &engine)
+            await applyConcurrentEvent(event, engine: &engine, connection: connection)
         }
         return await flushHTTP2(&engine, to: connection) ? .closeConnection : .keepStreaming
     }
@@ -210,12 +212,14 @@ extension HTTPServer {
     /// streams one response at a time (other event kinds are deferred until streaming ends).
     private func applyConcurrentEvent(
         _ event: HTTP2Connection.Event,
-        engine: inout HTTP2Connection
+        engine: inout HTTP2Connection,
+        connection: any TransportConnection
     ) async {
         guard case .request(let id, let request, let body) = event else {
             return
         }
-        let response = await responder.respond(to: request, body: body)
+        let stamped = Self.stampingClientCertSubject(request, from: connection)
+        let response = await responder.respond(to: stamped, body: body)
         let buffered = await bufferedResponse(response)
         try? engine.respond(to: id, withAltSvc(buffered.head), body: buffered.body)
     }

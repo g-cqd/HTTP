@@ -121,7 +121,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
             identity: identity,
             applicationProtocols: tls.applicationProtocols,
             minVersion: tls.minVersion,
-            maxVersion: tls.maxVersion
+            maxVersion: tls.maxVersion,
+            clientAuth: tls.clientAuth,
+            verifyPeer: tls.verifyPeer
         )
         return NWParameters(tls: options, tcp: tcp)
     }
@@ -140,12 +142,17 @@ public final class NetworkFrameworkTransport: ServerTransport {
                 case .ready:
                     nwConnection.stateUpdateHandler = nil
                     let alpn = NetworkFrameworkTLS.negotiatedApplicationProtocol(of: nwConnection)
+                    // Capture the verified client-cert subject (mutual TLS) on the NW queue, where the
+                    // handshake metadata is settled — nil unless this is a `.required` client-auth
+                    // listener and the peer presented an accepted certificate.
+                    let peerSubject = NetworkFrameworkTLS.peerSubject(of: nwConnection)
                     continuation.yield(
                         NetworkFrameworkConnection(
                             id: id,
                             connection: nwConnection,
                             negotiatedApplicationProtocol: alpn,
-                            isSecure: isSecure
+                            isSecure: isSecure,
+                            tlsPeerSubject: peerSubject
                         )
                     )
                 case .failed, .cancelled:
