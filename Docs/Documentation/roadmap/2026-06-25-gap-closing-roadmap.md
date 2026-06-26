@@ -82,14 +82,17 @@ We ship signed sessions only. Add the verification primitives (keep OAuth/OIDC *
 - _Gate:_ basic accept/reject + constant-time, JWT valid/expired/bad-sig/wrong-aud + alg-confusion (`none`/
       HS-vs-RS) rejected, forward-auth allow/deny + header propagation; no credential leakage in logs.
 
-### [~] G1 — Observability bridges · Effort M · Risk ● — *continues completion-roadmap P9*
+### [x] G1 — Observability bridges · Effort M · Risk ● — *continues completion-roadmap P9*
 A clean `HTTPMetrics` seam + closure logging exist; ship the exporters as an isolated module.
-- [~] **`Sources/HTTPObservability/`** isolated module (new deps confined to it): a swift-log structured
+- [x] **`Sources/HTTPObservability/`** isolated module (new deps confined to it): a swift-log structured
       access sink + a swift-metrics `HTTPMetrics` sink with a **Prometheus text exporter** (`/metrics`)
-      **shipped (G1a)**; swift-distributed-tracing **span per request** → G1b. (Metrics use method×status
-      labels only — never the path — bounding cardinality and sidestepping swift-prometheus CVE-2024-28867.)
-- [ ] **W3C trace-context**: parse `traceparent`/`tracestate` inbound, propagate a span context on the
-      request, inject on outbound (sets us up for distributed traces end-to-end). → G1b
+      (G1a) and a swift-distributed-tracing **`.server` span per request** with OTel attributes (G1b).
+      (Metrics use method×status labels only — never the path — bounding cardinality and sidestepping
+      swift-prometheus CVE-2024-28867.)
+- [x] **W3C trace-context**: `traceparent`/`tracestate` extracted inbound via an `Extractor` over
+      `HTTPFields`, the span context propagated task-locally on the request (so an instrumented call in a
+      handler inherits it). Outbound *injection* is N/A here — the server makes no upstream calls (a client
+      concern); deferred until one exists.
 - [x] **Built-in `/healthz` + `/readyz`** handlers (liveness/readiness), drain-aware via a `ReadinessProbe`
       the app flips on graceful shutdown (readyz → 503).
 - _Gate:_ bridge tests (log line shape, Prometheus exposition parse, span open/close + trace-context
@@ -226,3 +229,8 @@ in the project docs.)
   adapted from the sibling ADServe project's `ADServeObservability`. New deps (swift-log, swift-metrics,
   swift-prometheus, +swift-atomics transitively) are confined to the module — core targets' resolved deps
   unchanged. 887 tests (+4), ASan + lint clean. Tracing + W3C trace-context (G1b) next.
+- 2026-06-26 — **G1b shipped — G1 complete**: a swift-distributed-tracing `TracingMiddleware` (ported from
+  ADServe) opening a `.server` span per request with the OTel HTTP attributes, marking 5xx errored, plus
+  an `HTTPFieldsExtractor` that reads W3C `traceparent`/`tracestate` inbound (trace-context propagation).
+  Tested against the official `InMemoryTracer`. New deps (swift-distributed-tracing, swift-service-context)
+  stay confined to `HTTPObservability`. 890 tests (+3), ASan + lint clean. **Wave W1 remaining: G5, G7.**

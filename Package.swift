@@ -74,10 +74,12 @@ let package = Package(
         // never by a core/protocol/transport/server target, so a consumer of the bare server never pulls
         // them in. All are apple/* or swift-server/* (allowed by CLAUDE.md). swift-metrics records into
         // swift-prometheus' registry for the `/metrics` exposition; swift-log backs the structured access
-        // log. (swift-distributed-tracing is added with the tracing middleware in G1b.)
+        // log; swift-distributed-tracing (over swift-service-context) opens a span per request.
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-metrics.git", from: "2.4.0"),
-        .package(url: "https://github.com/swift-server/swift-prometheus.git", from: "2.0.0")
+        .package(url: "https://github.com/swift-server/swift-prometheus.git", from: "2.0.0"),
+        .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.1.0"),
+        .package(url: "https://github.com/apple/swift-service-context.git", from: "1.1.0")
     ],
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
@@ -277,16 +279,19 @@ let package = Package(
         ),
         // G1 — opt-in observability bridges over the dependency-free `HTTPMetrics` / middleware seams:
         // a swift-metrics sink rendered by swift-prometheus at `/metrics`, a swift-log structured access
-        // log, and `/healthz` + `/readyz` (a swift-distributed-tracing span-per-request lands in G1b).
-        // ISOLATED: it depends on HTTPServer one-way, so its dependencies never enter a core consumer's
-        // resolved graph — the bridge stays opt-in.
+        // log, `/healthz` + `/readyz`, and a swift-distributed-tracing span per request. ISOLATED: it
+        // depends on HTTPServer one-way, so its dependencies never enter a core consumer's resolved graph
+        // — the bridge stays opt-in.
         .target(
             name: "HTTPObservability",
             dependencies: [
                 "HTTPServer",
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Metrics", package: "swift-metrics"),
-                .product(name: "Prometheus", package: "swift-prometheus")
+                .product(name: "Prometheus", package: "swift-prometheus"),
+                .product(name: "Tracing", package: "swift-distributed-tracing"),
+                .product(name: "Instrumentation", package: "swift-distributed-tracing"),
+                .product(name: "ServiceContextModule", package: "swift-service-context")
             ],
             path: "Sources/HTTPObservability"
         ),
@@ -296,7 +301,11 @@ let package = Package(
                 "HTTPObservability", "HTTPServer", "HTTPCore",
                 .product(name: "Metrics", package: "swift-metrics"),
                 .product(name: "Prometheus", package: "swift-prometheus"),
-                .product(name: "Logging", package: "swift-log")
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "Tracing", package: "swift-distributed-tracing"),
+                .product(name: "Instrumentation", package: "swift-distributed-tracing"),
+                .product(name: "InMemoryTracing", package: "swift-distributed-tracing"),
+                .product(name: "ServiceContextModule", package: "swift-service-context")
             ],
             path: "Tests/Server/HTTPObservabilityTests"
         )
