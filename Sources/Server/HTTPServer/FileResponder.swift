@@ -4,12 +4,13 @@
 //
 //  Static file serving (RFC 9110). An ``HTTPResponder`` that maps a request path to a file under a root
 //  directory and serves it with a content type (via the system `UTType` registry), `Last-Modified` /
-//  `ETag` validators
-//  (from the file's mtime + size), conditional-request short-circuiting (`If-None-Match` /
-//  `If-Modified-Since` → 304), and byte ranges (`206` / `416`, reusing the ``RangeMiddleware`` parser).
-//  Path resolution is traversal-safe (CWE-22): a `..`/`.` component is rejected and the resolved path
-//  must stay under the root. A file larger than `streamingThreshold` is streamed in chunks (P6) rather
-//  than buffered, so a large download never holds the whole file in memory.
+//  `ETag` validators (from the file's mtime + size), conditional-request short-circuiting (`If-None-Match`
+//  / `If-Modified-Since` → 304), and byte ranges (`206` / `416`, reusing the ``RangeMiddleware`` parser).
+//  Path resolution is traversal-safe (CWE-22): a `..`/`.` component is rejected and the resolved path must
+//  stay under the root. A file larger than `streamingThreshold` is streamed in chunks (P6) rather than
+//  buffered. Production niceties (G5): precompressed `.br`/`.gz` sidecars (``serveFile`` →
+//  ``FileResponder+Precompressed``), an opt-in directory autoindex (``FileResponder+Autoindex``), and a
+//  `try_files`-style SPA fallback for a missing path.
 //
 
 internal import Foundation
@@ -18,13 +19,36 @@ internal import UniformTypeIdentifiers
 
 /// Serves static files from a root directory — traversal-safe, with validators, conditionals, and ranges.
 public struct FileResponder: HTTPResponder {
-    private let root: String
-    private let streamingThreshold: Int
+    let root: String
+    let streamingThreshold: Int
+    let precompressed: Bool
+    let autoindex: Bool
+    let fallback: String?
 
-    /// Serves files under `root`; a response body larger than `streamingThreshold` octets is streamed.
-    public init(root: String, streamingThreshold: Int = 1 << 20) {
+    /// Serves files under `root`.
+    ///
+    /// A response body larger than `streamingThreshold` octets is streamed. `precompressed` serves a fresh
+    /// `.br`/`.gz` sidecar when the client accepts it; `autoindex` renders a directory listing (off by
+    /// default); `fallback` (e.g. `"index.html"`) is served for a missing path (SPA `try_files`).
+    public init(
+        root: String,
+        streamingThreshold: Int = 1 << 20,
+        precompressed: Bool = true,
+        autoindex: Bool = false,
+        fallback: String? = nil
+    ) {
         self.root = root
         self.streamingThreshold = max(0, streamingThreshold)
+        self.precompressed = precompressed
+        self.autoindex = autoindex
+        self.fallback = fallback
+    }
+
+    /// What a resolved path points at.
+    enum Resolution {
+        case file(size: Int, modified: Int)
+        case directory
+        case missing
     }
 
     /// Resolves the request path to a file under the root and serves it, or `403`/`404`/`405`.
@@ -34,31 +58,72 @@ public struct FileResponder: HTTPResponder {
             _ = head.headerFields.setValue("GET, HEAD", for: .allow)
             return ServerResponse(head)
         }
+        // A traversal or otherwise malformed path is refused (CWE-22).
         guard let path = resolvedPath(request.path) else {
-            // A traversal or otherwise malformed path (CWE-22).
             return ServerResponse(HTTPResponse(status: .forbidden))
         }
-        guard let info = Self.fileInfo(path) else {
+        switch Self.classify(path) {
+            case .file:
+                return serveFile(path, request: request)
+            case .directory:
+                return serveDirectory(path, request: request)
+            case .missing:
+                return serveMissing(request: request)
+        }
+    }
+
+    /// Serves a directory's `index.html`, an autoindex listing (when enabled), else `404`.
+    private func serveDirectory(_ path: String, request: HTTPRequest) -> ServerResponse {
+        let index = path + "/index.html"
+        if case .file = Self.classify(index) {
+            return serveFile(index, request: request)
+        }
+        guard autoindex else {
             return ServerResponse(HTTPResponse(status: .notFound))
         }
-        let etag = Self.entityTag(info)
-        let lastModified = HTTPDate.imfFixdate(info.modified)
-        if Self.isNotModified(request, etag: etag, modified: info.modified) {
+        return autoindexResponse(path, requestPath: request.path, omitBody: request.method == .head)
+    }
+
+    /// Serves the `fallback` file for a missing path (SPA `try_files`), else `404`.
+    private func serveMissing(request: HTTPRequest) -> ServerResponse {
+        guard let fallback, let path = resolvedPath("/" + fallback),
+            case .file = Self.classify(path)
+        else {
+            return ServerResponse(HTTPResponse(status: .notFound))
+        }
+        return serveFile(path, request: request)
+    }
+
+    /// Serves a regular file: negotiates a precompressed sidecar, applies conditionals, and emits the body.
+    private func serveFile(_ path: String, request: HTTPRequest) -> ServerResponse {
+        let choice = precompressed ? precompressedChoice(path, request: request) : nil
+        let servePath = choice?.path ?? path
+        guard case .file(let size, let modified) = Self.classify(servePath) else {
+            return ServerResponse(HTTPResponse(status: .notFound))
+        }
+        let etag = Self.entityTag(size: size, modified: modified, encoding: choice?.encoding)
+        let lastModified = HTTPDate.imfFixdate(modified)
+        if Self.isNotModified(request, etag: etag, modified: modified) {
             var head = HTTPResponse(status: .notModified)
             _ = head.headerFields.setValue(etag, for: .etag)
             _ = head.headerFields.setValue(lastModified, for: .lastModified)
             return ServerResponse(head)
         }
         var head = HTTPResponse(status: .ok)
+        // The content type is the identity file's, never the `.br`/`.gz` sibling's.
         _ = head.headerFields.setValue(Self.contentType(path), for: .contentType)
         _ = head.headerFields.setValue(etag, for: .etag)
         _ = head.headerFields.setValue(lastModified, for: .lastModified)
         _ = head.headerFields.setValue("bytes", for: .acceptRanges)
+        if let encoding = choice?.encoding {
+            _ = head.headerFields.setValue(encoding, for: .contentEncoding)
+            _ = head.headerFields.append("Accept-Encoding", for: .vary)
+        }
         return serve(
-            path,
-            size: info.size,
+            servePath,
+            size: size,
             head: head,
-            range: request.headerFields[.range],
+            range: choice == nil ? request.headerFields[.range] : nil,  // ranges over identity only
             omitBody: request.method == .head
         )
     }
@@ -109,7 +174,7 @@ public struct FileResponder: HTTPResponder {
     }
 
     /// Resolves `target` to an absolute path under the root, or nil for a traversal / malformed path.
-    private func resolvedPath(_ target: String) -> String? {
+    func resolvedPath(_ target: String) -> String? {
         let pathPart = String(target.prefix { $0 != "?" && $0 != "#" })
         guard let decoded = pathPart.removingPercentEncoding else {
             return nil
@@ -119,33 +184,47 @@ public struct FileResponder: HTTPResponder {
         guard !components.contains(where: { $0 == ".." || $0 == "." || $0.contains("\0") }) else {
             return nil
         }
-        let relative = components.isEmpty ? "index.html" : components.joined(separator: "/")
-        let standardized = URL(fileURLWithPath: root + "/" + relative).standardizedFileURL.path
+        return inRoot(root + "/" + components.joined(separator: "/"))
+    }
+
+    /// The standardized form of `absolutePath` if it stays inside the root, else nil (CWE-22 jail).
+    func inRoot(_ absolutePath: String) -> String? {
+        let standardized = URL(fileURLWithPath: absolutePath).standardizedFileURL.path
         let rootStandardized = URL(fileURLWithPath: root).standardizedFileURL.path
         guard standardized == rootStandardized || standardized.hasPrefix(rootStandardized + "/")
         else {
-            return nil  // resolved outside the root — refuse (CWE-22)
+            return nil
         }
         return standardized
     }
 
-    /// The size and modification time (epoch seconds) of a regular file, or nil if missing / a directory.
-    private static func fileInfo(_ path: String) -> (size: Int, modified: Int)? {
+    /// Classifies `path`: a regular file (with size + mtime), a directory, or missing.
+    static func classify(_ path: String) -> Resolution {
         let manager = FileManager.default
         var isDirectory: ObjCBool = false
-        guard manager.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue,
-            let attributes = try? manager.attributesOfItem(atPath: path),
+        guard manager.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            return .missing
+        }
+        if isDirectory.boolValue {
+            return .directory
+        }
+        guard let attributes = try? manager.attributesOfItem(atPath: path),
             let size = attributes[.size] as? Int,
             let modified = attributes[.modificationDate] as? Date
         else {
-            return nil
+            return .missing
         }
-        return (size, Int(modified.timeIntervalSince1970))
+        return .file(size: size, modified: Int(modified.timeIntervalSince1970))
     }
 
-    /// A strong entity-tag from the file's size and mtime: `"<hex size>-<hex mtime>"` (RFC 9110 §8.8.3).
-    private static func entityTag(_ info: (size: Int, modified: Int)) -> String {
-        "\"\(String(info.size, radix: 16))-\(String(info.modified, radix: 16))\""
+    /// A strong entity-tag from the file's size and mtime (and content coding, when precompressed):
+    /// `"<hex size>-<hex mtime>[-<coding>]"` (RFC 9110 §8.8.3).
+    static func entityTag(size: Int, modified: Int, encoding: String?) -> String {
+        let base = "\(String(size, radix: 16))-\(String(modified, radix: 16))"
+        guard let encoding else {
+            return "\"\(base)\""
+        }
+        return "\"\(base)-\(encoding)\""
     }
 
     /// Whether `If-None-Match` matches (weak) or `If-Modified-Since` is unmet — a `304` (RFC 9110 §13).
@@ -186,7 +265,7 @@ public struct FileResponder: HTTPResponder {
 
     /// The content type for `path`, from the system Uniform Type registry (``UTType``), defaulting to
     /// `application/octet-stream`; a `text/*` type gains an explicit `charset=utf-8`.
-    private static func contentType(_ path: String) -> String {
+    static func contentType(_ path: String) -> String {
         let ext = URL(fileURLWithPath: path).pathExtension
         guard !ext.isEmpty, let mime = UTType(filenameExtension: ext)?.preferredMIMEType else {
             return "application/octet-stream"

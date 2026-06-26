@@ -132,4 +132,105 @@ struct FileResponderTests {
             #expect(await response.stream?.collect(maxBytes: 1 << 20) == big)
         }
     }
+
+    // MARK: G5 — precompressed sidecars, try_files, autoindex
+
+    @Test("serves a fresh precompressed .br sidecar when the client accepts it (RFC 9110 §12.5.3)")
+    func precompressedSidecar() async {
+        let identity = Array("body { color: red }".utf8)
+        let sidecar = Array("OPAQUE-BROTLI".utf8)  // the bytes are opaque to the responder
+        await withTree(["app.css": identity, "app.css.br": sidecar]) { responder, _ in
+            let request = get("/app.css", headers: [(.acceptEncoding, "br")])
+            let response = await responder.respond(to: request, body: [])
+            #expect(response.head.status == .ok)
+            #expect(response.head.headerFields[.contentEncoding] == "br")
+            #expect(response.head.headerFields[.vary]?.contains("Accept-Encoding") == true)
+            #expect(response.body == sidecar)
+            #expect(response.head.headerFields[.contentType] == "text/css; charset=utf-8")
+            #expect(response.head.headerFields[.etag]?.contains("-br") == true)
+        }
+    }
+
+    @Test("a stale precompressed sidecar (older than the original) is not served")
+    func staleSidecarSkipped() async {
+        let identity = Array("html { }".utf8)
+        await withTree(["a.css": identity, "a.css.br": Array("OLD".utf8)]) { responder, root in
+            let future = Date().addingTimeInterval(120)  // make the original newer than the sidecar
+            try? FileManager.default.setAttributes(
+                [.modificationDate: future], ofItemAtPath: root.path + "/a.css"
+            )
+            let request = get("/a.css", headers: [(.acceptEncoding, "br")])
+            let response = await responder.respond(to: request, body: [])
+            #expect(response.head.headerFields[.contentEncoding] == nil)
+            #expect(response.body == identity)
+        }
+    }
+
+    @Test("a Range request serves identity bytes, never the precompressed sidecar")
+    func rangeIgnoresSidecar() async {
+        await withTree(["a.css": Array("0123456789".utf8), "a.css.br": Array("BR".utf8)]) {
+            responder, _ in
+            let request = get("/a.css", headers: [(.acceptEncoding, "br"), (.range, "bytes=0-3")])
+            let response = await responder.respond(to: request, body: [])
+            #expect(response.head.status == .partialContent)
+            #expect(response.head.headerFields[.contentEncoding] == nil)
+            #expect(response.body == Array("0123".utf8))
+        }
+    }
+
+    @Test("try_files serves the fallback for a missing path (SPA routing)")
+    func tryFilesFallback() async {
+        let app = Array("<div id=app></div>".utf8)
+        await withTree(["index.html": app], fallback: "index.html") { responder, _ in
+            let response = await responder.respond(to: get("/app/deep/route"), body: [])
+            #expect(response.head.status == .ok)
+            #expect(response.body == app)
+            #expect(response.head.headerFields[.contentType] == "text/html; charset=utf-8")
+        }
+    }
+
+    @Test("autoindex is off by default — a directory without index.html is 404")
+    func autoindexOffByDefault() async {
+        await withTree(["a.txt": Array("x".utf8)]) { responder, _ in
+            let response = await responder.respond(to: get("/"), body: [])
+            #expect(response.head.status == .notFound)
+        }
+    }
+
+    @Test("autoindex lists entries and HTML-escapes names (XSS-safe) when enabled")
+    func autoindexListsAndEscapes() async {
+        let files = ["a&b<c.txt": Array("x".utf8), "plain.txt": Array("y".utf8)]
+        await withTree(files, autoindex: true) { responder, _ in
+            let response = await responder.respond(to: get("/"), body: [])
+            #expect(response.head.status == .ok)
+            #expect(response.head.headerFields[.contentType] == "text/html; charset=utf-8")
+            let html = String(bytes: response.body, encoding: .utf8) ?? ""
+            #expect(html.contains("a&amp;b&lt;c.txt"))  // escaped
+            #expect(!html.contains("a&b<c.txt"))  // never the raw, unescaped name
+            #expect(html.contains("plain.txt"))
+        }
+    }
+
+    /// Creates a temp tree, runs `body` against a responder rooted there (with the given options) plus the
+    /// root URL (for mtime tweaks), and removes the tree afterward.
+    private func withTree(
+        _ files: [String: [UInt8]],
+        precompressed: Bool = true,
+        autoindex: Bool = false,
+        fallback: String? = nil,
+        _ body: (FileResponder, URL) async -> Void
+    ) async {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory
+            .appendingPathComponent("fileresponder-\(UUID().uuidString)")
+        try? manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+        for (name, bytes) in files {
+            manager.createFile(atPath: root.path + "/" + name, contents: Data(bytes))
+        }
+        let responder = FileResponder(
+            root: root.path, precompressed: precompressed, autoindex: autoindex, fallback: fallback
+        )
+        await body(responder, root)
+    }
 }

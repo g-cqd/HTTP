@@ -58,17 +58,22 @@ We decode `br`/`deflate`/`gzip` inbound (P4) but only *emit* gzip. Close the asy
       fallback), streaming responses still skip compression, decompression-bomb caps unaffected; ASan clean.
       ✓ green: `CompressionMiddlewareTests` — 14 cases incl. the Brotli (RFC 7932) round-trip; ASan + lint clean.
 
-### [ ] G5 — Static-serving completeness · Effort M · Risk ●
+### [~] G5 — Static-serving completeness · Effort M · Risk ● — *responder-level shipped; sendfile → transport phase*
 `FileResponder` (P7) does range/conditional/ETag/streaming; add the production niceties.
-- [ ] **Precompressed sidecars:** serve `foo.css.br` / `foo.css.gz` when the client accepts that coding and
-      the sidecar exists and is no older than the original; set `Content-Encoding` + `Vary`.
-- [ ] **Directory autoindex** (opt-in): traversal-safe HTML listing with sortable name/size/mtime; off by
-      default (no accidental exposure).
-- [ ] **`sendfile`/zero-copy** on the POSIX backbones (`sendfile(2)`; mmap+write fallback) — backbone-aware
-      (Network.framework has no sendfile; keep the streamed path there).
-- [ ] **`try_files`-style fallback** chain (SPA hosting: try path, then `index.html`).
-- _Gate:_ sidecar chosen only when fresh + accepted, autoindex traversal-safe + off-by-default, sendfile
-      byte-identical to the streamed path, fallback resolves; HEAD/range/conditional unaffected.
+- [x] **Precompressed sidecars:** serve `foo.css.br` / `foo.css.gz` when the client accepts that coding and
+      the sidecar exists and is no older than the original; sets `Content-Encoding` + `Vary` + coding-ETag.
+      Never for a `Range` (identity only). (`FileResponder+Precompressed.swift`.)
+- [x] **Directory autoindex** (opt-in): traversal-safe HTML listing (name/size/mtime, sorted), every entry
+      name HTML-escaped (XSS-safe), dotfiles omitted; **off by default**. (`FileResponder+Autoindex.swift`.)
+- [ ] **`sendfile`/zero-copy** — **deferred to a transport-layer phase**: every `TransportConnection` is
+      `send([UInt8])`-only with a private fd, so `sendfile(2)` needs a new protocol method across all 4
+      backbones + h1/h2/h3 plumbing. The streamed path already bounds memory (64 KiB chunks), so this is an
+      optimization, not a gap.
+- [x] **`try_files`-style fallback** chain (SPA hosting: a missing path serves the configured `fallback`,
+      e.g. `index.html`).
+- _Gate:_ sidecar chosen only when fresh + accepted (skipped when stale / ranged / unaccepted), autoindex
+      traversal-safe + off-by-default + HTML-escaped, fallback resolves; HEAD/range/conditional/403 unaffected.
+      ✓ green: `FileResponderTests` — 14 cases (8 prior + 6 new); ASan + lint clean.
 
 ### [ ] G7 — Auth building blocks · Effort M · Risk ■
 We ship signed sessions only. Add the verification primitives (keep OAuth/OIDC *flows* out — app concern).
@@ -234,3 +239,8 @@ in the project docs.)
   an `HTTPFieldsExtractor` that reads W3C `traceparent`/`tracestate` inbound (trace-context propagation).
   Tested against the official `InMemoryTracer`. New deps (swift-distributed-tracing, swift-service-context)
   stay confined to `HTTPObservability`. 890 tests (+3), ASan + lint clean. **Wave W1 remaining: G5, G7.**
+- 2026-06-26 — **G5 shipped (responder-level)**: `FileResponder` gains precompressed `.br`/`.gz` sidecar
+  negotiation (fresh + accepted + jailed; `Content-Encoding`/`Vary`/coding-ETag; identity-only for ranges,
+  adapted from ADServe's `planStaticFile`), a `try_files` SPA fallback, and an opt-in HTML-escaped
+  directory autoindex (off by default). No new dependency. **sendfile deferred** to a transport-layer
+  phase (architectural). 896 tests (+6), ASan + lint clean. **W1 remaining: G7.**
