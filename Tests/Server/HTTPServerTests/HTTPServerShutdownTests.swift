@@ -62,7 +62,7 @@ struct HTTPServerShutdownTests {
         )
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await server.serve(hanging) }  // registers, then blocks on receive
-            try? await probe.wait(forAtLeast: 1)  // the connection is registered and being served
+            _ = try? await probe.wait(forAtLeast: 1)  // the connection is registered + being served
             group.addTask { await server.shutdown(within: .seconds(1)) }
             group.addTask {
                 while !Task.isCancelled {

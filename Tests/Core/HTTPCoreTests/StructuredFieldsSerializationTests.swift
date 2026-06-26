@@ -83,7 +83,7 @@ struct StructuredFieldsSerializationTests {
         }
         #expect(throws: SF.SerializeError.invalidKey) {
             let entry = SF.DictionaryEntry(key: "Bad", value: .item(SF.Item(.boolean(true))))
-            try SF.serialize(dictionary: [entry])
+            _ = try SF.serialize(dictionary: [entry])
         }
     }
 }
