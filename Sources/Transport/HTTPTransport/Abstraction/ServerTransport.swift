@@ -28,4 +28,21 @@ public protocol ServerTransport: Sendable {
 
     /// Stops accepting and closes the listener.
     func shutdown() async
+
+    /// Hot-reloads the server's TLS identity (G4b): subsequent handshakes use `tls` while already
+    /// accepted connections keep serving on the identity they handshook with.
+    ///
+    /// Restart-based — the backbone rebinds its listener on the same port — because the only TLS
+    /// backbone today (Network.framework) fixes the server identity at listen time. The default throws
+    /// ``TransportError/unsupported(_:)``: a cleartext or non-Network.framework listener has no identity
+    /// to swap. SNI multi-cert and `.optional` client-auth wait on the portable TLS backbone (G0).
+    func reload(tls: TransportTLS) async throws
+}
+
+extension ServerTransport {
+    /// Cleartext and the non-Network.framework backbones have no server TLS identity to swap, so a
+    /// reload is unsupported; the Network.framework backbone overrides this.
+    public func reload(tls _: TransportTLS) async throws {
+        throw TransportError.unsupported("TLS reload is unsupported by the \(backbone) backbone")
+    }
 }

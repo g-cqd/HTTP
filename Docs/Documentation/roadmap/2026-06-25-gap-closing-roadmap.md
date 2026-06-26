@@ -130,17 +130,26 @@ Network.framework exposes client-cert challenge + verify blocks; surface them.
       real-loopback integration test with a `DevTLSIdentity` client surfaces its subject; server-stamp test
       strips a spoofed subject and rejects a CR/LF-injecting one (CWE-93). (`.optional` allow-both → G0.)
 
-### [ ] G4 — Graceful config & certificate reload · Effort L · Risk ■
+### [~] G4 — Graceful config & certificate reload · Effort L · Risk ■ — *Darwin shipped; SNI multi-cert → G0*
 Today a cert rotation or route change needs a restart. Make both hot.
-- [ ] **Hot cert reload:** store the TLS identity behind an atomic/`Mutex`; new handshakes pick up the new
-      identity, in-flight connections keep theirs (SIGHUP-triggered).
+- [x] **Hot cert reload:** `ServerTransport.reload(tls:)` (default throws `.unsupported`; Network.framework
+      implements it). Restart-based — the only TLS backbone fixes the server identity at listen time, and
+      its challenge block is *client*-side — so it rebinds the `NWListener` on the same port with the new
+      identity. `NWListener` cannot share a port (SO_REUSEADDR is not enough), so the old listener is
+      retired (its `.cancelled` awaited to free the port) before the replacement binds: a brief
+      *new*-connection accept gap, but already-accepted `NWConnection`s are independent of the listener and
+      keep serving on their original identity (zero existing-connection drops). `HTTPServer.reloadCertificate`
+      forwards to it.
 - [x] **Hot responder/route swap:** `HTTPServer.responder` is a `Mutex<any HTTPResponder>` swapped by
       `reloadResponder(_:)`; every dispatch reads it once (never across the `await`), so a request in
       flight finishes on the table it read and new requests use the new one — no drain needed.
 - [ ] **SNI multi-cert selection** (sub-gap from the matrix): pick the identity by SNI server-name at
-      handshake, so one listener serves multiple host certs.
-- _Gate:_ reload under sustained load drops **zero** connections (extend the bench harness with a
-      reload-mid-run case), old in-flight requests complete on the old config, SNI picks the right cert.
+      handshake → **deferred to G0** (needs a server-side SNI callback Network.framework lacks; the
+      portable BoringSSL path can do it). `.optional` client-auth defers with it.
+- _Gate:_ ✓ in-process reload-under-load gate (real loopback): after `reload(B)` a new connection's client
+      verify-block sees cert B's subject while an existing cert-A connection still round-trips (zero
+      existing-connection drops); the responder swap keeps in-flight requests on the old table. The external
+      bench "reload-mid-run" case is a noted follow-up; SNI picks the right cert → G0.
 
 ---
 
@@ -286,3 +295,17 @@ in the project docs.)
   inside the old responder across the swap while a fresh request is served by the new one, then the
   parked request completes on the old — deterministic, no real-time race. ASan + lint `--strict` clean.
   **W2 remaining: G4b (hot certificate reload — restart-based).**
+- 2026-06-26 — **G4b shipped — W2 complete (G3 + G4 done on Darwin)**: hot TLS certificate reload.
+  `ServerTransport` gains `reload(tls:)` (default throws the new `TransportError.unsupported`;
+  Network.framework implements it), and `HTTPServer.reloadCertificate(_:)` forwards to it. Restart-based:
+  `NetworkFrameworkTransport` stores the stream continuation + the swappable identity in `State` and
+  `makeParameters(tls:)` takes the identity (no longer the immutable `configuration.tls`); on reload it
+  builds a fresh `NWListener` with the new identity, retires the old one — awaiting its `.cancelled` so the
+  port frees, since `NWListener` can't share a port (SO_REUSEADDR ≠ SO_REUSEPORT, which it doesn't expose) —
+  then binds the replacement on the same port and feeds the same stream. A brief *new*-connection accept
+  gap, but already-accepted `NWConnection`s are independent and keep serving (zero existing-connection
+  drops). 930 tests (+3): real-loopback reload-under-load gate — after `reload(B)` a new connection's client
+  verify-block sees cert B's subject while the existing cert-A connection still round-trips; reload throws
+  `.unsupported` on a non-Network backbone; `reloadCertificate` delegates. SNI multi-cert + `.optional`
+  client-auth deferred to G0 (need a server-side SNI callback Network.framework lacks). ASan +
+  swift-format/SwiftLint `--strict` clean. **W2 done; next: W3 (G0 Linux), W4 (G6 protocol tail).**

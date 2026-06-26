@@ -37,6 +37,13 @@ public final class NetworkFrameworkTransport: ServerTransport {
         /// port by then), so reads never race a live `listener.port` that can be transiently nil under
         /// concurrent load.
         var boundPort: UInt16 = 0
+        /// The currently-active TLS identity (`nil` for a cleartext listener), swapped by
+        /// ``reload(tls:)`` (G4b). `makeParameters` reads it so a rebuilt listener picks up the new
+        /// identity; `handleNewConnection` reads it to mark accepted connections secure.
+        var tls: TransportTLS?
+        /// The inbound-connection stream continuation, captured at ``start()`` so a reloaded listener's
+        /// `newConnectionHandler` can yield into the same stream the server is already consuming.
+        var continuation: AsyncStream<any TransportConnection>.Continuation?
     }
 
     /// Creates a Network.framework transport for `configuration`.
@@ -61,7 +68,7 @@ public final class NetworkFrameworkTransport: ServerTransport {
     ///
     /// Waits for the listener to reach `ready` (so ``boundPort`` is valid) before returning.
     public func start() async throws -> AsyncStream<any TransportConnection> {
-        let listener = try makeListener()
+        let listener = try makeListener(tls: configuration.tls, port: configuration.port)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
 
         listener.newConnectionHandler = { [weak self] nwConnection in
@@ -74,7 +81,13 @@ public final class NetworkFrameworkTransport: ServerTransport {
             Task { await self?.shutdown() }
         }
 
-        state.withLock { $0.listener = listener }
+        // Record the initial identity and the stream continuation so ``reload(tls:)`` can rebuild the
+        // listener and feed new connections into this same stream.
+        state.withLock {
+            $0.tls = configuration.tls
+            $0.continuation = continuation
+            $0.listener = listener
+        }
         listener.start(queue: queue)
         try await waitUntilReady()
         return stream
@@ -90,42 +103,138 @@ public final class NetworkFrameworkTransport: ServerTransport {
         listener?.cancel()
     }
 
+    /// Hot-reloads the TLS identity (G4b): rebinds the listener with `tls` on the same port, so new
+    /// handshakes use the new identity while already-accepted connections keep serving on the old one.
+    ///
+    /// Restart-based, because Network.framework's challenge block is *client*-side and the server
+    /// identity is fixed at listen time. `NWListener` cannot share a bound port (SO_REUSEADDR is not
+    /// enough — that needs SO_REUSEPORT, which `NWListener` does not expose), so the old listener is
+    /// fully retired — its `.cancelled` awaited so the port is released — before the replacement binds
+    /// the freed port. That is a brief accept gap for *new* connections, but already-accepted
+    /// `NWConnection`s are independent of the listener and keep serving (zero existing-connection
+    /// drops). A bad identity throws before the running listener is touched.
+    public func reload(tls: TransportTLS) async throws {
+        // The transport must be accepting: capture the bound port and the live stream continuation.
+        let (port, continuation) = try state.withLock {
+            current -> (UInt16, AsyncStream<any TransportConnection>.Continuation) in
+            guard current.boundPort != 0, let continuation = current.continuation else {
+                throw TransportError.closed
+            }
+            return (current.boundPort, continuation)
+        }
+        // Build the replacement (and its identity) first, so a bad identity throws here with the
+        // running listener untouched.
+        let newListener = try makeListener(tls: tls, port: port)
+        newListener.newConnectionHandler = { [weak self] nwConnection in
+            self?.handleNewConnection(nwConnection, continuation: continuation)
+        }
+        // Promote the replacement + identity to current, retire the old listener (awaiting its full
+        // cancel so the port frees), then bind the replacement on the freed port.
+        let oldListener = state.withLock { current -> NWListener? in
+            let previous = current.listener
+            current.listener = newListener
+            current.tls = tls
+            return previous
+        }
+        if let oldListener {
+            await retireListener(oldListener)
+        }
+        try await startReplacement(newListener, continuation: continuation)
+    }
+
     // MARK: - Internals
 
-    private func makeListener() throws -> NWListener {
-        let port = NWEndpoint.Port(rawValue: configuration.port) ?? .any
-        let parameters = try makeParameters()  // may throw TransportError.tlsConfigurationFailed
+    /// Cancels `listener` and waits for it to reach `.cancelled` (releasing its bound port) *without*
+    /// finishing the shared stream — so a reload's replacement can bind the freed port.
+    private func retireListener(_ listener: NWListener) async {
+        // No throw is possible; `try?` only discards the continuation's `Error` channel.
+        try? await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, any Error>) in
+            let resumer = OnceResumer(continuation)
+            listener.stateUpdateHandler = { newState in
+                switch newState {
+                    case .cancelled, .failed:
+                        resumer.resume(returning: ())
+                    default:
+                        break
+                }
+            }
+            listener.cancel()
+        }
+    }
+
+    /// Starts a replacement listener and waits for it to reach `.ready` (so it is accepting).
+    ///
+    /// Its handler also finishes the shared stream on `.failed`/`.cancelled`, so a later shutdown or
+    /// fault of the now-current listener tears the stream down as usual.
+    private func startReplacement(
+        _ listener: NWListener,
+        continuation: AsyncStream<any TransportConnection>.Continuation
+    ) async throws {
+        try await withCheckedThrowingContinuation {
+            (ready: CheckedContinuation<Void, any Error>) in
+            let resumer = OnceResumer(ready)
+            listener.stateUpdateHandler = { newState in
+                switch newState {
+                    case .ready:
+                        resumer.resume(returning: ())
+                    case .failed(let error):
+                        resumer.resume(throwing: TransportError.bindFailed("\(error)"))
+                        continuation.finish()
+                    case .cancelled:
+                        continuation.finish()
+                    default:
+                        break
+                }
+            }
+            listener.start(queue: queue)
+        }
+    }
+
+    private func makeListener(tls: TransportTLS?, port: UInt16) throws -> NWListener {
+        let endpointPort = NWEndpoint.Port(rawValue: port) ?? .any
+        let parameters = try makeParameters(tls: tls)  // may throw .tlsConfigurationFailed
         do {
-            return try NWListener(using: parameters, on: port)
+            return try NWListener(using: parameters, on: endpointPort)
         }
         catch {
             throw TransportError.bindFailed("\(error)")
         }
     }
 
-    /// TLS `NWParameters` when ``TransportConfiguration/tls`` is set (advertising ALPN so a client can
-    /// pick `"h2"`, RFC 9113 §3.3), otherwise a cleartext TCP listener (h1 / h2c).
-    private func makeParameters() throws -> NWParameters {
+    /// TLS `NWParameters` when `tls` is set (advertising ALPN so a client can pick `"h2"`, RFC 9113
+    /// §3.3), otherwise a cleartext TCP listener (h1 / h2c).
+    ///
+    /// Takes the identity as an argument (rather than reading the immutable `configuration.tls`) so
+    /// ``reload(tls:)`` (G4b) can rebuild the listener with a fresh identity. `allowLocalEndpointReuse`
+    /// (SO_REUSEADDR) lets the reloaded listener bind the same port while the old one is still
+    /// draining, so the accept gap during a hot cert reload is minimal.
+    private func makeParameters(tls: TransportTLS?) throws -> NWParameters {
         // Disable Nagle's algorithm so a sub-MSS response flushes immediately instead of waiting to
         // coalesce — Nagle + delayed-ACK inflates the tail latency the Bench/ comparison exposed.
         let tcp = NWProtocolTCP.Options()
         tcp.noDelay = true
-        guard let tls = configuration.tls else {
-            return NWParameters(tls: nil, tcp: tcp)  // cleartext TCP (h1 / h2c)
+        let parameters: NWParameters
+        if let tls {
+            let identity = try NetworkFrameworkTLS.identity(
+                pkcs12: tls.pkcs12,
+                passphrase: tls.passphrase
+            )
+            let options = NetworkFrameworkTLS.options(
+                identity: identity,
+                applicationProtocols: tls.applicationProtocols,
+                minVersion: tls.minVersion,
+                maxVersion: tls.maxVersion,
+                clientAuth: tls.clientAuth,
+                verifyPeer: tls.verifyPeer
+            )
+            parameters = NWParameters(tls: options, tcp: tcp)
         }
-        let identity = try NetworkFrameworkTLS.identity(
-            pkcs12: tls.pkcs12,
-            passphrase: tls.passphrase
-        )
-        let options = NetworkFrameworkTLS.options(
-            identity: identity,
-            applicationProtocols: tls.applicationProtocols,
-            minVersion: tls.minVersion,
-            maxVersion: tls.maxVersion,
-            clientAuth: tls.clientAuth,
-            verifyPeer: tls.verifyPeer
-        )
-        return NWParameters(tls: options, tcp: tcp)
+        else {
+            parameters = NWParameters(tls: nil, tcp: tcp)  // cleartext TCP (h1 / h2c)
+        }
+        parameters.allowLocalEndpointReuse = true
+        return parameters
     }
 
     private func handleNewConnection(
@@ -133,7 +242,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
         let id = connectionIDs.next()
-        let isSecure = configuration.tls != nil  // a TLS listener advertised ALPN; enforce it below
+        // Read the active identity (swappable by reload, G4b): a TLS listener advertised ALPN, enforced
+        // below. Once per accept, off the byte path.
+        let isSecure = state.withLock { $0.tls != nil }
         // Surface the connection only once the handshake settles (`.ready`), so its negotiated ALPN
         // protocol (RFC 7301) is known and the server can commit to h2 vs h1 without sniffing. For a
         // cleartext listener `.ready` is just the completed TCP connect and ALPN resolves to nil.

@@ -21,4 +21,8 @@ public enum TransportError: Error, Sendable, Equatable {
 
     /// The connection or listener has already been closed.
     case closed
+
+    /// The requested operation is not supported by this backbone (e.g. a TLS hot-reload on a cleartext
+    /// or non-Network.framework listener), with a diagnostic message.
+    case unsupported(String)
 }
