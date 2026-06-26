@@ -132,7 +132,8 @@ extension HTTPServer {
             let (events, actions) = await engine.receive(stream.id, chunk.bytes, fin: chunk.fin)
             await applyHTTP3(actions, stream: stream, engine: engine, quic: quic)
             for case .request(let id, let request, let body) in events {
-                let response = await responder.respond(to: request, body: body)
+                let current = currentResponder  // hot-swappable responder, read once (G4a)
+                let response = await current.respond(to: request, body: body)
                 if let bodyStream = response.stream {
                     // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
                     await streamHTTP3Response(

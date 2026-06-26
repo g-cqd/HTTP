@@ -59,7 +59,9 @@ extension HTTPServer where C.Duration == Duration {
         // Surface the verified mutual-TLS client identity (G3) as a server-asserted header before the
         // responder runs — stripping any inbound spoof — so handlers/middleware can authorize on it.
         let stamped = Self.stampingClientCertSubject(request, from: connection)
-        let response = await responder.respond(to: stamped, body: framed.parsed.body)
+        // Read the hot-swappable responder once (G4a); the lock is never held across the await.
+        let current = currentResponder
+        let response = await current.respond(to: stamped, body: framed.parsed.body)
         var head = withAltSvc(response.head)
         // Graceful shutdown: signal this is the last exchange (RFC 9110 §7.6.1) and close after it.
         let draining = applyHTTP1Drain(to: &head)

@@ -23,7 +23,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     let transport: any ServerTransport
     /// An optional QUIC transport run alongside the TCP one to serve HTTP/3 (RFC 9114).
     let quicTransport: (any QUICServerTransport)?
-    let responder: any HTTPResponder
+    /// The responder, hot-swappable at runtime via ``reloadResponder(_:)`` (G4a).
+    ///
+    /// Behind a `Mutex` — a `Sendable` existential — so a config reload can replace the routing table
+    /// without a restart. Every dispatch reads it exactly once (`responder.withLock { $0 }`) and never
+    /// holds the lock across the `await`, so an in-flight request finishes on the table it read while
+    /// new requests pick up the new one: the graceful old/new split falls out with no drain.
+    let responder: Mutex<any HTTPResponder>
     /// Handles connections that upgrade to WebSocket (RFC 6455 §4), or nil to refuse upgrades.
     let webSocketHandler: (any WebSocketHandler)?
     let limits: HTTPLimits
@@ -68,7 +74,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     ) {
         self.transport = transport
         self.quicTransport = quicTransport
-        self.responder = responder
+        self.responder = Mutex(responder)
         self.webSocketHandler = webSocketHandler
         self.limits = limits
         self.clock = clock
@@ -93,6 +99,25 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             }
         }
     }
+
+    /// Atomically swaps the responder so subsequent requests are served by `responder` (G4a — a hot
+    /// route / handler reload with no restart).
+    ///
+    /// A request reads the responder once at dispatch, so this needs no drain: requests already
+    /// in flight finish on the table they read, and every request dispatched after this call uses the
+    /// new one. Safe to call from any task while the server is running.
+    public func reloadResponder(_ responder: any HTTPResponder) {
+        self.responder.withLock { $0 = responder }
+    }
+
+    /// The current responder, read once under the lock (never held across a dispatch's `await`) — the
+    /// single hot-swap read point (G4a).
+    ///
+    /// A dispatch reads this exactly once, then awaits the returned responder, so an in-flight request
+    /// finishes on the table it read while a concurrent ``reloadResponder(_:)`` only affects requests
+    /// dispatched afterward. Centralized here so the protocol-engine dispatch files need not import the
+    /// synchronization primitive.
+    var currentResponder: any HTTPResponder { responder.withLock(\.self) }
 
     /// Admits `connection` if it is under both the global (``HTTPLimits/maxConnections``) and
     /// per-client (``HTTPLimits/maxConnectionsPerClient``) caps, serves it for its lifetime, then

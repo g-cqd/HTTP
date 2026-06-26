@@ -134,8 +134,9 @@ Network.framework exposes client-cert challenge + verify blocks; surface them.
 Today a cert rotation or route change needs a restart. Make both hot.
 - [ ] **Hot cert reload:** store the TLS identity behind an atomic/`Mutex`; new handshakes pick up the new
       identity, in-flight connections keep theirs (SIGHUP-triggered).
-- [ ] **Hot responder/route swap:** make `HTTPServer.responder` atomically swappable; new connections use
-      the new table, in-flight requests finish on the old (pairs with the existing graceful-drain).
+- [x] **Hot responder/route swap:** `HTTPServer.responder` is a `Mutex<any HTTPResponder>` swapped by
+      `reloadResponder(_:)`; every dispatch reads it once (never across the `await`), so a request in
+      flight finishes on the table it read and new requests use the new one — no drain needed.
 - [ ] **SNI multi-cert selection** (sub-gap from the matrix): pick the identity by SNI server-name at
       handshake, so one listener serves multiple host certs.
 - _Gate:_ reload under sustained load drops **zero** connections (extend the bench harness with a
@@ -276,3 +277,12 @@ in the project docs.)
   real-loopback mTLS handshakes (subject surfaced, no-cert + pin-rejected fail, DER chain delivered
   leaf-first) through `NetworkFrameworkTransport` + `DevTLSIdentity`, plus server-level stamp/strip/inject
   tests. ASan + swift-format/SwiftLint `--strict` clean. **W2 remaining: G4 (hot responder + cert reload).**
+- 2026-06-26 — **G4a shipped (hot responder/route swap)**: `HTTPServer.responder` is now a
+  `Mutex<any HTTPResponder>` swapped atomically by `public reloadResponder(_:)`. Every dispatch site
+  (HTTP/1, HTTP/2 buffered + concurrent, HTTP/3) reads it once via a centralized `currentResponder`
+  accessor — the lock is never held across the `await` — so the graceful old/new split needs no drain: a
+  request reads the table at dispatch, so in-flight requests finish on the old table and requests
+  dispatched after the swap use the new one. 927 tests (+2): an `AsyncGate` holds one request in flight
+  inside the old responder across the swap while a fresh request is served by the new one, then the
+  parked request completes on the old — deterministic, no real-time race. ASan + lint `--strict` clean.
+  **W2 remaining: G4b (hot certificate reload — restart-based).**

@@ -43,7 +43,8 @@ extension HTTPServer {
     ) async -> Bool {
         // Stamp the verified mutual-TLS client identity (G3) before dispatch, like the HTTP/1 path.
         let stamped = Self.stampingClientCertSubject(request, from: connection)
-        let response = await responder.respond(to: stamped, body: body)
+        let current = currentResponder  // hot-swappable responder, read once (G4a)
+        let response = await current.respond(to: stamped, body: body)
         if let bodyStream = response.stream {
             return await streamHTTP2Response(
                 withAltSvc(response.head),
@@ -219,7 +220,8 @@ extension HTTPServer {
             return
         }
         let stamped = Self.stampingClientCertSubject(request, from: connection)
-        let response = await responder.respond(to: stamped, body: body)
+        let current = currentResponder  // hot-swappable responder, read once (G4a)
+        let response = await current.respond(to: stamped, body: body)
         let buffered = await bufferedResponse(response)
         try? engine.respond(to: id, withAltSvc(buffered.head), body: buffered.body)
     }
