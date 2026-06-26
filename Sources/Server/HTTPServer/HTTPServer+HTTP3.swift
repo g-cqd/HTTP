@@ -15,6 +15,7 @@ internal import HTTP3
 internal import HTTPCore
 internal import HTTPTransport
 internal import Synchronization
+internal import WebSocket
 
 extension HTTPServer {
     /// Serializes the non-`Sendable` ``HTTP3Connection`` engine across a connection's concurrent streams.
@@ -25,8 +26,10 @@ extension HTTPServer {
         /// decoder stream (RFC 9204 §4.4) — reach the right stream.
         private var roleStreams: [HTTP3StreamRole: any QUICStream] = [:]
 
-        init(limits: HTTPLimits) {
-            connection = HTTP3Connection(localSettings: HTTP3Settings(), limits: limits)
+        init(limits: HTTPLimits, enableConnectProtocol: Bool) {
+            var settings = HTTP3Settings()
+            settings.enableConnectProtocol = enableConnectProtocol  // RFC 9220 — WebSocket over h3
+            connection = HTTP3Connection(localSettings: settings, limits: limits)
         }
 
         /// Records a freshly opened server uni stream so later role-addressed sends can find it.
@@ -71,6 +74,22 @@ extension HTTPServer {
         func respondHeaders(to id: QUICStreamID, _ head: HTTPResponse) -> [UInt8]? {
             try? connection.respondHeaders(to: id, head)
         }
+
+        /// Accepts an Extended CONNECT tunnel (RFC 9220), returning the `200` HEADERS bytes for the
+        /// driver to send `fin:false`; nil if the engine rejects it (unknown / non-tunnel stream).
+        func acceptTunnel(_ id: QUICStreamID, secWebSocketExtensions: String?) -> [UInt8]? {
+            try? connection.acceptTunnel(id, secWebSocketExtensions: secWebSocketExtensions)
+        }
+
+        /// Frames `bytes` as a tunnel DATA frame (RFC 9220) for the driver to send on the stream.
+        func sendTunnelData(_ id: QUICStreamID, _ bytes: [UInt8]) -> [UInt8] {
+            connection.sendTunnelData(id, bytes)
+        }
+
+        /// Untracks a tunnel stream (RFC 9220); the driver sends the FIN to close it.
+        func closeTunnel(_ id: QUICStreamID) {
+            connection.closeTunnel(id)
+        }
     }
 
     /// Runs the QUIC listener: advertise `Alt-Svc` (RFC 7838), then serve each connection as HTTP/3.
@@ -91,7 +110,8 @@ extension HTTPServer {
     /// Opens the server's control + QPACK unidirectional streams concurrently (so a slow stream open
     /// never stalls request serving), then serves each inbound stream until the connection closes.
     func serveHTTP3(_ quic: any QUICConnection) async {
-        let engine = Engine(limits: limits)
+        // Advertise Extended CONNECT (RFC 9220) only when a WebSocket handler can service it.
+        let engine = Engine(limits: limits, enableConnectProtocol: webSocketHandler != nil)
         let initialActions = await engine.pendingActions()
         let serverStreams = Task {
             await self.holdServerStreams(from: initialActions, engine: engine, on: quic)
@@ -124,36 +144,141 @@ extension HTTPServer {
         _ = streams
     }
 
-    /// Serves one inbound stream: feed bytes → events → respond → flush, until FIN.
+    /// Serves one inbound stream: feed bytes → events → respond / drive a tunnel → flush, until FIN.
+    ///
+    /// A request stream yields a `.request` (answered by the responder) or, with a WebSocket handler and
+    /// ENABLE_CONNECT_PROTOCOL advertised, an `.extendedConnect` opening a WebSocket-over-HTTP/3 tunnel
+    /// (RFC 9220) that is then driven over this stream until it closes.
     private func serveHTTP3Stream(
         _ stream: any QUICStream, engine: Engine, quic: any QUICConnection
     ) async {
+        var webSocket: WebSocketConnection?
         while let chunk = try? await stream.receive() {
             let (events, actions) = await engine.receive(stream.id, chunk.bytes, fin: chunk.fin)
             await applyHTTP3(actions, stream: stream, engine: engine, quic: quic)
-            for case .request(let id, let request, let body) in events {
-                let current = currentResponder  // hot-swappable responder, read once (G4a)
-                let response = await current.respond(to: request, body: body)
-                if let bodyStream = response.stream {
-                    // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
-                    await streamHTTP3Response(
-                        response.head,
-                        body: bodyStream,
-                        omitBody: request.method == .head,
-                        id: id,
-                        engine: engine,
-                        on: stream
-                    )
-                }
-                else {
-                    let responseActions = await engine.respond(
-                        to: id, response.head, body: response.body
-                    )
-                    await applyHTTP3(responseActions, stream: stream, engine: engine, quic: quic)
+            for event in events {
+                switch event {
+                    case .request(let id, let request, let body):
+                        await respondHTTP3(
+                            id,
+                            request: request,
+                            body: body,
+                            stream: stream,
+                            engine: engine,
+                            quic: quic
+                        )
+                    case .extendedConnect(let id, let request, let proto):
+                        webSocket = await acceptHTTP3Tunnel(
+                            id, request: request, protocol: proto, on: stream, engine: engine
+                        )
+                    case .tunnelData(_, let bytes):
+                        webSocket = await pumpHTTP3Tunnel(
+                            webSocket, bytes: bytes, on: stream, engine: engine
+                        )
+                    case .tunnelClosed:
+                        webSocket = nil
+                    case .goAway:
+                        break
                 }
             }
-            if chunk.fin { break }
+            if chunk.fin || webSocket?.isClosing == true {
+                break
+            }
         }
+    }
+
+    /// Answers a non-tunnel request — natively streamed (P6b) when the response carries a body stream,
+    /// else buffered (RFC 9114 §4.1).
+    private func respondHTTP3(
+        _ id: QUICStreamID,
+        request: HTTPRequest,
+        body: [UInt8],
+        stream: any QUICStream,
+        engine: Engine,
+        quic: any QUICConnection
+    ) async {
+        let current = currentResponder  // hot-swappable responder, read once (G4a)
+        let response = await current.respond(to: request, body: body)
+        if let bodyStream = response.stream {
+            // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
+            await streamHTTP3Response(
+                response.head,
+                body: bodyStream,
+                omitBody: request.method == .head,
+                id: id,
+                engine: engine,
+                on: stream
+            )
+        }
+        else {
+            let responseActions = await engine.respond(to: id, response.head, body: response.body)
+            await applyHTTP3(responseActions, stream: stream, engine: engine, quic: quic)
+        }
+    }
+
+    /// Accepts (or refuses) a WebSocket-over-HTTP/3 Extended CONNECT (RFC 9220) — the same CSWSH origin
+    /// defense and permessage-deflate negotiation as the HTTP/2 tunnel.
+    ///
+    /// On success it sends the engine's `200` (no FIN) and returns the per-stream ``WebSocketConnection``;
+    /// a disallowed origin, a declined upgrade, or a framing error resets the stream and returns nil.
+    private func acceptHTTP3Tunnel(
+        _ id: QUICStreamID,
+        request: HTTPRequest,
+        protocol proto: String,
+        on stream: any QUICStream,
+        engine: Engine
+    ) async -> WebSocketConnection? {
+        // CSWSH defense (RFC 6455 §10.2): a disallowed Origin refuses the tunnel, as on the h1/h2 paths.
+        guard let handler = webSocketHandler, proto == "websocket", handler.shouldUpgrade(request),
+            handler.isOriginAllowed(request.headerFields[.origin])
+        else {
+            stream.reset(errorCode: HTTP3ErrorCode.h3RequestRejected.rawValue)
+            return nil
+        }
+        let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(request.headerFields)
+        guard
+            let accept = await engine.acceptTunnel(
+                id, secWebSocketExtensions: permessageDeflate?.headerValue
+            ),
+            (try? await stream.send(accept, fin: false)) != nil
+        else {
+            stream.reset(errorCode: HTTP3ErrorCode.h3InternalError.rawValue)
+            return nil
+        }
+        return WebSocketConnection(
+            maxMessageSize: limits.maxBodySize, permessageDeflate: permessageDeflate
+        )
+    }
+
+    /// Feeds tunnel `bytes` to the stream's ``WebSocketConnection`` and writes the frames it produces back
+    /// as tunnel DATA (RFC 9220 over RFC 6455 §6).
+    ///
+    /// Returns the updated connection, or nil once it closes — after flushing the queued Close and FINing
+    /// the stream (a violation leaves a queued Close and sets `isClosing`).
+    private func pumpHTTP3Tunnel(
+        _ webSocket: WebSocketConnection?,
+        bytes: [UInt8],
+        on stream: any QUICStream,
+        engine: Engine
+    ) async -> WebSocketConnection? {
+        guard var socket = webSocket, let handler = webSocketHandler else {
+            return webSocket
+        }
+        let events = (try? socket.receive(bytes)) ?? []
+        for event in events {
+            for action in await handler.handle(event) { socket.apply(action) }
+        }
+        let outbound = socket.outboundBytes()
+        if !outbound.isEmpty {
+            let frame = await engine.sendTunnelData(stream.id, outbound)
+            try? await stream.send(frame, fin: false)
+        }
+        guard !socket.isClosing else {
+            await engine.closeTunnel(stream.id)
+            try? await stream.send([], fin: true)
+            return nil
+        }
+        return socket
     }
 
     /// Streams a response natively on a QUIC request stream (RFC 9114 §4.1).

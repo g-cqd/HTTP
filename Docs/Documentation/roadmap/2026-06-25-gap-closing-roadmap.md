@@ -183,20 +183,25 @@ portable — the lift is the I/O floor and a non-Network.framework TLS path. **D
 
 ## W4 — Protocol-tail completion (continues P8 / P6b / P10)
 
-### [~] G6 — Finish the modern-protocol tail · Effort L · Risk ▲ — *continues completion-roadmap P8/P6b/P10*
+### [~] G6 — Finish the modern-protocol tail · Effort L · Risk ▲ — *protocol features done; only Conformance CI (P10) remains*
 Engines exist; the conformance-sensitive integration remains. Tracked in the completion roadmap; surfaced
 here for completeness.
-- [~] **Native HTTP/2 streaming server adoption** (completion P6b/S4): the engine API is done + deadlock-
-      proven; server adoption is deferred pending a transport that can stage a late `WINDOW_UPDATE` to prove
-      the producer/serve-loop rendezvous deadlock-free. → build that h2 test harness, then adopt.
-- [~] **QPACK dynamic-table integration** (completion P8/S5): decoder consumes a peer's dynamic table with
-      `QPACK_BLOCKED_STREAMS = 0` first (reject RIC > received inserts), response encoder stays static-only.
-- [ ] **WebSocket over HTTP/3** (RFC 9220): extended CONNECT over h3 (we have it on h2 via RFC 8441).
+- [x] **Native HTTP/2 streaming server adoption** (completion P6b/S4): adopted — `HTTPServer+HTTP2Streaming`
+      drives the engine's incremental DATA API; the late-`WINDOW_UPDATE` `ControllableConnection` harness +
+      `HTTP2StreamingServerTests` prove the producer/serve-loop rendezvous deadlock-free.
+- [x] **QPACK dynamic-table integration** (completion P8/S5): bidirectional dynamic table + blocked streams
+      (the encoder inserts on the QPACK encoder stream and references the dynamic table; the decoder buffers
+      a blocked section until its Required Insert Count is satisfied).
+- [x] **WebSocket over HTTP/3** (RFC 9220): Extended CONNECT over h3 — `HTTP3Connection` surfaces the tunnel
+      (`extendedConnect`/`tunnelData`/`tunnelClosed`) and accepts it (`acceptTunnel`/`sendTunnelData`/
+      `closeTunnel`); `HTTPServer+HTTP3` advertises ENABLE_CONNECT_PROTOCOL when a WebSocket handler is set
+      and drives the tunnel (CSWSH origin defense + permessage-deflate, mirroring the RFC 8441 h2 path).
 - [x] **HTTP/2 priority scheduling** (RFC 9218) — done (completion P8/S1).
 - [ ] **Conformance CI** (completion P10): Autobahn (WS) Docker job, h3spec/QUIC interop, h3 load-client
-      wired into the bench matrix.
-- _Gate (per item):_ QPACK/h3 conformance + fuzz green; native-h2-streaming deadlock test on the new
-      harness; Autobahn green or explicit logged skip; h2spec still green.
+      wired into the bench matrix. **Remaining** — infra (not locally verifiable); the only open G6 item.
+- _Gate (per item):_ QPACK/h3 conformance + fuzz green; native-h2-streaming deadlock test on the harness;
+      WebSocket-over-h3 handshake + echo over a real-QUIC loopback; Autobahn green or explicit logged skip;
+      h2spec/h3spec still green.
 
 ---
 
@@ -309,3 +314,18 @@ in the project docs.)
   `.unsupported` on a non-Network backbone; `reloadCertificate` delegates. SNI multi-cert + `.optional`
   client-auth deferred to G0 (need a server-side SNI callback Network.framework lacks). ASan +
   swift-format/SwiftLint `--strict` clean. **W2 done; next: W3 (G0 Linux), W4 (G6 protocol tail).**
+- 2026-06-26 — **W4 / G6: WebSocket over HTTP/3 shipped (RFC 9220)** — the one unbuilt G6 protocol feature
+  (investigation found the gap-closing G6 markers stale: native h2 streaming S4 and the bidirectional QPACK
+  dynamic table S5 were already done, now reconciled to `[x]`). Extended CONNECT over h3, mirroring the
+  proven RFC 8441 (h2) path. Engine: `HTTP3Connection.Event` gains `extendedConnect`/`tunnelData`/
+  `tunnelClosed`; the request path uses the mapper's `:protocol` (a shared `recordDecodedRequest` marks the
+  stream a tunnel, rejecting it H3_MESSAGE_ERROR without ENABLE_CONNECT_PROTOCOL) and a new
+  `surfaceStream`/`surfaceTunnel` emits the tunnel events as soon as the CONNECT HEADERS decode (no FIN
+  wait); new `HTTP3Connection+Connect.swift` adds `acceptTunnel` (static 200, stream kept tracked) /
+  `sendTunnelData` (DATA frame) / `closeTunnel`. Server: `HTTPServer+HTTP3` advertises
+  ENABLE_CONNECT_PROTOCOL when a WebSocket handler is set and drives the tunnel over the QUIC stream — same
+  CSWSH origin defense + permessage-deflate negotiation as the h2 tunnel. The SETTINGS + request-mapper
+  groundwork already existed. 936 tests (+6): engine extended-CONNECT/tunnel-data/close + reject-when-
+  disabled, plus a real-QUIC loopback WebSocket-over-h3 handshake + echo; full h3spec + h2spec conformance
+  green; ASan + swift-format/SwiftLint `--strict` clean. **G6 remaining: Conformance CI (P10) — infra, not
+  locally verifiable. Other waves: W3 (G0 Linux).**
