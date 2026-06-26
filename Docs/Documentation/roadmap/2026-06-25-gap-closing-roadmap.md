@@ -84,13 +84,14 @@ We ship signed sessions only. Add the verification primitives (keep OAuth/OIDC *
 
 ### [~] G1 — Observability bridges · Effort M · Risk ● — *continues completion-roadmap P9*
 A clean `HTTPMetrics` seam + closure logging exist; ship the exporters as an isolated module.
-- [ ] **`Sources/Observability/`** module(s): swift-log access/structured sink; swift-metrics counters/
-      histograms with a **Prometheus text exporter** (`/metrics`); swift-distributed-tracing **span per
-      request** over `HTTPMetrics`.
+- [~] **`Sources/HTTPObservability/`** isolated module (new deps confined to it): a swift-log structured
+      access sink + a swift-metrics `HTTPMetrics` sink with a **Prometheus text exporter** (`/metrics`)
+      **shipped (G1a)**; swift-distributed-tracing **span per request** → G1b. (Metrics use method×status
+      labels only — never the path — bounding cardinality and sidestepping swift-prometheus CVE-2024-28867.)
 - [ ] **W3C trace-context**: parse `traceparent`/`tracestate` inbound, propagate a span context on the
-      request, inject on outbound (sets us up for distributed traces end-to-end).
-- [ ] **Built-in `/healthz` + `/readyz`** handlers (liveness/readiness), drain-aware (readyz flips false on
-      graceful shutdown).
+      request, inject on outbound (sets us up for distributed traces end-to-end). → G1b
+- [x] **Built-in `/healthz` + `/readyz`** handlers (liveness/readiness), drain-aware via a `ReadinessProbe`
+      the app flips on graceful shutdown (readyz → 503).
 - _Gate:_ bridge tests (log line shape, Prometheus exposition parse, span open/close + trace-context
       round-trip, readyz flips on shutdown); **core targets' dependency lists unchanged** (deps isolated to
       the bridge module).
@@ -218,3 +219,10 @@ in the project docs.)
   `identity`, `Vary: Accept-Encoding`) in `CompressionMiddleware`. 14 compression tests green incl. a
   Brotli round-trip; ASan + swift-format/SwiftLint `--strict` clean. Zstd deferred (D2); the Linux
   `libbrotlienc` shim deferred to G0.
+- 2026-06-26 — **G1a shipped**: new **isolated** `HTTPObservability` module bridging the dependency-free
+  seams — a swift-metrics `HTTPMetrics` sink (method×status labels only, never the path → cardinality +
+  swift-prometheus CVE-2024-28867 safe) with a swift-prometheus `/metrics` exporter, a swift-log
+  structured access-log middleware, and `/healthz` + drain-aware `/readyz` (a `ReadinessProbe`). Patterns
+  adapted from the sibling ADServe project's `ADServeObservability`. New deps (swift-log, swift-metrics,
+  swift-prometheus, +swift-atomics transitively) are confined to the module — core targets' resolved deps
+  unchanged. 887 tests (+4), ASan + lint clean. Tracing + W3C trace-context (G1b) next.

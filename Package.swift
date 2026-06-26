@@ -58,6 +58,7 @@ let package = Package(
         .library(name: "WebSocket", targets: ["WebSocket"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
+        .library(name: "HTTPObservability", targets: ["HTTPObservability"]),
         .executable(name: "httpd-example", targets: ["httpd-example"])
     ],
     dependencies: [
@@ -68,7 +69,15 @@ let package = Package(
         // deterministic `TestClock` / `AsyncEventProbe`). Linked ONLY by the test-only
         // `HTTPTestSupport` target, so it never enters a downstream consumer's resolved graph. Empty
         // transitive dependency graph; allowed by CLAUDE.md (apple/*).
-        .package(url: "https://github.com/apple/swift-collections.git", from: "1.6.0")
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.6.0"),
+        // Observability bridges (gap G1) — resolved ONLY by the isolated `HTTPObservability` module,
+        // never by a core/protocol/transport/server target, so a consumer of the bare server never pulls
+        // them in. All are apple/* or swift-server/* (allowed by CLAUDE.md). swift-metrics records into
+        // swift-prometheus' registry for the `/metrics` exposition; swift-log backs the structured access
+        // log. (swift-distributed-tracing is added with the tracing middleware in G1b.)
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+        .package(url: "https://github.com/apple/swift-metrics.git", from: "2.4.0"),
+        .package(url: "https://github.com/swift-server/swift-prometheus.git", from: "2.0.0")
     ],
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
@@ -265,6 +274,31 @@ let package = Package(
             name: "httpd-example",
             dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport", "WebSocket"],
             path: "Sources/Examples/httpd-example"
+        ),
+        // G1 — opt-in observability bridges over the dependency-free `HTTPMetrics` / middleware seams:
+        // a swift-metrics sink rendered by swift-prometheus at `/metrics`, a swift-log structured access
+        // log, and `/healthz` + `/readyz` (a swift-distributed-tracing span-per-request lands in G1b).
+        // ISOLATED: it depends on HTTPServer one-way, so its dependencies never enter a core consumer's
+        // resolved graph — the bridge stays opt-in.
+        .target(
+            name: "HTTPObservability",
+            dependencies: [
+                "HTTPServer",
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "Metrics", package: "swift-metrics"),
+                .product(name: "Prometheus", package: "swift-prometheus")
+            ],
+            path: "Sources/HTTPObservability"
+        ),
+        .testTarget(
+            name: "HTTPObservabilityTests",
+            dependencies: [
+                "HTTPObservability", "HTTPServer", "HTTPCore",
+                .product(name: "Metrics", package: "swift-metrics"),
+                .product(name: "Prometheus", package: "swift-prometheus"),
+                .product(name: "Logging", package: "swift-log")
+            ],
+            path: "Tests/Server/HTTPObservabilityTests"
         )
     ]
 )
