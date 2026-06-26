@@ -25,10 +25,51 @@ extension HTTP3Connection {
         for frame in try drainFrames(streamID) {
             try handleRequestFrame(streamID, frame)
         }
-        guard streams[streamID]?.finReceived == true else {
+        try surfaceStream(streamID, into: &events)
+    }
+
+    /// Surfaces the events a request stream is now owed: a tunnel's open / data / close (RFC 9220) for a
+    /// tunnel stream, or a completed non-tunnel request once FIN closes the send side.
+    private mutating func surfaceStream(
+        _ streamID: QUICStreamID,
+        into events: inout [Event]
+    ) throws(HTTP3Error) {
+        guard let state = streams[streamID] else {
             return
         }
-        try finishRequest(streamID, into: &events)
+        guard state.isTunnel else {
+            guard state.finReceived else {
+                return
+            }
+            try finishRequest(streamID, into: &events)
+            return
+        }
+        surfaceTunnel(streamID, into: &events)
+    }
+
+    /// Surfaces an Extended CONNECT tunnel's events (RFC 9220 / RFC 8441 §5): the open once, then any
+    /// buffered DATA as opaque bytes, then close on FIN (untracking the stream).
+    private mutating func surfaceTunnel(
+        _ streamID: QUICStreamID,
+        into events: inout [Event]
+    ) {
+        guard var state = streams[streamID] else {
+            return
+        }
+        if !state.tunnelAnnounced, let request = state.request, let proto = state.connectProtocol {
+            state.tunnelAnnounced = true
+            events.append(.extendedConnect(streamID: streamID, request: request, protocol: proto))
+        }
+        if !state.body.isEmpty {
+            events.append(.tunnelData(streamID: streamID, bytes: state.body))
+            state.body = []
+        }
+        guard !state.finReceived else {
+            events.append(.tunnelClosed(streamID: streamID))
+            streams[streamID] = nil
+            return
+        }
+        streams[streamID] = state
     }
 
     /// Validates one request-stream frame against the §4.1 sequence and routes HEADERS / DATA.
@@ -92,10 +133,34 @@ extension HTTP3Connection {
             streams[streamID] = state
             return
         }
-        let (request, _) = try HTTP3RequestMapper.makeRequest(from: fields, streamID: streamID)
+        let (request, connectProtocol) = try HTTP3RequestMapper.makeRequest(
+            from: fields, streamID: streamID
+        )
+        try recordDecodedRequest(streamID, request: request, connect: connectProtocol, &state)
+        streams[streamID] = state
+    }
+
+    /// Records a decoded request on `state` and, when it carries an Extended CONNECT `:protocol`
+    /// (RFC 9220), marks the stream a tunnel — rejecting it with a stream `H3_MESSAGE_ERROR` if we never
+    /// advertised `ENABLE_CONNECT_PROTOCOL` (mirrors the HTTP/2 §8.5 guard).
+    private func recordDecodedRequest(
+        _ streamID: QUICStreamID,
+        request: HTTPRequest,
+        connect connectProtocol: String?,
+        _ state: inout StreamState
+    ) throws(HTTP3Error) {
         state.sawHeaders = true
         state.request = request
-        streams[streamID] = state
+        guard let connectProtocol else {
+            return
+        }
+        guard localSettings.enableConnectProtocol else {
+            throw .stream(
+                streamID, .h3MessageError, "extended CONNECT without ENABLE_CONNECT_PROTOCOL"
+            )
+        }
+        state.isTunnel = true
+        state.connectProtocol = connectProtocol
     }
 
     /// Handles a DATA frame: appends to the body after HEADERS and before trailers (RFC 9114 §4.1).
@@ -115,6 +180,13 @@ extension HTTP3Connection {
             throw .connection(.h3FrameUnexpected, "a DATA frame after trailers")
         }
         state.body.append(contentsOf: payload)
+        // A tunnel stream's DATA is opaque WebSocket bytes (RFC 9220), drained each receive batch as
+        // `tunnelData` rather than a request body, so the request-body / content-length bounds do not
+        // apply here (the WebSocket engine's own `maxMessageSize` governs message size downstream).
+        if state.isTunnel {
+            streams[streamID] = state
+            return
+        }
         guard state.body.count <= limits.maxBodySize else {
             throw .stream(streamID, .h3RequestRejected, "request body exceeds the maximum")
         }
@@ -287,13 +359,12 @@ extension HTTP3Connection {
         }
         let fields = try decodeFieldSection(blocked.payload)
         acknowledgeSection(streamID)  // a blocked section always referenced the dynamic table
-        let (request, _) = try HTTP3RequestMapper.makeRequest(from: fields, streamID: streamID)
-        state.sawHeaders = true
-        state.request = request
+        let (request, connectProtocol) = try HTTP3RequestMapper.makeRequest(
+            from: fields, streamID: streamID
+        )
+        try recordDecodedRequest(streamID, request: request, connect: connectProtocol, &state)
         state.blockedSection = nil
         streams[streamID] = state
-        if state.finReceived {
-            try finishRequest(streamID, into: &events)
-        }
+        try surfaceStream(streamID, into: &events)
     }
 }

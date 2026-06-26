@@ -25,6 +25,14 @@ public struct HTTP3Connection {
     public enum Event: Sendable, Equatable {
         /// A complete request arrived on a request stream (HEADERS and any DATA received, RFC 9114 §4).
         case request(streamID: QUICStreamID, request: HTTPRequest, body: [UInt8])
+        /// An Extended CONNECT opened a tunnel on a request stream (RFC 9220 / RFC 8441 §4) — `protocol`
+        /// names it (e.g. `"websocket"`). The driver accepts with ``acceptTunnel(_:secWebSocketExtensions:)``
+        /// or resets the stream. Surfaced as soon as the CONNECT HEADERS decode — it does not await FIN.
+        case extendedConnect(streamID: QUICStreamID, request: HTTPRequest, protocol: String)
+        /// Opaque bytes arrived on a tunnel stream's DATA frames (RFC 9220 / RFC 8441 §5).
+        case tunnelData(streamID: QUICStreamID, bytes: [UInt8])
+        /// The peer ended a tunnel stream with FIN (RFC 9220 / RFC 8441 §5).
+        case tunnelClosed(streamID: QUICStreamID)
         /// The peer sent GOAWAY, asking us to stop opening streams above `streamID` (RFC 9114 §5.2).
         case goAway(streamID: QUICStreamID)
     }
@@ -78,6 +86,13 @@ public struct HTTP3Connection {
         var sawTrailers = false
         /// Whether the completed request has already been surfaced as an event (emit-once guard).
         var requestEmitted = false
+        /// Extended CONNECT (RFC 9220): this request stream is a tunnel — its DATA frames are opaque
+        /// tunnel bytes (not a request body), and FIN is `tunnelClosed`, not end-of-request.
+        var isTunnel = false
+        /// The Extended CONNECT `:protocol` (e.g. `"websocket"`), surfaced with `extendedConnect`.
+        var connectProtocol: String?
+        /// Whether the `extendedConnect` event has been surfaced (emit-once guard for the tunnel open).
+        var tunnelAnnounced = false
         /// The request being assembled on a request stream, and its body.
         var request: HTTPRequest?
         var body: [UInt8] = []
