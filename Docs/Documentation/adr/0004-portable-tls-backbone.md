@@ -1,6 +1,7 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
-- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–4 shipped, `.optional` works)
+- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–5 shipped — `.optional` +
+  SNI multi-cert both work; only vendoring + hot-reload remain)
 - **Context date:** 2026-06
 
 ## Context
@@ -214,7 +215,15 @@ return (the `NetworkFrameworkTLS` contract).
    `NetworkFrameworkMutualTLSTests`, **plus the three `.optional` cases the Network backbone could not
    satisfy** (admits a no-cert client with `tlsPeerSubject == nil`; surfaces a presented subject; pins a
    `verifyPeer`-rejected cert). Full 936-test default suite green; gates green under the flag.
-5. **SNI multi-cert** + **hot reload** parity. *Gate:* SNI selection + reload-under-load gates green.
+5. **SNI multi-cert** — ✅ **shipped 2026-06-27.** `TransportTLS` grows a `sniIdentities` name→identity
+   map (additive; single-identity callers unaffected); `OpenSSLTLS` builds one `SSL_CTX` per name and
+   installs `SSL_CTX_set_tlsext_servername_callback` over a per-default-context registry (in the shim,
+   freed with the default ctx) that swaps to the matching context, falling back to the default for an
+   unmatched / absent name. The hook Network.framework has never exposed (legacy or modern). *Gate
+   met:* a libssl client's `server_name` selects the matching leaf for two names and the default for an
+   unmatched name and for no-SNI. **Hot reload** (G4b parity) is the remaining sub-item — on this
+   backbone it is a `Mutex`-guarded `SSL_CTX` swap (no port rebind, unlike the Network restart-based
+   reload); deferred to a follow-up.
 6. **Vendored BoringSSL provider** (separate effort) — swap `-lssl` for vendored sources behind the
    seam; remove the system-lib caveat. *Gate:* suites green with no system OpenSSL present.
 

@@ -70,8 +70,32 @@ public struct TransportTLS: Sendable {
     /// run through the hook).
     public var verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
 
+    /// Per-server-name identities for SNI multi-cert selection (RFC 6066 §3): the handshake's
+    /// `server_name` extension picks the matching identity; an unmatched name — or a client that sends
+    /// no SNI — falls back to the default ``pkcs12``.
+    ///
+    /// Honored only by the portable TLS backbone (``TransportBackbone/portableTLS``); Network.framework
+    /// exposes no server-side server-name callback. Empty by default (single-identity), so existing
+    /// callers are unaffected.
+    public var sniIdentities: [String: SNIIdentity]
+
+    /// A PKCS#12 server identity bound to a server-name in ``sniIdentities`` (SNI multi-cert).
+    public struct SNIIdentity: Sendable {
+        /// A PKCS#12 (RFC 7292) blob holding this name's certificate chain and private key.
+        public var pkcs12: [UInt8]
+        /// The passphrase protecting ``pkcs12`` (empty if the blob is unencrypted).
+        public var passphrase: String
+
+        /// Creates an SNI identity from a PKCS#12 blob and its passphrase.
+        public init(pkcs12: [UInt8], passphrase: String) {
+            self.pkcs12 = pkcs12
+            self.passphrase = passphrase
+        }
+    }
+
     /// Creates a TLS configuration from a PKCS#12 identity, the ALPN protocols to advertise, the TLS
-    /// version range (default: TLS 1.3-only), and the client-certificate policy (default: none).
+    /// version range (default: TLS 1.3-only), the client-certificate policy (default: none), and an
+    /// optional SNI multi-cert identity map (default: none).
     public init(
         pkcs12: [UInt8],
         passphrase: String,
@@ -79,7 +103,8 @@ public struct TransportTLS: Sendable {
         minVersion: TLSVersion = .tlsV13,
         maxVersion: TLSVersion = .tlsV13,
         clientAuth: ClientAuth = .none,
-        verifyPeer: (@Sendable ([[UInt8]]) -> Bool)? = nil
+        verifyPeer: (@Sendable ([[UInt8]]) -> Bool)? = nil,
+        sniIdentities: [String: SNIIdentity] = [:]
     ) {
         self.pkcs12 = pkcs12
         self.passphrase = passphrase
@@ -88,5 +113,6 @@ public struct TransportTLS: Sendable {
         self.maxVersion = maxVersion
         self.clientAuth = clientAuth
         self.verifyPeer = verifyPeer
+        self.sniIdentities = sniIdentities
     }
 }

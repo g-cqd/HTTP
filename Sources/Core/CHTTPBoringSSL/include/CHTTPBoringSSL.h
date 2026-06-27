@@ -87,4 +87,19 @@ int CHTTPBoringSSL_peer_subject(SSL *ssl, char *buffer, int buffer_length);
 void CHTTPBoringSSL_peer_der_chain(
     SSL *ssl, void (*emit)(const uint8_t *der, int length, void *context), void *context);
 
+/// Enables SNI multi-cert selection (RFC 6066 §3) on `default_ctx`: installs a server-name callback
+/// backed by an (initially empty) registry that later ``CHTTPBoringSSL_add_sni_context`` registrations
+/// populate and the callback consults at handshake time. An unmatched / absent server-name keeps the
+/// default context.
+void CHTTPBoringSSL_enable_sni(SSL_CTX *default_ctx);
+
+/// Registers `per_name_ctx` for the server-name `name` in `default_ctx`'s SNI registry (call
+/// ``CHTTPBoringSSL_enable_sni`` first). The registry takes its own reference, so the caller may free
+/// its reference afterwards; the registry and all its contexts are released when `default_ctx` is freed.
+void CHTTPBoringSSL_add_sni_context(SSL_CTX *default_ctx, const char *name, SSL_CTX *per_name_ctx);
+
+/// Sets the client `server_name` (SNI, RFC 6066 §3) on `ssl` — a test/interop helper wrapping the
+/// `SSL_set_tlsext_host_name` macro.
+void CHTTPBoringSSL_set_sni(SSL *ssl, const char *name);
+
 #endif

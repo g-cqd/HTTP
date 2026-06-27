@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -208,4 +209,98 @@ void CHTTPBoringSSL_peer_der_chain(
     if (leaf != NULL) {
         X509_free(leaf);
     }
+}
+
+// SNI multi-cert registry (RFC 6066 §3): a per-default-SSL_CTX name -> SSL_CTX map, attached via
+// ex_data so the server-name callback can look up the matching context. The registry owns a reference
+// to each context and frees the registry + its contexts when the default SSL_CTX is freed.
+struct sni_entry {
+    char *name;
+    SSL_CTX *context;
+};
+
+struct sni_registry {
+    struct sni_entry *entries;
+    int count;
+    int capacity;
+};
+
+static int sni_registry_index = -1;
+static pthread_once_t sni_once = PTHREAD_ONCE_INIT;
+
+static void sni_registry_free(
+    void *parent, void *ptr, CRYPTO_EX_DATA *ad, int idx, long argl, void *argp) {
+    (void)parent;
+    (void)ad;
+    (void)idx;
+    (void)argl;
+    (void)argp;
+    struct sni_registry *registry = ptr;
+    if (registry == NULL) {
+        return;
+    }
+    for (int i = 0; i < registry->count; i++) {
+        free(registry->entries[i].name);
+        SSL_CTX_free(registry->entries[i].context);
+    }
+    free(registry->entries);
+    free(registry);
+}
+
+static void sni_init_index(void) {
+    sni_registry_index = SSL_CTX_get_ex_new_index(0, NULL, NULL, NULL, sni_registry_free);
+}
+
+static int sni_servername_cb(SSL *ssl, int *al, void *arg) {
+    (void)al;
+    (void)arg;
+    const char *name = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+    if (name == NULL) {
+        return SSL_TLSEXT_ERR_OK;  // no SNI → keep the default context
+    }
+    struct sni_registry *registry = SSL_CTX_get_ex_data(SSL_get_SSL_CTX(ssl), sni_registry_index);
+    if (registry == NULL) {
+        return SSL_TLSEXT_ERR_OK;
+    }
+    for (int i = 0; i < registry->count; i++) {
+        if (strcmp(registry->entries[i].name, name) == 0) {
+            SSL_set_SSL_CTX(ssl, registry->entries[i].context);
+            return SSL_TLSEXT_ERR_OK;
+        }
+    }
+    return SSL_TLSEXT_ERR_OK;  // unmatched name → keep the default context
+}
+
+void CHTTPBoringSSL_enable_sni(SSL_CTX *default_ctx) {
+    pthread_once(&sni_once, sni_init_index);
+    struct sni_registry *registry = calloc(1, sizeof(*registry));
+    if (registry == NULL) {
+        return;
+    }
+    SSL_CTX_set_ex_data(default_ctx, sni_registry_index, registry);
+    SSL_CTX_set_tlsext_servername_callback(default_ctx, sni_servername_cb);
+}
+
+void CHTTPBoringSSL_add_sni_context(SSL_CTX *default_ctx, const char *name, SSL_CTX *per_name_ctx) {
+    struct sni_registry *registry = SSL_CTX_get_ex_data(default_ctx, sni_registry_index);
+    if (registry == NULL) {
+        return;
+    }
+    if (registry->count == registry->capacity) {
+        int capacity = registry->capacity == 0 ? 4 : registry->capacity * 2;
+        struct sni_entry *entries = realloc(registry->entries, (size_t)capacity * sizeof(*entries));
+        if (entries == NULL) {
+            return;
+        }
+        registry->entries = entries;
+        registry->capacity = capacity;
+    }
+    registry->entries[registry->count].name = strdup(name);
+    SSL_CTX_up_ref(per_name_ctx);
+    registry->entries[registry->count].context = per_name_ctx;
+    registry->count++;
+}
+
+void CHTTPBoringSSL_set_sni(SSL *ssl, const char *name) {
+    SSL_set_tlsext_host_name(ssl, name);
 }

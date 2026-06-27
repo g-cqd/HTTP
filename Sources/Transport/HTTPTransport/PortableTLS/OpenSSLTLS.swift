@@ -21,17 +21,41 @@
 
     /// Safe Swift wrappers over the libssl `SSL_CTX` configuration used by the portable backbone.
     enum OpenSSLTLS {
-        /// Builds a server `SSL_CTX` from `tls` — version range, PKCS#12 identity, and ALPN policy.
+        /// Builds the server `SSL_CTX` from `tls` — the default identity plus, when ``sniIdentities``
+        /// is non-empty, a per-server-name context and an SNI selection callback (RFC 6066 §3).
         ///
-        /// Pins the TLS version range (RFC 8446 / RFC 9325; default TLS 1.3-only), loads the PKCS#12
-        /// server identity, and installs the ALPN selection policy (RFC 7301). The caller owns the
-        /// returned context and must `SSL_CTX_free` it once no live `SSL` references it (an `SSL` retains
-        /// its context, so it may be freed after the last `SSL_new`).
-        ///
-        /// Client-auth (`.none`/`.optional`/`.required`) is configured here (RFC 8446 §4.4.2); the
-        /// `verifyPeer` trust hook over the DER chain is applied post-handshake by the connection. SNI
-        /// multi-cert selection lands in a later phase.
+        /// The caller owns the returned (default) context and must `SSL_CTX_free` it once no live `SSL`
+        /// references it; freeing it also releases the SNI registry and its per-name contexts.
         static func serverContext(_ tls: TransportTLS) throws -> OpaquePointer {
+            let context = try makeContext(pkcs12: tls.pkcs12, passphrase: tls.passphrase, tls: tls)
+            guard !tls.sniIdentities.isEmpty else {
+                return context
+            }
+            do {
+                CHTTPBoringSSL_enable_sni(context)
+                for (name, identity) in tls.sniIdentities {
+                    let perName = try makeContext(
+                        pkcs12: identity.pkcs12, passphrase: identity.passphrase, tls: tls
+                    )
+                    name.withCString { CHTTPBoringSSL_add_sni_context(context, $0, perName) }
+                    SSL_CTX_free(perName)  // the registry retains its own reference
+                }
+                return context
+            }
+            catch {
+                SSL_CTX_free(context)
+                throw error
+            }
+        }
+
+        /// Builds and configures one server `SSL_CTX` (version, identity, ALPN, client-auth).
+        ///
+        /// Pins the version range (RFC 8446 / RFC 9325), loads the PKCS#12 identity, installs the ALPN
+        /// policy (RFC 7301), and sets the client-auth mode (RFC 8446 §4.4.2). The `verifyPeer` trust
+        /// hook is applied post-handshake by the connection.
+        private static func makeContext(
+            pkcs12: [UInt8], passphrase: String, tls: TransportTLS
+        ) throws -> OpaquePointer {
             guard let context = SSL_CTX_new(TLS_server_method()) else {
                 throw TransportError.tlsConfigurationFailed("SSL_CTX_new returned nil")
             }
@@ -46,9 +70,9 @@
                         "failed to pin the TLS version range"
                     )
                 }
-                let loaded = tls.pkcs12.withUnsafeBufferPointer { buffer in
+                let loaded = pkcs12.withUnsafeBufferPointer { buffer in
                     CHTTPBoringSSL_use_pkcs12(
-                        context, buffer.baseAddress, Int32(buffer.count), tls.passphrase
+                        context, buffer.baseAddress, Int32(buffer.count), passphrase
                     )
                 }
                 guard loaded == 1 else {

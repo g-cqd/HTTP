@@ -160,9 +160,11 @@ Today a cert rotation or route change needs a restart. Make both hot.
 - [x] **Hot responder/route swap:** `HTTPServer.responder` is a `Mutex<any HTTPResponder>` swapped by
       `reloadResponder(_:)`; every dispatch reads it once (never across the `await`), so a request in
       flight finishes on the table it read and new requests use the new one — no drain needed.
-- [ ] **SNI multi-cert selection** (sub-gap from the matrix): pick the identity by SNI server-name at
-      handshake → **deferred to G0** (needs a server-side SNI callback Network.framework lacks; the
-      portable BoringSSL path can do it). `.optional` client-auth defers with it.
+- [x] **SNI multi-cert selection** (sub-gap from the matrix): pick the identity by SNI server-name at
+      handshake — **shipped 2026-06-27 on the portable TLS backbone** (ADR 0004 Phase 5;
+      `SSL_CTX_set_tlsext_servername_callback` + per-name `SSL_CTX`). Network.framework still lacks the
+      server-side callback, so this is portable-backbone-only. `.optional` client-auth shipped with it
+      (Phase 4).
 - _Gate:_ ✓ in-process reload-under-load gate (real loopback): after `reload(B)` a new connection's client
       verify-block sees cert B's subject while an existing cert-A connection still round-trips (zero
       existing-connection drops); the responder swap keeps in-flight requests on the old table. The external
@@ -444,3 +446,17 @@ in the project docs.)
   `.required` mTLS); 12 gated portable-TLS tests green under the flag; `project-hooks` clean. **Remaining:
   Phase 5** (SNI multi-cert — the other W2/G4 deferral) **and Phase 6** (vendored BoringSSL, to retire the
   system-OpenSSL dependency).
+- 2026-06-27 — **portable TLS Phase 5 (SNI multi-cert) shipped — the other W2/G4 deferral done.**
+  Per-server-name certificate selection (RFC 6066 §3), the hook Network.framework has never exposed
+  (legacy *or* modern). `TransportTLS` grows an additive `sniIdentities` name→identity map (single-
+  identity callers unaffected); `OpenSSLTLS` builds one `SSL_CTX` per name (factored out a `makeContext`
+  helper) and installs `SSL_CTX_set_tlsext_servername_callback` over a per-default-context registry —
+  in the shim (`enable_sni` / `add_sni_context`, attached via `ex_data`, the registry + its up-ref'd
+  contexts freed when the default ctx is freed) — that swaps to the matching context, falling back to
+  the default for an unmatched / absent name. New shim `set_sni` (client `SSL_set_tlsext_host_name`) for
+  the test. **Gate met:** a libssl client's `server_name` selects the matching leaf for two names, and
+  the default `localhost` leaf for an unmatched name and for no-SNI. Full **936-test** default suite
+  green (the ungated `sniIdentities` addition is additive); **13** gated portable-TLS tests green under
+  the flag; `project-hooks` clean. **Remaining: hot reload** (G4b parity on this backbone — a
+  `Mutex`-guarded `SSL_CTX` swap, no port rebind) **and Phase 6** (vendored BoringSSL, to retire the
+  system-OpenSSL dependency and make the default-off backbone self-contained).
