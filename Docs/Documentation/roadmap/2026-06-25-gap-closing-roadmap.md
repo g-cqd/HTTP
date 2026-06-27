@@ -121,6 +121,21 @@ Network.framework exposes client-cert challenge + verify blocks; surface them.
 - [x] `TransportTLS.clientAuth`: `.none` / `.required` + a `verifyPeer` trust-evaluation hook over the DER
       chain (custom CA / pinning), expressed backbone-agnostically (raw DER, leaf-first) so it ports to the
       G0 BoringSSL path. `.optional` deferred to G0 (Network.framework cleanly does require/none only).
+- [ ] `.optional` via the **modern SDK-26 `NetworkListener<TLS>` backbone — investigated 2026-06-26,
+      blocked, stays → G0/BoringSSL.** The modern `Network.TLS` builder *does* expose a three-state
+      `TLS.PeerAuthentication` (`.none`/`.optional`/`.required`), and a spike confirmed `.optional` + a
+      *no-cert* client handshakes cleanly (subject `nil`). But on macOS 26 / SDK 27 the modern server
+      **deadlocks the handshake whenever a client presents a certificate**: `.certificateValidator` is never
+      invoked and the connection never reaches `.ready`. Reproduced invariant of `.optional`/`.required`,
+      TLS 1.2/1.3, legacy `NWConnection` *and* modern `NetworkConnection<TLS>` clients, direct vs.
+      `NWParametersBuilder` init, and custom-validator vs. default-trust — so the modern backbone cannot
+      validate a *presented* client cert (a cert-presenting client would hang the connection forever — a DoS),
+      making `.optional` unshippable there. Defer it **with SNI multi-cert** to the portable BoringSSL TLS
+      backbone (a real stack does request-but-don't-require *and* client-cert validation); re-evaluate the
+      modern path only if a later macOS 26.x fixes the server-side `certificateValidator` client-cert path
+      (file Feedback). _(Secondary spike finding, applies to any future modern-backbone work: the modern
+      `NetworkConnection<TLS>` is delivered "cold" — it needs a pending `receive` to drive the handshake;
+      passively awaiting `.ready` deadlocks.)_
 - [x] Surface the **verified client identity** (leaf subject) as the server-asserted `.xClientCertSubject`
       header — the connection→request seam the stack already uses for `.xRequestID`/`.xAuthSubject`,
       stripping any inbound spoof. Full SAN / cert chain is a documented header-only limitation (richer
@@ -329,3 +344,19 @@ in the project docs.)
   disabled, plus a real-QUIC loopback WebSocket-over-h3 handshake + echo; full h3spec + h2spec conformance
   green; ASan + swift-format/SwiftLint `--strict` clean. **G6 remaining: Conformance CI (P10) — infra, not
   locally verifiable. Other waves: W3 (G0 Linux).**
+- 2026-06-26 — **W2 deferred `.optional` via the modern SDK-26 backbone: investigated, blocked, reverted —
+  stays → G0/BoringSSL.** Attempted to ship `.optional` client-auth on a new modern `NetworkListener<TLS>`
+  backbone (gated `@available(macOS 26, iOS 26, *)`, mirroring `ModernQUICTransport`). The full implementation
+  was written and compiled clean (warnings-as-errors), but a runtime spike against macOS 26 / SDK 27 found a
+  platform blocker: the modern Network TLS **server deadlocks the handshake whenever a client presents a
+  certificate** — `Network.TLS.certificateValidator` is never invoked and the connection never reaches
+  `.ready`. Invariant across `.optional`/`.required`, TLS 1.2/1.3, legacy `NWConnection` *and* modern
+  `NetworkConnection<TLS>` clients, direct vs. `NWParametersBuilder` init, and custom-validator vs.
+  default-trust. `.optional` + a *no-cert* client works (handshake completes, subject `nil`), but a
+  cert-presenting client would hang the connection forever (a DoS) — so the backbone is unshippable for
+  client-auth. Changes reverted to baseline (936 tests, unchanged); `.optional` (and SNI multi-cert) remain
+  deferred to the portable BoringSSL TLS backbone (G0), where a real stack does request-but-don't-require
+  *and* client-cert validation. Re-evaluate the modern path only if a later macOS 26.x fixes the server-side
+  `certificateValidator` client-cert path (Feedback to file). Secondary spike note for any future
+  modern-backbone work: the modern `NetworkConnection<TLS>` is delivered "cold" and needs a pending `receive`
+  to drive its handshake — passively awaiting `.ready` deadlocks.
