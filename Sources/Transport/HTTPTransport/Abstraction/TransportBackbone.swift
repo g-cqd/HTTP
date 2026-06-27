@@ -18,6 +18,11 @@ public enum TransportBackbone: String, Sendable, CaseIterable {
     /// BSD sockets with a hand-rolled kqueue readiness loop — closest to the hardware.
     case posixKqueue
 
+    /// BSD sockets with a hand-rolled `epoll(7)` readiness loop — the Linux mirror of ``posixKqueue``.
+    /// Available only on Linux (`canImport(Glibc)`); selecting it elsewhere is a configuration error
+    /// (see ``TransportFactory``). **WIP — not yet verified on a Linux toolchain.**
+    case posixEpoll
+
     /// BSD sockets with GCD `DispatchSource` readiness (kqueue under the hood, less hand-rolled).
     case posixDispatch
 

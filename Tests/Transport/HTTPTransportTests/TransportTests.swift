@@ -15,8 +15,10 @@ struct TransportTests {
     func factorySelectsBackbone() {
         // `.fake` binds no port; `.portableTLS` needs a TLS identity + the opt-in HTTP_PORTABLE_TLS
         // build, so it is covered by the gated portable-TLS suite, not this cleartext battery.
+        // `.posixEpoll` is Linux-only (Glibc) — the factory traps for it off Linux, so it is excluded
+        // here and verified by the Linux suite once that toolchain lands (G0).
         for backbone in TransportBackbone.allCases
-        where backbone != .fake && backbone != .portableTLS {
+        where backbone != .fake && backbone != .portableTLS && backbone != .posixEpoll {
             let configuration = TransportConfiguration(port: 0, backbone: backbone)
             #expect(TransportFactory.make(configuration).backbone == backbone)
         }

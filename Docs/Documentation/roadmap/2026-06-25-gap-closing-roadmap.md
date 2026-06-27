@@ -178,9 +178,14 @@ Today a cert rotation or route change needs a restart. Make both hot.
 The single biggest gap: servers run on Linux; we're Apple-only. The sans-I/O engines are already pure and
 portable — the lift is the I/O floor and a non-Network.framework TLS path. **Decision required first — see
 [Decisions needed](#decisions-needed) D1 (TLS backend).**
-- [ ] **`POSIXEpoll` transport backbone** (`Sources/Transport/HTTPTransport/POSIXEpoll/`): epoll readiness
-      loop modeled on the existing `KqueueEventLoop`; `SO_REUSEPORT` prefork (already proven on kqueue);
-      EINTR/EAGAIN parity; dual-stack IPv6.
+- [~] **`POSIXEpoll` transport backbone** (`Sources/Transport/HTTPTransport/POSIXEpoll/`) — **WIP authored
+      2026-06-27, unverified on Linux.** `EpollEventLoop` (epoll readiness loop modeled on `KqueueEventLoop`,
+      with epoll's combined-mask one-shot model), `POSIXEpollConnection` (read/`send(MSG_NOSIGNAL)`), and
+      `POSIXEpollTransport` (accept loop reusing the now-portable `POSIXSocket`); `SO_REUSEPORT` prefork,
+      EINTR/EAGAIN parity, dual-stack via `getaddrinfo`. Gated `#if canImport(Glibc)` (inert + 936-suite
+      green on macOS). **Remaining:** (a) gate the Darwin-only backbones (`#if canImport(Darwin)`) so the
+      whole `HTTPTransport` target compiles on Linux; (b) build + run the suite on a Linux toolchain (epoll
+      cannot be compiled or tested on Darwin); (c) the `ubuntu-latest` CI job.
 - [x] **Portable TLS path** (D1) — **shipped 2026-06-27 (macOS arm64)**, see
       **[ADR 0004](../adr/0004-portable-tls-backbone.md)** (Phases 1–6). A TLS backbone that is *not*
       Network.framework: `PortableTLS{Transport,Connection}` over the existing `POSIXSocket` accept loop +

@@ -10,8 +10,15 @@
 //  per POSIX.1-2017 (IEEE Std 1003.1-2017). TCP (RFC 9293) over IPv4 (RFC 791) or IPv6 (RFC 4291) —
 //  the family is chosen from the host literal, matching Network.framework's reach (audit T-F12).
 //
+//  Portable across Darwin and Linux (Glibc) — the two `#if` branches below cover the only platform
+//  divergences in this file (`SO_NOSIGPIPE` and `sockaddr_storage.ss_len`, both BSD-only).
+//
 
-internal import Darwin
+#if canImport(Darwin)
+    internal import Darwin
+#elseif canImport(Glibc)
+    internal import Glibc
+#endif
 
 /// Stateless POSIX sockets helpers shared by the BSD-socket transport backbones.
 enum POSIXSocket {
@@ -101,8 +108,16 @@ enum POSIXSocket {
     /// equivalent for `write`; Linux would use `MSG_NOSIGNAL` on `send`). Set on the listen socket and
     /// on every accepted client socket so the entire byte path fails closed via `TransportError`.
     static func setNoSIGPIPE(_ rawFD: Int32) {
-        var on: Int32 = 1
-        _ = setsockopt(rawFD, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        #if canImport(Darwin)
+            var on: Int32 = 1
+            let size = socklen_t(MemoryLayout<Int32>.size)
+            _ = setsockopt(rawFD, SOL_SOCKET, SO_NOSIGPIPE, &on, size)
+        #else
+            // Linux has no `SO_NOSIGPIPE`; the byte path suppresses SIGPIPE per-write with
+            // `send(..., MSG_NOSIGNAL)` instead (so a peer RST mid-write yields EPIPE, not a fatal
+            // signal — audit T-F1). Nothing to set on the descriptor here.
+            _ = rawFD
+        #endif
     }
 
     /// Disables Nagle's algorithm via `TCP_NODELAY` so a sub-MSS response flushes immediately,
@@ -137,7 +152,12 @@ enum POSIXSocket {
         var source = storage
         var hostBuffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
         var serviceBuffer = [CChar](repeating: 0, count: Int(NI_MAXSERV))
-        let length = socklen_t(source.ss_len)
+        #if canImport(Darwin)
+            let length = socklen_t(source.ss_len)
+        #else
+            // Linux's `sockaddr_storage` has no `ss_len`; `getnameinfo` accepts the full storage size.
+            let length = socklen_t(MemoryLayout<sockaddr_storage>.size)
+        #endif
         let status = withUnsafePointer(to: &source) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
                 getnameinfo(
