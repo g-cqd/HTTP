@@ -43,6 +43,13 @@ enum NetworkFrameworkTLS {
     /// identity, a value that is not a `SecIdentity`, or a `nil` `sec_identity_t` each surface as a
     /// `TransportError.tlsConfigurationFailed` rather than a force-cast or a silent `nil`. The import
     /// step is serialized (see ``importLock``).
+    ///
+    /// `SecPKCS12Import` on macOS has no in-memory mode — it persists the imported **certificate** into
+    /// the default (login) keychain. The returned `sec_identity_t` retains the certificate and key in
+    /// memory (the TLS handshake uses those refs, not a keychain lookup), so the persisted copy is dead
+    /// weight that would otherwise accumulate — a test suite minting throwaway dev identities accreted
+    /// thousands of stray certs in the developer's login keychain. We therefore best-effort delete the
+    /// persisted certificate before returning, leaving no trace (see ``purgeImportedCertificate(_:)``).
     static func identity(pkcs12: [UInt8], passphrase: String) throws -> sec_identity_t {
         let options = [kSecImportExportPassphrase as String: passphrase] as CFDictionary
         // `SecPKCS12Import` is serialized (see `importLock`). `rawItems` is local to this call and
@@ -71,7 +78,32 @@ enum NetworkFrameworkTLS {
         guard let identity = sec_identity_create(secIdentity) else {
             throw TransportError.tlsConfigurationFailed("sec_identity_create returned nil")
         }
+        purgeImportedCertificate(secIdentity)
         return identity
+    }
+
+    /// Best-effort removal of the certificate `SecPKCS12Import` persisted into the keychain, so an
+    /// import leaves no trace.
+    ///
+    /// The in-memory `sec_identity_t` retains its own certificate and key references — the TLS stack
+    /// uses those, not a keychain lookup — so deleting the persisted certificate does not affect the
+    /// returned identity (validated by the real-loopback TLS handshake tests). The private key is left
+    /// alone: it backs the identity's signing during the handshake, and it is not persisted as a
+    /// findable identity (no certificate remains to pair it with). Any failure is ignored — keychain
+    /// hygiene must never break identity creation.
+    private static func purgeImportedCertificate(_ identity: SecIdentity) {
+        var certificate: SecCertificate?
+        guard SecIdentityCopyCertificate(identity, &certificate) == errSecSuccess,
+            let certificate
+        else {
+            return
+        }
+        let query =
+            [
+                kSecClass as String: kSecClassCertificate,
+                kSecValueRef as String: certificate
+            ] as CFDictionary
+        _ = SecItemDelete(query)
     }
 
     /// Builds `NWProtocolTLS.Options` advertising `applicationProtocols` (ALPN, RFC 7301) and the
