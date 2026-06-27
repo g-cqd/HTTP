@@ -1,6 +1,6 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
-- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phase 1 shipped) — resolves **D1**
+- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–2 shipped) — resolves **D1**
 - **Context date:** 2026-06
 
 ## Context
@@ -74,12 +74,13 @@ provider (system OpenSSL now, vendored BoringSSL later) a **swappable detail**, 
 keeps the unsafe interop bounded to one file (the `NetworkFrameworkTLS` discipline).
 
     Sources/Transport/HTTPTransport/PortableTLS/
-      PortableTLSTransport.swift     ServerTransport: accept loop (reuses POSIXSocket) → AsyncStream
-      PortableTLSConnection.swift    TransportConnection: SSL_read/SSL_write bridged to async
-      TLSProvider.swift              protocol: context, per-conn SSL object, handshake, I/O, metadata
-      TLSContext.swift               ALPN/version/peer-auth/SNI config, value-typed, Sendable
-      OpenSSLProvider.swift          TLSProvider over the C shim (the first concrete provider)
-    Sources/Core/CHTTPBoringSSL/     C shim: the *only* place that #includes <openssl/ssl.h>
+      OpenSSLTLS.swift               SSL_CTX builder + handshake metadata (mirrors NetworkFrameworkTLS) [P2]
+      PortableTLSConnection.swift    TransportConnection: libssl I/O bridged to async [P2]
+      PortableTLSTransport.swift     ServerTransport: accept loop (reuses POSIXSocket) → AsyncStream [P3]
+    Sources/Core/CHTTPBoringSSL/     C shim: the *only* place that #includes <openssl/ssl.h> [P1]
+
+  (The §Decision "TLSProvider seam" is realized as the C shim + the OpenSSLTLS/PortableTLSConnection
+  pair — see phase 2 below for why a Swift `TLSProvider` protocol was pruned as YAGNI.)
                                      (named for the eventual provider; OpenSSL is ABI-compatible here)
 
 ### 2. First provider: **system OpenSSL, gated and opt-in**; vendored BoringSSL is the follow-up
@@ -184,8 +185,16 @@ return (the `NetworkFrameworkTLS` contract).
    gating (default graph stays apple-only), and a gated test proving link + import + a TLS 1.3
    handshake negotiating ALPN `h2` over memory BIOs (kept as a regression test, not throwaway). *Gate
    met:* TLS 1.3 completes; ALPN negotiates `h2`; lint clean.
-2. **`TLSProvider` + `OpenSSLProvider` + `PortableTLSConnection`** — identity from PKCS#12, memory-BIO
-   byte bridge, `receive`/`send`/`close`. *Gate:* loopback echo (mirrors `assertLoopbackEcho`).
+2. **`OpenSSLTLS` + `PortableTLSConnection`** — ✅ **shipped 2026-06-27.** PKCS#12 → server `SSL_CTX`
+   + ALPN + version pinning (`OpenSSLTLS`, mirroring `NetworkFrameworkTLS`); the connection bridges
+   libssl I/O to `TransportConnection` (`performHandshake`/`receive`/`send`/`close`). *Two deliberate
+   deviations from the §Architecture sketch:* (a) **no `TLSProvider` protocol** — OpenSSL and BoringSSL
+   share one C API through one shim, so a protocol would have a single conformer forever (YAGNI); the
+   shim's backing lib is the seam, and the Swift types mirror `NetworkFrameworkTLS`/`…Connection`
+   instead. (b) **v1 drives blocking `SSL_set_fd` on a per-connection serial `DispatchQueue`** (the
+   ADR-sanctioned first step) rather than memory BIOs; the non-blocking memory-BIO + shared-readiness
+   path (no thread per in-flight op) is the perf follow-up. *Gate met:* a loopback echo over a
+   socketpair through `PortableTLSConnection` round-trips plaintext end-to-end through TLS.
 3. **`PortableTLSTransport`** — accept loop over `POSIXSocket`, `AsyncStream`, `boundPort`, `shutdown`.
    *Gate:* one-way TLS + ALPN suite green; interop with `curl`.
 4. **mTLS tri-state** — `.none`/`.optional`/`.required` + `verifyPeer`/DER + `tlsPeerSubject`. *Gate:*

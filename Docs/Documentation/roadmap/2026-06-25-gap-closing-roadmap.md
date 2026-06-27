@@ -393,3 +393,16 @@ in the project docs.)
   `h2`** over memory BIOs using a DevTLSIdentity identity (no keychain). Default build-tests green; gate green
   under the flag; swift-format + SwiftLint `--strict` clean. **Next: Phase 2** — `TLSProvider` +
   `OpenSSLProvider` + `PortableTLSConnection` (identity, memory-BIO byte bridge, receive/send/close).
+- 2026-06-27 — **portable TLS Phase 2 (connection) shipped.** `OpenSSLTLS` (the `SSL_CTX` builder + ALPN
+  metadata, mirroring `NetworkFrameworkTLS`) + `PortableTLSConnection` (a `TransportConnection` carrying a
+  libssl session over an accepted socket: `performHandshake`/`receive`/`send`/`close`). Two deliberate
+  deviations from ADR 0004's sketch, both recorded there: **(a)** no `TLSProvider` protocol — OpenSSL and
+  BoringSSL share one C API through one shim, so a protocol would have a single conformer forever (YAGNI);
+  the shim's backing lib is the seam and the Swift types mirror the Network backbone. **(b)** v1 drives
+  **blocking `SSL_set_fd` on a per-connection serial `DispatchQueue`** bridged to `async` (the
+  ADR-sanctioned first step), with the non-blocking memory-BIO + shared-readiness path as the perf
+  follow-up. New gated test round-trips `ping` end-to-end through TLS over a `socketpair` (server =
+  `PortableTLSConnection`, client = raw libssl). Default build-tests green; gate green under the flag;
+  swift-format + SwiftLint `--strict` clean. **Next: Phase 3** — `PortableTLSTransport` (accept loop over
+  `POSIXSocket` → `AsyncStream`, `boundPort`, `shutdown`); gate: the one-way-TLS + ALPN suite + `curl`
+  interop.
