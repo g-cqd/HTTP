@@ -189,11 +189,14 @@ portable — the lift is the I/O floor and a non-Network.framework TLS path. **D
       BoringSSL (Phase 6, commit `79e821d`)** — self-contained, no system OpenSSL, no `HTTP_OPENSSL_PREFIX`;
       `scripts/vendor-boringssl.sh` regenerates the tree. Remaining for Linux: the `POSIXEpoll` backbone
       (below) + the multi-arch symbol-mangling/CI (ADR 0004 §6.5, needs a Linux runner).
-- [ ] **Foundation-usage audit:** inventory `Foundation`/`FileManager`/`ProcessInfo`/`JSONSerialization`
-      uses; confirm each works under swift-corelibs-foundation or swap to first-party/`ADFoundation`-style
-      portable primitives (the library already favors first-party types).
-- [ ] **`Synchronization` / atomics:** confirm `Mutex`/`Atomic` availability on the Linux toolchain
-      (fallback: swift-atomics) and `ContinuousClock` parity.
+- [x] **Foundation-usage audit** — done 2026-06-27, see
+      [Linux-readiness audit](../audit/2026-06-27-linux-readiness-audit.md). All ~27 Foundation users in
+      Sources touch only swift-corelibs-foundation-available APIs (`Data`/`Dispatch`/`Process`/`URL`/
+      `FileManager`/`JSONDecoder`/`NSLock`); no Darwin-only Foundation surface. `DevTLSIdentity` makes its
+      PKCS#12 via the `openssl` CLI (not Security.framework), so it is portable too.
+- [x] **`Synchronization` / atomics** — done 2026-06-27 (same audit). 34 files use `Synchronization`
+      (`Mutex`, 8× `Atomic`, 15× `ContinuousClock`); all present in the Swift 6 Linux toolchain. Core's
+      `NowProvider` is already `Darwin`/`Glibc`-guarded.
 - [ ] **HTTP/3:** flag h3 as **Darwin-only in v1** (QUIC is platform-provided via Network.framework); a
       Linux QUIC story (quiche/lsquic shim, or wait for a portable Swift QUIC) is a separate XL follow-up —
       do **not** block Linux h1/h2 on it.
