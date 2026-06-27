@@ -177,9 +177,13 @@ portable — the lift is the I/O floor and a non-Network.framework TLS path. **D
 - [ ] **`POSIXEpoll` transport backbone** (`Sources/Transport/HTTPTransport/POSIXEpoll/`): epoll readiness
       loop modeled on the existing `KqueueEventLoop`; `SO_REUSEPORT` prefork (already proven on kqueue);
       EINTR/EAGAIN parity; dual-stack IPv6.
-- [ ] **Portable TLS path** (D1): a TLS backbone that is *not* Network.framework — BoringSSL/OpenSSL via a
-      C shim (NIO-free), reusing the existing ALPN/TLS-1.3-floor/strict-ALPN policy. mTLS (G3) and hot
-      reload (G4) must work here too.
+- [ ] **Portable TLS path** (D1): a TLS backbone that is *not* Network.framework — see
+      **[ADR 0004](../adr/0004-portable-tls-backbone.md)** (provider seam; system OpenSSL first, vendored
+      BoringSSL follow-up). Reuses the existing `POSIXSocket` accept loop + the ALPN / TLS-1.3-floor /
+      strict-ALPN policy; mTLS (G3) and hot reload (G4) must work here too. **Also unblocks W2's deferred
+      `.optional` client-auth + SNI multi-cert** — OpenSSL/BoringSSL do request-but-don't-require
+      (`SSL_VERIFY_PEER` without `FAIL_IF_NO_PEER_CERT`) and a server-name cert callback
+      (`SSL_CTX_set_tlsext_servername_callback`) natively, neither of which Network.framework exposes.
 - [ ] **Foundation-usage audit:** inventory `Foundation`/`FileManager`/`ProcessInfo`/`JSONSerialization`
       uses; confirm each works under swift-corelibs-foundation or swap to first-party/`ADFoundation`-style
       portable primitives (the library already favors first-party types).
@@ -224,11 +228,14 @@ here for completeness.
 
 These are forks the team should resolve before the dependent phase starts:
 
-- **D1 — Linux TLS backend (blocks G0 W3-b).** The library is deliberately SwiftNIO-free, so
-  `swift-nio-ssl` is off the table. Options: **(a)** a thin BoringSSL C shim (vendored, like the existing C
-  shims) — most control, most maintenance; **(b)** system OpenSSL via a C shim — least vendoring, distro
-  ABI variance; **(c)** build on swift-crypto's BoringSSL for primitives + a minimal TLS-record binding.
-  *Recommendation:* (a) or (c) to keep the dependency posture; decide before W3-b.
+- **D1 — Linux/portable TLS backend (blocks G0 W3-b + W2's deferred `.optional`/SNI).** **Resolved →
+  see [ADR 0004](../adr/0004-portable-tls-backbone.md) (Proposed, awaiting ratification).** Investigation
+  killed option (c): swift-crypto's BoringSSL is **libcrypto-only** (no `ssl/`, no `SSL_CTX_*`), so "a
+  minimal TLS-record binding" is really "hand-write a TLS 1.3 stack" (XXL, a standing security
+  liability). The decision: a **provider-seam** architecture (`TLSProvider`) with the libssl calls
+  behind one C shim, **system OpenSSL first** (gated opt-in via `HTTP_PORTABLE_TLS`; the default build
+  stays apple-only), and **vendored BoringSSL (option a) as the drop-in productionization** behind the
+  same seam. Ratification point: system-OpenSSL-first vs. vendor-up-front — the seam makes it low-regret.
 - **D2 — Zstd scope (G2).** Ship Zstd-out now (needs a `libzstd` shim) or defer until a consumer asks?
   *Recommendation:* defer; Brotli-out covers the table-stakes case.
 - **D3 — Linux QUIC/HTTP/3 (G0 follow-up).** Accept h3 as Darwin-only in v1, or invest in a portable QUIC
@@ -360,3 +367,17 @@ in the project docs.)
   `certificateValidator` client-cert path (Feedback to file). Secondary spike note for any future
   modern-backbone work: the modern `NetworkConnection<TLS>` is delivered "cold" and needs a pending `receive`
   to drive its handshake — passively awaiting `.ready` deadlocks.
+- 2026-06-27 — **D1 resolved: portable TLS backbone designed → [ADR 0004](../adr/0004-portable-tls-backbone.md)
+  (Proposed).** Design/ADR-first (no backbone code yet). Investigation settled the fork: swift-crypto's
+  `CCryptoBoringSSL` is **libcrypto-only** (tree has `crypto/`/`gen/`/`third_party/`, no `ssl/`; no
+  `SSL_CTX_*`), so roadmap option (c) collapses to hand-writing a TLS 1.3 stack (XXL/security liability) and
+  is rejected; `swift-nio-ssl` stays off the table (CLAUDE.md). Decision: a **provider-seam** (`TLSProvider`)
+  with the only `libssl` interop behind one C shim (`CHTTPBoringSSL`), the accept loop reusing the existing
+  `POSIXSocket` layer, and the backbone (`PortableTLS{Transport,Connection}`) provider-agnostic — **system
+  OpenSSL first** (gated opt-in `HTTP_PORTABLE_TLS`; default build stays apple-only), **vendored BoringSSL
+  (option a) the drop-in follow-up** behind the same seam. The ADR maps every requirement to the
+  OpenSSL/BoringSSL API and shows the two W2-blocked features fall out natively: `.optional` =
+  `SSL_VERIFY_PEER` without `FAIL_IF_NO_PEER_CERT`; SNI multi-cert = `SSL_CTX_set_tlsext_servername_callback`
+  + per-name `SSL_CTX`. Six-phase rollout (plumbing+handshake spike → provider → transport → mTLS tri-state →
+  SNI/reload → vendored BoringSSL), each gated, with `openssl s_client`/`curl` interop as the portability
+  proof. **Awaiting ratification:** system-OpenSSL-first vs. vendor-up-front (the seam makes it low-regret).
