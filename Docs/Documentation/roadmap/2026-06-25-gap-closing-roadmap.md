@@ -381,3 +381,15 @@ in the project docs.)
   + per-name `SSL_CTX`. Six-phase rollout (plumbing+handshake spike → provider → transport → mTLS tri-state →
   SNI/reload → vendored BoringSSL), each gated, with `openssl s_client`/`curl` interop as the portability
   proof. **Awaiting ratification:** system-OpenSSL-first vs. vendor-up-front (the seam makes it low-regret).
+- 2026-06-27 — **ADR 0004 ratified (system-OpenSSL-first); portable TLS Phase 1 (plumbing) shipped.** New
+  `CHTTPBoringSSL` C shim — the single `#include <openssl/...>` surface — wrapping the macro-based OpenSSL
+  config APIs the Swift importer can't call (version pinning, PKCS#12 → `SSL_CTX`, ALPN select/offer, a
+  memory-BIO handshake pump), plus a one-time legacy-provider load so OpenSSL 3 parses DevTLSIdentity's
+  `-legacy` PKCS#12. `Package.swift` adds the shim + OpenSSL header/link flags **only under
+  `HTTP_PORTABLE_TLS`** (default graph stays apple/swiftlang-only; verified the shim is absent without the
+  flag), passing `-Xcc -I<prefix>` to consumers so the clang importer finds the headers; OpenSSL prefix via
+  `HTTP_OPENSSL_PREFIX` (Homebrew `openssl@3` default). New gated test (`#if canImport(CHTTPBoringSSL)`)
+  proves the plumbing end-to-end: the shim links + imports, and a real **TLS 1.3 handshake negotiates ALPN
+  `h2`** over memory BIOs using a DevTLSIdentity identity (no keychain). Default build-tests green; gate green
+  under the flag; swift-format + SwiftLint `--strict` clean. **Next: Phase 2** — `TLSProvider` +
+  `OpenSSLProvider` + `PortableTLSConnection` (identity, memory-BIO byte bridge, receive/send/close).

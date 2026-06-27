@@ -1,6 +1,6 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
-- **Status:** Proposed (awaiting ratification) — resolves **D1** in the gap-closing roadmap
+- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phase 1 shipped) — resolves **D1**
 - **Context date:** 2026-06
 
 ## Context
@@ -179,9 +179,11 @@ return (the `NetworkFrameworkTLS` contract).
 
 ## Phased rollout
 
-1. **Plumbing + handshake spike** — `CHTTPBoringSSL` shim, `HTTP_PORTABLE_TLS` gating, a throwaway
-   `SSL_accept` over a loopback fd proving link + handshake + ALPN against `openssl s_client`. *Gate:*
-   a TLS 1.3 handshake completes; ALPN negotiates `h2`.
+1. **Plumbing + handshake spike** — ✅ **shipped 2026-06-27.** `CHTTPBoringSSL` shim (macro wrappers,
+   PKCS#12 → `SSL_CTX`, ALPN, memory-BIO handshake pump, legacy-provider load), `HTTP_PORTABLE_TLS`
+   gating (default graph stays apple-only), and a gated test proving link + import + a TLS 1.3
+   handshake negotiating ALPN `h2` over memory BIOs (kept as a regression test, not throwaway). *Gate
+   met:* TLS 1.3 completes; ALPN negotiates `h2`; lint clean.
 2. **`TLSProvider` + `OpenSSLProvider` + `PortableTLSConnection`** — identity from PKCS#12, memory-BIO
    byte bridge, `receive`/`send`/`close`. *Gate:* loopback echo (mirrors `assertLoopbackEcho`).
 3. **`PortableTLSTransport`** — accept loop over `POSIXSocket`, `AsyncStream`, `boundPort`, `shutdown`.
