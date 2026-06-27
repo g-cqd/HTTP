@@ -109,6 +109,11 @@ enum NetworkFrameworkTLS {
     /// Builds `NWProtocolTLS.Options` advertising `applicationProtocols` (ALPN, RFC 7301) and the
     /// server `identity`, pinning the TLS version range (RFC 8446 / RFC 9325; default TLS 1.3-only),
     /// and — when `clientAuth` is `.required` — requesting and verifying a client certificate (mTLS).
+    ///
+    /// Throws ``TransportError/unsupported(_:)`` for ``TransportTLS/ClientAuth/optional``, which
+    /// Network.framework cannot model (request-but-don't-require) — that policy needs the portable TLS
+    /// backbone (``PortableTLSTransport``, ADR 0004). Failing closed here avoids silently degrading an
+    /// `.optional` listener to one-way TLS.
     // swiftlint:disable discouraged_default_parameter - secure TLS 1.3 default
     static func options(
         identity: sec_identity_t,
@@ -117,8 +122,13 @@ enum NetworkFrameworkTLS {
         maxVersion: TLSVersion = .tlsV13,
         clientAuth: TransportTLS.ClientAuth = .none,
         verifyPeer: (@Sendable ([[UInt8]]) -> Bool)? = nil
-    ) -> NWProtocolTLS.Options {
+    ) throws -> NWProtocolTLS.Options {
         // swiftlint:enable discouraged_default_parameter
+        guard clientAuth != .optional else {
+            throw TransportError.unsupported(
+                "optional client-auth requires the portable TLS backbone (HTTP_PORTABLE_TLS)"
+            )
+        }
         let options = NWProtocolTLS.Options()
         let security = options.securityProtocolOptions
         sec_protocol_options_set_local_identity(security, identity)

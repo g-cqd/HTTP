@@ -121,8 +121,10 @@ Network.framework exposes client-cert challenge + verify blocks; surface them.
 - [x] `TransportTLS.clientAuth`: `.none` / `.required` + a `verifyPeer` trust-evaluation hook over the DER
       chain (custom CA / pinning), expressed backbone-agnostically (raw DER, leaf-first) so it ports to the
       G0 BoringSSL path. `.optional` deferred to G0 (Network.framework cleanly does require/none only).
-- [ ] `.optional` via the **modern SDK-26 `NetworkListener<TLS>` backbone — investigated 2026-06-26,
-      blocked, stays → G0/BoringSSL.** The modern `Network.TLS` builder *does* expose a three-state
+- [x] `.optional` client-auth — **shipped 2026-06-27 on the portable TLS backbone** (ADR 0004 Phase 4:
+      `SSL_VERIFY_PEER` without `FAIL_IF_NO_PEER_CERT`; the full `.optional` suite is green). The *modern
+      SDK-26 `NetworkListener<TLS>`* path remains blocked (investigated 2026-06-26 — kept here for the
+      record): the modern `Network.TLS` builder *does* expose a three-state
       `TLS.PeerAuthentication` (`.none`/`.optional`/`.required`), and a spike confirmed `.optional` + a
       *no-cert* client handshakes cleanly (subject `nil`). But on macOS 26 / SDK 27 the modern server
       **deadlocks the handshake whenever a client presents a certificate**: `.certificateValidator` is never
@@ -424,3 +426,21 @@ in the project docs.)
   `project-hooks` (swift-format + SwiftLint) clean. **Next: Phase 4** — mTLS tri-state
   (`.none`/`.optional`/`.required` + `verifyPeer`/DER + `tlsPeerSubject`), where the W2-blocked
   `.optional` finally works (`SSL_VERIFY_PEER` without `FAIL_IF_NO_PEER_CERT`).
+- 2026-06-27 — **portable TLS Phase 4 (mTLS tri-state) shipped — `.optional` finally works.** The W2
+  payoff: `.optional` client-auth runs natively on the portable backbone, the exact feature the macOS 26
+  modern Network path deadlocked on. `OpenSSLTLS` maps client-auth to `SSL_VERIFY_NONE` /
+  `SSL_VERIFY_PEER` / `+ SSL_VERIFY_FAIL_IF_NO_PEER_CERT` with a **permissive TLS-layer verify**
+  (replacing default trust, so self-signed / private-CA client certs are admissible — the G3 "the verify
+  hook is the policy" posture); the real decision — `verifyPeer` over the **leaf-first DER chain** (new
+  shim `peer_der_chain`, leaf emitted explicitly since server-side libssl separates it) + presence rules
+  — is applied **post-handshake** by the connection, which also captures `tlsPeerSubject` (leaf CN via
+  `peer_subject`). `TransportTLS.ClientAuth.optional` is re-added (reverted earlier with the dead
+  modern-Network path); `NetworkFrameworkTLS.options` now **rejects `.optional` with `.unsupported`**
+  (fail-closed, no silent degrade to one-way TLS — Network can't request-but-don't-require). **Gate met:**
+  the full mutual-TLS suite — the `.required` battery mirrored from `NetworkFrameworkMutualTLSTests`, plus
+  the **three `.optional` cases the Network backbone couldn't satisfy** (admits a no-cert client with
+  `tlsPeerSubject == nil`; surfaces a presented subject; pins a `verifyPeer`-rejected cert). Full
+  **936-test** default suite green (the ungated `.optional`/Network-reject changes don't regress
+  `.required` mTLS); 12 gated portable-TLS tests green under the flag; `project-hooks` clean. **Remaining:
+  Phase 5** (SNI multi-cert — the other W2/G4 deferral) **and Phase 6** (vendored BoringSSL, to retire the
+  system-OpenSSL dependency).

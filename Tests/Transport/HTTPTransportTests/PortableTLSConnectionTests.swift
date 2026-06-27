@@ -47,7 +47,9 @@
                 id: TransportConnectionID(1),
                 peer: TransportAddress(host: "127.0.0.1", port: 0),
                 ssl: serverSSL,
-                descriptor: serverDescriptor
+                descriptor: serverDescriptor,
+                clientAuth: .none,
+                verifyPeer: nil
             )
 
             // Client side: a raw libssl peer that handshakes, sends "ping", and records the echo it reads.

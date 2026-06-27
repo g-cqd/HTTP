@@ -220,7 +220,10 @@ public final class NetworkFrameworkTransport: ServerTransport {
                 pkcs12: tls.pkcs12,
                 passphrase: tls.passphrase
             )
-            let options = NetworkFrameworkTLS.options(
+            // `options` rejects `.optional` client-auth (Network.framework can't request-but-don't-
+            // require) with `.unsupported`, so an `.optional` listener on this backbone fails closed at
+            // `start()` instead of silently degrading to one-way TLS (it needs the portable backbone).
+            let options = try NetworkFrameworkTLS.options(
                 identity: identity,
                 applicationProtocols: tls.applicationProtocols,
                 minVersion: tls.minVersion,

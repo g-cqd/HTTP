@@ -36,22 +36,37 @@
         /// completes or when none was negotiated.
         var negotiatedApplicationProtocol: String? { negotiated.withLock(\.self) }
 
+        /// The verified client-cert leaf subject (mutual TLS), captured at ``performHandshake()``, or
+        /// `nil` when no client certificate was presented.
+        var tlsPeerSubject: String? { subject.withLock(\.self) }
+
         private let ssl: OpaquePointer
         private let descriptor: Int32
         private let queue = DispatchQueue(label: "http.transport.portable-tls")
         private let negotiated = Mutex<String?>(nil)
+        private let subject = Mutex<String?>(nil)
+        /// The client-auth policy and the trust hook over the DER chain (G3), applied post-handshake.
+        private let clientAuth: TransportTLS.ClientAuth
+        private let verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
         /// `true` once the `SSL` and socket have been torn down (once-only across ``close()`` / `deinit`).
         private let lifecycle = Mutex<Bool>(false)
 
         /// Wraps an `SSL` already bound to `descriptor` via `SSL_set_fd` (the caller owns that wiring); the
         /// connection takes ownership and tears both down on ``close()``.
         init(
-            id: TransportConnectionID, peer: TransportAddress, ssl: OpaquePointer, descriptor: Int32
+            id: TransportConnectionID,
+            peer: TransportAddress,
+            ssl: OpaquePointer,
+            descriptor: Int32,
+            clientAuth: TransportTLS.ClientAuth,
+            verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
         ) {
             self.id = id
             self.peer = peer
             self.ssl = ssl
             self.descriptor = descriptor
+            self.clientAuth = clientAuth
+            self.verifyPeer = verifyPeer
         }
 
         deinit {
@@ -59,8 +74,10 @@
             teardown()
         }
 
-        /// Drives the server-side TLS handshake (`SSL_accept`) to completion and captures the negotiated
-        /// ALPN protocol, or throws if the handshake fails.
+        /// Drives the server-side TLS handshake (`SSL_accept`) to completion, captures the negotiated
+        /// ALPN protocol and the verified client-cert subject (mutual TLS), and applies the `verifyPeer`
+        /// trust policy over the DER chain — throwing if the handshake fails or `verifyPeer` rejects the
+        /// presented certificate.
         func performHandshake() async throws {
             try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Void, any Error>) in
@@ -76,6 +93,23 @@
                     self.negotiated.withLock {
                         $0 = OpenSSLTLS.negotiatedApplicationProtocol(of: self.ssl)
                     }
+                    // Client-auth policy (G3): a presented chain is run through `verifyPeer` (a nil hook
+                    // accepts any presented chain); an absent chain is allowed under `.optional`/`.none`
+                    // and unreachable under `.required` (the handshake already failed without a cert).
+                    let chain = OpenSSLTLS.peerDERChain(of: self.ssl)
+                    let accepted =
+                        chain.isEmpty
+                        ? (self.clientAuth != .required)
+                        : (self.verifyPeer?(chain) ?? true)
+                    guard accepted else {
+                        continuation.resume(
+                            throwing: TransportError.tlsConfigurationFailed(
+                                "the client certificate was rejected by verifyPeer"
+                            )
+                        )
+                        return
+                    }
+                    self.subject.withLock { $0 = OpenSSLTLS.peerSubject(of: self.ssl) }
                     continuation.resume()
                 }
             }

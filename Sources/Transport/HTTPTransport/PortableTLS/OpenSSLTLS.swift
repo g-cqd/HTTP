@@ -28,8 +28,9 @@
         /// returned context and must `SSL_CTX_free` it once no live `SSL` references it (an `SSL` retains
         /// its context, so it may be freed after the last `SSL_new`).
         ///
-        /// Client-auth (`.none`/`.optional`/`.required` + `verifyPeer`) and SNI multi-cert land in later
-        /// phases; this phase is one-way server TLS.
+        /// Client-auth (`.none`/`.optional`/`.required`) is configured here (RFC 8446 §4.4.2); the
+        /// `verifyPeer` trust hook over the DER chain is applied post-handshake by the connection. SNI
+        /// multi-cert selection lands in a later phase.
         static func serverContext(_ tls: TransportTLS) throws -> OpaquePointer {
             guard let context = SSL_CTX_new(TLS_server_method()) else {
                 throw TransportError.tlsConfigurationFailed("SSL_CTX_new returned nil")
@@ -56,6 +57,7 @@
                     )
                 }
                 CHTTPBoringSSL_set_alpn_select_h2(context)
+                CHTTPBoringSSL_set_client_auth(context, clientAuthMode(tls.clientAuth))
                 return context
             }
             catch {
@@ -75,6 +77,60 @@
             }
             let bytes = [UInt8](UnsafeBufferPointer(start: data, count: Int(length)))
             return String(decoding: bytes, as: Unicode.UTF8.self)
+        }
+
+        /// The peer leaf certificate's Common Name (mutual TLS) on a handshaken `ssl`, or `nil` when no
+        /// client certificate was presented — the verified subject surfaced as `tlsPeerSubject`.
+        static func peerSubject(of ssl: OpaquePointer) -> String? {
+            var buffer = [CChar](repeating: 0, count: 256)
+            let length = buffer.withUnsafeMutableBufferPointer {
+                CHTTPBoringSSL_peer_subject(ssl, $0.baseAddress, Int32($0.count))
+            }
+            guard length >= 0 else {
+                return nil
+            }
+            let bytes = buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }
+            return String(decoding: bytes, as: Unicode.UTF8.self)
+        }
+
+        /// The peer's certificate chain (leaf-first) as raw DER (RFC 5280), or empty when no client
+        /// certificate was presented — the backbone-agnostic form the `verifyPeer` trust hook consumes.
+        static func peerDERChain(of ssl: OpaquePointer) -> [[UInt8]] {
+            final class Accumulator {
+                var chain: [[UInt8]] = []
+
+                deinit {
+                    // No teardown beyond ARC.
+                }
+            }
+            let accumulator = Accumulator()
+            CHTTPBoringSSL_peer_der_chain(
+                ssl,
+                { der, length, context in
+                    guard let der, let context else {
+                        return
+                    }
+                    let accumulator = Unmanaged<Accumulator>.fromOpaque(context)
+                        .takeUnretainedValue()
+                    accumulator.chain.append(
+                        [UInt8](UnsafeBufferPointer(start: der, count: Int(length)))
+                    )
+                },
+                Unmanaged.passUnretained(accumulator).toOpaque()
+            )
+            return accumulator.chain
+        }
+
+        /// Maps the backbone-agnostic ``TransportTLS/ClientAuth`` to the shim's mode (0/1/2).
+        private static func clientAuthMode(_ clientAuth: TransportTLS.ClientAuth) -> Int32 {
+            switch clientAuth {
+                case .none:
+                    0
+                case .optional:
+                    1
+                case .required:
+                    2
+            }
         }
 
         /// Maps a backbone-agnostic ``TLSVersion`` to libssl's protocol-version constant.

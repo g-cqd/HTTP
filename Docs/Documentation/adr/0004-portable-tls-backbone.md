@@ -1,6 +1,6 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
-- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–3 shipped) — resolves **D1**
+- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–4 shipped, `.optional` works)
 - **Context date:** 2026-06
 
 ## Context
@@ -203,8 +203,17 @@ return (the `NetworkFrameworkTLS` contract).
    `curl` interops over TLS** (a real non-Network.framework client — the portability proof) exchanging
    HTTP/1.1 and negotiating `http/1.1` ALPN. Full 936-test default suite green; gates green under the
    flag.
-4. **mTLS tri-state** — `.none`/`.optional`/`.required` + `verifyPeer`/DER + `tlsPeerSubject`. *Gate:*
-   the full mutual-TLS suite **including `.optional`** green.
+4. **mTLS tri-state** — ✅ **shipped 2026-06-27. `.optional` works.** `OpenSSLTLS` maps client-auth to
+   `SSL_VERIFY_NONE` / `SSL_VERIFY_PEER` / `+ SSL_VERIFY_FAIL_IF_NO_PEER_CERT`, with a permissive
+   TLS-layer verify (replacing default trust so self-signed/private-CA client certs are admissible); the
+   real policy — `verifyPeer` over the leaf-first DER chain (shim `peer_der_chain`) + presence rules —
+   is applied **post-handshake** by the connection, which also captures `tlsPeerSubject` (the leaf CN).
+   `TransportTLS.ClientAuth.optional` is re-added (it was reverted with the dead modern-Network path);
+   the Network backbone now rejects `.optional` with `.unsupported` (fail-closed, no silent degrade).
+   *Gate met:* the full mutual-TLS suite — the `.required` battery mirrored from
+   `NetworkFrameworkMutualTLSTests`, **plus the three `.optional` cases the Network backbone could not
+   satisfy** (admits a no-cert client with `tlsPeerSubject == nil`; surfaces a presented subject; pins a
+   `verifyPeer`-rejected cert). Full 936-test default suite green; gates green under the flag.
 5. **SNI multi-cert** + **hot reload** parity. *Gate:* SNI selection + reload-under-load gates green.
 6. **Vendored BoringSSL provider** (separate effort) — swap `-lssl` for vendored sources behind the
    seam; remove the system-lib caveat. *Gate:* suites green with no system OpenSSL present.

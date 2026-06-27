@@ -12,13 +12,22 @@
 /// turns this into a `sec_identity_t` and `NWProtocolTLS.Options`. Advertising `"h2"` is what lets a
 /// client negotiate HTTP/2 over TLS (RFC 9113 §3.3); cleartext backbones ignore this.
 public struct TransportTLS: Sendable {
-    /// Whether the server requires a client certificate during the handshake (mutual TLS).
+    /// Whether the server requests a client certificate during the handshake (mutual TLS).
     ///
-    /// Network.framework cleanly supports only require-or-none, so ``optional`` is intentionally
-    /// absent until the portable BoringSSL path (G0) can model a request-but-don't-require handshake.
+    /// ``none`` and ``required`` work on every TLS backbone. ``optional`` — request a certificate but
+    /// proceed if the client presents none — requires the **portable TLS backbone**
+    /// (``TransportBackbone/portableTLS``, `HTTP_PORTABLE_TLS`): Network.framework cannot model a
+    /// request-but-don't-require handshake (the legacy `sec_protocol` flag is two-state, and the modern
+    /// `NetworkListener<TLS>` deadlocks validating a presented client certificate — see ADR 0004), so
+    /// it rejects ``optional`` with ``TransportError/unsupported(_:)`` rather than silently degrading.
     public enum ClientAuth: Sendable {
         /// One-way server TLS: no client certificate is requested (the default).
         case none
+        /// Optional mutual TLS (RFC 8446 §4.4.2): the server *requests* a client certificate but the
+        /// handshake still succeeds if the client presents none — ``TransportConnection/tlsPeerSubject``
+        /// is then `nil`. A *presented* certificate is still run through ``verifyPeer`` (present-but-
+        /// rejected fails the handshake). Requires the portable TLS backbone (see the type-level doc).
+        case optional
         /// Mutual TLS (RFC 8446 §4.4.2): the client must present a certificate and the handshake
         /// fails if it does not, or if ``verifyPeer`` rejects the presented chain.
         case required
@@ -50,13 +59,15 @@ public struct TransportTLS: Sendable {
     public var clientAuth: ClientAuth
 
     /// An optional trust / pinning hook over the client's certificate chain, evaluated during the
-    /// handshake when ``clientAuth`` is ``ClientAuth/required``.
+    /// handshake when ``clientAuth`` is ``ClientAuth/required`` or ``ClientAuth/optional`` and the
+    /// client presents a certificate.
     ///
     /// Receives the DER-encoded chain leaf-first (each element one certificate's raw bytes) and
-    /// returns `false` to fail the handshake. Expressed over raw DER — not a backbone certificate
-    /// type — so the policy is backbone-agnostic and portable to the future BoringSSL path (G0). A
-    /// `nil` hook accepts any chain the peer presents (presence is still required under
-    /// ``ClientAuth/required``).
+    /// returns `false` to fail the handshake. Expressed over raw DER — not a backbone certificate type
+    /// — so the policy is backbone-agnostic across the Network and portable TLS backbones. A `nil` hook
+    /// accepts any chain the peer presents; presence is required under ``ClientAuth/required`` but
+    /// optional under ``ClientAuth/optional`` (an absent certificate is allowed, a present one is still
+    /// run through the hook).
     public var verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
 
     /// Creates a TLS configuration from a PKCS#12 identity, the ALPN protocols to advertise, the TLS

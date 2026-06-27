@@ -144,3 +144,68 @@ int CHTTPBoringSSL_connect_loopback(uint16_t port) {
     }
     return fd;
 }
+
+static int permissive_verify(int preverify_ok, X509_STORE_CTX *store) {
+    (void)preverify_ok;
+    (void)store;
+    // Accept any *presented* certificate at the TLS layer: the platform default trust evaluation
+    // (which would reject a self-signed / privately-issued client cert) is replaced by the caller's
+    // post-handshake verifyPeer hook over the DER chain (the G3 "verify hook is the policy" semantics).
+    return 1;
+}
+
+void CHTTPBoringSSL_set_client_auth(SSL_CTX *ctx, int mode) {
+    if (mode == 0) {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+        return;
+    }
+    int verify_mode = SSL_VERIFY_PEER;  // optional: request, proceed if absent
+    if (mode == 2) {
+        verify_mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;  // required: fail without a cert
+    }
+    SSL_CTX_set_verify(ctx, verify_mode, permissive_verify);
+}
+
+int CHTTPBoringSSL_peer_subject(SSL *ssl, char *buffer, int buffer_length) {
+    X509 *certificate = SSL_get1_peer_certificate(ssl);
+    if (certificate == NULL) {
+        return -1;
+    }
+    int length = X509_NAME_get_text_by_NID(
+        X509_get_subject_name(certificate), NID_commonName, buffer, buffer_length);
+    X509_free(certificate);
+    return length;
+}
+
+static void emit_der(X509 *certificate, void (*emit)(const uint8_t *, int, void *), void *context) {
+    unsigned char *der = NULL;
+    int length = i2d_X509(certificate, &der);
+    if (length >= 0) {
+        emit(der, length, context);
+        OPENSSL_free(der);
+    }
+}
+
+void CHTTPBoringSSL_peer_der_chain(
+    SSL *ssl, void (*emit)(const uint8_t *, int, void *), void *context) {
+    // Server-side libssl returns the leaf separately from the chain, so emit the leaf first, then the
+    // remaining chain (skipping a duplicated leaf), giving the caller a leaf-first DER chain.
+    X509 *leaf = SSL_get1_peer_certificate(ssl);
+    if (leaf != NULL) {
+        emit_der(leaf, emit, context);
+    }
+    STACK_OF(X509) *chain = SSL_get_peer_cert_chain(ssl);
+    if (chain != NULL) {
+        int count = sk_X509_num(chain);
+        for (int i = 0; i < count; i++) {
+            X509 *certificate = sk_X509_value(chain, i);
+            if (leaf != NULL && X509_cmp(certificate, leaf) == 0) {
+                continue;
+            }
+            emit_der(certificate, emit, context);
+        }
+    }
+    if (leaf != NULL) {
+        X509_free(leaf);
+    }
+}

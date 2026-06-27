@@ -181,7 +181,9 @@
                 id: connectionIDs.next(),
                 peer: POSIXSocket.peerAddress(from: address),
                 ssl: ssl,
-                descriptor: clientFD
+                descriptor: clientFD,
+                clientAuth: configuration.tls?.clientAuth ?? .none,
+                verifyPeer: configuration.tls?.verifyPeer
             )
             // Drive the handshake off the accept thread; surface only on success — a failed handshake
             // (e.g. ALPN no-overlap / ALPACA refusal) is torn down, never yielded.

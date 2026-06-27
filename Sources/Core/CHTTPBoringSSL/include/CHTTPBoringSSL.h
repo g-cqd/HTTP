@@ -66,4 +66,25 @@ int CHTTPBoringSSL_handshake(SSL *server, SSL *client);
 /// `sockaddr` plumbing leaking into Swift.
 int CHTTPBoringSSL_connect_loopback(uint16_t port);
 
+/// Configures client-certificate authentication (mTLS, RFC 8446 §4.4.2) on `ctx`: `mode` 0 = none (no
+/// CertificateRequest), 1 = optional (`SSL_VERIFY_PEER` — request, but proceed if the client presents
+/// none), 2 = required (`+ SSL_VERIFY_FAIL_IF_NO_PEER_CERT` — the handshake fails without a cert).
+///
+/// A *presented* certificate is accepted at the TLS layer (default trust evaluation is replaced), so
+/// the actual trust decision is the caller's post-handshake `verifyPeer` hook over the DER chain — the
+/// G3 "the verify hook is the policy; a `nil` hook accepts any presented chain" semantics, ported.
+void CHTTPBoringSSL_set_client_auth(SSL_CTX *ctx, int mode);
+
+/// Writes the peer leaf certificate's Common Name into `buffer` (NUL-terminated), returning its length,
+/// or `-1` when no client certificate was presented (or it carries no CN). The leaf-subject identity
+/// surfaced as `TransportConnection.tlsPeerSubject`.
+int CHTTPBoringSSL_peer_subject(SSL *ssl, char *buffer, int buffer_length);
+
+/// Invokes `emit(der, length, context)` once per peer certificate, **leaf-first** — each a DER-encoded
+/// (RFC 5280) buffer valid for the call's duration only. The backbone-agnostic chain the `verifyPeer`
+/// trust hook consumes. (Server-side libssl keeps the leaf separate from the chain, so the leaf is
+/// emitted explicitly, then the rest of the chain, de-duplicated.)
+void CHTTPBoringSSL_peer_der_chain(
+    SSL *ssl, void (*emit)(const uint8_t *der, int length, void *context), void *context);
+
 #endif
