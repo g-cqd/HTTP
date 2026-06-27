@@ -8,12 +8,12 @@
 //  exposes no server-side server-name callback (legacy or modern); OpenSSL/BoringSSL do
 //  (`SSL_CTX_set_tlsext_servername_callback` + per-name `SSL_CTX`).
 //
-//  Gated `#if canImport(CHTTPBoringSSL)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Gated `#if canImport(CHTTPBoringSSLShims)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
     import Testing
@@ -92,7 +92,7 @@
         }
 
         private static func handshakeLeafCN(port: UInt16, serverName: String?) -> String? {
-            let descriptor = CHTTPBoringSSL_connect_loopback(port)
+            let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
             guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
                 return nil
             }
@@ -108,7 +108,7 @@
             }
             SSL_set_fd(ssl, descriptor)
             if let serverName {
-                serverName.withCString { CHTTPBoringSSL_set_sni(ssl, $0) }
+                serverName.withCString { CHTTPBoringSSLShims_set_sni(ssl, $0) }
             }
             guard SSL_connect(ssl) == 1 else {
                 return nil

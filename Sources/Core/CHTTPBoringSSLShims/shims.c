@@ -1,8 +1,8 @@
 //
 //  shim.c
-//  CHTTPBoringSSL
+//  CHTTPBoringSSLShims
 //
-//  Definitions of the libssl wrapper functions declared in CHTTPBoringSSL.h. The macro-based OpenSSL
+//  Definitions of the libssl wrapper functions declared in CHTTPBoringSSLShims.h. The macro-based OpenSSL
 //  configuration APIs and the STACK_OF(X509) helpers are macros, natural in C and invisible to the
 //  Swift importer — so they live here, behind plain functions Swift can call. See ADR 0004.
 //
@@ -15,7 +15,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "CHTTPBoringSSL.h"  // pulls <openssl/ssl.h>, which defines OPENSSL_IS_BORINGSSL on BoringSSL
+#include "CHTTPBoringSSLShims.h"  // pulls <openssl/ssl.h>, which defines OPENSSL_IS_BORINGSSL on BoringSSL
 
 #ifndef OPENSSL_IS_BORINGSSL
 #include <openssl/provider.h>
@@ -26,7 +26,7 @@
 // `PKCS12_parse` accepts both modern and legacy bundles. OpenSSL-specific; vendored BoringSSL (ADR
 // 0004 phase 6) keeps these PBES1 ciphers built in (`kBuiltinPBE`) with no provider concept, so the
 // whole load compiles out under `OPENSSL_IS_BORINGSSL`.
-static void CHTTPBoringSSL_load_providers(void) {
+static void CHTTPBoringSSLShims_load_providers(void) {
     OSSL_PROVIDER_load(NULL, "default");
     OSSL_PROVIDER_load(NULL, "legacy");
 }
@@ -39,21 +39,21 @@ static void CHTTPBoringSSL_load_providers(void) {
 #define SSL_get1_peer_certificate SSL_get_peer_certificate
 #endif
 
-long CHTTPBoringSSL_set_min_proto_version(SSL_CTX *ctx, int version) {
+long CHTTPBoringSSLShims_set_min_proto_version(SSL_CTX *ctx, int version) {
     return SSL_CTX_set_min_proto_version(ctx, version);
 }
 
-long CHTTPBoringSSL_set_max_proto_version(SSL_CTX *ctx, int version) {
+long CHTTPBoringSSLShims_set_max_proto_version(SSL_CTX *ctx, int version) {
     return SSL_CTX_set_max_proto_version(ctx, version);
 }
 
-int CHTTPBoringSSL_use_pkcs12(
+int CHTTPBoringSSLShims_use_pkcs12(
     SSL_CTX *ctx, const uint8_t *bytes, int length, const char *passphrase) {
 #ifndef OPENSSL_IS_BORINGSSL
     // OpenSSL needs the legacy provider for DevTLSIdentity's `-legacy` PKCS#12; BoringSSL parses it
     // natively (built-in PBES1), so the load is compiled out above and there is nothing to prime.
     static pthread_once_t providers = PTHREAD_ONCE_INIT;
-    pthread_once(&providers, CHTTPBoringSSL_load_providers);
+    pthread_once(&providers, CHTTPBoringSSLShims_load_providers);
 #endif
     BIO *source = BIO_new_mem_buf(bytes, length);
     if (source == NULL) {
@@ -111,11 +111,11 @@ static int http_alpn_select(
     return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
-void CHTTPBoringSSL_set_alpn_select_h2(SSL_CTX *ctx) {
+void CHTTPBoringSSLShims_set_alpn_select_h2(SSL_CTX *ctx) {
     SSL_CTX_set_alpn_select_cb(ctx, http_alpn_select, NULL);
 }
 
-int CHTTPBoringSSL_set_client_alpn(SSL_CTX *ctx) {
+int CHTTPBoringSSLShims_set_client_alpn(SSL_CTX *ctx) {
     static const unsigned char protocols[] = { 2, 'h', '2' };
     return SSL_CTX_set_alpn_protos(ctx, protocols, (unsigned int)sizeof(protocols));
 }
@@ -129,7 +129,7 @@ static void transfer(BIO *from, BIO *to) {
     }
 }
 
-int CHTTPBoringSSL_handshake(SSL *server, SSL *client) {
+int CHTTPBoringSSLShims_handshake(SSL *server, SSL *client) {
     // Bounded ping-pong: the client (connect) speaks first; each side's output is fed to the other's
     // input until both report a finished handshake. 200 rounds is far beyond TLS 1.3's flights.
     for (int round = 0; round < 200; round++) {
@@ -144,7 +144,7 @@ int CHTTPBoringSSL_handshake(SSL *server, SSL *client) {
     return 0;
 }
 
-int CHTTPBoringSSL_connect_loopback(uint16_t port) {
+int CHTTPBoringSSLShims_connect_loopback(uint16_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         return -1;
@@ -170,7 +170,7 @@ static int permissive_verify(int preverify_ok, X509_STORE_CTX *store) {
     return 1;
 }
 
-void CHTTPBoringSSL_set_client_auth(SSL_CTX *ctx, int mode) {
+void CHTTPBoringSSLShims_set_client_auth(SSL_CTX *ctx, int mode) {
     if (mode == 0) {
         SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
         return;
@@ -182,7 +182,7 @@ void CHTTPBoringSSL_set_client_auth(SSL_CTX *ctx, int mode) {
     SSL_CTX_set_verify(ctx, verify_mode, permissive_verify);
 }
 
-int CHTTPBoringSSL_peer_subject(SSL *ssl, char *buffer, int buffer_length) {
+int CHTTPBoringSSLShims_peer_subject(SSL *ssl, char *buffer, int buffer_length) {
     X509 *certificate = SSL_get1_peer_certificate(ssl);
     if (certificate == NULL) {
         return -1;
@@ -202,7 +202,7 @@ static void emit_der(X509 *certificate, void (*emit)(const uint8_t *, int, void 
     }
 }
 
-void CHTTPBoringSSL_peer_der_chain(
+void CHTTPBoringSSLShims_peer_der_chain(
     SSL *ssl, void (*emit)(const uint8_t *, int, void *), void *context) {
     // Server-side libssl returns the leaf separately from the chain, so emit the leaf first, then the
     // remaining chain (skipping a duplicated leaf), giving the caller a leaf-first DER chain.
@@ -286,7 +286,7 @@ static int sni_servername_cb(SSL *ssl, int *al, void *arg) {
     return SSL_TLSEXT_ERR_OK;  // unmatched name → keep the default context
 }
 
-void CHTTPBoringSSL_enable_sni(SSL_CTX *default_ctx) {
+void CHTTPBoringSSLShims_enable_sni(SSL_CTX *default_ctx) {
     pthread_once(&sni_once, sni_init_index);
     struct sni_registry *registry = calloc(1, sizeof(*registry));
     if (registry == NULL) {
@@ -296,7 +296,7 @@ void CHTTPBoringSSL_enable_sni(SSL_CTX *default_ctx) {
     SSL_CTX_set_tlsext_servername_callback(default_ctx, sni_servername_cb);
 }
 
-void CHTTPBoringSSL_add_sni_context(SSL_CTX *default_ctx, const char *name, SSL_CTX *per_name_ctx) {
+void CHTTPBoringSSLShims_add_sni_context(SSL_CTX *default_ctx, const char *name, SSL_CTX *per_name_ctx) {
     struct sni_registry *registry = SSL_CTX_get_ex_data(default_ctx, sni_registry_index);
     if (registry == NULL) {
         return;
@@ -316,6 +316,6 @@ void CHTTPBoringSSL_add_sni_context(SSL_CTX *default_ctx, const char *name, SSL_
     registry->count++;
 }
 
-void CHTTPBoringSSL_set_sni(SSL *ssl, const char *name) {
+void CHTTPBoringSSLShims_set_sni(SSL *ssl, const char *name) {
     SSL_set_tlsext_host_name(ssl, name);
 }

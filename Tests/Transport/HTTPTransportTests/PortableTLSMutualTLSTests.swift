@@ -9,12 +9,12 @@
 //  `.optional` admits a no-cert client (subject `nil`) yet still surfaces and pins a presented one.
 //  `SSL_VERIFY_PEER` without `SSL_VERIFY_FAIL_IF_NO_PEER_CERT` is request-but-don't-require, natively.
 //
-//  Gated `#if canImport(CHTTPBoringSSL)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Gated `#if canImport(CHTTPBoringSSLShims)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
     import HTTPTestSupport
@@ -186,17 +186,17 @@
         private static func connect(port: UInt16, identity: TransportTLS?) {
             DispatchQueue.global()
                 .async {
-                    let descriptor = CHTTPBoringSSL_connect_loopback(port)
+                    let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
                     guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
                         return
                     }
                     defer { SSL_CTX_free(context) }
                     // Trust the dev self-signed server certificate (test only).
                     SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
-                    _ = CHTTPBoringSSL_set_client_alpn(context)
+                    _ = CHTTPBoringSSLShims_set_client_alpn(context)
                     if let identity {
                         _ = identity.pkcs12.withUnsafeBufferPointer { buffer in
-                            CHTTPBoringSSL_use_pkcs12(
+                            CHTTPBoringSSLShims_use_pkcs12(
                                 context,
                                 buffer.baseAddress,
                                 Int32(buffer.count),

@@ -352,18 +352,18 @@ for target in package.targets where !["CHTTPTestMalloc", "CCRC32"].contains(targ
     target.swiftSettings = settings
 }
 
-// G0 / ADR 0004 — the opt-in portable TLS backbone (system OpenSSL behind the `CHTTPBoringSSL` shim).
+// G0 / ADR 0004 — the opt-in portable TLS backbone (system OpenSSL behind the `CHTTPBoringSSLShims` shim).
 // Gated by `HTTP_PORTABLE_TLS` so the DEFAULT build graph stays apple/swiftlang-only — no OpenSSL in a
 // consumer's resolved graph unless they opt in. The OpenSSL prefix is `HTTP_OPENSSL_PREFIX` or the
 // Homebrew `openssl@3` default on macOS (Linux: set the env, or rely on the default search paths).
 // Appended after the strict loop above so the C shim never receives Swift-only settings. The portable
-// Swift sources / tests guard on `#if canImport(CHTTPBoringSSL)`, so they vanish when the flag is off.
+// Swift sources / tests guard on `#if canImport(CHTTPBoringSSLShims)`, so they vanish when the flag is off.
 if Context.environment["HTTP_PORTABLE_TLS"] != nil {
     let opensslPrefix = Context.environment["HTTP_OPENSSL_PREFIX"] ?? "/opt/homebrew/opt/openssl@3"
     package.targets.append(
         .target(
-            name: "CHTTPBoringSSL",
-            path: "Sources/Core/CHTTPBoringSSL",
+            name: "CHTTPBoringSSLShims",
+            path: "Sources/Core/CHTTPBoringSSLShims",
             cSettings: [.unsafeFlags(["-I\(opensslPrefix)/include"])],
             linkerSettings: [
                 .unsafeFlags(["-L\(opensslPrefix)/lib"]),
@@ -373,12 +373,12 @@ if Context.environment["HTTP_PORTABLE_TLS"] != nil {
         )
     )
     // Consumers depend on the shim AND need the OpenSSL header path passed to the clang importer that
-    // builds the `CHTTPBoringSSL` module on `import` (`cSettings -I` only covers compiling shim.c, not
+    // builds the `CHTTPBoringSSLShims` module on `import` (`cSettings -I` only covers compiling shim.c, not
     // a dependent's module build). The C target's `linkerSettings` propagate the `-lssl`/`-lcrypto`
     // link to the final binary.
     for target in package.targets
     where ["HTTPTransport", "HTTPTransportTests"].contains(target.name) {
-        target.dependencies.append("CHTTPBoringSSL")
+        target.dependencies.append("CHTTPBoringSSLShims")
         target.swiftSettings =
             (target.swiftSettings ?? []) + [.unsafeFlags(["-Xcc", "-I\(opensslPrefix)/include"])]
     }

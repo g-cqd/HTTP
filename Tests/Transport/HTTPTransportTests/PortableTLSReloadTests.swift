@@ -7,12 +7,12 @@
 //  port rebind (unlike the Network backbone's restart-based reload). A libssl client reads back which
 //  server leaf it was handed before and after the swap.
 //
-//  Gated `#if canImport(CHTTPBoringSSL)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Gated `#if canImport(CHTTPBoringSSLShims)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
     import Testing
@@ -86,7 +86,7 @@
         }
 
         private static func handshakeLeafCN(port: UInt16) -> String? {
-            let descriptor = CHTTPBoringSSL_connect_loopback(port)
+            let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
             guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
                 return nil
             }

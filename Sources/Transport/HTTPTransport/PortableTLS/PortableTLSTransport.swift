@@ -11,15 +11,15 @@
 //  surfaced. The single shared `SSL_CTX` is built once from the `TransportTLS` identity.
 //
 //  Selected by ``TransportFactory`` for ``TransportBackbone/portableTLS``; gated
-//  `#if canImport(CHTTPBoringSSL)` (the opt-in `HTTP_PORTABLE_TLS` build).
+//  `#if canImport(CHTTPBoringSSLShims)` (the opt-in `HTTP_PORTABLE_TLS` build).
 //
 //  Standards: TCP (RFC 9293) over IPv4 (RFC 791) / IPv6 (RFC 4291) via POSIX.1-2017 sockets, carrying
 //  TLS 1.3 (RFC 8446); ALPN (RFC 7301).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
     internal import Synchronization

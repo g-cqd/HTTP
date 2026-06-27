@@ -5,19 +5,19 @@
 //  The single place the portable TLS backbone touches the libssl `SSL_CTX` surface — the mirror of
 //  `NetworkFrameworkTLS` for the Network backbone (ADR 0004). Builds a server `SSL_CTX` from the
 //  backbone-agnostic `TransportTLS` (the same PKCS#12 identity + ALPN + version policy the Network
-//  path uses), and reads handshake metadata. All libssl calls go through the `CHTTPBoringSSL` shim,
+//  path uses), and reads handshake metadata. All libssl calls go through the `CHTTPBoringSSLShims` shim,
 //  so the unsafe interop stays bounded here; every entry point fails closed to a typed
 //  `TransportError`.
 //
-//  Gated `#if canImport(CHTTPBoringSSL)` — present only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Gated `#if canImport(CHTTPBoringSSLShims)` — present only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 //  Standards: TLS 1.3 (RFC 8446 / RFC 9325 floor); ALPN (RFC 7301) selects "h2"/"http/1.1"; PKCS#12
 //  identities (RFC 7292).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
 
     /// Safe Swift wrappers over the libssl `SSL_CTX` configuration used by the portable backbone.
     enum OpenSSLTLS {
@@ -32,12 +32,12 @@
                 return context
             }
             do {
-                CHTTPBoringSSL_enable_sni(context)
+                CHTTPBoringSSLShims_enable_sni(context)
                 for (name, identity) in tls.sniIdentities {
                     let perName = try makeContext(
                         pkcs12: identity.pkcs12, passphrase: identity.passphrase, tls: tls
                     )
-                    name.withCString { CHTTPBoringSSL_add_sni_context(context, $0, perName) }
+                    name.withCString { CHTTPBoringSSLShims_add_sni_context(context, $0, perName) }
                     SSL_CTX_free(perName)  // the registry retains its own reference
                 }
                 return context
@@ -61,17 +61,19 @@
             }
             do {
                 guard
-                    CHTTPBoringSSL_set_min_proto_version(context, protocolVersion(tls.minVersion))
-                        == 1,
-                    CHTTPBoringSSL_set_max_proto_version(context, protocolVersion(tls.maxVersion))
-                        == 1
+                    CHTTPBoringSSLShims_set_min_proto_version(
+                        context, protocolVersion(tls.minVersion)
+                    ) == 1,
+                    CHTTPBoringSSLShims_set_max_proto_version(
+                        context, protocolVersion(tls.maxVersion)
+                    ) == 1
                 else {
                     throw TransportError.tlsConfigurationFailed(
                         "failed to pin the TLS version range"
                     )
                 }
                 let loaded = pkcs12.withUnsafeBufferPointer { buffer in
-                    CHTTPBoringSSL_use_pkcs12(
+                    CHTTPBoringSSLShims_use_pkcs12(
                         context, buffer.baseAddress, Int32(buffer.count), passphrase
                     )
                 }
@@ -80,8 +82,8 @@
                         "failed to load the PKCS#12 identity"
                     )
                 }
-                CHTTPBoringSSL_set_alpn_select_h2(context)
-                CHTTPBoringSSL_set_client_auth(context, clientAuthMode(tls.clientAuth))
+                CHTTPBoringSSLShims_set_alpn_select_h2(context)
+                CHTTPBoringSSLShims_set_client_auth(context, clientAuthMode(tls.clientAuth))
                 return context
             }
             catch {
@@ -108,7 +110,7 @@
         static func peerSubject(of ssl: OpaquePointer) -> String? {
             var buffer = [CChar](repeating: 0, count: 256)
             let length = buffer.withUnsafeMutableBufferPointer {
-                CHTTPBoringSSL_peer_subject(ssl, $0.baseAddress, Int32($0.count))
+                CHTTPBoringSSLShims_peer_subject(ssl, $0.baseAddress, Int32($0.count))
             }
             guard length >= 0 else {
                 return nil
@@ -128,7 +130,7 @@
                 }
             }
             let accumulator = Accumulator()
-            CHTTPBoringSSL_peer_der_chain(
+            CHTTPBoringSSLShims_peer_der_chain(
                 ssl,
                 { der, length, context in
                     guard let der, let context else {

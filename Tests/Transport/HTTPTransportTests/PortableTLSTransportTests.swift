@@ -8,12 +8,12 @@
 //  over TLS (a real non-Network.framework client — the portability proof), exchanging an HTTP/1.1
 //  request/response and negotiating `http/1.1` ALPN. The `curl` test skips cleanly if `curl` is absent.
 //
-//  Gated `#if canImport(CHTTPBoringSSL)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Gated `#if canImport(CHTTPBoringSSLShims)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
     import Foundation
@@ -52,13 +52,13 @@
             let echoed = AsyncEventProbe<[UInt8]>()
             DispatchQueue.global()
                 .async {
-                    let descriptor = CHTTPBoringSSL_connect_loopback(port)
+                    let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
                     guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
                         return
                     }
                     defer { SSL_CTX_free(context) }
                     SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
-                    _ = CHTTPBoringSSL_set_client_alpn(context)
+                    _ = CHTTPBoringSSLShims_set_client_alpn(context)
                     guard let ssl = SSL_new(context) else {
                         _ = Darwin.close(descriptor)
                         return

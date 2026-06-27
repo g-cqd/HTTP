@@ -13,12 +13,12 @@
 //  thread per in-flight op) is the noted follow-up. Teardown is once-only (guarded by `lifecycle`),
 //  from `close()` or `deinit`.
 //
-//  Gated `#if canImport(CHTTPBoringSSL)` — present only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Gated `#if canImport(CHTTPBoringSSLShims)` — present only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
     internal import Synchronization

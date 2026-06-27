@@ -9,12 +9,12 @@
 //  the client side is a raw libssl peer on a background queue. The gate mirrors the other backbones'
 //  `assertLoopbackEcho`: send `ping`, read it back unchanged — but end-to-end through TLS.
 //
-//  Gated `#if canImport(CHTTPBoringSSL)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Gated `#if canImport(CHTTPBoringSSLShims)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 
-#if canImport(CHTTPBoringSSL)
+#if canImport(CHTTPBoringSSLShims)
 
-    internal import CHTTPBoringSSL
+    internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
     import HTTPTestSupport
@@ -56,7 +56,7 @@
             let clientContext = try #require(SSL_CTX_new(TLS_client_method()))
             // Trust the dev self-signed leaf (test only).
             SSL_CTX_set_verify(clientContext, SSL_VERIFY_NONE, nil)
-            #expect(CHTTPBoringSSL_set_client_alpn(clientContext) == 0)
+            #expect(CHTTPBoringSSLShims_set_client_alpn(clientContext) == 0)
             // `SSL` access is confined to the single background closure below, so the non-Sendable
             // `OpaquePointer` is safe to hand it — `nonisolated(unsafe)` states that invariant.
             nonisolated(unsafe) let clientSSL = try #require(SSL_new(clientContext))

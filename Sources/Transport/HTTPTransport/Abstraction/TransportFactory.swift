@@ -33,7 +33,7 @@ public enum TransportFactory {
     private static func makePortableTLS(
         _ configuration: TransportConfiguration
     ) -> any ServerTransport {
-        #if canImport(CHTTPBoringSSL)
+        #if canImport(CHTTPBoringSSLShims)
             return PortableTLSTransport(configuration: configuration)
         #else
             preconditionFailure(
