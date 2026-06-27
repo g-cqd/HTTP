@@ -40,6 +40,9 @@
         private let connectionIDs = ConnectionIDAllocator()
 
         private struct State {
+            /// The shared server `SSL_CTX`, swappable by ``reload(tls:)``: new handshakes use the
+            /// current one, while in-flight `SSL`s keep the context they handshook with.
+            var context: ContextBox?
             var listenDescriptor: Int32?
             var boundPort: UInt16 = 0
             var isRunning = false
@@ -92,6 +95,7 @@
             }
             let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
             state.withLock {
+                $0.context = ContextBox(pointer: sslContext)
                 $0.listenDescriptor = listener.descriptor
                 $0.boundPort = listener.port
                 $0.isRunning = true
@@ -99,12 +103,10 @@
             continuation.onTermination = { [weak self] _ in
                 Task { await self?.shutdown() }
             }
-            let context = ContextBox(pointer: sslContext)
             acceptQueue.async { [weak self] in
                 self?
                     .acceptLoop(
                         listenDescriptor: listener.descriptor,
-                        context: context,
                         continuation: continuation
                     )
             }
@@ -125,11 +127,36 @@
             }
         }
 
+        /// Hot-reloads the TLS identity (G4b): swaps the shared `SSL_CTX` so new handshakes use `tls`,
+        /// while connections already accepted keep serving on the context they handshook with.
+        ///
+        /// A `Mutex`-guarded pointer swap — no port rebind (the listening socket is untouched), unlike
+        /// the Network backbone's restart-based reload, so there is no accept gap. A bad identity throws
+        /// before the running context is touched. The old context is released after the swap; in-flight
+        /// `SSL`s retain it (refcounted), so it is freed only once the last such connection closes.
+        public func reload(tls: TransportTLS) async throws {
+            let newContext = try OpenSSLTLS.serverContext(tls)
+            let outcome: (running: Bool, previous: ContextBox?) = state.withLock { state in
+                guard state.isRunning else {
+                    return (false, nil)
+                }
+                let previous = state.context
+                state.context = ContextBox(pointer: newContext)
+                return (true, previous)
+            }
+            guard outcome.running else {
+                SSL_CTX_free(newContext)  // not accepting: nothing to swap into
+                throw TransportError.closed
+            }
+            if let previous = outcome.previous {
+                SSL_CTX_free(previous.pointer)
+            }
+        }
+
         // MARK: - Internals
 
         private func acceptLoop(
             listenDescriptor: Int32,
-            context: ContextBox,
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
             drain: while state.withLock(\.isRunning) {
@@ -154,25 +181,36 @@
                 // audit T-F1: a peer RST mid-write must not kill us; disable Nagle for p99.9 tail.
                 POSIXSocket.setNoSIGPIPE(clientFD)
                 POSIXSocket.setNoDelay(clientFD)
-                surface(
-                    clientFD: clientFD,
-                    address: address,
-                    context: context.pointer,
-                    continuation: continuation
-                )
+                surface(clientFD: clientFD, address: address, continuation: continuation)
             }
             continuation.finish()
-            SSL_CTX_free(context.pointer)
+            let context = state.withLock { state -> ContextBox? in
+                let current = state.context
+                state.context = nil
+                return current
+            }
+            if let context {
+                SSL_CTX_free(context.pointer)
+            }
         }
 
         /// Wraps an accepted descriptor in a libssl session and surfaces it once its handshake settles.
         private func surface(
             clientFD: Int32,
             address: sockaddr_storage,
-            context: OpaquePointer,
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
-            guard let ssl = SSL_new(context) else {
+            // Snapshot the current context under the lock and hold a reference across `SSL_new`, so a
+            // concurrent ``reload(tls:)`` that swaps and frees it cannot pull it out from under us; the
+            // new `SSL` then retains the context it handshakes with.
+            guard let context = state.withLock(\.context) else {
+                _ = Darwin.close(clientFD)
+                return
+            }
+            _ = SSL_CTX_up_ref(context.pointer)
+            let ssl = SSL_new(context.pointer)
+            SSL_CTX_free(context.pointer)
+            guard let ssl else {
                 _ = Darwin.close(clientFD)
                 return
             }

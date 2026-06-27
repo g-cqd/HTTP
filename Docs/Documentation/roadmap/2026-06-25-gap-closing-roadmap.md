@@ -460,3 +460,19 @@ in the project docs.)
   the flag; `project-hooks` clean. **Remaining: hot reload** (G4b parity on this backbone — a
   `Mutex`-guarded `SSL_CTX` swap, no port rebind) **and Phase 6** (vendored BoringSSL, to retire the
   system-OpenSSL dependency and make the default-off backbone self-contained).
+- 2026-06-27 — **portable TLS hot reload (G4b parity) shipped — the G4 deferral set is now complete.**
+  `PortableTLSTransport.reload(tls:)` overrides the `ServerTransport` default (which throws
+  `.unsupported`): it builds a new `SSL_CTX` and atomically swaps it into the `Mutex<State>`, so new
+  handshakes use the new identity while connections already accepted keep serving on the context they
+  handshook with (libssl refcounts it). **No port rebind** — the listening socket is untouched, so
+  there is no accept gap (simpler than the Network backbone's retire-and-rebind reload). The `SSL_CTX`
+  moved from an accept-loop-captured box into shared state; `surface` now snapshots it under the lock
+  and `SSL_CTX_up_ref`s across `SSL_new` so a concurrent reload's free can't race it (the new `SSL`
+  then holds its own ref). A bad identity throws before the running context is touched; reload before
+  `start()` (or after shutdown) fails closed with `.closed`. **Gate met:** a libssl client is served
+  cert A, then cert B after `reload(B)`, on the same port; reload-before-start throws. Full **936-test**
+  default suite green (reload is gated-only — no ungated change); **15** gated portable-TLS tests green
+  under the flag; `project-hooks` clean. **The portable TLS backbone is now feature-complete for v1**
+  (one-way TLS + ALPN, mTLS `.none`/`.optional`/`.required` + `verifyPeer`, SNI multi-cert, hot reload,
+  `curl` interop). **Only remaining: Phase 6** — vendor BoringSSL behind the same shim to retire the
+  system-OpenSSL link and make the default-off backbone self-contained + reproducible (XL).

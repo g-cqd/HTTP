@@ -1,7 +1,7 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
-- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–5 shipped — `.optional` +
-  SNI multi-cert both work; only vendoring + hot-reload remain)
+- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–5 + hot-reload shipped —
+  `.optional`, SNI multi-cert, and `reload(tls:)` all work; only the BoringSSL vendoring (Phase 6) remains)
 - **Context date:** 2026-06
 
 ## Context
@@ -221,9 +221,11 @@ return (the `NetworkFrameworkTLS` contract).
    freed with the default ctx) that swaps to the matching context, falling back to the default for an
    unmatched / absent name. The hook Network.framework has never exposed (legacy or modern). *Gate
    met:* a libssl client's `server_name` selects the matching leaf for two names and the default for an
-   unmatched name and for no-SNI. **Hot reload** (G4b parity) is the remaining sub-item — on this
-   backbone it is a `Mutex`-guarded `SSL_CTX` swap (no port rebind, unlike the Network restart-based
-   reload); deferred to a follow-up.
+   unmatched name and for no-SNI. **Hot reload** (G4b parity) ✅ **shipped 2026-06-27** — `reload(tls:)`
+   is a `Mutex`-guarded `SSL_CTX` swap (no port rebind, unlike the Network restart-based reload): new
+   handshakes use the new context, in-flight `SSL`s keep theirs (refcounted), `surface` snapshots +
+   `up_ref`s the context across `SSL_new` so a concurrent reload can't free it mid-flight. *Gate:* a
+   client sees cert A before `reload(B)` and cert B after; reload-before-start fails closed.
 6. **Vendored BoringSSL provider** (separate effort) — swap `-lssl` for vendored sources behind the
    seam; remove the system-lib caveat. *Gate:* suites green with no system OpenSSL present.
 
