@@ -113,7 +113,26 @@ func registerHPACKBenchmarks() {
             blackHole(encoder.encode(realisticResponseFields))
         }
     }
+
+    // The encoder's dynamic-table *lookup* cost at scale: a near-full (~32-entry) table re-encoded as
+    // indexed references — each field resolved by the linear table search (§6.1); the small-table
+    // `encode-warm` above barely exercises the scan. Kept as the guard for any future lookup change: a
+    // hashed index was prototyped + measured here and rejected as a net loss (deferred-risky-subplan §4).
+    Benchmark("hpack/response/encode-warm-large") { benchmark in
+        var encoder = warmedLargeEncoder
+        for _ in benchmark.scaledIterations {
+            blackHole(encoder.encode(largeHeaderSet))
+        }
+    }
 }
+
+/// An encoder whose dynamic table is already primed with ``largeHeaderSet`` (~32 entries, near 4 KiB),
+/// so re-encoding the same set yields indexed references without mutating the table (it stays warm).
+private let warmedLargeEncoder: HPACKEncoder = {
+    var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
+    _ = encoder.encode(largeHeaderSet)
+    return encoder
+}()
 
 /// The RFC 7541 §5.2 string-literal encode benchmarks (Huffman-wins and raw-wins), split out so
 /// ``registerHPACKBenchmarks()`` stays under the cyclomatic-complexity limit.

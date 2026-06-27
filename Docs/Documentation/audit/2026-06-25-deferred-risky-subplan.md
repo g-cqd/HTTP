@@ -102,6 +102,39 @@ nothing to toggle. Both transports now carry the policy comment. The `425 Too Ea
 remains the required defense *if* a future framework API ever enables QUIC 0-RTT — it is not wireable
 today (the transport surfaces no early-data flag) and is moot while 0-RTT is off.
 
+## 4. HPACK encoder dynamic-table lookup (O(n) scan)
+
+**Finding.** The encoder linearly scans the dynamic table to find a usable reference for each field
+(`HPACKDynamicTable.firstIndex` — exact, then name-only; RFC 7541 §2.3.3). The static table is already
+hashed; only the dynamic table (≤ ~128 entries at the 4 KiB default) scans. An O(1) `[HPACKField: Int]`
+(+ `[String: Int]`) index, keyed by a monotonic insertion sequence (so positions shift correctly with
+new inserts, no rebuild), is the obvious replacement.
+
+**Status (2026-06-27): investigated + measured — net loss, NOT shipped.** Prototyped behind a
+`maintainsIndex` flag (encoder-only, so the decoder's table kept its layout) and benchmarked with
+package-benchmark's `instructions` (deterministic) + `mallocCountTotal`, adding a near-full-table
+`hpack/response/encode-warm-large` (~32 entries) to expose the asymptotic case:
+
+| benchmark | before (instr / malloc) | after | Δ |
+|---|---|---|---|
+| `response/encode-warm-large` (32 entries) | 79 K / 1 | 50 K / 1 | **−37 %** |
+| `response/encode-warm` (9 entries — the typical hot path) | 14 K / 1 | 17 K / 1 | **+21 %** |
+| `response/encode-cold` | 188 K / 5 | 236 K / 13 | +26 % / +8 |
+| `headerBlock/decode` | 71 K / 12 | 91 K / 16 | +28 % / +4 |
+| `request/decode-cold` | 333 K / 22 | 380 K / 30 | +14 % / +8 |
+
+The hash wins only on an artificially large table. On realistic small tables it **loses**: hashing an
+`HPACKField` key (name **plus a potentially long value** — e.g. an 80-char `user-agent`) costs more than
+the linear scan's short-circuiting `==`, which bails on the first length/byte mismatch. And the two extra
+`Dictionary` fields enlarge `HPACKDynamicTable`, whose struct-size growth ripples into the **decoder's**
+codegen (+instructions, +allocations) though the decoder never searches the table.
+
+**Recommendation: keep the O(n) scan** (the Iron Law — the only beneficiary is a regime the real hot path
+does not represent; every realistic path regresses). A future revisit could try (a) keying on a cheap
+field *fingerprint* to avoid hashing long values and (b) holding the index in the encoder, not the shared
+table, to spare the decoder — but only if a measured workload shows large warm tables dominating. The
+prototype was reverted; only the `encode-warm-large` guard benchmark + a transport-harness fix landed.
+
 ## Status of everything else
 
 Done + merged: the comparison matrix (§ perf-battletest), worktree/branch consolidation, the tiered

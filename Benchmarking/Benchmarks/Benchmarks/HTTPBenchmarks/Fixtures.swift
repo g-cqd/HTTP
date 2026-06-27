@@ -134,6 +134,15 @@ let realisticRequestFields = [
     HPACKField(name: "pragma", value: "no-cache")
 ]
 
+/// ~32 distinct fields that fill a 4 KiB dynamic table (each ≈86 octets) — the input that exposes the
+/// encoder's dynamic-table *lookup* cost: re-encoding these against a warm, near-full table resolves
+/// every field by scanning the table, with no Huffman/insert noise (a hashed index was measured here
+/// and rejected — see Docs/Documentation/audit/2026-06-25-deferred-risky-subplan.md §4).
+let largeHeaderSet: [HPACKField] = (0 ..< 32)
+    .map { index in
+        HPACKField(name: "x-custom-header-\(index)", value: "value-\(index)-padding")
+    }
+
 /// A realistic JSON-API response header set — the server's encode side, mirroring the request set.
 let realisticResponseFields = [
     HPACKField(name: ":status", value: "200"),

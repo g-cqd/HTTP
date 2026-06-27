@@ -125,9 +125,11 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       load-client for the bench matrix; flip low-noise benchmark baseline gates. _Gate:_ CI green or
       explicit logged skips (no silent omission).
 
-- [ ] **P11 — Performance backlog (Iron-Law gated).** HPACK O(n)→hashed lookup; h3 receive-side borrow;
-      NF zero-copy receive; h3 0-RTT if Apple exposes a QUIC server early-data API. _Gate per item:_
-      before/after measurement, zero conformance/fuzz regression, ASan clean.
+- [ ] **P11 — Performance backlog (Iron-Law gated).** HPACK O(n)→hashed lookup — **investigated
+      2026-06-27: measured a net loss (regresses the typical small-table encode hot path + ripples into
+      the decoder), kept O(n)**; see [deferred-risky-subplan §4](../audit/2026-06-25-deferred-risky-subplan.md).
+      Remaining: h3 receive-side borrow; NF zero-copy receive; h3 0-RTT if Apple exposes a QUIC server
+      early-data API. _Gate per item:_ before/after measurement, zero conformance/fuzz regression, ASan clean.
 
 ## Change log
 - 2026-06-25 — P0 scaffold created; battletest worktree removed; roadmap approved.
