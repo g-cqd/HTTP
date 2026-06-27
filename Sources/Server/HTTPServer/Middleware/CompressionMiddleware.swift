@@ -3,10 +3,13 @@
 //  HTTPServer
 //
 //  Content coding (RFC 9110 §8.4.1 / §12.5.3): the response body is encoded with the client's most
-//  preferred coding that we can produce — Brotli (RFC 7932) or gzip (RFC 1952) — selected from
-//  `Accept-Encoding` by q-value, preferring `br` on a tie. `Content-Encoding`/`Content-Length` are
-//  updated and `Vary: Accept-Encoding` is set so caches key on it. Brotli uses Darwin's level-2 encoder
-//  (the portable/Linux `libbrotlienc` shim is gap G0); the body-transform shape of ``HTTPMiddleware``.
+//  preferred coding that we can produce — Brotli (RFC 7932), zstd (RFC 8878), or gzip (RFC 1952) —
+//  selected from `Accept-Encoding` by q-value, with the server preference br > zstd > gzip breaking
+//  a tie. `Content-Encoding`/`Content-Length` are updated and `Vary: Accept-Encoding` is set so
+//  caches key on it. Brotli uses Darwin's level-2 encoder (the portable/Linux `libbrotlienc` shim
+//  is gap G0); zstd is the opt-in `CZstd` shim over the system libzstd (`HTTP_ZSTD`), absent from
+//  the default graph and guarded by `#if canImport(CZstd)`. The body-transform shape of
+//  ``HTTPMiddleware``.
 //
 
 internal import Foundation
@@ -19,20 +22,28 @@ public struct CompressionMiddleware: HTTPMiddleware {
 
     /// Media-type fragments whose payloads are already compressed — re-encoding only adds overhead.
     private static let incompressible = [
-        "image/", "video/", "audio/", "zip", "gzip", "brotli", "compress"
+        "image/", "video/", "audio/", "zip", "gzip", "brotli", "zstd", "compress"
     ]
 
-    /// A content coding this middleware can produce, in server-preference order (Brotli first — it is
-    /// the smaller coding for text at a comparable cost) (RFC 9110 §12.5.3).
+    /// A content coding this middleware can produce, in server-preference order — Brotli, then zstd
+    /// (only when the opt-in `CZstd` shim is present), then gzip. `CaseIterable` order is source
+    /// order, so this is exactly the br > zstd > gzip tie-break the negotiator applies (§12.5.3).
     private enum Coding: CaseIterable {
         case br
+        #if canImport(CZstd)
+            case zstd
+        #endif
         case gzip
 
-        /// The `Content-Encoding` token (RFC 9110 §8.4.1 / RFC 7932 / RFC 1952).
+        /// The `Content-Encoding` token (RFC 9110 §8.4.1 / RFC 7932 / RFC 8878 / RFC 1952).
         var token: String {
             switch self {
                 case .br:
                     return "br"
+                #if canImport(CZstd)
+                    case .zstd:
+                        return "zstd"
+                #endif
                 case .gzip:
                     return "gzip"
             }
@@ -130,11 +141,16 @@ public struct CompressionMiddleware: HTTPMiddleware {
         return 1.0
     }
 
-    /// Encodes `body` with `coding` — Darwin Brotli (RFC 7932) or gzip (RFC 1952).
+    /// Encodes `body` with `coding` — Darwin Brotli (RFC 7932), libzstd (RFC 8878), or gzip
+    /// (RFC 1952).
     private func compress(_ body: [UInt8], with coding: Coding) -> [UInt8]? {
         switch coding {
             case .br:
                 return Brotli.compress(body)
+            #if canImport(CZstd)
+                case .zstd:
+                    return Zstd.compress(body)
+            #endif
             case .gzip:
                 return Gzip.compress(body)
         }

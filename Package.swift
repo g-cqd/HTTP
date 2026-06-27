@@ -396,3 +396,44 @@ if Context.environment["HTTP_PORTABLE_TLS"] != nil {
         target.dependencies.append("CHTTPBoringSSLShims")
     }
 }
+
+// The opt-in outbound `zstd` content coding (RFC 8878): a `CZstd` C shim over the system libzstd,
+// since Apple's Compression framework has no Zstandard codec. Gated by `HTTP_ZSTD` so the DEFAULT
+// build graph never links libzstd; the Swift integration (Zstd.swift, the CompressionMiddleware
+// case, the test) all guard on `#if canImport(CZstd)`, so they vanish when the flag is off. The
+// libzstd prefix is `HTTP_ZSTD_PREFIX` or the Homebrew `zstd` default on macOS (Linux: set the env,
+// or rely on the default search paths). Appended after the strict loop above so the C shim never
+// receives Swift-only settings — mirrors the HTTP_PORTABLE_TLS block. The `.unsafeFlags` header /
+// library paths are acceptable here precisely because the whole block is opt-in (off for downstream
+// consumers), exactly like the gated settings the package already documents.
+if Context.environment["HTTP_ZSTD"] != nil {
+    let zstdPrefix = Context.environment["HTTP_ZSTD_PREFIX"] ?? "/opt/homebrew/opt/zstd"
+    let zstdInclude = zstdPrefix + "/include"
+    let zstdLib = zstdPrefix + "/lib"
+    // The thin C wrapper over <zstd.h>. It alone needs the header path; it links libzstd directly,
+    // so a consumer of HTTPServer pulls the dependency transitively. Default C settings — the loop
+    // above (which it is appended after) never gives a C target Swift-only settings.
+    package.targets.append(
+        .target(
+            name: "CZstd",
+            path: "Sources/Core/CZstd",
+            cSettings: [.unsafeFlags(["-I", zstdInclude])],
+            linkerSettings: [
+                .unsafeFlags(["-L", zstdLib]),
+                .linkedLibrary("zstd")
+            ]
+        )
+    )
+    // The server (and its tests) gain the shim dependency, plus the clang header path threaded
+    // through swiftc (`-Xcc -I …`) so importing the `CZstd` module resolves regardless of the
+    // toolchain's default search paths.
+    for target in package.targets
+    where ["HTTPServer", "HTTPServerTests"].contains(target.name) {
+        target.dependencies.append("CZstd")
+        var settings = target.swiftSettings ?? []
+        // The joined `-I<path>` form (one token after `-Xcc`) — the separated `-Xcc -I -Xcc <path>`
+        // form interleaves with swift-testing's plugin args on the test target and breaks its build.
+        settings.append(.unsafeFlags(["-Xcc", "-I" + zstdInclude]))
+        target.swiftSettings = settings
+    }
+}
