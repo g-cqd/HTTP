@@ -17,6 +17,7 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
 
     /// Safe Swift wrappers over the libssl `SSL_CTX` configuration used by the portable backbone.
@@ -24,7 +25,7 @@
         /// Builds the server `SSL_CTX` from `tls` — the default identity plus, when ``sniIdentities``
         /// is non-empty, a per-server-name context and an SNI selection callback (RFC 6066 §3).
         ///
-        /// The caller owns the returned (default) context and must `SSL_CTX_free` it once no live `SSL`
+        /// The caller owns the returned (default) context and must `CHTTPBoringSSL_SSL_CTX_free` it once no live `SSL`
         /// references it; freeing it also releases the SNI registry and its per-name contexts.
         static func serverContext(_ tls: TransportTLS) throws -> OpaquePointer {
             let context = try makeContext(pkcs12: tls.pkcs12, passphrase: tls.passphrase, tls: tls)
@@ -38,12 +39,12 @@
                         pkcs12: identity.pkcs12, passphrase: identity.passphrase, tls: tls
                     )
                     name.withCString { CHTTPBoringSSLShims_add_sni_context(context, $0, perName) }
-                    SSL_CTX_free(perName)  // the registry retains its own reference
+                    CHTTPBoringSSL_SSL_CTX_free(perName)  // the registry retains its own reference
                 }
                 return context
             }
             catch {
-                SSL_CTX_free(context)
+                CHTTPBoringSSL_SSL_CTX_free(context)
                 throw error
             }
         }
@@ -56,7 +57,8 @@
         private static func makeContext(
             pkcs12: [UInt8], passphrase: String, tls: TransportTLS
         ) throws -> OpaquePointer {
-            guard let context = SSL_CTX_new(TLS_server_method()) else {
+            guard let context = CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_server_method())
+            else {
                 throw TransportError.tlsConfigurationFailed("SSL_CTX_new returned nil")
             }
             do {
@@ -87,7 +89,7 @@
                 return context
             }
             catch {
-                SSL_CTX_free(context)
+                CHTTPBoringSSL_SSL_CTX_free(context)
                 throw error
             }
         }
@@ -97,7 +99,7 @@
         static func negotiatedApplicationProtocol(of ssl: OpaquePointer) -> String? {
             var data: UnsafePointer<UInt8>?
             var length: UInt32 = 0
-            SSL_get0_alpn_selected(ssl, &data, &length)
+            CHTTPBoringSSL_SSL_get0_alpn_selected(ssl, &data, &length)
             guard let data, length > 0 else {
                 return nil
             }

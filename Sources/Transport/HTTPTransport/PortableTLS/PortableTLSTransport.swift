@@ -19,6 +19,7 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
@@ -29,7 +30,7 @@
     /// State lives in a `Mutex`; the blocking `accept()` runs on `acceptQueue`, and each accepted
     /// connection's handshake + I/O run on the connection's own serial queue, so the accept thread never
     /// blocks on a handshake. The shared `SSL_CTX` is owned by the accept loop and freed when it exits
-    /// (after which no `SSL_new` can race it; live `SSL`s retain their own reference).
+    /// (after which no `CHTTPBoringSSL_SSL_new` can race it; live `SSL`s retain their own reference).
     public final class PortableTLSTransport: ServerTransport {
         /// The backbone this transport implements.
         public let backbone: TransportBackbone = .portableTLS
@@ -90,7 +91,7 @@
                 )
             }
             catch {
-                SSL_CTX_free(sslContext)
+                CHTTPBoringSSL_SSL_CTX_free(sslContext)
                 throw error
             }
             let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
@@ -145,11 +146,11 @@
                 return (true, previous)
             }
             guard outcome.running else {
-                SSL_CTX_free(newContext)  // not accepting: nothing to swap into
+                CHTTPBoringSSL_SSL_CTX_free(newContext)  // not accepting: nothing to swap into
                 throw TransportError.closed
             }
             if let previous = outcome.previous {
-                SSL_CTX_free(previous.pointer)
+                CHTTPBoringSSL_SSL_CTX_free(previous.pointer)
             }
         }
 
@@ -190,7 +191,7 @@
                 return current
             }
             if let context {
-                SSL_CTX_free(context.pointer)
+                CHTTPBoringSSL_SSL_CTX_free(context.pointer)
             }
         }
 
@@ -200,21 +201,21 @@
             address: sockaddr_storage,
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
-            // Snapshot the current context under the lock and hold a reference across `SSL_new`, so a
+            // Snapshot the current context under the lock and hold a reference across `CHTTPBoringSSL_SSL_new`, so a
             // concurrent ``reload(tls:)`` that swaps and frees it cannot pull it out from under us; the
             // new `SSL` then retains the context it handshakes with.
             guard let context = state.withLock(\.context) else {
                 _ = Darwin.close(clientFD)
                 return
             }
-            _ = SSL_CTX_up_ref(context.pointer)
-            let ssl = SSL_new(context.pointer)
-            SSL_CTX_free(context.pointer)
+            _ = CHTTPBoringSSL_SSL_CTX_up_ref(context.pointer)
+            let ssl = CHTTPBoringSSL_SSL_new(context.pointer)
+            CHTTPBoringSSL_SSL_CTX_free(context.pointer)
             guard let ssl else {
                 _ = Darwin.close(clientFD)
                 return
             }
-            SSL_set_fd(ssl, clientFD)
+            CHTTPBoringSSL_SSL_set_fd(ssl, clientFD)
             let connection = PortableTLSConnection(
                 id: connectionIDs.next(),
                 peer: POSIXSocket.peerAddress(from: address),

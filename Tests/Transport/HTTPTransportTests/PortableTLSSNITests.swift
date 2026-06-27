@@ -6,13 +6,14 @@
 //  W2/G4 deferral. The server holds a default identity plus a `server_name` → identity map; a libssl
 //  client sends an SNI host name and reads back **which** server leaf it was handed. Network.framework
 //  exposes no server-side server-name callback (legacy or modern); OpenSSL/BoringSSL do
-//  (`SSL_CTX_set_tlsext_servername_callback` + per-name `SSL_CTX`).
+//  (`CHTTPBoringSSL_SSL_CTX_set_tlsext_servername_callback` + per-name `SSL_CTX`).
 //
 //  Gated `#if canImport(CHTTPBoringSSLShims)` — runs only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
 //
 
 #if canImport(CHTTPBoringSSLShims)
 
+    internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
@@ -20,7 +21,7 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (system OpenSSL) — SNI multi-cert (Phase 5, ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — SNI multi-cert (Phase 5, ADR 0004)")
     struct PortableTLSSNITests {
         @Test(
             "the handshake's server_name selects the matching certificate, else the default",
@@ -93,24 +94,26 @@
 
         private static func handshakeLeafCN(port: UInt16, serverName: String?) -> String? {
             let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
-            guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
+            guard descriptor >= 0,
+                let context = CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method())
+            else {
                 return nil
             }
-            defer { SSL_CTX_free(context) }
-            SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
-            guard let ssl = SSL_new(context) else {
+            defer { CHTTPBoringSSL_SSL_CTX_free(context) }
+            CHTTPBoringSSL_SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
+            guard let ssl = CHTTPBoringSSL_SSL_new(context) else {
                 _ = Darwin.close(descriptor)
                 return nil
             }
             defer {
-                SSL_free(ssl)
+                CHTTPBoringSSL_SSL_free(ssl)
                 _ = Darwin.close(descriptor)
             }
-            SSL_set_fd(ssl, descriptor)
+            CHTTPBoringSSL_SSL_set_fd(ssl, descriptor)
             if let serverName {
                 serverName.withCString { CHTTPBoringSSLShims_set_sni(ssl, $0) }
             }
-            guard SSL_connect(ssl) == 1 else {
+            guard CHTTPBoringSSL_SSL_connect(ssl) == 1 else {
                 return nil
             }
             return OpenSSLTLS.peerSubject(of: ssl)  // the server leaf the SNI callback selected

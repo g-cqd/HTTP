@@ -12,6 +12,7 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
@@ -19,7 +20,7 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (system OpenSSL) — hot certificate reload (G4b, ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — hot certificate reload (G4b, ADR 0004)")
     struct PortableTLSReloadTests {
         @Test(
             "reload swaps the served certificate for new connections",
@@ -87,21 +88,23 @@
 
         private static func handshakeLeafCN(port: UInt16) -> String? {
             let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
-            guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
+            guard descriptor >= 0,
+                let context = CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method())
+            else {
                 return nil
             }
-            defer { SSL_CTX_free(context) }
-            SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
-            guard let ssl = SSL_new(context) else {
+            defer { CHTTPBoringSSL_SSL_CTX_free(context) }
+            CHTTPBoringSSL_SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
+            guard let ssl = CHTTPBoringSSL_SSL_new(context) else {
                 _ = Darwin.close(descriptor)
                 return nil
             }
             defer {
-                SSL_free(ssl)
+                CHTTPBoringSSL_SSL_free(ssl)
                 _ = Darwin.close(descriptor)
             }
-            SSL_set_fd(ssl, descriptor)
-            guard SSL_connect(ssl) == 1 else {
+            CHTTPBoringSSL_SSL_set_fd(ssl, descriptor)
+            guard CHTTPBoringSSL_SSL_connect(ssl) == 1 else {
                 return nil
             }
             return OpenSSLTLS.peerSubject(of: ssl)

@@ -14,6 +14,7 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
@@ -23,7 +24,7 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (system OpenSSL) — mutual TLS, incl. .optional (Phase 4, ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — mutual TLS, incl. .optional (Phase 4, ADR 0004)")
     struct PortableTLSMutualTLSTests {
         @Test(
             "required client-auth surfaces the presented client certificate subject",
@@ -187,12 +188,14 @@
             DispatchQueue.global()
                 .async {
                     let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
-                    guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
+                    guard descriptor >= 0,
+                        let context = CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method())
+                    else {
                         return
                     }
-                    defer { SSL_CTX_free(context) }
+                    defer { CHTTPBoringSSL_SSL_CTX_free(context) }
                     // Trust the dev self-signed server certificate (test only).
-                    SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
+                    CHTTPBoringSSL_SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
                     _ = CHTTPBoringSSLShims_set_client_alpn(context)
                     if let identity {
                         _ = identity.pkcs12.withUnsafeBufferPointer { buffer in
@@ -204,16 +207,16 @@
                             )
                         }
                     }
-                    guard let ssl = SSL_new(context) else {
+                    guard let ssl = CHTTPBoringSSL_SSL_new(context) else {
                         _ = Darwin.close(descriptor)
                         return
                     }
                     defer {
-                        SSL_free(ssl)
+                        CHTTPBoringSSL_SSL_free(ssl)
                         _ = Darwin.close(descriptor)
                     }
-                    SSL_set_fd(ssl, descriptor)
-                    _ = SSL_connect(ssl)
+                    CHTTPBoringSSL_SSL_set_fd(ssl, descriptor)
+                    _ = CHTTPBoringSSL_SSL_connect(ssl)
                     // Hold the connection briefly so the server captures the subject before teardown.
                     usleep(200_000)
                 }

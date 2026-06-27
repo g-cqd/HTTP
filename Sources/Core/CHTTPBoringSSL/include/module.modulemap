@@ -1,0 +1,4 @@
+module CHTTPBoringSSL {
+    umbrella header "CHTTPBoringSSL.h"
+    export *
+}

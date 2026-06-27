@@ -15,17 +15,19 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    import CHTTPBoringSSL
     import CHTTPBoringSSLShims
     import Testing
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (system OpenSSL) — Phase 1 plumbing (ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — Phase 1 plumbing (ADR 0004)")
     struct PortableTLSPlumbingTests {
         @Test("the CHTTPBoringSSLShims shim links libssl and its macro wrappers are callable")
         func shimLinksAndImports() throws {
-            let context = try #require(SSL_CTX_new(TLS_server_method()))
-            defer { SSL_CTX_free(context) }
+            let context = try #require(
+                CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_server_method()))
+            defer { CHTTPBoringSSL_SSL_CTX_free(context) }
             #expect(CHTTPBoringSSLShims_set_min_proto_version(context, Int32(TLS1_3_VERSION)) == 1)
             #expect(CHTTPBoringSSLShims_set_max_proto_version(context, Int32(TLS1_3_VERSION)) == 1)
         }
@@ -34,8 +36,9 @@
         func handshakeNegotiatesTLS13AndALPNh2() throws {
             let identity = try DevTLSIdentity.selfSigned()
 
-            let server = try #require(SSL_CTX_new(TLS_server_method()))
-            defer { SSL_CTX_free(server) }
+            let server = try #require(
+                CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_server_method()))
+            defer { CHTTPBoringSSL_SSL_CTX_free(server) }
             #expect(CHTTPBoringSSLShims_set_min_proto_version(server, Int32(TLS1_3_VERSION)) == 1)
             #expect(CHTTPBoringSSLShims_set_max_proto_version(server, Int32(TLS1_3_VERSION)) == 1)
             let loaded = identity.pkcs12.withUnsafeBufferPointer { buffer in
@@ -46,27 +49,32 @@
             #expect(loaded == 1)
             CHTTPBoringSSLShims_set_alpn_select_h2(server)
 
-            let client = try #require(SSL_CTX_new(TLS_client_method()))
-            defer { SSL_CTX_free(client) }
+            let client = try #require(
+                CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method()))
+            defer { CHTTPBoringSSL_SSL_CTX_free(client) }
             #expect(CHTTPBoringSSLShims_set_min_proto_version(client, Int32(TLS1_3_VERSION)) == 1)
             // The test trusts the dev self-signed leaf, so the client skips chain verification.
-            SSL_CTX_set_verify(client, SSL_VERIFY_NONE, nil)
+            CHTTPBoringSSL_SSL_CTX_set_verify(client, SSL_VERIFY_NONE, nil)
             #expect(CHTTPBoringSSLShims_set_client_alpn(client) == 0)  // OpenSSL: 0 == success here
 
-            let serverSSL = try #require(SSL_new(server))
-            defer { SSL_free(serverSSL) }
-            let clientSSL = try #require(SSL_new(client))
-            defer { SSL_free(clientSSL) }
+            let serverSSL = try #require(CHTTPBoringSSL_SSL_new(server))
+            defer { CHTTPBoringSSL_SSL_free(serverSSL) }
+            let clientSSL = try #require(CHTTPBoringSSL_SSL_new(client))
+            defer { CHTTPBoringSSL_SSL_free(clientSSL) }
             // `SSL_set_bio` takes ownership of both BIOs, so `SSL_free` releases them — no separate frees.
             // `BIO_new` is imported non-optional (never returns nil), so it needs no `#require`.
-            SSL_set_bio(serverSSL, BIO_new(BIO_s_mem()), BIO_new(BIO_s_mem()))
-            SSL_set_bio(clientSSL, BIO_new(BIO_s_mem()), BIO_new(BIO_s_mem()))
-            SSL_set_accept_state(serverSSL)
-            SSL_set_connect_state(clientSSL)
+            let serverRead = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
+            let serverWrite = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
+            CHTTPBoringSSL_SSL_set_bio(serverSSL, serverRead, serverWrite)
+            let clientRead = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
+            let clientWrite = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
+            CHTTPBoringSSL_SSL_set_bio(clientSSL, clientRead, clientWrite)
+            CHTTPBoringSSL_SSL_set_accept_state(serverSSL)
+            CHTTPBoringSSL_SSL_set_connect_state(clientSSL)
 
             #expect(CHTTPBoringSSLShims_handshake(serverSSL, clientSSL) == 1)
 
-            #expect(String(cString: SSL_get_version(serverSSL)) == "TLSv1.3")
+            #expect(String(cString: CHTTPBoringSSL_SSL_get_version(serverSSL)) == "TLSv1.3")
             #expect(Self.negotiatedALPN(of: serverSSL) == "h2")
             #expect(Self.negotiatedALPN(of: clientSSL) == "h2")
         }
@@ -75,7 +83,7 @@
         private static func negotiatedALPN(of ssl: OpaquePointer) -> String? {
             var data: UnsafePointer<UInt8>?
             var length: UInt32 = 0
-            SSL_get0_alpn_selected(ssl, &data, &length)
+            CHTTPBoringSSL_SSL_get0_alpn_selected(ssl, &data, &length)
             guard let data, length > 0 else {
                 return nil
             }

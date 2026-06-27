@@ -13,6 +13,7 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
@@ -23,7 +24,7 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (system OpenSSL) — Phase 3 transport (ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — Phase 3 transport (ADR 0004)")
     struct PortableTLSTransportTests {
         @Test(
             "the transport accepts a libssl client, negotiates ALPN h2, and round-trips bytes",
@@ -53,29 +54,33 @@
             DispatchQueue.global()
                 .async {
                     let descriptor = CHTTPBoringSSLShims_connect_loopback(port)
-                    guard descriptor >= 0, let context = SSL_CTX_new(TLS_client_method()) else {
+                    guard descriptor >= 0,
+                        let context = CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method())
+                    else {
                         return
                     }
-                    defer { SSL_CTX_free(context) }
-                    SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
+                    defer { CHTTPBoringSSL_SSL_CTX_free(context) }
+                    CHTTPBoringSSL_SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
                     _ = CHTTPBoringSSLShims_set_client_alpn(context)
-                    guard let ssl = SSL_new(context) else {
+                    guard let ssl = CHTTPBoringSSL_SSL_new(context) else {
                         _ = Darwin.close(descriptor)
                         return
                     }
                     defer {
-                        SSL_free(ssl)
+                        CHTTPBoringSSL_SSL_free(ssl)
                         _ = Darwin.close(descriptor)
                     }
-                    SSL_set_fd(ssl, descriptor)
-                    guard SSL_connect(ssl) == 1 else {
+                    CHTTPBoringSSL_SSL_set_fd(ssl, descriptor)
+                    guard CHTTPBoringSSL_SSL_connect(ssl) == 1 else {
                         return
                     }
                     let ping = [UInt8]("ping".utf8)
-                    _ = ping.withUnsafeBytes { SSL_write(ssl, $0.baseAddress, Int32($0.count)) }
+                    _ = ping.withUnsafeBytes {
+                        CHTTPBoringSSL_SSL_write(ssl, $0.baseAddress, Int32($0.count))
+                    }
                     var buffer = [UInt8](repeating: 0, count: 64)
                     let count = buffer.withUnsafeMutableBytes {
-                        SSL_read(ssl, $0.baseAddress, Int32($0.count))
+                        CHTTPBoringSSL_SSL_read(ssl, $0.baseAddress, Int32($0.count))
                     }
                     if count > 0 {
                         buffer.removeLast(buffer.count - Int(count))

@@ -336,7 +336,10 @@ let package = Package(
             ],
             path: "Tests/Server/HTTPAuthTests"
         )
-    ]
+    ],
+    // Vendored BoringSSL (ADR 0004 Phase 6) is C++; pin the standard for its `.cc` sources. Only the
+    // opt-in `CHTTPBoringSSL` target is C++, so this is inert for the default apple-only graph.
+    cxxLanguageStandard: .cxx17
 )
 
 // Apply the strict settings uniformly to every target we define. Warnings-as-errors is scoped to
@@ -359,27 +362,37 @@ for target in package.targets where !["CHTTPTestMalloc", "CCRC32"].contains(targ
 // Appended after the strict loop above so the C shim never receives Swift-only settings. The portable
 // Swift sources / tests guard on `#if canImport(CHTTPBoringSSLShims)`, so they vanish when the flag is off.
 if Context.environment["HTTP_PORTABLE_TLS"] != nil {
-    let opensslPrefix = Context.environment["HTTP_OPENSSL_PREFIX"] ?? "/opt/homebrew/opt/openssl@3"
+    // Vendored, symbol-prefixed (`CHTTPBoringSSL_*`) BoringSSL — no system OpenSSL, no
+    // `HTTP_OPENSSL_PREFIX` (ADR 0004 Phase 6). The C/C++/asm sources compile in-tree; SwiftPM links
+    // libc++ for the C++ `.cc`. The whole block stays gated on `HTTP_PORTABLE_TLS`, so the default build
+    // graph is apple-only.
     package.targets.append(
         .target(
-            name: "CHTTPBoringSSLShims",
-            path: "Sources/Core/CHTTPBoringSSLShims",
-            cSettings: [.unsafeFlags(["-I\(opensslPrefix)/include"])],
-            linkerSettings: [
-                .unsafeFlags(["-L\(opensslPrefix)/lib"]),
-                .linkedLibrary("ssl"),
-                .linkedLibrary("crypto")
+            name: "CHTTPBoringSSL",
+            path: "Sources/Core/CHTTPBoringSSL",
+            cSettings: [
+                .define("_GNU_SOURCE"),
+                .define("_POSIX_C_SOURCE", to: "200112L"),
+                .define("_DARWIN_C_SOURCE")
             ]
         )
     )
-    // Consumers depend on the shim AND need the OpenSSL header path passed to the clang importer that
-    // builds the `CHTTPBoringSSLShims` module on `import` (`cSettings -I` only covers compiling shim.c, not
-    // a dependent's module build). The C target's `linkerSettings` propagate the `-lssl`/`-lcrypto`
-    // link to the final binary.
+    // The hand-written macro-wrapper shim — the only place that includes the BoringSSL umbrella and holds
+    // the unsafe interop. Depends on the vendored module.
+    package.targets.append(
+        .target(
+            name: "CHTTPBoringSSLShims",
+            dependencies: ["CHTTPBoringSSL"],
+            path: "Sources/Core/CHTTPBoringSSLShims",
+            cSettings: [.define("_GNU_SOURCE")]
+        )
+    )
+    // The transport (and its tests) consume both the vendored module (prefixed BoringSSL symbols) and the
+    // shim (the macro wrappers). No link flags or header search paths needed — the vendored module carries
+    // its own headers via its modulemap.
     for target in package.targets
     where ["HTTPTransport", "HTTPTransportTests"].contains(target.name) {
+        target.dependencies.append("CHTTPBoringSSL")
         target.dependencies.append("CHTTPBoringSSLShims")
-        target.swiftSettings =
-            (target.swiftSettings ?? []) + [.unsafeFlags(["-Xcc", "-I\(opensslPrefix)/include"])]
     }
 }

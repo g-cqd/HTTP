@@ -21,14 +21,15 @@
 #define CHTTPBORINGSSLSHIMS_H
 
 #include <stdint.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
-#include <openssl/pem.h>
-#include <openssl/pkcs12.h>
-#include <openssl/x509.h>
-#include <openssl/x509v3.h>
+
+// The vendored BoringSSL umbrella (ADR 0004 Phase 6) replaces the system `<openssl/...>` headers; it
+// pulls the full prefixed (CHTTPBoringSSL_*) surface the wrappers below use, and defines
+// OPENSSL_IS_BORINGSSL (consumed by shims.c to compile out the OpenSSL-only legacy-provider load).
+#if __has_include(<CHTTPBoringSSL/CHTTPBoringSSL.h>)
+#include <CHTTPBoringSSL/CHTTPBoringSSL.h>
+#else
+#include "CHTTPBoringSSL.h"
+#endif
 
 /// Pins the minimum negotiated TLS protocol version (e.g. TLS1_3_VERSION). Returns 1 on success.
 ///

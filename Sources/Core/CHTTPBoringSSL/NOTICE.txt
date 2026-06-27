@@ -1,0 +1,14 @@
+This directory contains a vendored, symbol-prefixed copy of BoringSSL.
+
+BoringSSL
+  Source: https://boringssl.googlesource.com/boringssl
+  Revision: see hash.txt
+  License: ISC / OpenSSL / SSLeay (see the per-file headers under crypto/, ssl/, third_party/).
+
+Vendoring process
+  The SwiftPM-friendly layout (flattened sources, renamed CHTTPBoringSSL_* headers, the generated
+  CHTTPBoringSSL_boringssl_prefix_symbols*.h symbol-prefix headers, per-architecture assembly, and the
+  executable-stack guards) derives from the Apache-2.0 licensed vendoring process of
+  apple/swift-nio-ssl (https://github.com/apple/swift-nio-ssl), re-namespaced from CNIOBoringSSL to
+  CHTTPBoringSSL. swift-nio-ssl is NOT a build- or run-time dependency of this package; only BoringSSL
+  itself is vendored here.

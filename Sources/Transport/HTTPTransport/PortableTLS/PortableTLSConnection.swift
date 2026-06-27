@@ -5,7 +5,7 @@
 //  A ``TransportConnection`` backed by a libssl `SSL` over an accepted socket (the portable, non-
 //  Network.framework backbone — ADR 0004). The mirror of ``NetworkFrameworkConnection``.
 //
-//  Byte-bridge model (v1): `SSL_set_fd` on a *blocking* accepted socket, with every SSL operation
+//  Byte-bridge model (v1): `CHTTPBoringSSL_SSL_set_fd` on a *blocking* accepted socket, with every SSL operation
 //  offloaded to a per-connection serial `DispatchQueue` and bridged to `async` via a continuation —
 //  the connection's I/O never blocks a cooperative thread, and SSL access is serialized (so the `SSL`
 //  is single-threaded, as libssl requires). This is the ADR's sanctioned first step; the
@@ -18,6 +18,7 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
     internal import Darwin
     internal import Dispatch
@@ -51,8 +52,8 @@
         /// `true` once the `SSL` and socket have been torn down (once-only across ``close()`` / `deinit`).
         private let lifecycle = Mutex<Bool>(false)
 
-        /// Wraps an `SSL` already bound to `descriptor` via `SSL_set_fd` (the caller owns that wiring); the
-        /// connection takes ownership and tears both down on ``close()``.
+        /// Wraps an `SSL` already bound to `descriptor` via `SSL_set_fd` (the caller owns that wiring);
+        /// the connection takes ownership and tears both down on ``close()``.
         init(
             id: TransportConnectionID,
             peer: TransportAddress,
@@ -82,9 +83,10 @@
             try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Void, any Error>) in
                 queue.async {
-                    let result = SSL_accept(self.ssl)
+                    let result = CHTTPBoringSSL_SSL_accept(self.ssl)
                     guard result == 1 else {
-                        let message = "SSL_accept failed (error \(SSL_get_error(self.ssl, result)))"
+                        let code = CHTTPBoringSSL_SSL_get_error(self.ssl, result)
+                        let message = "SSL_accept failed (error \(code))"
                         continuation.resume(
                             throwing: TransportError.tlsConfigurationFailed(message)
                         )
@@ -126,14 +128,14 @@
                     }
                     var buffer = [UInt8](repeating: 0, count: max(1, maxLength))
                     let count = buffer.withUnsafeMutableBytes { raw in
-                        SSL_read(self.ssl, raw.baseAddress, Int32(raw.count))
+                        CHTTPBoringSSL_SSL_read(self.ssl, raw.baseAddress, Int32(raw.count))
                     }
                     if count > 0 {
                         buffer.removeLast(buffer.count - Int(count))
                         continuation.resume(returning: buffer)
                         return
                     }
-                    let status = SSL_get_error(self.ssl, count)
+                    let status = CHTTPBoringSSL_SSL_get_error(self.ssl, count)
                     // A clean close-notify (`ZERO_RETURN`) or an abrupt peer EOF (`SYSCALL` with no error
                     // queued) is end-of-stream — surfaced as `nil`, matching the other backbones.
                     if status == SSL_ERROR_ZERO_RETURN || status == SSL_ERROR_SYSCALL {
@@ -161,10 +163,11 @@
                         return
                     }
                     let count = bytes.withUnsafeBytes { raw in
-                        SSL_write(self.ssl, raw.baseAddress, Int32(raw.count))
+                        CHTTPBoringSSL_SSL_write(self.ssl, raw.baseAddress, Int32(raw.count))
                     }
                     guard count > 0 else {
-                        let message = "SSL_write error \(SSL_get_error(self.ssl, count))"
+                        let message =
+                            "CHTTPBoringSSL_SSL_write error \(CHTTPBoringSSL_SSL_get_error(self.ssl, count))"
                         continuation.resume(throwing: TransportError.ioFailed(message))
                         return
                     }
@@ -192,8 +195,8 @@
             guard firstTeardown else {
                 return
             }
-            SSL_shutdown(ssl)
-            SSL_free(ssl)
+            CHTTPBoringSSL_SSL_shutdown(ssl)
+            CHTTPBoringSSL_SSL_free(ssl)
             _ = Darwin.close(descriptor)
         }
     }
