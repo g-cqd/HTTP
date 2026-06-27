@@ -19,6 +19,7 @@
 //    curl -v --range 0-31 http://127.0.0.1:8080/large   # 206 Partial Content (RangeMiddleware)
 //    curl -v http://127.0.0.1:8080/metrics              # the HTTPMetrics seam
 //    curl -v --http2-prior-knowledge --data 'ping' http://127.0.0.1:8080/echo
+//    curl -v -H 'Accept: text/html' http://127.0.0.1:8080/negotiate  # content negotiation (§12.5)
 //
 
 import Foundation
@@ -168,6 +169,10 @@ enum HTTPDExample {
             }
             // Surfaces the HTTPMetrics seam the MetricsMiddleware feeds (rate + errors).
             Route.get("/metrics") { _, _, _ in .text(metrics.snapshot()) }
+            // Proactive content negotiation (RFC 9110 §12.5): JSON or HTML per `Accept`, greeting
+            // localized per `Accept-Language`, `Vary` set, 406 when neither type fits. See
+            // ``ContentNegotiation``.
+            ContentNegotiation.route()
             // A trailing `*path` catch-all capturing the remaining path (RFC 3986 §3.3).
             Route.get("/files/*path") { _, parameters, _ in
                 .text("would serve: \(parameters["path"] ?? "")\n")
