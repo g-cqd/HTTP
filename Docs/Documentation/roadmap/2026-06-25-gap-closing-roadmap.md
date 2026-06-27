@@ -406,3 +406,21 @@ in the project docs.)
   swift-format + SwiftLint `--strict` clean. **Next: Phase 3** — `PortableTLSTransport` (accept loop over
   `POSIXSocket` → `AsyncStream`, `boundPort`, `shutdown`); gate: the one-way-TLS + ALPN suite + `curl`
   interop.
+- 2026-06-27 — **portable TLS Phase 3 (transport) shipped — `curl` interops over the new backbone.**
+  `PortableTLSTransport` is a full `ServerTransport`: it binds via the shared `POSIXSocket` accept
+  plumbing (the same the swift-system/kqueue backbones use), accepts on a dedicated blocking-`accept()`
+  thread, wraps each fd in a libssl session (`SSL_new`/`SSL_set_fd`), drives the handshake off the
+  accept thread, and surfaces the connection only at `.ready` (a failed/ALPACA-refused handshake is
+  never yielded). The shared `SSL_CTX` is carried to the accept loop in an `@unchecked Sendable` box
+  (a raw `OpaquePointer` in a `Mutex<State>` trips `RegionIsolation`) and freed when the loop exits.
+  Wired into the abstraction: a new `TransportBackbone.portableTLS` case + `TransportFactory` routing
+  (gated; selecting it without `HTTP_PORTABLE_TLS` `preconditionFailure`s with a clear message;
+  `TransportTests` excludes it from the cleartext factory battery, like `.fake`). Added a tiny
+  `CHTTPBoringSSL_connect_loopback` C helper so a libssl client can drive the loop without `sockaddr`
+  plumbing in Swift. **Gate met:** a libssl client negotiates ALPN `h2` and round-trips bytes through
+  the transport, **and `curl` interops over TLS** (a real non-Network.framework client — the
+  portability proof) exchanging HTTP/1.1 and negotiating `http/1.1` ALPN. Full **936-test** default
+  suite green (the ungated abstraction changes don't regress it); gates green under the flag;
+  `project-hooks` (swift-format + SwiftLint) clean. **Next: Phase 4** — mTLS tri-state
+  (`.none`/`.optional`/`.required` + `verifyPeer`/DER + `tlsPeerSubject`), where the W2-blocked
+  `.optional` finally works (`SSL_VERIFY_PEER` without `FAIL_IF_NO_PEER_CERT`).

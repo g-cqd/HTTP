@@ -61,4 +61,9 @@ int CHTTPBoringSSL_set_client_alpn(SSL_CTX *ctx);
 /// 0 if it fails to converge.
 int CHTTPBoringSSL_handshake(SSL *server, SSL *client);
 
+/// Opens a blocking TCP connection to `127.0.0.1:port` and returns the descriptor, or `-1` on failure
+/// — a test-only helper so a libssl client can drive the transport's accept loop without the POSIX
+/// `sockaddr` plumbing leaking into Swift.
+int CHTTPBoringSSL_connect_loopback(uint16_t port);
+
 #endif

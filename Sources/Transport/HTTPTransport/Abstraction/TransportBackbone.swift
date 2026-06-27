@@ -10,6 +10,11 @@ public enum TransportBackbone: String, Sendable, CaseIterable {
     /// Apple Network.framework (`NWListener` / `NWConnection`) — TLS, ALPN, and QUIC.
     case networkFramework
 
+    /// Portable libssl-over-POSIX-socket TLS (system OpenSSL today, vendored BoringSSL later) — the
+    /// non-Network.framework TLS path (ADR 0004). Available only in the opt-in `HTTP_PORTABLE_TLS`
+    /// build; selecting it otherwise is a build-configuration error (see ``TransportFactory``).
+    case portableTLS
+
     /// BSD sockets with a hand-rolled kqueue readiness loop — closest to the hardware.
     case posixKqueue
 

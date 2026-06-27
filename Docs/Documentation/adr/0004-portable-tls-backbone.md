@@ -1,6 +1,6 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
-- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–2 shipped) — resolves **D1**
+- **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–3 shipped) — resolves **D1**
 - **Context date:** 2026-06
 
 ## Context
@@ -195,8 +195,14 @@ return (the `NetworkFrameworkTLS` contract).
    ADR-sanctioned first step) rather than memory BIOs; the non-blocking memory-BIO + shared-readiness
    path (no thread per in-flight op) is the perf follow-up. *Gate met:* a loopback echo over a
    socketpair through `PortableTLSConnection` round-trips plaintext end-to-end through TLS.
-3. **`PortableTLSTransport`** — accept loop over `POSIXSocket`, `AsyncStream`, `boundPort`, `shutdown`.
-   *Gate:* one-way TLS + ALPN suite green; interop with `curl`.
+3. **`PortableTLSTransport`** — ✅ **shipped 2026-06-27.** Accept loop over `POSIXSocket` (blocking
+   `accept()` on a dedicated thread), wraps each fd in a libssl session, handshakes off the accept
+   thread, surfaces at `.ready`; `boundPort`/`shutdown`. Wired into `TransportBackbone.portableTLS` +
+   `TransportFactory` (gated; selecting it without `HTTP_PORTABLE_TLS` traps with a clear message).
+   *Gate met:* a libssl client negotiates ALPN `h2` and round-trips bytes through the transport, **and
+   `curl` interops over TLS** (a real non-Network.framework client — the portability proof) exchanging
+   HTTP/1.1 and negotiating `http/1.1` ALPN. Full 936-test default suite green; gates green under the
+   flag.
 4. **mTLS tri-state** — `.none`/`.optional`/`.required` + `verifyPeer`/DER + `tlsPeerSubject`. *Gate:*
    the full mutual-TLS suite **including `.optional`** green.
 5. **SNI multi-cert** + **hot reload** parity. *Gate:* SNI selection + reload-under-load gates green.

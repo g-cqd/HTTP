@@ -7,7 +7,12 @@
 //  Swift importer — so they live here, behind plain functions Swift can call. See ADR 0004.
 //
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <pthread.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <openssl/provider.h>
 
 #include "CHTTPBoringSSL.h"
@@ -121,4 +126,21 @@ int CHTTPBoringSSL_handshake(SSL *server, SSL *client) {
         }
     }
     return 0;
+}
+
+int CHTTPBoringSSL_connect_loopback(uint16_t port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    struct sockaddr_in address;
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
 }

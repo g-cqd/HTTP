@@ -13,7 +13,10 @@ import Testing
 struct TransportTests {
     @Test("the factory wires each real backbone flag to its implementation")
     func factorySelectsBackbone() {
-        for backbone in TransportBackbone.allCases where backbone != .fake {
+        // `.fake` binds no port; `.portableTLS` needs a TLS identity + the opt-in HTTP_PORTABLE_TLS
+        // build, so it is covered by the gated portable-TLS suite, not this cleartext battery.
+        for backbone in TransportBackbone.allCases
+        where backbone != .fake && backbone != .portableTLS {
             let configuration = TransportConfiguration(port: 0, backbone: backbone)
             #expect(TransportFactory.make(configuration).backbone == backbone)
         }
