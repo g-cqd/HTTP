@@ -232,8 +232,12 @@ return (the `NetworkFrameworkTLS` contract).
    for vendored sources behind the seam; the system-lib caveat (and `HTTP_OPENSSL_PREFIX`) are retired.
    *Gate met:* the 15-test gated suite (incl. curl interop, mTLS `.optional`, SNI, reload) is green with
    **no system OpenSSL present** (`otool -L` shows no libssl/libcrypto dylib); the 936-test default suite
-   is unaffected. The multi-arch/Linux matrix (6.5) dovetails with G0 (the vendored tree already carries
-   the per-arch asm; only the Linux symbol-mangling + CI remain, needing Docker/a Linux runner).
+   is unaffected. **macOS x86_64 also builds + links cleanly** (cross-build 2026-06-27 — the x86_64 asm
+   assembles and the prefixed symbols resolve; runtime test-exec on the arm64 host is blocked only by the
+   xctest helper's cross-arch dlopen, a harness limit, not the code). The multi-arch matrix (6.5) dovetails
+   with G0: the vendored tree already carries the Linux asm **and** the prefix symbols already cover Linux
+   (swift-nio-ssl's symbol union spans mac/iOS/Linux), so only a Linux-toolchain build/test + a CI job
+   remain — they need a Linux runner.
    - **6.2–6.4 done — ✅ 2026-06-27.** The vendored tree is swift-nio-ssl's proven `CNIOBoringSSL`
      (BoringSSL `817ab07e`) **re-namespaced** `CNIOBoringSSL → CHTTPBoringSSL` by
      `scripts/vendor-boringssl.sh` (chosen over regenerating from upstream, which is revision-fragile —
