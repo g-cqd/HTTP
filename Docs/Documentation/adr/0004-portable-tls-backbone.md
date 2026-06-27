@@ -1,7 +1,8 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
 - **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–5 + hot-reload shipped —
-  `.optional`, SNI multi-cert, and `reload(tls:)` all work; only the BoringSSL vendoring (Phase 6) remains)
+  `.optional`, SNI multi-cert, and `reload(tls:)` all work; BoringSSL vendoring (Phase 6) in progress —
+  the 6.1 spike validated the swap on macOS arm64, bulk vendoring 6.2+ remains)
 - **Context date:** 2026-06
 
 ## Context
@@ -228,6 +229,17 @@ return (the `NetworkFrameworkTLS` contract).
    client sees cert A before `reload(B)` and cert B after; reload-before-start fails closed.
 6. **Vendored BoringSSL provider** (separate effort) — swap `-lssl` for vendored sources behind the
    seam; remove the system-lib caveat. *Gate:* suites green with no system OpenSSL present.
+   - **6.1 spike — ✅ 2026-06-27 (macOS arm64).** Built BoringSSL (commit `3c6315e0…`), staged it as an
+     `HTTP_OPENSSL_PREFIX`, and ran the full 15-test gated suite against it **unchanged — all green, no
+     system OpenSSL linked** (verified: the 33 MB test binary has BoringSSL baked in statically, `otool -L`
+     shows no libssl/libcrypto dylib). Findings: (a) the *only* API-name drift across the whole
+     shim+backbone surface is OpenSSL 3's `SSL_get1_peer_certificate` vs BoringSSL's retained
+     `SSL_get_peer_certificate` (identical owning semantics) — aliased under `OPENSSL_IS_BORINGSSL`; (b) the
+     OpenSSL-only legacy-provider load compiles out — BoringSSL keeps the PBES1 PKCS#12 ciphers built in
+     (`kBuiltinPBE`), so DevTLSIdentity's `-legacy` bundle parses natively (the `.optional`/SNI/reload
+     tests, which load it, all pass); (c) BoringSSL needs `-lc++` at link; (d) the vendored lib **must be
+     symbol-prefixed** to coexist with swift-crypto's `CCryptoBoringSSL` — proven by both linking cleanly
+     into one test binary. Bulk vendoring (script + prefixed tree + `Package.swift` flip) is 6.2+.
 
 ## Alternatives considered
 

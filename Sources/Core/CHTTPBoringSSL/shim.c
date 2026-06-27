@@ -14,19 +14,30 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <openssl/provider.h>
 
-#include "CHTTPBoringSSL.h"
+#include "CHTTPBoringSSL.h"  // pulls <openssl/ssl.h>, which defines OPENSSL_IS_BORINGSSL on BoringSSL
+
+#ifndef OPENSSL_IS_BORINGSSL
+#include <openssl/provider.h>
 
 // OpenSSL 3 moved the SHA1-MAC / 3DES algorithms a PKCS#12 commonly uses (and which DevTLSIdentity's
 // `-legacy` export — required for `SecPKCS12Import` — produces) into the non-default *legacy*
 // provider. Load it once (alongside the default, which an explicit load would otherwise displace) so
-// `PKCS12_parse` accepts both modern and legacy bundles. OpenSSL-specific; a vendored-BoringSSL
-// provider (ADR 0004 phase 6) has no provider concept and omits this.
+// `PKCS12_parse` accepts both modern and legacy bundles. OpenSSL-specific; vendored BoringSSL (ADR
+// 0004 phase 6) keeps these PBES1 ciphers built in (`kBuiltinPBE`) with no provider concept, so the
+// whole load compiles out under `OPENSSL_IS_BORINGSSL`.
 static void CHTTPBoringSSL_load_providers(void) {
     OSSL_PROVIDER_load(NULL, "default");
     OSSL_PROVIDER_load(NULL, "legacy");
 }
+#endif
+
+#ifdef OPENSSL_IS_BORINGSSL
+// BoringSSL never renamed the owning peer-certificate accessor: its `SSL_get_peer_certificate` already
+// returns a +1 reference the caller frees — exactly OpenSSL 3's `SSL_get1_peer_certificate`. This is
+// pure ABI drift (no behavioral difference); alias it so the shim body below reads identically on both.
+#define SSL_get1_peer_certificate SSL_get_peer_certificate
+#endif
 
 long CHTTPBoringSSL_set_min_proto_version(SSL_CTX *ctx, int version) {
     return SSL_CTX_set_min_proto_version(ctx, version);
@@ -38,8 +49,12 @@ long CHTTPBoringSSL_set_max_proto_version(SSL_CTX *ctx, int version) {
 
 int CHTTPBoringSSL_use_pkcs12(
     SSL_CTX *ctx, const uint8_t *bytes, int length, const char *passphrase) {
+#ifndef OPENSSL_IS_BORINGSSL
+    // OpenSSL needs the legacy provider for DevTLSIdentity's `-legacy` PKCS#12; BoringSSL parses it
+    // natively (built-in PBES1), so the load is compiled out above and there is nothing to prime.
     static pthread_once_t providers = PTHREAD_ONCE_INIT;
     pthread_once(&providers, CHTTPBoringSSL_load_providers);
+#endif
     BIO *source = BIO_new_mem_buf(bytes, length);
     if (source == NULL) {
         return 0;
