@@ -181,13 +181,14 @@ portable — the lift is the I/O floor and a non-Network.framework TLS path. **D
 - [ ] **`POSIXEpoll` transport backbone** (`Sources/Transport/HTTPTransport/POSIXEpoll/`): epoll readiness
       loop modeled on the existing `KqueueEventLoop`; `SO_REUSEPORT` prefork (already proven on kqueue);
       EINTR/EAGAIN parity; dual-stack IPv6.
-- [ ] **Portable TLS path** (D1): a TLS backbone that is *not* Network.framework — see
-      **[ADR 0004](../adr/0004-portable-tls-backbone.md)** (provider seam; system OpenSSL first, vendored
-      BoringSSL follow-up). Reuses the existing `POSIXSocket` accept loop + the ALPN / TLS-1.3-floor /
-      strict-ALPN policy; mTLS (G3) and hot reload (G4) must work here too. **Also unblocks W2's deferred
-      `.optional` client-auth + SNI multi-cert** — OpenSSL/BoringSSL do request-but-don't-require
-      (`SSL_VERIFY_PEER` without `FAIL_IF_NO_PEER_CERT`) and a server-name cert callback
-      (`SSL_CTX_set_tlsext_servername_callback`) natively, neither of which Network.framework exposes.
+- [x] **Portable TLS path** (D1) — **shipped 2026-06-27 (macOS arm64)**, see
+      **[ADR 0004](../adr/0004-portable-tls-backbone.md)** (Phases 1–6). A TLS backbone that is *not*
+      Network.framework: `PortableTLS{Transport,Connection}` over the existing `POSIXSocket` accept loop +
+      ALPN / TLS-1.3-floor / strict-ALPN policy; mTLS (G3), `.optional`, SNI multi-cert, and hot reload
+      (G4) all work — the features Network.framework cannot do. **Now on vendored, symbol-prefixed
+      BoringSSL (Phase 6, commit `79e821d`)** — self-contained, no system OpenSSL, no `HTTP_OPENSSL_PREFIX`;
+      `scripts/vendor-boringssl.sh` regenerates the tree. Remaining for Linux: the `POSIXEpoll` backbone
+      (below) + the multi-arch symbol-mangling/CI (ADR 0004 §6.5, needs a Linux runner).
 - [ ] **Foundation-usage audit:** inventory `Foundation`/`FileManager`/`ProcessInfo`/`JSONSerialization`
       uses; confirm each works under swift-corelibs-foundation or swap to first-party/`ADFoundation`-style
       portable primitives (the library already favors first-party types).

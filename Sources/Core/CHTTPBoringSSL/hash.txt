@@ -1,1 +1,2 @@
 This directory is derived from BoringSSL cloned from https://boringssl.googlesource.com/boringssl at revision 817ab07ebb53da35afea409ab9328f578492832d
+Re-namespaced from apple/swift-nio-ssl@e168589846bad3e77a5f03ef4e6d12d66cf826d7 by scripts/vendor-boringssl.sh.

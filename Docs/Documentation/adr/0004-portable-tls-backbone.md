@@ -1,8 +1,9 @@
 # ADR 0004 — Portable TLS backbone (the non-Network.framework TLS path)
 
 - **Status:** Accepted (system-OpenSSL-first ratified 2026-06-27; Phases 1–5 + hot-reload shipped —
-  `.optional`, SNI multi-cert, and `reload(tls:)` all work; BoringSSL vendoring (Phase 6) in progress —
-  the 6.1 spike validated the swap on macOS arm64, bulk vendoring 6.2+ remains)
+  `.optional`, SNI multi-cert, and `reload(tls:)` all work; **BoringSSL vendoring (Phase 6) shipped on
+  macOS arm64** — vendored, symbol-prefixed BoringSSL, no system OpenSSL; the multi-arch/Linux matrix
+  (6.5) dovetails with G0)
 - **Context date:** 2026-06
 
 ## Context
@@ -227,8 +228,21 @@ return (the `NetworkFrameworkTLS` contract).
    handshakes use the new context, in-flight `SSL`s keep theirs (refcounted), `surface` snapshots +
    `up_ref`s the context across `SSL_new` so a concurrent reload can't free it mid-flight. *Gate:* a
    client sees cert A before `reload(B)` and cert B after; reload-before-start fails closed.
-6. **Vendored BoringSSL provider** (separate effort) — swap `-lssl` for vendored sources behind the
-   seam; remove the system-lib caveat. *Gate:* suites green with no system OpenSSL present.
+6. **Vendored BoringSSL provider** — ✅ **shipped 2026-06-27 (macOS arm64).** Swapped `-lssl`/`-lcrypto`
+   for vendored sources behind the seam; the system-lib caveat (and `HTTP_OPENSSL_PREFIX`) are retired.
+   *Gate met:* the 15-test gated suite (incl. curl interop, mTLS `.optional`, SNI, reload) is green with
+   **no system OpenSSL present** (`otool -L` shows no libssl/libcrypto dylib); the 936-test default suite
+   is unaffected. The multi-arch/Linux matrix (6.5) dovetails with G0 (the vendored tree already carries
+   the per-arch asm; only the Linux symbol-mangling + CI remain, needing Docker/a Linux runner).
+   - **6.2–6.4 done — ✅ 2026-06-27.** The vendored tree is swift-nio-ssl's proven `CNIOBoringSSL`
+     (BoringSSL `817ab07e`) **re-namespaced** `CNIOBoringSSL → CHTTPBoringSSL` by
+     `scripts/vendor-boringssl.sh` (chosen over regenerating from upstream, which is revision-fragile —
+     the prefix tooling moved in newer BoringSSL; both paths derive from swift-nio-ssl's Apache-2.0
+     vendoring since BoringSSL ships no SwiftPM packaging — attributed in `NOTICE.txt`/`hash.txt`). The
+     shim split into a hand-written `CHTTPBoringSSLShims` target (commit `1b6b01e`) so re-vendoring
+     clobbers `CHTTPBoringSSL` wholesale; the Swift backbone calls the prefixed `CHTTPBoringSSL_*` symbols
+     and the shim wrappers; `Package.swift` builds both gated targets (C++17, libc++ auto-linked) with no
+     system-OpenSSL flags.
    - **6.1 spike — ✅ 2026-06-27 (macOS arm64).** Built BoringSSL (commit `3c6315e0…`), staged it as an
      `HTTP_OPENSSL_PREFIX`, and ran the full 15-test gated suite against it **unchanged — all green, no
      system OpenSSL linked** (verified: the 33 MB test binary has BoringSSL baked in statically, `otool -L`
