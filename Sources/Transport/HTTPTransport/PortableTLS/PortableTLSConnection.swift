@@ -2,18 +2,20 @@
 //  PortableTLSConnection.swift
 //  HTTPTransport
 //
-//  A ``TransportConnection`` backed by a libssl `SSL` over an accepted socket (the portable, non-
-//  Network.framework backbone — ADR 0004). The mirror of ``NetworkFrameworkConnection``.
+//  A ``TransportConnection`` backed by a libssl `SSL` over an accepted socket — **event-driven** via
+//  memory BIOs on the shared kqueue/epoll loop (audit R4, ADR 0004's productionization path), the TLS
+//  twin of ``POSIXKqueueConnection``. The earlier model bound a *blocking* `SSL_set_fd` on a
+//  per-connection serial `DispatchQueue` (a thread per in-flight TLS op); this drives `SSL` through a
+//  pair of memory `BIO`s instead: `SSL_read`/`SSL_write` move *plaintext* to/from the BIOs, and the
+//  connection pumps *ciphertext* between those BIOs and a **non-blocking** socket using the shared
+//  readiness loop — `SSL_ERROR_WANT_READ`/`WANT_WRITE` become "await more socket bytes / flush". The
+//  serve task is pinned to the loop (``preferredTaskExecutor``), so handshake, decrypt, encrypt and the
+//  raw socket I/O all run inline on the loop thread with no hop and no thread-per-connection.
 //
-//  Byte-bridge model (v1): `CHTTPBoringSSL_SSL_set_fd` on a *blocking* accepted socket, with every SSL operation
-//  offloaded to a per-connection serial `DispatchQueue` and bridged to `async` via a continuation —
-//  the connection's I/O never blocks a cooperative thread, and SSL access is serialized (so the `SSL`
-//  is single-threaded, as libssl requires). This is the ADR's sanctioned first step; the
-//  higher-throughput path (non-blocking fd + memory BIOs driven by a shared readiness loop, avoiding a
-//  thread per in-flight op) is the noted follow-up. Teardown is once-only (guarded by `lifecycle`),
-//  from `close()` or `deinit`.
+//  Gated `#if canImport(CHTTPBoringSSLShims)` (the opt-in `HTTP_PORTABLE_TLS` build).
 //
-//  Gated `#if canImport(CHTTPBoringSSLShims)` — present only in the opt-in portable build (`HTTP_PORTABLE_TLS`).
+//  Standards: TLS 1.3 (RFC 8446) + ALPN (RFC 7301) over a POSIX.1-2017 TCP (RFC 9293) socket; readiness
+//  via BSD kqueue / Linux epoll.
 //
 
 #if canImport(CHTTPBoringSSLShims)
@@ -25,241 +27,370 @@
     #elseif canImport(Glibc)
         internal import Glibc
     #endif
-    internal import Dispatch
     internal import Synchronization
 
-    /// Closes a raw socket descriptor, qualified per platform — the global `close` is shadowed by the
-    /// connection's own `close()` method, and resolves from `Darwin` on Apple / `Glibc` on Linux.
-    private func closeFD(_ descriptor: Int32) {
-        #if canImport(Darwin)
-            _ = Darwin.close(descriptor)
-        #else
-            _ = Glibc.close(descriptor)
-        #endif
-    }
+    /// The platform readiness loop the TLS connection rides — kqueue on Darwin, epoll on Linux. Both are
+    /// `TaskExecutor`s with the same `waitReadable`/`waitWritable`/`closeDescriptor` surface (audit R4).
+    #if canImport(Darwin)
+        typealias TLSEventLoop = KqueueEventLoop
+    #elseif canImport(Glibc)
+        typealias TLSEventLoop = EpollEventLoop
+    #endif
 
-    /// A ``TransportConnection`` backed by a libssl `SSL` over a blocking accepted socket.
+    /// A ``TransportConnection`` backed by a libssl `SSL` driven through memory BIOs on a shared
+    /// readiness loop (audit R4).
     ///
-    /// All `SSL`/fd access is confined to ``queue`` (libssl `SSL` objects are not thread-safe), so the
-    /// type is safe to share across tasks — `@unchecked Sendable`, like ``NetworkFrameworkConnection``.
+    /// `SSL`/BIO access is confined to the loop thread (the serve task is pinned and I/O is serial per
+    /// connection), so the type is safe to share — `@unchecked Sendable`.
     final class PortableTLSConnection: TransportConnection, @unchecked Sendable {
         let id: TransportConnectionID
         let peer: TransportAddress
         let isSecure = true
 
-        /// The ALPN protocol captured at ``performHandshake()`` (RFC 7301), or `nil` before the handshake
-        /// completes or when none was negotiated.
         var negotiatedApplicationProtocol: String? { negotiated.withLock(\.self) }
-
-        /// The verified client-cert leaf subject (mutual TLS), captured at ``performHandshake()``, or
-        /// `nil` when no client certificate was presented.
         var tlsPeerSubject: String? { subject.withLock(\.self) }
 
+        /// The loop is a `TaskExecutor`; pinning the serve task to it runs decrypt → handler → encrypt
+        /// inline on the loop thread (audit R4).
+        var preferredTaskExecutor: (any TaskExecutor)? { eventLoop }
+
         private let ssl: OpaquePointer
+        /// Ciphertext IN: raw socket bytes are `BIO_write`-fed here for `SSL_read` to decrypt.
+        private let readBIO: UnsafeMutablePointer<BIO>
+        /// Ciphertext OUT: `SSL_write`/handshake leave ciphertext here for us to drain to the socket.
+        private let writeBIO: UnsafeMutablePointer<BIO>
         private let descriptor: Int32
-        // `.userInitiated`: the per-connection serial I/O queue runs latency-sensitive TLS read/write.
-        private let queue = DispatchQueue(label: "http.transport.portable-tls", qos: .userInitiated)
-        private let negotiated = Mutex<String?>(nil)
-        private let subject = Mutex<String?>(nil)
-        /// The client-auth policy and the trust hook over the DER chain (G3), applied post-handshake.
+        private let eventLoop: TLSEventLoop
         private let clientAuth: TransportTLS.ClientAuth
         private let verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
-        /// `true` once the `SSL` and socket have been torn down (once-only across ``close()`` / `deinit`).
-        private let lifecycle = Mutex<Bool>(false)
-        /// Reused receive buffer (audit P1) — `SSL_read` decrypts into it, then the bytes are copied once
-        /// to the caller's accumulator; no fresh per-read chunk.
+        private let isClosed = Atomic<Bool>(false)
+        /// `true` once the `SSL` (and its BIOs) have been freed — once-only across ``deinit`` paths.
+        private let freed = Mutex<Bool>(false)
+        private let negotiated = Mutex<String?>(nil)
+        private let subject = Mutex<String?>(nil)
+        /// Reused plaintext receive buffer (`SSL_read` decrypts into it) — audit P1.
         private let scratch = Mutex<[UInt8]>([])
+        /// Reused ciphertext pump buffer (raw socket ↔ BIO), sized once.
+        private let cipher = Mutex<[UInt8]>([UInt8](repeating: 0, count: 16_384))
 
-        /// Wraps an `SSL` already bound to `descriptor` via `SSL_set_fd` (the caller owns that wiring);
-        /// the connection takes ownership and tears both down on ``close()``.
+        /// A non-blocking socket read/write reported it would block — await readiness and retry.
+        private struct WouldBlock: Error {}
+
         init(
             id: TransportConnectionID,
             peer: TransportAddress,
             ssl: OpaquePointer,
+            readBIO: UnsafeMutablePointer<BIO>,
+            writeBIO: UnsafeMutablePointer<BIO>,
             descriptor: Int32,
+            eventLoop: TLSEventLoop,
             clientAuth: TransportTLS.ClientAuth,
             verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
         ) {
             self.id = id
             self.peer = peer
             self.ssl = ssl
+            self.readBIO = readBIO
+            self.writeBIO = writeBIO
             self.descriptor = descriptor
+            self.eventLoop = eventLoop
             self.clientAuth = clientAuth
             self.verifyPeer = verifyPeer
         }
 
         deinit {
-            // Best-effort if `close()` was never called; once-guarded so it can't double-free.
-            teardown()
-        }
-
-        /// Drives the server-side TLS handshake (`SSL_accept`) to completion, captures the negotiated
-        /// ALPN protocol and the verified client-cert subject (mutual TLS), and applies the `verifyPeer`
-        /// trust policy over the DER chain — throwing if the handshake fails or `verifyPeer` rejects the
-        /// presented certificate.
-        func performHandshake() async throws {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, any Error>) in
-                queue.async {
-                    let result = CHTTPBoringSSL_SSL_accept(self.ssl)
-                    guard result == 1 else {
-                        let code = CHTTPBoringSSL_SSL_get_error(self.ssl, result)
-                        let message = "SSL_accept failed (error \(code))"
-                        continuation.resume(
-                            throwing: TransportError.tlsConfigurationFailed(message)
-                        )
-                        return
-                    }
-                    self.negotiated.withLock {
-                        $0 = OpenSSLTLS.negotiatedApplicationProtocol(of: self.ssl)
-                    }
-                    // Client-auth policy (G3): a presented chain is run through `verifyPeer`; a nil hook
-                    // fails closed — it rejects the presented chain rather than trusting it blindly (audit
-                    // F4). An absent chain is allowed under `.optional`/`.none` and unreachable under
-                    // `.required` (the handshake already failed without a cert).
-                    let chain = OpenSSLTLS.peerDERChain(of: self.ssl)
-                    let accepted =
-                        chain.isEmpty
-                        ? (self.clientAuth != .required)
-                        : (self.verifyPeer?(chain) ?? false)
-                    guard accepted else {
-                        continuation.resume(
-                            throwing: TransportError.tlsConfigurationFailed(
-                                "the client certificate was rejected by verifyPeer"
-                            )
-                        )
-                        return
-                    }
-                    self.subject.withLock { $0 = OpenSSLTLS.peerSubject(of: self.ssl) }
-                    continuation.resume()
-                }
+            // Free the SSL (and, since `SSL_set_bio` transferred ownership, both memory BIOs) exactly
+            // once. Safe on any thread: at deinit no reference remains, so nothing can race the free.
+            let firstFree = freed.withLock { wasFreed -> Bool in
+                defer { wasFreed = true }
+                return !wasFreed
+            }
+            if firstFree {
+                CHTTPBoringSSL_SSL_free(ssl)
             }
         }
+
+        // MARK: - Handshake
+
+        /// Drives the TLS handshake to completion through the memory BIOs, then captures the negotiated
+        /// ALPN protocol and applies the client-auth (mutual TLS) trust policy — throwing on failure.
+        func performHandshake() async throws {
+            while true {
+                // `SSL_accept` (not `SSL_do_handshake`) so the session enters server accept-state on the
+                // first call; subsequent calls continue the handshake after each BIO pump.
+                let result = CHTTPBoringSSL_SSL_accept(ssl)
+                try await flushCiphertext()  // push any handshake records SSL produced
+                if result == 1 {
+                    break
+                }
+                let status = CHTTPBoringSSL_SSL_get_error(ssl, result)
+                switch status {
+                    case SSL_ERROR_WANT_READ:
+                        guard try await fillCiphertext() else {
+                            throw TransportError.tlsConfigurationFailed("handshake EOF")
+                        }
+                    case SSL_ERROR_WANT_WRITE:
+                        try await awaitWritable()
+                    default:
+                        throw TransportError.tlsConfigurationFailed("SSL_accept error \(status)")
+                }
+            }
+
+            negotiated.withLock { $0 = OpenSSLTLS.negotiatedApplicationProtocol(of: ssl) }
+            // Client-auth (G3): the TLS layer is permissive (`permissive_verify` always accepts), so the
+            // `verifyPeer` hook is the *sole* validator of a presented chain. RFC 8446 §4.4.2.4 requires a
+            // presented certificate to be validated — so a nil hook (no validator) **fails closed**:
+            // an unvalidated chain MUST NOT be trusted (audit F4). An absent chain is allowed under
+            // `.optional`/`.none` and unreachable under `.required` (the handshake already failed).
+            let chain = OpenSSLTLS.peerDERChain(of: ssl)
+            let accepted =
+                chain.isEmpty
+                ? (clientAuth != .required)
+                : (verifyPeer?(chain) ?? false)
+            guard accepted else {
+                throw TransportError.tlsConfigurationFailed(
+                    "the client certificate was rejected by verifyPeer"
+                )
+            }
+            subject.withLock { $0 = OpenSSLTLS.peerSubject(of: ssl) }
+        }
+
+        // MARK: - Receive
 
         /// Receives up to `maxLength` decrypted bytes, or `nil` once the peer closes (TLS close-notify).
         func receive(maxLength: Int) async throws -> [UInt8]? {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<[UInt8]?, any Error>) in
-                queue.async {
-                    if self.lifecycle.withLock(\.self) {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-                    // One uninitialized allocation sized to what `SSL_read` returns — no 16 KB memset and
-                    // no `removeLast` trim (mirrors `POSIXSocket.readBuffer`; CLAUDE.md allocation rules).
-                    var count: Int32 = 0
-                    let buffer = [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) {
-                        raw, filled in
-                        count = CHTTPBoringSSL_SSL_read(self.ssl, raw.baseAddress, Int32(raw.count))
-                        filled = count > 0 ? Int(count) : 0
-                    }
-                    if count > 0 {
-                        continuation.resume(returning: buffer)
-                        return
-                    }
-                    let status = CHTTPBoringSSL_SSL_get_error(self.ssl, count)
-                    // A clean close-notify (`ZERO_RETURN`) or an abrupt peer EOF (`SYSCALL` with no error
-                    // queued) is end-of-stream — surfaced as `nil`, matching the other backbones.
-                    if status == SSL_ERROR_ZERO_RETURN || status == SSL_ERROR_SYSCALL {
-                        continuation.resume(returning: nil)
-                    }
-                    else {
-                        continuation.resume(
-                            throwing: TransportError.ioFailed("SSL_read error \(status)")
-                        )
-                    }
-                }
+            let count = try await readPlaintext(maxLength: maxLength)
+            guard count > 0 else {
+                return nil
             }
+            return scratch.withLock { Array($0[..<count]) }
         }
 
         /// Reads up to `maxLength` decrypted bytes into the reused scratch and appends them to `buffer`
         /// (audit P1), returning the count appended (`0` once the peer closes).
         func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-            let count = try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Int, any Error>) in
-                queue.async { [self] in
-                    if lifecycle.withLock(\.self) {
-                        continuation.resume(returning: 0)
-                        return
-                    }
-                    let read: Int32 = scratch.withLock { (b: inout [UInt8]) in
-                        if b.count < maxLength {
-                            // Sized once on first use, then reused (so `b.count >= maxLength`).
-                            b = [UInt8](repeating: 0, count: max(1, maxLength))
-                        }
-                        return b.withUnsafeMutableBytes { raw in
-                            CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, Int32(maxLength))
-                        }
-                    }
-                    if read > 0 {
-                        continuation.resume(returning: Int(read))
-                        return
-                    }
-                    let status = CHTTPBoringSSL_SSL_get_error(ssl, read)
-                    if status == SSL_ERROR_ZERO_RETURN || status == SSL_ERROR_SYSCALL {
-                        continuation.resume(returning: 0)
-                    }
-                    else {
-                        continuation.resume(
-                            throwing: TransportError.ioFailed("SSL_read error \(status)")
-                        )
-                    }
-                }
-            }
+            let count = try await readPlaintext(maxLength: maxLength)
             if count > 0 {
                 scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
             }
             return count
         }
 
-        /// Sends `bytes` to the peer, encrypting and writing them in full.
+        /// `SSL_read` into the scratch, pumping ciphertext from the socket on `WANT_READ` — the shared
+        /// decrypt loop.
+        ///
+        /// Returns the plaintext byte count, or `0` at end of stream.
+        private func readPlaintext(maxLength: Int) async throws -> Int {
+            while true {
+                let count = scratch.withLock { (b: inout [UInt8]) -> Int32 in
+                    if b.count < maxLength {
+                        b = [UInt8](repeating: 0, count: max(1, maxLength))
+                    }
+                    return b.withUnsafeMutableBytes { raw in
+                        CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, Int32(maxLength))
+                    }
+                }
+                if count > 0 {
+                    return Int(count)
+                }
+                let status = CHTTPBoringSSL_SSL_get_error(ssl, count)
+                switch status {
+                    case SSL_ERROR_ZERO_RETURN:
+                        return 0  // clean TLS close-notify
+                    case SSL_ERROR_WANT_READ:
+                        // A renegotiation may owe the peer records first.
+                        try await flushCiphertext()
+                        guard try await fillCiphertext() else {
+                            return 0  // socket EOF before close-notify — treat as end of stream
+                        }
+                    case SSL_ERROR_WANT_WRITE:
+                        try await awaitWritable()
+                    case SSL_ERROR_SYSCALL:
+                        return 0  // abrupt peer EOF with nothing queued
+                    default:
+                        throw TransportError.ioFailed("SSL_read error \(status)")
+                }
+            }
+        }
+
+        // MARK: - Send
+
+        /// Encrypts and sends all of `bytes`, draining the produced ciphertext to the socket.
         func send(_ bytes: [UInt8]) async throws {
-            if bytes.isEmpty {
+            guard !bytes.isEmpty else {
                 return
             }
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, any Error>) in
-                queue.async {
-                    if self.lifecycle.withLock(\.self) {
-                        continuation.resume(throwing: TransportError.closed)
-                        return
-                    }
-                    let count = bytes.withUnsafeBytes { raw in
-                        CHTTPBoringSSL_SSL_write(self.ssl, raw.baseAddress, Int32(raw.count))
-                    }
-                    guard count > 0 else {
-                        let message =
-                            "CHTTPBoringSSL_SSL_write error \(CHTTPBoringSSL_SSL_get_error(self.ssl, count))"
-                        continuation.resume(throwing: TransportError.ioFailed(message))
-                        return
-                    }
-                    continuation.resume()
+            var offset = 0
+            while offset < bytes.count {
+                // `SSL_write` synchronously (no `await` may span `withUnsafeBytes`); `bytes` is immutable,
+                // so the pointer is stable across the loop's suspension points.
+                let written = bytes.withUnsafeBytes { raw -> Int32 in
+                    CHTTPBoringSSL_SSL_write(
+                        ssl,
+                        raw.baseAddress?.advanced(by: offset),
+                        Int32(raw.count - offset)
+                    )
+                }
+                if written > 0 {
+                    offset += Int(written)
+                    try await flushCiphertext()  // push this record out before the next
+                    continue
+                }
+                let status = CHTTPBoringSSL_SSL_get_error(ssl, written)
+                switch status {
+                    case SSL_ERROR_WANT_WRITE:
+                        try await flushCiphertext()
+                    case SSL_ERROR_WANT_READ:
+                        try await flushCiphertext()
+                        _ = try await fillCiphertext()
+                    default:
+                        throw TransportError.ioFailed("SSL_write error \(status)")
                 }
             }
+            try await flushCiphertext()
         }
 
-        /// Closes the connection: TLS close-notify, then frees the `SSL` and the socket.
+        // MARK: - Close
+
         func close() async {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                queue.async {
-                    self.teardown()
-                    continuation.resume()
+            closeDescriptor()
+        }
+
+        private func closeDescriptor() {
+            guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else {
+                return
+            }
+            // Close the fd on the loop (deregisters interest + resumes any parked waiter so an in-flight
+            // receive/send unblocks). The `SSL`/BIOs are freed at `deinit`, once the loop has released the
+            // handler closures that retain `self`.
+            eventLoop.closeDescriptor(descriptor)
+        }
+
+        // MARK: - Ciphertext pump (raw socket ↔ memory BIOs)
+
+        /// Drains all ciphertext `SSL` has queued in ``writeBIO`` to the socket, awaiting writability on
+        /// a full send buffer.
+        private func flushCiphertext() async throws {
+            while CHTTPBoringSSL_BIO_ctrl_pending(writeBIO) > 0 {
+                let chunk = cipher.withLock { (buffer: inout [UInt8]) -> Int in
+                    Int(
+                        buffer.withUnsafeMutableBytes { raw in
+                            CHTTPBoringSSL_BIO_read(writeBIO, raw.baseAddress, Int32(raw.count))
+                        }
+                    )
+                }
+                guard chunk > 0 else {
+                    return
+                }
+                var offset = 0
+                while offset < chunk {
+                    do {
+                        offset += try cipher.withLock { (buffer: inout [UInt8]) -> Int in
+                            try buffer.withUnsafeBytes { raw -> Int in
+                                let slice = UnsafeRawBufferPointer(rebasing: raw[offset ..< chunk])
+                                return try Self.writeOnce(descriptor, slice)
+                            }
+                        }
+                    }
+                    catch is WouldBlock {
+                        try await awaitWritable()
+                    }
                 }
             }
         }
 
-        /// Frees the `SSL` and closes the socket exactly once (idempotent across ``close()`` / `deinit`).
-        private func teardown() {
-            let firstTeardown = lifecycle.withLock { closed -> Bool in
-                defer { closed = true }
-                return !closed
+        /// Reads one batch of ciphertext from the socket into ``readBIO`` for `SSL_read` to decrypt,
+        /// awaiting readability on `EAGAIN`.
+        ///
+        /// Returns `false` at socket EOF.
+        private func fillCiphertext() async throws -> Bool {
+            while true {
+                do {
+                    let count = try cipher.withLock { (buffer: inout [UInt8]) -> Int in
+                        try buffer.withUnsafeMutableBytes { raw in
+                            try Self.readOnce(descriptor, raw.baseAddress, raw.count)
+                        }
+                    }
+                    if count == 0 {
+                        return false  // EOF
+                    }
+                    cipher.withLock { buffer in
+                        _ = buffer.withUnsafeBytes { raw in
+                            CHTTPBoringSSL_BIO_write(readBIO, raw.baseAddress, Int32(count))
+                        }
+                    }
+                    return true
+                }
+                catch is WouldBlock {
+                    try await awaitReadable()
+                }
             }
-            guard firstTeardown else {
-                return
+        }
+
+        /// One non-blocking `read`, retrying `EINTR`, mapping `EAGAIN`/`EWOULDBLOCK` to ``WouldBlock``.
+        private static func readOnce(
+            _ descriptor: Int32,
+            _ base: UnsafeMutableRawPointer?,
+            _ capacity: Int
+        ) throws -> Int {
+            while true {
+                let count = read(descriptor, base, capacity)
+                if count >= 0 {
+                    return count
+                }
+                if errno == EINTR { continue }
+                if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlock() }
+                throw TransportError.ioFailed("read errno \(errno)")
             }
-            CHTTPBoringSSL_SSL_shutdown(ssl)
-            CHTTPBoringSSL_SSL_free(ssl)
-            closeFD(descriptor)
+        }
+
+        /// One non-blocking `write`/`send`, retrying `EINTR`, mapping `EAGAIN` to ``WouldBlock``.
+        private static func writeOnce(
+            _ descriptor: Int32,
+            _ buffer: UnsafeRawBufferPointer
+        ) throws -> Int {
+            while true {
+                let base = buffer.baseAddress
+                let count = buffer.count
+                // SO_NOSIGPIPE (Darwin) / MSG_NOSIGNAL (Linux) suppress SIGPIPE on a peer RST.
+                #if canImport(Darwin)
+                    let written = write(descriptor, base, count)
+                #else
+                    let written = send(descriptor, base, count, Int32(MSG_NOSIGNAL))
+                #endif
+                if written >= 0 {
+                    return written
+                }
+                if errno == EINTR { continue }
+                if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlock() }
+                throw TransportError.ioFailed("write errno \(errno)")
+            }
+        }
+
+        // MARK: - Readiness (one-shot, on the loop)
+
+        private func awaitReadable() async throws {
+            try await withTaskCancellationHandler {
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Void, any Error>) in
+                    let once = OnceResumer(continuation)
+                    eventLoop.waitReadable(descriptor) { once.resume(returning: ()) }
+                }
+            } onCancel: {
+                closeDescriptor()
+            }
+        }
+
+        private func awaitWritable() async throws {
+            try await withTaskCancellationHandler {
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Void, any Error>) in
+                    let once = OnceResumer(continuation)
+                    eventLoop.waitWritable(descriptor) { once.resume(returning: ()) }
+                }
+            } onCancel: {
+                closeDescriptor()
+            }
         }
     }
 

@@ -35,6 +35,13 @@ public struct TransportConfiguration: Sendable {
     /// sane ceiling either way, replacing the former hard-coded 128 (audit T-F14).
     public var backlog: Int32
 
+    /// How many event loops the kqueue/epoll backbones shard across — one dedicated thread each, sharing
+    /// the port via `SO_REUSEPORT`, serving its connections inline (audit R4 — p50 parity under load).
+    ///
+    /// `nil` auto-sizes to the active processor count. `1` reproduces the single-loop behavior. Ignored
+    /// by the non-event-loop backbones (swiftSystem, Dispatch, Network.framework).
+    public var eventLoopCount: Int?
+
     /// Creates a transport configuration.
     public init(
         host: String = "127.0.0.1",
@@ -42,7 +49,8 @@ public struct TransportConfiguration: Sendable {
         backbone: TransportBackbone,
         tls: TransportTLS? = nil,
         reusePort: Bool = false,
-        backlog: Int32 = 1_024
+        backlog: Int32 = 1_024,
+        eventLoopCount: Int? = nil
     ) {
         self.host = host
         self.port = port
@@ -50,5 +58,6 @@ public struct TransportConfiguration: Sendable {
         self.tls = tls
         self.reusePort = reusePort
         self.backlog = backlog
+        self.eventLoopCount = eventLoopCount
     }
 }

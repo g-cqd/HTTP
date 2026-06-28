@@ -31,6 +31,11 @@
         /// The peer's address.
         public let peer: TransportAddress
 
+        /// The connection's own ``EpollEventLoop`` — a `TaskExecutor` — so the server pins this
+        /// connection's serve task to the loop and runs read → handler → write inline on the loop thread,
+        /// with no hop to the cooperative pool (audit R4).
+        public var preferredTaskExecutor: (any TaskExecutor)? { eventLoop }
+
         private let descriptor: Int32
         private let eventLoop: EpollEventLoop
         private let isClosed = Atomic<Bool>(false)
@@ -70,7 +75,7 @@
             let descriptor = self.descriptor
             let eventLoop = self.eventLoop
             return try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation { continuation in
+                try await withUnsafeThrowingContinuation { continuation in
                     let once = OnceResumer(continuation)
                     eventLoop.waitReadable(descriptor) {
                         Self.readAvailable(
@@ -90,8 +95,8 @@
         /// returning the count appended (`0` at EOF) — the allocation-free read path.
         public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
             let count = try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation {
-                    (continuation: CheckedContinuation<Int, any Error>) in
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Int, any Error>) in
                     readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
                 }
             } onCancel: {
@@ -144,8 +149,8 @@
             let descriptor = self.descriptor
             let eventLoop = self.eventLoop
             try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation {
-                    (continuation: CheckedContinuation<Void, any Error>) in
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Void, any Error>) in
                     let once = OnceResumer(continuation)
                     Self.writeRemaining(
                         bytes: bytes,

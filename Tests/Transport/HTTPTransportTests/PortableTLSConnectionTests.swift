@@ -49,14 +49,24 @@
             let serverDescriptor = descriptors[0]
             let clientDescriptor = descriptors[1]
 
-            // Server side: wrap the accepted descriptor in a PortableTLSConnection.
+            // Server side: wrap the accepted descriptor in a PortableTLSConnection driven through memory
+            // BIOs on a kqueue/epoll loop (audit R4 — event-driven, non-blocking).
+            POSIXSocket.setNonBlocking(serverDescriptor)
             let serverSSL = try #require(CHTTPBoringSSL_SSL_new(serverContext))
-            CHTTPBoringSSL_SSL_set_fd(serverSSL, serverDescriptor)
+            let readBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
+            let writeBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
+            CHTTPBoringSSL_SSL_set_bio(serverSSL, readBIO, writeBIO)
+            let loop = try TLSEventLoop()
+            loop.start()
+            defer { loop.stop() }
             let connection = PortableTLSConnection(
                 id: TransportConnectionID(1),
                 peer: TransportAddress(host: "127.0.0.1", port: 0),
                 ssl: serverSSL,
+                readBIO: readBIO,
+                writeBIO: writeBIO,
                 descriptor: serverDescriptor,
+                eventLoop: loop,
                 clientAuth: .none,
                 verifyPeer: nil
             )

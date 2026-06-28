@@ -2,31 +2,62 @@
 //  KqueueEventLoop.swift
 //  HTTPTransport
 //
-//  A minimal hand-rolled kqueue event loop: it watches descriptors for one-shot read/write
-//  readiness and invokes the registered handler on its background queue. This is the core that
-//  makes the kqueue backbone "closest to the hardware" — no GCD source, no DispatchIO.
+//  A hand-rolled kqueue event loop that is ALSO a `TaskExecutor` (audit R4 — tail-latency variance /
+//  p50 parity). One dedicated thread runs a real run loop that interleaves I/O readiness and task
+//  execution: each turn it `kevent`-waits for socket readiness, runs the ready read/write handlers,
+//  then drains the executor's task queue — all on the same thread. Pinning a connection's serve task
+//  to this loop (via `withTaskExecutorPreference`) therefore runs read → parse → route → respond →
+//  write **inline on the loop thread**, with no hop to the global cooperative pool. That hop is what
+//  cost the event-driven backbones their median vs the blocking swiftSystem backbone (which the kernel
+//  wakes directly on its read thread); removing it is how kqueue reaches swiftSystem's p50 while
+//  keeping a bounded thread count (so the p99/p99.9 tail stays tight). N loops (one per core) shard the
+//  work — see ``KqueueEventLoopGroup``.
 //
-//  Standards: kqueue()/kevent() are the BSD/Darwin readiness primitives (documented in the Darwin
-//  manuals, not POSIX); the descriptors they watch are POSIX.1-2017 TCP (RFC 9293) sockets.
+//  Cross-thread wakeups use an `EVFILT_USER` user event: enqueuing a job (or a close/stop) from another
+//  thread triggers it so the blocked `kevent` returns at once instead of waiting out the idle timeout.
+//
+//  Standards: kqueue()/kevent()/EVFILT_USER are the BSD/Darwin readiness primitives (Darwin manuals,
+//  not POSIX); the descriptors they watch are POSIX.1-2017 TCP (RFC 9293) sockets.
 //
 
 internal import Darwin
 internal import Dispatch
 internal import Synchronization
 
-/// A one-shot readiness multiplexer over `kqueue`/`kevent`.
-final class KqueueEventLoop: Sendable {
+/// A readiness multiplexer over `kqueue`/`kevent` that doubles as a `TaskExecutor` so work pinned to it
+/// runs inline on the loop thread (audit R4).
+final class KqueueEventLoop: Sendable, TaskExecutor {
     /// Disambiguates the Darwin `kevent` *struct* from the `kevent()` *function* (same C name).
     private typealias KEvent = kevent
 
     private let kq: Int32
-    private let queue = DispatchQueue(label: "http.transport.kqueue.loop")
+    /// Owns the single loop thread: ``start()`` submits one block that runs ``runLoop()`` for the loop's
+    /// lifetime. `.userInitiated` so the thread is scheduled promptly under CPU contention (a default-QoS
+    /// loop thread gets descheduled behind unrelated work — a p99/p99.9 jitter source).
+    private let thread = DispatchQueue(label: "http.transport.kqueue.loop", qos: .userInitiated)
     private let registry = Mutex<Registry>(Registry())
+    /// Work submitted from off-loop (executor jobs + control closures), drained each turn on the loop
+    /// thread.
+    ///
+    /// Separate from `registry` so enqueuing never contends with readiness bookkeeping.
+    private let inbox = Mutex<Inbox>(Inbox())
+
+    /// The `EVFILT_USER` identity used purely as a cross-thread wakeup (never a real fd).
+    private static let wakeIdent = UInt(0xFFFF_FFF0)
 
     private struct Registry {
         var readHandlers: [Int32: @Sendable () -> Void] = [:]
         var writeHandlers: [Int32: @Sendable () -> Void] = [:]
         var isRunning = true
+    }
+
+    private struct Inbox {
+        /// Continuations of tasks pinned to this loop, run on the loop thread (the no-hop hot path).
+        var jobs: [UnownedJob] = []
+        /// Out-of-band control work (close/cancel) that must run on the loop thread, serialized against
+        /// the readiness handlers so a close never races an in-flight read/write on the same fd.
+        var control: [@Sendable () -> Void] = []
+        var isEmpty: Bool { jobs.isEmpty && control.isEmpty }
     }
 
     init() throws {
@@ -44,34 +75,30 @@ final class KqueueEventLoop: Sendable {
         // No teardown beyond ARC.
     }
 
-    /// Starts the event loop on its background queue.
-    ///
-    /// Each poll re-schedules the next via `queue.async` rather than spinning a `while` that
-    /// monopolizes the serial queue — so out-of-band work submitted to the queue (notably
-    /// ``closeDescriptor(_:)``, which unblocks a cancelled receive) runs between polls instead of
-    /// being starved behind an endless loop.
+    /// Starts the run loop on its dedicated thread (one long-running block, not a re-scheduled poll).
     func start() {
-        scheduleNextPoll()
-    }
-
-    private func scheduleNextPoll() {
-        queue.async { [weak self] in
-            guard let self else {
-                return
-            }
-            guard registry.withLock(\.isRunning) else {
-                close(kq)
-                return
-            }
-            pollOnce()
-            scheduleNextPoll()
+        thread.async { [self] in
+            registerWakeup()
+            runLoop()
         }
     }
 
-    /// Stops the loop; it exits within one poll interval.
+    /// Stops the loop; the wakeup makes it exit this turn instead of waiting out the idle timeout.
     func stop() {
         registry.withLock { $0.isRunning = false }
+        triggerWakeup()
     }
+
+    // MARK: - TaskExecutor
+
+    /// Enqueues a pinned task's job to run on the loop thread next turn, then wakes the loop.
+    func enqueue(_ job: consuming ExecutorJob) {
+        let unowned = UnownedJob(job)
+        inbox.withLock { $0.jobs.append(unowned) }
+        triggerWakeup()
+    }
+
+    // MARK: - Readiness registration
 
     /// Registers one-shot interest in `fd` becoming readable; `handler` runs once when it does.
     func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) {
@@ -85,51 +112,73 @@ final class KqueueEventLoop: Sendable {
         register(fd: fd, filter: EVFILT_WRITE)
     }
 
-    /// Drops any pending interest in `fd` and closes it on the loop's queue, so a close never races
-    /// an in-flight handler and the fd number cannot be reused under one.
+    /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races an
+    /// in-flight handler and the fd number cannot be reused under one.
     func closeDescriptor(_ fd: Int32) {
-        queue.async { [self] in
-            let (readHandler, writeHandler) = registry.withLock {
-                ($0.readHandlers.removeValue(forKey: fd), $0.writeHandlers.removeValue(forKey: fd))
+        inbox.withLock {
+            $0.control.append { [self] in
+                let (readHandler, writeHandler) = registry.withLock {
+                    (
+                        $0.readHandlers.removeValue(forKey: fd),
+                        $0.writeHandlers.removeValue(forKey: fd)
+                    )
+                }
+                close(fd)
+                // Resume any waiter parked on this fd so a cancelled (or otherwise closed) receive/send
+                // does not leak its continuation: invoked after `close`, the handler's read/write hits
+                // EBADF and resumes with an error instead of hanging (the cancel-deadlock the
+                // backbone-conformance suite guards).
+                readHandler?()
+                writeHandler?()
             }
-            close(fd)
-            // Resume any waiter parked on this fd so a cancelled (or otherwise closed) receive/send
-            // does not leak its continuation forever: invoked after `close`, the handler's read/write
-            // hits EBADF and resumes with an error instead of hanging. Without this, cancelling a
-            // stalled kqueue receive deadlocks — the bug the backbone-conformance suite surfaced.
-            readHandler?()
-            writeHandler?()
         }
+        triggerWakeup()
     }
 
-    private func register(fd: Int32, filter: Int32) {
-        var event = KEvent(
-            ident: UInt(fd),
-            filter: Int16(filter),
-            flags: UInt16(EV_ADD | EV_ONESHOT),
-            fflags: 0,
-            data: 0,
-            udata: nil
-        )
-        _ = kevent(kq, &event, 1, nil, 0, nil)
+    // MARK: - The run loop
+
+    private func runLoop() {
+        var events = [KEvent](repeating: KEvent(), count: 256)
+        while registry.withLock(\.isRunning) {
+            // Wait for readiness, but return at once (timeout 0) when work is already queued so pinned
+            // continuations are not delayed behind the idle poll. The idle timeout (50 ms) only bounds
+            // shutdown latency on a quiet loop; a wakeup pre-empts it.
+            let idle = inbox.withLock(\.isEmpty)
+            var timeout = timespec(tv_sec: 0, tv_nsec: idle ? 50_000_000 : 0)
+            let count = events.withUnsafeMutableBufferPointer { buffer in
+                kevent(kq, nil, 0, buffer.baseAddress, Int32(buffer.count), &timeout)
+            }
+            if count > 0 {
+                for index in 0 ..< Int(count) {
+                    let event = events[index]
+                    if Int32(event.filter) == EVFILT_USER {
+                        continue  // a bare wakeup — its only job was to return us from `kevent`
+                    }
+                    dispatch(event)
+                }
+            }
+            // Drain control + jobs until the loop is idle again: a read handler resumes a pinned
+            // continuation (→ a job), whose handler runs here and may chain straight into write / the
+            // next read, all inline on this thread, until the connection finally blocks on I/O.
+            while !inbox.withLock(\.isEmpty), registry.withLock(\.isRunning) {
+                drainInbox()
+            }
+        }
+        close(kq)
     }
 
-    /// Polls once for readiness (a bounded `kevent` wait) and dispatches any ready handlers, then
-    /// returns so the queue can run pending out-of-band work before the next poll.
-    private func pollOnce() {
-        // 50 ms bounds the latency of out-of-band work (close/cancel) and of shutdown; readiness
-        // wakes the poll immediately, so this timeout only caps the idle path, not throughput.
-        var timeout = timespec(tv_sec: 0, tv_nsec: 50_000_000)
-        var events = [KEvent](repeating: KEvent(), count: 64)
-        let count = events.withUnsafeMutableBufferPointer { buffer in
-            kevent(kq, nil, 0, buffer.baseAddress, Int32(buffer.count), &timeout)
+    private func drainInbox() {
+        let (jobs, control) = inbox.withLock { inbox -> ([UnownedJob], [@Sendable () -> Void]) in
+            let taken = (inbox.jobs, inbox.control)
+            inbox.jobs.removeAll(keepingCapacity: true)
+            inbox.control.removeAll(keepingCapacity: true)
+            return taken
         }
-        // count: 0 = timeout, < 0 = EINTR/error — the next poll retries.
-        guard count > 0 else {
-            return
+        for closure in control {
+            closure()
         }
-        for index in 0 ..< Int(count) {
-            dispatch(events[index])
+        for job in jobs {
+            job.runSynchronously(on: asUnownedTaskExecutor())
         }
     }
 
@@ -145,5 +194,46 @@ final class KqueueEventLoop: Sendable {
             return nil
         }
         handler?()
+    }
+
+    private func register(fd: Int32, filter: Int32) {
+        var event = KEvent(
+            ident: UInt(fd),
+            filter: Int16(filter),
+            flags: UInt16(EV_ADD | EV_ONESHOT),
+            fflags: 0,
+            data: 0,
+            udata: nil
+        )
+        _ = kevent(kq, &event, 1, nil, 0, nil)
+        // If the registration came from off-loop while the loop is parked in `kevent`, wake it so the
+        // new interest is honored this turn. From the loop thread itself this is a cheap no-op trigger.
+        triggerWakeup()
+    }
+
+    /// Adds the `EVFILT_USER` wakeup source once, at loop start (`EV_CLEAR` = auto-reset each delivery).
+    private func registerWakeup() {
+        var event = KEvent(
+            ident: Self.wakeIdent,
+            filter: Int16(EVFILT_USER),
+            flags: UInt16(EV_ADD | EV_CLEAR),
+            fflags: 0,
+            data: 0,
+            udata: nil
+        )
+        _ = kevent(kq, &event, 1, nil, 0, nil)
+    }
+
+    /// Fires the `EVFILT_USER` source so a blocked `kevent` returns immediately (thread-safe).
+    private func triggerWakeup() {
+        var event = KEvent(
+            ident: Self.wakeIdent,
+            filter: Int16(EVFILT_USER),
+            flags: 0,
+            fflags: UInt32(NOTE_TRIGGER),
+            data: 0,
+            udata: nil
+        )
+        _ = kevent(kq, &event, 1, nil, 0, nil)
     }
 }

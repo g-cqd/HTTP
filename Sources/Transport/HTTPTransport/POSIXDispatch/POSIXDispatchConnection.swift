@@ -68,8 +68,8 @@ public final class POSIXDispatchConnection: TransportConnection {
     public func receive(maxLength: Int) async throws -> [UInt8]? {
         let fd = descriptor
         return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<[UInt8]?, any Error>) in
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
                 let once = OnceResumer(continuation)
                 queue.async { [self] in
                     guard !isClosed.load(ordering: .acquiring) else {
@@ -125,8 +125,8 @@ public final class POSIXDispatchConnection: TransportConnection {
         }
         let fd = descriptor
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, any Error>) in
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
                 let once = OnceResumer(continuation)
                 queue.async { [self] in
                     guard !isClosed.load(ordering: .acquiring) else {

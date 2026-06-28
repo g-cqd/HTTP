@@ -26,6 +26,11 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// The peer's address.
     public let peer: TransportAddress
 
+    /// The connection's own ``KqueueEventLoop`` — a `TaskExecutor` — so the server pins this
+    /// connection's serve task to the loop and runs read → handler → write inline on the loop thread,
+    /// with no hop to the cooperative pool (audit R4).
+    public var preferredTaskExecutor: (any TaskExecutor)? { eventLoop }
+
     private let descriptor: Int32
     private let eventLoop: KqueueEventLoop
     private let isClosed = Atomic<Bool>(false)
@@ -67,7 +72,7 @@ public final class POSIXKqueueConnection: TransportConnection {
         let descriptor = self.descriptor
         let eventLoop = self.eventLoop
         return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            try await withUnsafeThrowingContinuation { continuation in
                 let once = OnceResumer(continuation)
                 eventLoop.waitReadable(descriptor) {
                     Self.readAvailable(
@@ -88,8 +93,8 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// in the readiness callback; the awaiting task then copies just the received bytes into `buffer`.
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
         let count = try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Int, any Error>) in
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Int, any Error>) in
                 readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
             }
         } onCancel: {
@@ -144,8 +149,8 @@ public final class POSIXKqueueConnection: TransportConnection {
         let descriptor = self.descriptor
         let eventLoop = self.eventLoop
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, any Error>) in
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
                 let once = OnceResumer(continuation)
                 Self.writeRemaining(
                     bytes: bytes,

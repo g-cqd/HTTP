@@ -26,9 +26,32 @@ public enum TransportBackbone: String, Sendable, CaseIterable {
     /// BSD sockets with GCD `DispatchSource` readiness (kqueue under the hood, less hand-rolled).
     case posixDispatch
 
-    /// apple/swift-system typed descriptor wrappers over the POSIX socket syscalls.
+    /// apple/swift-system typed `FileDescriptor` wrappers over the POSIX socket syscalls — **event-driven**
+    /// over the shared kqueue loop (audit R4), the swift-system-typed twin of ``posixKqueue``.
+    ///
+    /// Originally a blocking thread-per-connection reference (fast median, but a fat p99/p99.9 tail from
+    /// thread oversubscription — ~68 threads for 64 connections on 8 cores), it was converted to
+    /// non-blocking `FileDescriptor` I/O driven by the same N-sharded, executor-pinned event loop as
+    /// ``posixKqueue``, so it now shares that backbone's median **and** tight tail; it differs only in
+    /// doing its syscalls through swift-system's typed API.
     case swiftSystem
 
     /// In-memory transport for deterministic tests (no sockets).
     case fake
+
+    /// The recommended general-purpose backbone for the current platform: the event-driven,
+    /// "closest to the hardware" readiness loop — ``posixKqueue`` on Darwin, ``posixEpoll`` on Linux —
+    /// sharded one loop per core with each connection's serve task pinned to its loop (audit R4), so the
+    /// median rivals an inline blocking read while a bounded thread count keeps the tail tight.
+    ///
+    /// (``swiftSystem`` is the same event-driven, sharded, pinned model over swift-system's typed
+    /// `FileDescriptor`, so it performs equivalently.) TLS — and thus h2-over-TLS / h3 — is a separate
+    /// axis: use ``networkFramework`` or ``portableTLS`` when a secure listener is needed.
+    public static var recommended: Self {
+        #if canImport(Glibc)
+            .posixEpoll
+        #else
+            .posixKqueue
+        #endif
+    }
 }

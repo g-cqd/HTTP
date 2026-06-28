@@ -34,9 +34,13 @@
             "required client-auth surfaces the presented client certificate subject",
             .timeLimit(.minutes(1)))
         func requiredSurfacesSubject() async throws {
+            // RFC 8446 §4.4.2.4: a presented client certificate MUST be validated. This backbone defers
+            // that validation to the `verifyPeer` hook (the TLS layer is permissive — G3 "the hook is the
+            // policy"), so a *surfacing* test must supply the validator; without one, an unvalidated cert
+            // is conformantly rejected (the secure fail-closed default `verifyPeer?(chain) ?? false`).
             try await Self.expectSubject(
                 clientAuth: .required, commonName: "portable-required-client"
-            )
+            ) { _ in true }
         }
 
         @Test(
@@ -85,9 +89,11 @@
                 "optional client-auth surfaces a presented client certificate subject",
                 .timeLimit(.minutes(1)))
             func optionalSurfacesSubject() async throws {
+                // RFC 8446 §4.4.2.4 — see `requiredSurfacesSubject`: validation is the `verifyPeer` hook's
+                // job here, so a surfacing test supplies it; a nil hook conformantly rejects a presented cert.
                 try await Self.expectSubject(
                     clientAuth: .optional, commonName: "portable-optional-client"
-                )
+                ) { _ in true }
             }
         #endif
 

@@ -24,9 +24,15 @@ public final class POSIXDispatchTransport: ServerTransport {
     public let backbone: TransportBackbone = .posixDispatch
 
     private let configuration: TransportConfiguration
-    private let acceptQueue = DispatchQueue(label: "http.transport.posix-dispatch.accept")
+    private let acceptQueue = DispatchQueue(
+        label: "http.transport.posix-dispatch.accept",
+        qos: .userInitiated
+    )
+    // `.userInitiated` so readiness worker threads are scheduled promptly under CPU contention — at
+    // default QoS the pool's threads get descheduled behind unrelated work (a p99/p99.9 jitter source).
     private let ioQueue = DispatchQueue(
         label: "http.transport.posix-dispatch.io",
+        qos: .userInitiated,
         attributes: .concurrent
     )
     private let state = Mutex<State>(State())
@@ -142,6 +148,7 @@ public final class POSIXDispatchTransport: ServerTransport {
             // the fd), while still spreading connections across the pool's threads.
             let connectionQueue = DispatchQueue(
                 label: "http.transport.posix-dispatch.conn",
+                qos: .userInitiated,
                 target: ioQueue
             )
             continuation.yield(

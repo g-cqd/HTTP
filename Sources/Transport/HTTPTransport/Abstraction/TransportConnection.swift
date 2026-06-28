@@ -59,6 +59,15 @@ public protocol TransportConnection: Sendable {
 
     /// Closes the connection gracefully, flushing any pending output.
     func close() async
+
+    /// The task executor this connection's serve task should prefer, or `nil` to use the global
+    /// cooperative pool.
+    ///
+    /// An event-loop backbone returns **its own loop** (a `TaskExecutor`): pinning the serve task to it
+    /// runs read → parse → route → respond → write **inline on the loop thread**, with no hop to the
+    /// cooperative pool — the median-latency parity path with the blocking backbone, which the kernel
+    /// wakes directly on its read thread (audit R4). `nil` (the default) keeps the prior behavior.
+    var preferredTaskExecutor: (any TaskExecutor)? { get }
 }
 
 extension TransportConnection {
@@ -72,6 +81,11 @@ extension TransportConnection {
     /// No client certificate by default; a TLS backbone doing mutual TLS overrides this once the
     /// handshake settles.
     public var tlsPeerSubject: String? { nil }
+
+    /// No executor preference by default — the serve task runs on the global cooperative pool.
+    ///
+    /// The kqueue/epoll backbones override this to return their loop so the serve task runs inline on it.
+    public var preferredTaskExecutor: (any TaskExecutor)? { nil }
 
     /// Default ``receive(into:maxLength:)``: read one chunk via ``receive(maxLength:)`` and append it.
     ///
