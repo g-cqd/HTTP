@@ -218,4 +218,14 @@ struct HPACKDecoderTests {
         #expect(try decode(&decoder, [0x20]).isEmpty)  // 0x20 = size update to 0
         #expect(decoder.dynamicTable.maxSize == 0)
     }
+
+    @Test("at most two consecutive size updates are accepted; a third is rejected (§4.2)")
+    func boundsSizeUpdateRun() throws {
+        var ok = HPACKDecoder(maxDynamicTableSize: 4_096)
+        #expect(try decode(&ok, [0x20, 0x20]).isEmpty)  // two updates before any field are allowed
+        var flood = HPACKDecoder(maxDynamicTableSize: 4_096)
+        #expect(throws: HPACKError.invalidTableSizeUpdate) {
+            try decode(&flood, [0x20, 0x20, 0x20])  // a third is an eviction-churn vector
+        }
+    }
 }

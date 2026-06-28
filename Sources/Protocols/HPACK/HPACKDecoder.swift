@@ -36,6 +36,7 @@ public struct HPACKDecoder {
         var reader = ByteReader(block)
         var fields: [HPACKField] = []
         var decodedSize = 0
+        var sizeUpdates = 0
         while let first = reader.peek() {
             if first & 0x80 != 0 {
                 fields.append(try decodeIndexed(&reader))
@@ -44,8 +45,11 @@ public struct HPACKDecoder {
                 fields.append(try decodeLiteral(&reader, prefixBits: 6, addToTable: true))
             }
             else if first & 0x20 != 0 {
-                // A dynamic table size update MUST precede any field in the block (RFC 7541 §4.2).
+                // A dynamic table size update MUST precede any field in the block, and at most two may
+                // appear (RFC 7541 §4.2); a longer run is an eviction-churn vector — reject the third.
                 guard fields.isEmpty else { throw .invalidTableSizeUpdate }
+                sizeUpdates += 1
+                guard sizeUpdates <= 2 else { throw .invalidTableSizeUpdate }
                 try decodeSizeUpdate(&reader)
                 continue
             }
