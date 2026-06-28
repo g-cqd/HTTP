@@ -4,20 +4,19 @@
 //
 //  Tamper-proof session identity via a signed cookie (RFC 6265bis + RFC 9110). The cookie carries a
 //  random session id and an HMAC-SHA256 tag over it (`<id>.<base64url(mac)>`); on each request the tag
-//  is verified in constant time (CryptoKit), so a client cannot forge or alter the id. A valid session
+//  is verified in constant time (``HMACSHA256``), so a client cannot forge or alter the id. A valid session
 //  continues untouched; an absent or tampered one is replaced with a fresh signed `Set-Cookie`
 //  (`HttpOnly`, `SameSite=Lax`). The verified bare id is asserted onto the request as `X-Session-ID` for
 //  the handler — any client-supplied value is stripped, so the handler only ever sees a server-verified
 //  id. Stateless: the signed cookie is the whole session, so it needs no server-side store.
 //
 
-internal import CryptoKit
 internal import Foundation
 public import HTTPCore
 
 /// Issues and verifies HMAC-signed session cookies, exposing the verified id as `X-Session-ID`.
 public struct SessionMiddleware: HTTPMiddleware {
-    private let key: SymmetricKey
+    private let key: [UInt8]
     private let cookieName: String
     private let maxAge: Int?
     private let isSecure: Bool
@@ -34,7 +33,7 @@ public struct SessionMiddleware: HTTPMiddleware {
         isSecure: Bool = true,
         generate: @escaping @Sendable () -> String = Self.randomID
     ) {
-        self.key = SymmetricKey(data: Data(key))
+        self.key = key
         self.cookieName = cookieName
         self.maxAge = maxAge
         self.isSecure = isSecure
@@ -77,14 +76,14 @@ public struct SessionMiddleware: HTTPMiddleware {
             return nil
         }
         let id = String(parts[0])
-        let message = Data(id.utf8)
-        let valid = HMAC<SHA256>.isValidAuthenticationCode(mac, authenticating: message, using: key)
+        let expected = HMACSHA256.authenticationCode(key: key, message: Array(id.utf8))
+        let valid = HMACSHA256.constantTimeEquals(Array(mac), expected)
         return valid ? id : nil
     }
 
     /// Signs `id` as `<id>.<base64url(HMAC-SHA256(id))>`.
     private func sign(_ id: String) -> String {
-        let mac = HMAC<SHA256>.authenticationCode(for: Data(id.utf8), using: key)
+        let mac = HMACSHA256.authenticationCode(key: key, message: Array(id.utf8))
         return id + "." + Self.base64urlEncode(Data(mac))
     }
 

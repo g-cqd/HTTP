@@ -7,7 +7,6 @@
 //  whose `Sec-WebSocket-Accept` is base64(SHA-1(key ‖ GUID)). No I/O; runs once per connection.
 //
 
-internal import CryptoKit
 internal import Foundation
 public import HTTPCore
 
@@ -78,9 +77,7 @@ public enum WebSocketHandshake {
 
     /// `Sec-WebSocket-Accept` for a client key: base64(SHA-1(key ‖ GUID)) (RFC 6455 §4.2.2).
     public static func accept(for key: String) -> String {
-        var hasher = Insecure.SHA1()
-        hasher.update(data: Data((key + guid).utf8))
-        return Data(hasher.finalize()).base64EncodedString()
+        Data(SHA1.hash(Array((key + guid).utf8))).base64EncodedString()
     }
 
     /// Whether `fields[name]` offers `token`, case-insensitively, within its comma-separated list

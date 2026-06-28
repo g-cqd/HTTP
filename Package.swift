@@ -41,6 +41,43 @@ let strictSwiftSettings: [SwiftSetting] = [
     .enableExperimentalFeature("Lifetimes")
 ]
 
+// G0 — the Darwin-only transport backbones are absent from the Linux build graph, where the portable
+// `POSIXEpoll` backbone takes over (the `POSIXSocket` floor, the `PortableTLS` seam, and the `Fake`
+// backbone stay cross-platform). `kqueue(2)`, Network.framework (and its QUIC), the Dispatch-sources and
+// swift-system backbones all need Darwin/Network, so they are excluded per-platform here rather than
+// `#if`-wrapped file-by-file (which would re-indent every body and overflow the line limit); the
+// `TransportFactory` cases that name these types are guarded by matching `#if canImport(Darwin)` /
+// `#if canImport(Network)`. `#if os(Linux)` is evaluated for the host running SwiftPM — which, since the
+// package is built natively per platform and never cross-compiled, is the target platform.
+#if os(Linux)
+    let darwinOnlyTransportSources = [
+        "Network",  // Network.framework backbone (3 files)
+        "POSIXKqueue",  // kqueue(2) backbone (3 files)
+        "SwiftSystem",  // swift-system + Darwin backbone (2 files)
+        "POSIXDispatch/POSIXDispatchConnection.swift",
+        "POSIXDispatch/POSIXDispatchTransport.swift",
+        "Quic/LegacyQUICConnection.swift",
+        "Quic/LegacyQUICStream.swift",
+        "Quic/LegacyQUICTransport.swift",
+        "Quic/ModernQUICConnection.swift",
+        "Quic/ModernQUICStream.swift",
+        "Quic/ModernQUICTransport.swift",
+        "Quic/QUICTransportFactory.swift"
+    ]
+    // The outbound/inbound codings built on Apple's `Compression` framework (Brotli RFC 7932, gzip
+    // RFC 1952, inflate) — absent on Linux, where the `CompressionMiddleware`/`DecompressionMiddleware`
+    // gate them off `#if canImport(Compression)` and zstd (the `CZstd` shim, `HTTP_ZSTD`) is the
+    // cross-platform coding. zlib-gzip + `libbrotli` for Linux are a G0 follow-up.
+    let appleCompressionSources = [
+        "Middleware/Brotli.swift",
+        "Middleware/Gzip.swift",
+        "Middleware/Inflate.swift"
+    ]
+#else
+    let darwinOnlyTransportSources: [String] = []
+    let appleCompressionSources: [String] = []
+#endif
+
 let package = Package(
     name: "HTTP",
     platforms: [
@@ -239,6 +276,10 @@ let package = Package(
             dependencies: ["WebSocket", "HTTPTestSupport"],
             path: "Tests/Protocols/WebSocketTests"
         ),
+        // G0 — a C shim re-exporting Linux `<sys/epoll.h>` (the platform `Glibc` module surfaces none of
+        // epoll), consumed only by the `POSIXEpoll` backbone. Header-guarded `#if __linux__` (inert
+        // elsewhere) and depended on only `.when(platforms: [.linux])`, so it never enters the apple graph.
+        .target(name: "CEpoll", path: "Sources/Transport/CEpoll"),
         // M3 — the I/O boundary. Four switchable backbones (Network.framework + three POSIX-level
         // variants) behind one abstraction, each isolated in its own subfolder. The only target
         // that performs I/O; the sans-I/O engines never depend on it.
@@ -247,9 +288,11 @@ let package = Package(
             dependencies: [
                 "HTTPCore",
                 "HTTPConcurrency",
-                .product(name: "SystemPackage", package: "swift-system")
+                .product(name: "SystemPackage", package: "swift-system"),
+                .target(name: "CEpoll", condition: .when(platforms: [.linux]))
             ],
-            path: "Sources/Transport/HTTPTransport"
+            path: "Sources/Transport/HTTPTransport",
+            exclude: darwinOnlyTransportSources
         ),
         .testTarget(
             name: "HTTPTransportTests",
@@ -265,7 +308,8 @@ let package = Package(
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
                 "HTTPConcurrency"
             ],
-            path: "Sources/Server/HTTPServer"
+            path: "Sources/Server/HTTPServer",
+            exclude: appleCompressionSources
         ),
         .testTarget(
             name: "HTTPServerTests",
@@ -347,7 +391,7 @@ let package = Package(
 // var so downstream consumers' builds stay green.
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
-for target in package.targets where !["CHTTPTestMalloc", "CCRC32"].contains(target.name) {
+for target in package.targets where !["CHTTPTestMalloc", "CCRC32", "CEpoll"].contains(target.name) {
     var settings = (target.swiftSettings ?? []) + strictSwiftSettings
     if treatWarningsAsErrors {
         settings.append(.treatAllWarnings(as: .error))

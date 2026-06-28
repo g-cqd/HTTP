@@ -39,3 +39,44 @@ discipline). Recommended landing order (per the gap-closing roadmap G0 gate): (a
 cleartext suite green on Linux, (b) portable TLS + h2/WS-over-TLS green on Linux (the vendored BoringSSL
 is ready), (c) the `ubuntu-latest` CI job + the cross-platform support matrix. HTTP/3 stays Darwin-only
 in v1 (QUIC is Network.framework-provided).
+
+## Verification — 2026-06-28 (apple/container · Swift 6.5-dev / Ubuntu noble · aarch64)
+
+The survey was validated on a real Linux toolchain: Apple's `container` runtime running the
+`swiftlang/swift:nightly-noble` image (Swift 6.5-dev accepts the package's `swift-tools-version: 6.4`;
+no stable `swift:6.4` image exists yet). Dependencies were seeded offline from the macOS-resolved
+`.build/checkouts` (the lightweight-VM NAT throttles `git clone`, aborting on `http.lowSpeedLimit`), and
+the build used a container-internal scratch path so the macOS `.build` was never clobbered. The VM was
+given 8 GB RAM — a 1 GB default OOM-thrashes `swift-frontend` and wedges the runtime.
+
+**Result: the whole library *and* `httpd-example` build on Linux, and the epoll backbone serves real
+HTTP/1.1 end to end.** Running `httpd-example` on the Linux-default `posixEpoll` backbone answered
+`GET /`, `GET /health`, `GET /hello/:name` (path parameters), and `POST /echo` (request body) with `200`s
+and the full middleware chain (ETag, CORS, security headers, Date) — i.e. bind/accept/read/write over
+`epoll(7)`, the ported `POSIXSocket`, the HTTP/1.1 engine, the `Router`, and middleware all working.
+
+The survey's "Linux-ready except the I/O floor" was **optimistic**: beyond the transport, several
+upper-layer couplings only surfaced once compiled for real. Each was fixed portably and re-validated by
+the 950-test macOS suite (unchanged):
+
+| Gap (found on first Linux compile) | Fix |
+|---|---|
+| `epoll(7)` absent from Swift's `Glibc` module (no `epoll_event` / `epoll_create1` / `EPOLL*`) | New `CEpoll` C shim re-exporting `<sys/epoll.h>`, depended on `.when(platforms: [.linux])`. |
+| `POSIXSocket`: `SOCK_STREAM` imports as the `__socket_type` enum, `IPPROTO_TCP` as `Int` on Glibc | `Int32(SOCK_STREAM.rawValue)` (Linux branch); `Int32(IPPROTO_TCP)` (portable). |
+| `epoll_wait` buffer pointer is non-optional on Linux; `send` shadowed by the instance method | `guard let base = buffer.baseAddress`; `Glibc.send(...)`. |
+| `WebSocketHandshake` used CryptoKit (`Insecure.SHA1`) | Pure-Swift `SHA1` (FIPS 180-4) on both platforms; RFC 6455 §1.3 vector test passes. |
+| `SessionMiddleware` used CryptoKit (`HMAC<SHA256>`) for signed cookies | Pure-Swift `SHA256` + `HMACSHA256` (RFC 2104), constant-time compare; both platforms. |
+| `FileResponder` used `UniformTypeIdentifiers` (`UTType`) for MIME | Gated: `UTType` on Apple, a built-in web MIME table on Linux. |
+| `Compression` framework (Brotli/gzip/inflate) is Apple-only | Gated `#if canImport(Compression)`; on Linux zstd (`CZstd`, `HTTP_ZSTD`) is the cross-platform coding. |
+
+The Darwin/Network backbones (kqueue, Network.framework + QUIC, Dispatch, swift-system) are excluded from
+the Linux build graph per-platform in `Package.swift`; the `TransportFactory` cases that name them are
+guarded by matching `#if canImport(Darwin)` / `#if canImport(Network)`.
+
+### Remaining G0 follow-ups (do not block the Linux build)
+- **Linux test suite + CI:** the test target still has Darwin-only test files (Network/kqueue/QUIC
+  backbone tests) to gate before `swift test` runs on Linux; then an `ubuntu-latest` CI job.
+- **Vendored BoringSSL on Linux** (`HTTP_PORTABLE_TLS`): `PortableTLS*` still `import Darwin` and need a
+  Darwin→Glibc port before the gated TLS suite runs on Linux (the vendored tree itself carries Linux asm).
+- **Linux content codings:** gzip via the already-linked zlib and Brotli via `libbrotli`, so Linux gets
+  gzip/br out (and inbound decoders), not only zstd.

@@ -11,20 +11,76 @@ public enum TransportFactory {
     public static func make(_ configuration: TransportConfiguration) -> any ServerTransport {
         switch configuration.backbone {
             case .networkFramework:
-                NetworkFrameworkTransport(configuration: configuration)
+                makeNetworkFramework(configuration)
             case .portableTLS:
                 makePortableTLS(configuration)
             case .posixKqueue:
-                POSIXKqueueTransport(configuration: configuration)
+                makePOSIXKqueue(configuration)
             case .posixEpoll:
                 makePOSIXEpoll(configuration)
             case .posixDispatch:
-                POSIXDispatchTransport(configuration: configuration)
+                makePOSIXDispatch(configuration)
             case .swiftSystem:
-                SwiftSystemTransport(configuration: configuration)
+                makeSwiftSystem(configuration)
             case .fake:
                 FakeTransport()
         }
+    }
+
+    /// The Network.framework backbone (the only h3/QUIC path) — available only on Apple platforms.
+    ///
+    /// Excluded from the Linux build graph (no Network.framework); selecting it off Apple platforms is a
+    /// configuration error — it traps with a clear message rather than silently degrading.
+    private static func makeNetworkFramework(
+        _ configuration: TransportConfiguration
+    ) -> any ServerTransport {
+        #if canImport(Network)
+            return NetworkFrameworkTransport(configuration: configuration)
+        #else
+            preconditionFailure("the .networkFramework backbone requires Apple's Network.framework")
+        #endif
+    }
+
+    /// The BSD-sockets + `kqueue(2)` backbone — available only on Darwin (Linux uses `.posixEpoll`).
+    ///
+    /// Excluded from the Linux build graph; selecting it off Darwin is a configuration error — it traps
+    /// with a clear message rather than silently degrading to another backbone.
+    private static func makePOSIXKqueue(
+        _ configuration: TransportConfiguration
+    ) -> any ServerTransport {
+        #if canImport(Darwin)
+            return POSIXKqueueTransport(configuration: configuration)
+        #else
+            preconditionFailure("the .posixKqueue backbone is Darwin-only (Linux uses .posixEpoll)")
+        #endif
+    }
+
+    /// The BSD-sockets + Dispatch-sources backbone — available only on Darwin (Linux uses `.posixEpoll`).
+    ///
+    /// Excluded from the Linux build graph; selecting it off Darwin is a configuration error — it traps
+    /// with a clear message rather than silently degrading to another backbone.
+    private static func makePOSIXDispatch(
+        _ configuration: TransportConfiguration
+    ) -> any ServerTransport {
+        #if canImport(Darwin)
+            return POSIXDispatchTransport(configuration: configuration)
+        #else
+            preconditionFailure("the .posixDispatch backbone is Darwin-only (use .posixEpoll)")
+        #endif
+    }
+
+    /// The swift-system file-descriptor backbone — available only on Darwin (Linux uses `.posixEpoll`).
+    ///
+    /// Excluded from the Linux build graph; selecting it off Darwin is a configuration error — it traps
+    /// with a clear message rather than silently degrading to another backbone.
+    private static func makeSwiftSystem(
+        _ configuration: TransportConfiguration
+    ) -> any ServerTransport {
+        #if canImport(Darwin)
+            return SwiftSystemTransport(configuration: configuration)
+        #else
+            preconditionFailure("the .swiftSystem backbone is Darwin-only (Linux uses .posixEpoll)")
+        #endif
     }
 
     /// The portable libssl TLS backbone (ADR 0004), available only in the opt-in build.
@@ -48,7 +104,7 @@ public enum TransportFactory {
     ///
     /// Compiled only where `Glibc` is importable; selecting ``TransportBackbone/posixEpoll`` off Linux
     /// is a configuration error — it traps with a clear message rather than silently degrading.
-    /// **WIP — the backbone is not yet verified on a Linux toolchain (see `EpollEventLoop`).**
+    /// Verified on Linux (Swift 6.5-dev / Ubuntu noble); see ``EpollEventLoop``.
     private static func makePOSIXEpoll(
         _ configuration: TransportConfiguration
     ) -> any ServerTransport {

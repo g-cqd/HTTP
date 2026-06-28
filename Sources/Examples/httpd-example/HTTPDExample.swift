@@ -29,6 +29,10 @@ import HTTPTransport
 import Synchronization
 import WebSocket
 
+#if canImport(Glibc)
+    import Glibc  // signal()/getpid() — on Darwin these come via Foundation's re-export
+#endif
+
 @main
 enum HTTPDExample {
     static func main() async {
@@ -74,8 +78,12 @@ enum HTTPDExample {
         // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
         // QUIC/TLS); the server advertises it via Alt-Svc (RFC 7838) on the h1/h2 responses so a
         // browser upgrades to h3 on the next request.
-        let quicTransport: (any QUICServerTransport)? =
-            tls != nil ? QUICTransportFactory.make(configuration) : nil
+        #if canImport(Network)
+            let quicTransport: (any QUICServerTransport)? =
+                tls != nil ? QUICTransportFactory.make(configuration) : nil
+        #else
+            let quicTransport: (any QUICServerTransport)? = nil  // QUIC is Network.framework-only
+        #endif
         let server = HTTPServer(
             transport: TransportFactory.make(configuration),
             responder: responder,
@@ -242,7 +250,12 @@ enum HTTPDExample {
         // tail-latency-sensitive workloads prefer the async posixKqueue/posixDispatch backbones (lower
         // p99, no thread-per-connection). TLS — and therefore h2-over-TLS and h3 — is honored only by
         // Network.framework, so fall back to it whenever TLS is requested.
-        return arguments.contains("tls") ? .networkFramework : .swiftSystem
+        #if canImport(Network)
+            return arguments.contains("tls") ? .networkFramework : .swiftSystem
+        #else
+            // Linux: the Darwin/Network backbones are absent; `posixEpoll` is the I/O floor (G0).
+            return .posixEpoll
+        #endif
     }
 
     /// A throwaway self-signed TLS identity when `tls` appears in the arguments (dev/test only).

@@ -7,10 +7,9 @@
 //  event drains pending connections with accept() and re-arms, and every connection's I/O is driven by
 //  the same loop. Reuses the shared (now portable) ``POSIXSocket`` plumbing.
 //
-//  ⚠️ WIP — NOT YET BUILT OR TESTED ON LINUX (gated `#if canImport(Glibc)`; see ``EpollEventLoop``).
-//  This is the remaining G0 deliverable — the rest of the stack (engines, Foundation surface,
-//  Synchronization, vendored-BoringSSL TLS, test fixtures) is already Linux-ready per the
-//  Linux-readiness audit; it must be verified under a Linux toolchain / CI before it is trusted.
+//  Verified on Linux (Swift 6.5-dev, Ubuntu noble, aarch64) via apple/container — gated
+//  `#if canImport(Glibc)`; see ``EpollEventLoop``. With this backbone the library builds and
+//  `httpd-example` serves real HTTP/1.1 end to end on Linux: the G0 I/O floor is delivered.
 //
 //  Standards: socket()/bind()/listen()/accept() per POSIX.1-2017 (IEEE Std 1003.1-2017); TCP (RFC 9293)
 //  over IPv4 (RFC 791) / IPv6 (RFC 4291). Readiness via Linux epoll(7).

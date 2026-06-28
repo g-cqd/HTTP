@@ -146,13 +146,23 @@ public struct CompressionMiddleware: HTTPMiddleware {
     private func compress(_ body: [UInt8], with coding: Coding) -> [UInt8]? {
         switch coding {
             case .br:
-                return Brotli.compress(body)
+                #if canImport(Compression)
+                    return Brotli.compress(body)
+                #else
+                    // No Brotli encoder where Apple's Compression is absent (Linux, gap G0).
+                    return nil
+                #endif
             #if canImport(CZstd)
                 case .zstd:
                     return Zstd.compress(body)
             #endif
             case .gzip:
-                return Gzip.compress(body)
+                #if canImport(Compression)
+                    return Gzip.compress(body)
+                #else
+                    // No gzip encoder where Apple's Compression is absent (Linux, gap G0).
+                    return nil
+                #endif
         }
     }
 

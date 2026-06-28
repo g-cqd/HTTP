@@ -8,10 +8,11 @@
 //  per fd carrying a combined event mask, so this tracks both handlers per fd and recomputes the mask
 //  on each (re-)arm; `EPOLLONESHOT` gives the one-shot semantics `EV_ONESHOT` gives on kqueue.
 //
-//  ⚠️ WIP — NOT YET BUILT OR TESTED ON LINUX. `epoll(7)` is absent on Darwin, so this cannot be compiled
-//  or exercised on the macOS dev host; the file is gated `#if canImport(Glibc)` (it compiles to nothing
-//  off Linux) and is the concrete starting point for the G0 Linux transport, to be verified under a
-//  Linux toolchain / CI before it is trusted. See Docs/Documentation/audit/2026-06-27-linux-readiness-audit.md.
+//  Verified on Linux (Swift 6.5-dev, Ubuntu noble, aarch64) via apple/container: the library builds and
+//  `httpd-example` on this backbone serves real HTTP/1.1 (GET/POST, path parameters, the middleware
+//  chain) end to end. `epoll(7)` is absent on Darwin, so the file is gated `#if canImport(Glibc)` (it
+//  compiles to nothing off Linux) and gets its epoll symbols from the `CEpoll` shim (the platform
+//  `Glibc` module surfaces none). See Docs/Documentation/audit/2026-06-27-linux-readiness-audit.md.
 //
 //  Standards: epoll_create1()/epoll_ctl()/epoll_wait() are the Linux readiness primitives (epoll(7));
 //  the descriptors they watch are POSIX.1-2017 TCP (RFC 9293) sockets.
@@ -19,6 +20,7 @@
 
 #if canImport(Glibc)
 
+    internal import CEpoll
     internal import Dispatch
     internal import Glibc
     internal import Synchronization
@@ -130,8 +132,13 @@
             // 50 ms bounds the latency of out-of-band work (close/cancel) and shutdown; readiness wakes
             // the wait immediately, so this caps only the idle path, not throughput (mirrors kqueue).
             var events = [epoll_event](repeating: epoll_event(), count: 64)
-            let count = events.withUnsafeMutableBufferPointer { buffer in
-                epoll_wait(epfd, buffer.baseAddress, Int32(buffer.count), 50)
+            let count = events.withUnsafeMutableBufferPointer { buffer -> Int32 in
+                // `epoll_wait`'s buffer is non-optional on Linux; `baseAddress` is non-nil for a non-empty
+                // buffer (count 64), but guard rather than force-unwrap per the no-`!` rule.
+                guard let base = buffer.baseAddress else {
+                    return 0
+                }
+                return epoll_wait(epfd, base, Int32(buffer.count), 50)
             }
             // 0 = timeout, < 0 = EINTR/error — the next poll retries.
             guard count > 0 else {

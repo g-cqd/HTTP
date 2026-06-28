@@ -15,7 +15,6 @@
 
 internal import Foundation
 public import HTTPCore
-internal import UniformTypeIdentifiers
 
 /// Serves static files from a root directory — traversal-safe, with validators, conditionals, and ranges.
 public struct FileResponder: HTTPResponder {
@@ -263,11 +262,12 @@ public struct FileResponder: HTTPResponder {
         tag.hasPrefix("W/") ? String(tag.dropFirst(2)) : String(tag)
     }
 
-    /// The content type for `path`, from the system Uniform Type registry (``UTType``), defaulting to
-    /// `application/octet-stream`; a `text/*` type gains an explicit `charset=utf-8`.
+    /// The content type for `path` by filename extension (``mimeType(forExtension:)`` — the system
+    /// `UTType` registry on Apple, a built-in table on Linux), defaulting to `application/octet-stream`;
+    /// a `text/*` type gains an explicit `charset=utf-8`.
     static func contentType(_ path: String) -> String {
-        let ext = URL(fileURLWithPath: path).pathExtension
-        guard !ext.isEmpty, let mime = UTType(filenameExtension: ext)?.preferredMIMEType else {
+        let ext = URL(fileURLWithPath: path).pathExtension.lowercased()
+        guard !ext.isEmpty, let mime = mimeType(forExtension: ext) else {
             return "application/octet-stream"
         }
         return mime.hasPrefix("text/") ? "\(mime); charset=utf-8" : mime

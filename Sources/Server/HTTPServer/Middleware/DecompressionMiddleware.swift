@@ -49,13 +49,21 @@ public struct DecompressionMiddleware: HTTPMiddleware {
         // a small body must not be allowed to expand without bound (CWE-409).
         let product = body.count.multipliedReportingOverflow(by: maxRatio)
         let cap = min(maxDecompressedSize, product.overflow ? Int.max : product.partialValue)
-        guard let inflated = Inflate.decompress(body, encoding: encoding, maxOutput: cap) else {
-            // A bomb past the cap, an over-ratio body, or a malformed member — fail closed.
-            return ServerResponse(HTTPResponse(status: .contentTooLarge))
-        }
-        var decoded = request
-        decoded.headerFields.removeAll(named: .contentEncoding)  // the body is now identity
-        _ = decoded.headerFields.setValue(String(inflated.count), for: .contentLength)
-        return await next.respond(to: decoded, body: inflated)
+        #if canImport(Compression)
+            guard let inflated = Inflate.decompress(body, encoding: encoding, maxOutput: cap) else {
+                // A bomb past the cap, an over-ratio body, or a malformed member — fail closed.
+                return ServerResponse(HTTPResponse(status: .contentTooLarge))
+            }
+            var decoded = request
+            decoded.headerFields.removeAll(named: .contentEncoding)  // the body is now identity
+            _ = decoded.headerFields.setValue(String(inflated.count), for: .contentLength)
+            return await next.respond(to: decoded, body: inflated)
+        #else
+            // No inbound decoder where Apple's Compression is absent (Linux); the coded body passes
+            // through untouched, exactly as an unrecognized `Content-Encoding` does (a `libz`/`libbrotli`
+            // decoder is a G0 follow-up). `cap` is computed for parity but unused on this path.
+            _ = cap
+            return await next.respond(to: request, body: body)
+        #endif
     }
 }

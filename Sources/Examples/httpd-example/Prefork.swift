@@ -18,9 +18,14 @@
 //  across processes the way SO_REUSEPORT does).
 //
 
-import Darwin
 import Dispatch
 import Foundation
+
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#endif
 
 /// A minimal fork/exec prefork supervisor for the POSIX backbones.
 enum Prefork {

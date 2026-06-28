@@ -9,7 +9,7 @@
 //  recursion, so hostile peers cannot grow the stack. Writes go through `send(..., MSG_NOSIGNAL)` so a
 //  peer RST mid-write yields `EPIPE` rather than a fatal `SIGPIPE` (Linux has no `SO_NOSIGPIPE`; audit T-F1).
 //
-//  ⚠️ WIP — NOT YET BUILT OR TESTED ON LINUX (gated `#if canImport(Glibc)`; see ``EpollEventLoop``).
+//  Verified on Linux (Swift 6.5-dev, Ubuntu noble) — gated `#if canImport(Glibc)`; see ``EpollEventLoop``.
 //
 //  Standards: read()/send()/close() per POSIX.1-2017 (IEEE Std 1003.1-2017); TCP (RFC 9293) over
 //  IPv4 (RFC 791) / IPv6 (RFC 4291). Readiness via Linux epoll(7).
@@ -164,7 +164,8 @@
                 while offset < raw.count {
                     // `MSG_NOSIGNAL`: a write to a peer that closed its read end returns EPIPE instead of
                     // raising SIGPIPE (Linux's per-call equivalent of Darwin's SO_NOSIGPIPE — audit T-F1).
-                    let written = send(
+                    // `Glibc.send` (not the `send(_:)` instance method, which would shadow it here).
+                    let written = Glibc.send(
                         descriptor,
                         raw.baseAddress?.advanced(by: offset),
                         raw.count - offset,

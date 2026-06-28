@@ -53,7 +53,12 @@ enum POSIXSocket {
     ) throws -> (descriptor: Int32, port: UInt16) {
         var hints = addrinfo()
         hints.ai_family = AF_UNSPEC  // IPv4 or IPv6, chosen from the host literal
-        hints.ai_socktype = SOCK_STREAM
+        // `SOCK_STREAM` imports as a plain `Int32` on Darwin but as the `__socket_type` enum on Glibc.
+        #if canImport(Darwin)
+            hints.ai_socktype = SOCK_STREAM
+        #else
+            hints.ai_socktype = Int32(SOCK_STREAM.rawValue)
+        #endif
         hints.ai_flags = AI_PASSIVE  // a bindable (server) address
         var resolved: UnsafeMutablePointer<addrinfo>?
         guard getaddrinfo(host, String(port), &hints, &resolved) == 0, let info = resolved else {
@@ -128,7 +133,10 @@ enum POSIXSocket {
     /// since the listen socket carries no data.
     static func setNoDelay(_ rawFD: Int32) {
         var on: Int32 = 1
-        _ = setsockopt(rawFD, IPPROTO_TCP, TCP_NODELAY, &on, socklen_t(MemoryLayout<Int32>.size))
+        // `IPPROTO_TCP` imports as `Int32` on Darwin but as `Int` on Glibc — normalize for `setsockopt`.
+        _ = setsockopt(
+            rawFD, Int32(IPPROTO_TCP), TCP_NODELAY, &on, socklen_t(MemoryLayout<Int32>.size)
+        )
     }
 
     /// Reads the OS-assigned port via `getsockname()` (either address family).
