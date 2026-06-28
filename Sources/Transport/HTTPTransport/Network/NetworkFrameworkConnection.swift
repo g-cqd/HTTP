@@ -81,6 +81,47 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
         }
     }
 
+    /// Receives up to `maxLength` inbound bytes, **appending** them to `buffer`, and returns the count
+    /// appended (`0` at EOF).
+    ///
+    /// The allocation-lean read path (audit #7): Network.framework hands back its own `Data`, so this
+    /// copies those bytes straight into the caller's `buffer` via `Data.withUnsafeBytes` — one copy,
+    /// dropping the intermediate `[UInt8]` chunk the protocol default builds before appending it. The
+    /// branch semantics mirror ``receive(maxLength:)`` (error / data / EOF / spurious empty wakeup).
+    ///
+    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
+    /// (audit CC4); cancelling the serve task cancels the `NWConnection`, which fires this receive's
+    /// completion with an error so the continuation resumes instead of leaking.
+    public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
+        let received: Data? = try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Data?, any Error>) in
+            connection.receive(
+                minimumIncompleteLength: 1,
+                maximumLength: max(1, maxLength)
+            ) { data, _, isComplete, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                }
+                else if let data, !data.isEmpty {
+                    continuation.resume(returning: data)
+                }
+                else if isComplete {
+                    continuation.resume(returning: nil)  // peer half-closed
+                }
+                else {
+                    continuation.resume(returning: Data())
+                }
+            }
+        }
+        // Append the received bytes in place — no intermediate `[UInt8]`; `nil` (EOF) and an empty
+        // payload both append nothing and report `0`, matching the protocol-default behaviour.
+        guard let received, !received.isEmpty else {
+            return 0
+        }
+        received.withUnsafeBytes { buffer.append(contentsOf: $0) }
+        return received.count
+    }
+
     /// Sends `bytes` to the peer, completing once Network.framework has accepted them.
     public func send(_ bytes: [UInt8]) async throws {
         try await withUnsafeThrowingContinuation {
