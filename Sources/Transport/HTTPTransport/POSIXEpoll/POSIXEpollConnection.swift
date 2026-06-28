@@ -168,6 +168,33 @@
             }
         }
 
+        /// Scatter-gather send: writes `head` then `body` in one `sendmsg` syscall — no coalesce copy
+        /// (audit #3 / L4) — re-arming on writability whenever the socket buffer fills.
+        ///
+        /// An empty `body` falls back to the single-buffer ``send(_:)``. No per-op cancellation handler:
+        /// the server registers one ``cancel()`` for the whole connection (audit CC4), which closes the
+        /// fd and unblocks a parked write.
+        public func send(_ head: [UInt8], _ body: [UInt8]) async throws {
+            guard !body.isEmpty else {
+                try await send(head)
+                return
+            }
+            let descriptor = self.descriptor
+            let eventLoop = self.eventLoop
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                writeResumer.reset(continuation)
+                Self.writevRemaining(
+                    head: head,
+                    body: body,
+                    offset: 0,
+                    descriptor: descriptor,
+                    eventLoop: eventLoop,
+                    once: writeResumer
+                )
+            }
+        }
+
         /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
         public func close() async {
             closeDescriptor()
@@ -275,6 +302,99 @@
                             once: once
                         )
                     }
+            }
+        }
+
+        /// Writes `head` then `body` as one scatter-gather message, advancing one combined offset across
+        /// the two buffers and re-arming on writability when the socket buffer fills — iterative
+        /// (event-driven), not recursive.
+        ///
+        /// Uses `sendmsg(..., MSG_NOSIGNAL)` rather than `writev`: `writev` cannot carry `MSG_NOSIGNAL`,
+        /// and Linux has no `SO_NOSIGPIPE`, so a bare `writev` would let a peer RST mid-write raise a fatal
+        /// `SIGPIPE` (the one-packet DoS audit T-F1 closes). `sendmsg` is the scatter-gather form that
+        /// takes the flag — `msg_iov`/`msg_iovlen` gather exactly as `writev(2)`.
+        private static func writevRemaining(
+            head: [UInt8],
+            body: [UInt8],
+            offset: Int,
+            descriptor: Int32,
+            eventLoop: EpollEventLoop,
+            once: OnceResumer<Void>
+        ) {
+            var offset = offset
+            let total = head.count + body.count
+            let outcome: WriteOutcome = head.withUnsafeBytes { headRaw in
+                body.withUnsafeBytes { bodyRaw in
+                    guard
+                        let headBase = headRaw.baseAddress, let bodyBase = bodyRaw.baseAddress
+                    else {
+                        // Both buffers are non-empty by construction (body guarded, head is status).
+                        return WriteOutcome.done
+                    }
+                    while offset < total {
+                        // Gather vector for the unwritten tail: still within the head (head slice +
+                        // whole body), or already past it (a body slice only).
+                        var iovecs: [iovec]
+                        if offset < head.count {
+                            let headPtr = UnsafeMutableRawPointer(mutating: headBase + offset)
+                            let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase)
+                            iovecs = [
+                                iovec(iov_base: headPtr, iov_len: head.count - offset),
+                                iovec(iov_base: bodyPtr, iov_len: body.count)
+                            ]
+                        }
+                        else {
+                            let bodyOffset = offset - head.count
+                            let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase + bodyOffset)
+                            iovecs = [iovec(iov_base: bodyPtr, iov_len: body.count - bodyOffset)]
+                        }
+                        let written = sendScatter(descriptor, &iovecs)
+                        if written > 0 {
+                            offset += written
+                        }
+                        else if written < 0, errno == EINTR {
+                            continue  // interrupted before any byte — retry (audit T-F3)
+                        }
+                        else if written < 0, errno == EWOULDBLOCK || errno == EAGAIN {
+                            return .wouldBlock(offset: offset)
+                        }
+                        else {
+                            return .failed(errno: errno)
+                        }
+                    }
+                    return .done
+                }
+            }
+            switch outcome {
+                case .done:
+                    once.resume(returning: ())
+                case .failed(let code):
+                    once.resume(throwing: TransportError.ioFailed("sendmsg errno \(code)"))
+                case .wouldBlock(let remaining):
+                    eventLoop.waitWritable(descriptor) {
+                        writevRemaining(
+                            head: head,
+                            body: body,
+                            offset: remaining,
+                            descriptor: descriptor,
+                            eventLoop: eventLoop,
+                            once: once
+                        )
+                    }
+            }
+        }
+
+        /// Sends one gather vector via `sendmsg(..., MSG_NOSIGNAL)`, returning its raw result.
+        ///
+        /// `msghdr()` zero-fills the header (no name, no control bytes, no flags); only `msg_iov` and
+        /// `msg_iovlen` are set. `MSG_NOSIGNAL` is the per-call SIGPIPE suppression Linux lacks as a
+        /// socket option (audit T-F1) — `writev` could not carry it.
+        private static func sendScatter(_ descriptor: Int32, _ iovecs: inout [iovec]) -> Int {
+            iovecs.withUnsafeMutableBufferPointer { iov -> Int in
+                var message = msghdr()
+                message.msg_iov = iov.baseAddress
+                message.msg_iovlen = iov.count
+                return sendmsg(descriptor, &message, Int32(MSG_NOSIGNAL))
             }
         }
     }
