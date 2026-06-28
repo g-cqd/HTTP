@@ -66,6 +66,10 @@ backbones (12 / 22 threads) already beat rust's tail and rival bun's.
 | **R4** | **NIO-style event loop = `TaskExecutor`; connection serve task pinned (no hop); round-robin sharded N-per-P-core** | kqueue · epoll (Linux mirror) · **swiftSystem converted to event-driven** | **Done** | full suite (~970) + backbone-conformance green; measured below |
 | CC4 | Hoist `withTaskCancellationHandler` to once-per-connection | all backbones | Pending | folds into R4 follow-up; per-op task-status-record churn |
 | CC5 | (subsumed by R4) executor pinning | — | **Done (R4)** | `withTaskExecutorPreference(connection.preferredTaskExecutor)` in `HTTPServer.accept` |
+| **TLS** | portableTLS memory-BIO event-driven — retires the **last blocking backbone** (non-blocking fd, BIO pair, TLS inline on the shared loop) | portableTLS | **Done** | 15 portable-TLS tests; `HTTP_PORTABLE_TLS` build clean; verifyPeer stays fail-closed (RFC 8446 §4.4.2.4) |
+| **L3** | HTTP/1 keep-alive ring buffer — absolute start cursor + lazy compaction (O(1), no per-request `removeFirst` memmove) | server (h1) | **Done** | `serveOne` cursor; +pipelined-remainder tests; 975 suite green |
+| **#9** | Precompute group-middleware chains once at route build (parameters flow via a task local) | server (routing) | **Done** | `Route.run` drops the per-request `ClosureResponder`+`reduce`; +grouped-`:param` test |
+| **DC** | Lock-free **per-thread** `DateCache` (`pthread` key) — no shared `Mutex` on the per-response path | server (middleware) | **Done** | per-second contract + warm-path zero-alloc tests green |
 
 ## R4 result — the executor hop was the p50 gap
 
@@ -91,6 +95,26 @@ original swiftSystem** (5.29 / 15.93) and ahead of rust (2.12 / 6.94) and bun's 
 p50 parity is on a **Pareto frontier**: it needs swiftSystem's ~64-thread count, which *is* its tail. The
 loop count (`TransportConfiguration.eventLoopCount` / `HTTPD_LOOPS`) tunes the operating point —
 loops=2-3 buys p99.9 ≈ 1-1.5 ms for ~0.03 ms of median.
+
+## Comparative battletest + the swiftSystem clarification
+
+The consolidated `Benchmarking/Bench/run.sh` measures our server on **every backbone** alongside the full
+field (nginx, caddy, rust, go, bun, hummingbird, vapor, django-wsgi/asgi) on one identical `oha` workload.
+Headline: **ours(posixKqueue) p99.9 ≈ 2.2–2.6 ms across all routes — bettered only by nginx in the entire
+field, 4–20× tighter than the SwiftNIO frameworks (Hummingbird/Vapor carry 9–50 ms tails), and a *tighter
+tail than rust*** at ~11% less throughput. The remaining frontier is raw rps (floor ~10–15% behind
+rust/nginx) and `/payload` (the 1 KiB body copy → a `writev` scatter-gather opportunity).
+
+**Measurement methodology — a real trap we hit.** A single sequential pass on this colocated 8-core box
+thermally throttles, so servers measured *later* in the run read slower than they are. In one pass
+swiftSystem (run 3rd, after kqueue+dispatch warmed the box) posted **82k rps** and looked "slow" — but an
+**interleaved A/B** (shared thermal state) showed **swiftSystem ≡ posixKqueue**: 142k vs 142k, identical
+p50, swiftSystem's tail even slightly tighter. swiftSystem is *not* slow — it is simply no longer the
+**blocking** p50-leader (we converted it to event-driven on request, trading the 0.22 ms blocking median
+for a 2.97 ms tail vs the old 16 ms). The harness now defends against this: each measurement is gated on a
+**CPU calibration probe** (`settle_thermal` — wait until the idle box returns near its coolest compute
+baseline; Apple Silicon exposes no sudo-free thermal sysctl) and it supports **best-of-N rounds**, so
+absolute numbers are order-independent. Trust tail shape + ratios + the interleaved A/B over single-pass rps.
 
 ## Verification
 
