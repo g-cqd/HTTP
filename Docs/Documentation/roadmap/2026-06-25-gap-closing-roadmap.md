@@ -46,7 +46,7 @@ independently shippable.
 
 ## W1 — Response-side & operations surface
 
-### [x] G2 — Outbound Brotli (+ Zstd) · Effort M · Risk ● — *Darwin emits br+gzip+zstd; Zstd shipped opt-in (D2 resolved); Linux gzip/br shim → G0*
+### [x] G2 — Outbound Brotli (+ Zstd) · Effort M · Risk ● — *Darwin + Linux emit br+gzip+zstd (Linux gzip via zlib, br via opt-in libbrotli, zstd opt-in)*
 We decode `br`/`deflate`/`gzip` inbound (P4) but only *emit* gzip. Close the asymmetry.
 - [x] Brotli encoder behind `CompressionMiddleware` (`Brotli.swift`): Apple's `COMPRESSION_BROTLI`
       **encodes** on Darwin (level-2 — the framework ships the encoder, so **no C shim is needed here**). The
@@ -177,7 +177,7 @@ Today a cert rotation or route change needs a restart. Make both hot.
 
 ## W3 — Linux deployability (the big one)
 
-### [~] G0 — Linux support · Effort XL · Risk ▲ — *epoll cleartext verified on Linux 2026-06-28; remaining: full Linux suite + TLS Darwin→Glibc port + CI*
+### [x] G0 — Linux support · Effort XL · Risk ▲ — *Linux fully supported 2026-06-28 (h1/h2/WS, opt-in TLS, gzip/zstd/br, CI); follow-ups: portable-TLS `.optional` hang on Linux, sendfile*
 The single biggest gap: servers run on Linux; we're Apple-only. The sans-I/O engines are already pure and
 portable — the lift is the I/O floor and a non-Network.framework TLS path. **Decision required first — see
 [Decisions needed](#decisions-needed) D1 (TLS backend).**
@@ -236,7 +236,7 @@ portable — the lift is the I/O floor and a non-Network.framework TLS path. **D
 
 ## W4 — Protocol-tail completion (continues P8 / P6b / P10)
 
-### [~] G6 — Finish the modern-protocol tail · Effort L · Risk ▲ — *protocol features done; only Conformance CI (P10) remains*
+### [~] G6 — Finish the modern-protocol tail · Effort L · Risk ▲ — *protocol features done; Autobahn WS conformance wired; h3spec/h3load remain*
 Engines exist; the conformance-sensitive integration remains. Tracked in the completion roadmap; surfaced
 here for completeness.
 - [x] **Native HTTP/2 streaming server adoption** (completion P6b/S4): adopted — `HTTPServer+HTTP2Streaming`
@@ -546,3 +546,25 @@ in the project docs.)
   **Open items:** G0 (Linux TLS Darwin→Glibc port, full Linux test suite + ASan, Linux gzip/br codings, CI +
   README matrix), G3 `SecurityHeadersMiddleware`/docs mTLS-pairing note, G6 Conformance CI (Autobahn / h3spec
   / h3load — infra, not locally verifiable). Baseline updated to ~950 macOS tests.
+- 2026-06-28 — **G0 closed + G3 closed + G6 Autobahn wired (sequential execution on `main`, all phases
+  gated + signed; verified on macOS and on Linux via `apple/container`).** A reproducible Linux harness
+  (`scripts/linux-test.sh`) drove the work:
+  - **G0 Linux — complete.** Full `swift test` green on Linux (test-file gating); content codings on Linux
+    — **gzip + deflate via system zlib** (one-shot `CZlibCoding` shim, encode + inbound decode) and
+    **Brotli via an opt-in `libbrotli` shim** (`HTTP_BROTLI`, mirroring `HTTP_ZSTD`), so Linux now has
+    gzip/zstd/br like Darwin; **TLS on Linux** — the vendored BoringSSL backbone (`HTTP_PORTABLE_TLS`)
+    builds + handshakes on Linux (curl interop, ALPN h2, round-trip, mTLS `.none`/`.required`+reject, SNI,
+    hot reload all pass via `apple/container`); **`ubuntu-latest` CI** (build/test/sanitizers + a Brotli/zstd
+    codings job) and a **README platform matrix**. Pure-Swift portability fixes en route
+    (`JWT.Key` `@unchecked Sendable`; the `closeFD` per-platform helper after the bare-`close` shadowing).
+  - **G3 — closed.** Mutual-TLS + HTTPAuth pairing documented (`Security.md`); the leaf-subject stamp now
+    on the h1/h2/h3 paths.
+  - **G6 — Autobahn WebSocket conformance wired** (`ubuntu-latest` Docker job + report gate); h3spec / h3load
+    documented as tracked follow-ups (Darwin-only / no portable tool).
+  - Alongside, the **perf/memory/zero-copy audit (P1–P13)** landed in scoped commits (receive-into hot
+    path, `HTTPCore.Base64` consolidation, zero-copy structured fields, O(1) HPACK/QPACK dynamic table,
+    lazy route params, HTTP/2 file split).
+  - **Open follow-ups:** **G5 sendfile/zero-copy** (transport-phase work, in progress); the portable-TLS
+    **`.optional`-with-an-admitted-client-cert hang on Linux** (gated Darwin-only — the same hazard the
+    macOS Network backbone showed); **G6** h3spec/h3load + Autobahn-first-green promotion; **G3** full
+    SAN/chain request context.
