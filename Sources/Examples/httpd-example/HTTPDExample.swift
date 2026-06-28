@@ -11,7 +11,8 @@
 //  Usage:
 //    swift run httpd-example [port] [backbone] [tls]
 //      port      — TCP port to bind (default 8080)
-//      backbone  — networkFramework | posixKqueue | posixDispatch | swiftSystem (default swiftSystem)
+//      backbone  — networkFramework | posixKqueue | posixDispatch | swiftSystem
+//                  (default: the event-driven `recommended` — posixKqueue on Darwin / posixEpoll on Linux)
 //
 //  Then, in another shell:
 //    curl -v --http1.1 http://127.0.0.1:8080/
@@ -255,16 +256,16 @@ enum HTTPDExample {
         {
             return backbone
         }
-        // Default: swiftSystem leads cleartext throughput (~140k req/s at moderate concurrency). It
-        // runs blocking syscalls on a thread per connection, so for very high connection counts or
-        // tail-latency-sensitive workloads prefer the async posixKqueue/posixDispatch backbones (lower
-        // p99, no thread-per-connection). TLS — and therefore h2-over-TLS and h3 — is honored only by
+        // Default: the event-driven `recommended` backbone (posixKqueue on Darwin / posixEpoll on
+        // Linux) — sharded one loop per core with pinned, inline-on-the-loop handlers (audit R4): a
+        // bounded thread count and a tight latency tail under concurrency. (swiftSystem is now the same
+        // event-driven model over swift-system's typed FileDescriptor and performs equivalently; it
+        // stays selectable by name.) TLS — and therefore h2-over-TLS and h3 — is honored only by
         // Network.framework, so fall back to it whenever TLS is requested.
         #if canImport(Network)
-            return arguments.contains("tls") ? .networkFramework : .swiftSystem
+            return arguments.contains("tls") ? .networkFramework : .recommended
         #else
-            // Linux: the Darwin/Network backbones are absent; `posixEpoll` is the I/O floor (G0).
-            return .posixEpoll
+            return .recommended  // Linux: resolves to posixEpoll, the I/O floor (G0).
         #endif
     }
 

@@ -114,6 +114,21 @@ struct RouterTests {
         #expect(bare.head.status == .notFound)
     }
 
+    @Test("a parameter route inside a middleware group still receives its captured parameter (#9)")
+    func groupedParameterRoute() async {
+        // The route carries group middleware, so its handler runs through the precomputed chain with
+        // parameters flowed via the task local (audit #9) — the handler must still see `:id`, and the
+        // group middleware must still run.
+        let router = Router {
+            RouteGroup("/api", middleware: [ServerHeaderMiddleware("grouped")]) {
+                Route.get("/users/:id") { _, parameters, _ in Self.ok(parameters["id"] ?? "?") }
+            }
+        }
+        let response = await router.respond(to: request(.get, "/api/users/42"), body: [])
+        #expect(response.body == Array("42".utf8))  // the captured parameter reached the handler
+        #expect(response.head.headerFields[.server] == "grouped")  // group middleware still ran
+    }
+
     @Test("nested groups compose their prefixes")
     func nestedGroups() async {
         let router = Router {

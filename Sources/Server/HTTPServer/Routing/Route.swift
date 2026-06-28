@@ -32,6 +32,34 @@ public struct Route: Sendable {
     /// plain route, in which case the handler runs directly with no wrapping cost.
     let middleware: [any HTTPMiddleware]
 
+    /// The group-middleware chain, composed **once** at build time.
+    ///
+    /// Terminates at a responder that reads the in-flight request's parameters from the
+    /// ``currentParameters`` task local; `nil` for a plain route. Precomputing it here is what lets
+    /// ``run`` avoid rebuilding a `ClosureResponder` plus the `wrapped(by:)` chain — several heap
+    /// allocations — on every request (audit #9).
+    private let composed: (any HTTPResponder)?
+
+    /// The matched route's parameters for the in-flight request.
+    ///
+    /// Flowed to the precomputed group-middleware terminal so the chain composes once, not per request:
+    /// ``run`` binds it around the composed chain and ``GroupTerminal`` reads it back (audit #9). Empty
+    /// outside a group route.
+    @TaskLocal
+    static var currentParameters = RouteParameters()
+
+    /// The innermost responder of a precomputed group-middleware chain (audit #9).
+    ///
+    /// Reads the in-flight request's parameters from ``Route/currentParameters`` — bound by ``run`` around
+    /// the chain — and runs the route handler. Stable across requests, so the chain composes once.
+    private struct GroupTerminal: HTTPResponder {
+        let handler: Handler
+
+        func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
+            await handler(request, Route.currentParameters, body)
+        }
+    }
+
     /// Creates a route matching `method` and `pattern`, running `handler` on a match.
     ///
     /// A `pattern` like `"/users/:id"` matches that path shape; a `:name` segment captures one path
@@ -51,6 +79,10 @@ public struct Route: Sendable {
         self.segments = segments
         self.handler = handler
         self.middleware = middleware
+        // Compose the group-middleware chain once, now, terminating at a parameter-reading responder —
+        // so a request only sets a task local, never rebuilds the chain (audit #9). Plain route ⇒ nil.
+        self.composed =
+            middleware.isEmpty ? nil : GroupTerminal(handler: handler).wrapped(by: middleware)
     }
 
     /// Parses a path pattern into segments, dropping empty components so a leading or trailing slash
@@ -114,14 +146,14 @@ public struct Route: Sendable {
         _ parameters: RouteParameters,
         _ body: [UInt8]
     ) async -> ServerResponse {
-        guard !middleware.isEmpty else {
-            return await handler(request, parameters, body)
+        guard let composed else {
+            return await handler(request, parameters, body)  // plain route — direct, no wrapping
         }
-        let handler = self.handler
-        let terminal = ClosureResponder { request, body in
-            await handler(request, parameters, body)
+        // Group middleware: the chain was composed once at build time. Flow this request's parameters
+        // to its terminal through the task local, so nothing is rebuilt per request (audit #9).
+        return await Self.$currentParameters.withValue(parameters) {
+            await composed.respond(to: request, body: body)
         }
-        return await terminal.wrapped(by: middleware).respond(to: request, body: body)
     }
 
     /// A copy with `groupSegments` prepended to the path and `groupMiddleware` wrapped outermost — the

@@ -43,6 +43,23 @@ public enum ResponseSerializer {
         omitBody: Bool = false
     ) -> [UInt8] {
         var output: [UInt8] = []
+        serialize(response, body: body, omitBody: omitBody, into: &output)
+        return output
+    }
+
+    /// Serializes `response` and `body` into `output`, **reusing its existing storage**.
+    ///
+    /// `output` is cleared keeping capacity, so a per-connection buffer threaded through the keep-alive
+    /// loop serializes every response with no fresh allocation after the first (audit: tail-latency
+    /// variance — fewer per-request mallocs means less allocator-lock contention, which tightens the
+    /// tail). Behaviourally identical to ``serialize(_:body:omitBody:)``.
+    public static func serialize(
+        _ response: HTTPResponse,
+        body: [UInt8] = [],
+        omitBody: Bool = false,
+        into output: inout [UInt8]
+    ) {
+        output.removeAll(keepingCapacity: true)
         output.reserveCapacity(64 + (omitBody ? 0 : body.count))
 
         // Status-line: HTTP-version SP status-code SP [ reason-phrase ] CRLF (RFC 9112 §3.1).
@@ -73,7 +90,6 @@ public enum ResponseSerializer {
         // A body-forbidden status (1xx/204/304) must emit no body octets either: an unframed body on
         // a keep-alive connection would be read as the start of the next response (RFC 9110 §6.4.1).
         if !omitBody, !Self.forbidsContent(response.status) { output.append(contentsOf: body) }
-        return output
     }
 
     /// Whether `status` forbids a response body: 1xx Informational, 204 No Content, 304 Not Modified

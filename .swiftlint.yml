@@ -164,7 +164,7 @@ strict: true                  # any violation fails CI
 
 attributes:
   always_on_same_line: ["@IBAction", "@NSManaged", "@objc", "@testable", "@State", "@Binding", "@Environment", "@Published"]
-  always_on_line_above: ["@MainActor", "@Observable", "@Sendable", "@available", "@discardableResult", "@frozen", "@inlinable", "@inlineable", "@nonobjc", "@objcMembers", "@propertyWrapper", "@resultBuilder", "@usableFromInline", "@Tag"]
+  always_on_line_above: ["@MainActor", "@Observable", "@Sendable", "@TaskLocal", "@available", "@discardableResult", "@frozen", "@inlinable", "@inlineable", "@nonobjc", "@objcMembers", "@propertyWrapper", "@resultBuilder", "@usableFromInline", "@Tag"]
 force_unwrapping:
   severity: error
 force_cast:

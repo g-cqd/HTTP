@@ -23,11 +23,29 @@ extension HTTPServer where C.Duration == Duration {
     func serveOne(
         _ connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>,
-        buffer: inout [UInt8]
+        buffer: inout [UInt8],
+        start: inout Int,
+        responseBuffer: inout [UInt8]
     ) async -> Bool {
+        // Reclaim the consumed prefix before reading the next request (audit L3 — the keep-alive ring
+        // buffer): free the whole buffer when it is fully drained (the common non-pipelined case — O(1),
+        // capacity kept), or compact a large dead prefix so a pipelined stream cannot grow it unbounded.
+        // Between pipelined requests we deliberately do *not* shift — advancing `start` past a consumed
+        // request is O(1), the win over the old per-request `removeFirst(consumed)` memmove.
+        if start == buffer.count {
+            buffer.removeAll(keepingCapacity: true)
+            start = 0
+        }
+        else if start >= 16_384 {
+            buffer.removeFirst(start)
+            start = 0
+        }
+
         let outcome: ReadOutcome
         do {
-            outcome = try await readRequest(from: connection, deadline: deadline, into: &buffer)
+            outcome = try await readRequest(
+                from: connection, deadline: deadline, into: &buffer, start: start
+            )
         }
         catch let error as HTTP1ParseError {
             await sendErrorResponse(for: error, to: connection)
@@ -39,7 +57,8 @@ extension HTTPServer where C.Duration == Duration {
         guard case .request(let framed) = outcome else {
             return false  // clean EOF on a boundary
         }
-        buffer.removeFirst(framed.consumed)  // carry any pipelined remainder to the next iteration
+        // Advance past this request (O(1)); any pipelined remainder stays in place, unshifted.
+        start = framed.consumed
 
         let request = framed.parsed.request
         // A WebSocket Upgrade request (RFC 6455 §4) the app accepts hands the connection to the
@@ -52,7 +71,7 @@ extension HTTPServer where C.Duration == Duration {
                 deadline: deadline,
                 request: request,
                 handler: handler,
-                carryover: buffer
+                carryover: Array(buffer[start...])
             )
             return false
         }
@@ -79,11 +98,11 @@ extension HTTPServer where C.Duration == Duration {
                 version: framed.parsed.version, request: request, response: head
             )
         }
-        let bytes = ResponseSerializer.serialize(
-            head, body: response.body, omitBody: request.method == .head
+        ResponseSerializer.serialize(
+            head, body: response.body, omitBody: request.method == .head, into: &responseBuffer
         )
         do {
-            try await connection.send(bytes)
+            try await connection.send(responseBuffer)
         }
         catch {
             return false
@@ -106,25 +125,32 @@ extension HTTPServer where C.Duration == Duration {
     private func readRequest(
         from connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>,
-        into buffer: inout [UInt8]
+        into buffer: inout [UInt8],
+        start: Int
     ) async throws -> ReadOutcome {
         var headerDeadline: C.Instant?
-        var scanOffset = 0  // resumable end-of-headers scan (keeps header framing O(n), not O(n²))
+        // Resumable end-of-headers scan (keeps header framing O(n), not O(n²)); an absolute index into
+        // `buffer`, so it begins at the request's start cursor, not 0 (audit L3 — keep-alive ring buffer).
+        var scanOffset = start
         var pending: PendingRequest?  // the head, parsed once, then reused as the body arrives
         // Resumable chunked-body decode kept across reads — O(n), not O(n²) (audit H1-F1).
         var chunked = ChunkedProgress()
         var expectHandled = false  // honor `Expect: 100-continue` once, before the body is read
         while true {
-            switch assemble(buffer, scanOffset: &scanOffset, pending: &pending, chunked: &chunked) {
+            switch assemble(
+                buffer, start: start, scanOffset: &scanOffset, pending: &pending, chunked: &chunked
+            ) {
                 case .request(let framed):
                     return .request(framed)
                 case .incomplete:
                     // Until the head parses, the parser's size limits can't run (no CRLF CRLF yet), so a
                     // peer that never terminates the header section would grow `buffer` unbounded.
-                    // `pending == nil` ⇒ no terminator present ⇒ the buffer is all header bytes: cap it
-                    // and fail closed with 431 instead of exhausting memory (RFC 9110 §15.5.13).
+                    // `pending == nil` ⇒ no terminator present ⇒ the unconsumed bytes are all header
+                    // bytes: cap them and fail closed with 431 instead of exhausting memory (RFC 9110
+                    // §15.5.13). `buffer.count - start` excludes any consumed pipelined prefix (L3).
+                    let headerBytes = buffer.count - start
                     if pending == nil,
-                        buffer.count > limits.maxRequestLineLength + limits.maxHeaderListSize
+                        headerBytes > limits.maxRequestLineLength + limits.maxHeaderListSize
                     {
                         throw HTTP1ParseError.headerSectionTooLarge
                     }
@@ -163,8 +189,9 @@ extension HTTPServer where C.Duration == Duration {
                 return .cleanClose  // timeout (the close surfaced as EOF)
             }
             guard received > 0 else {
-                // EOF: graceful on a request boundary, truncation mid-request.
-                if buffer.isEmpty {
+                // EOF: graceful on a request boundary (nothing buffered for this request — the cursor
+                // is at the tail), truncation mid-request otherwise.
+                if start == buffer.count {
                     return .cleanClose
                 }
                 throw HTTP1ParseError.incompleteHeaders
@@ -178,15 +205,16 @@ extension HTTPServer where C.Duration == Duration {
     /// Returns `.incomplete` when more bytes are needed.
     private func assemble(
         _ buffer: [UInt8],
+        start: Int,
         scanOffset: inout Int,
         pending: inout PendingRequest?,
         chunked: inout ChunkedProgress
     ) -> AssembleStep {
         if pending == nil {
-            guard Self.headerSectionEnd(buffer, from: &scanOffset) != nil else {
+            guard Self.headerSectionEnd(buffer, start: start, from: &scanOffset) != nil else {
                 return .incomplete
             }
-            switch parseHeadStep(buffer) {
+            switch parseHeadStep(buffer, start: start) {
                 case .parsed(let head):
                     pending = head
                 case .failed(let error):
@@ -221,7 +249,9 @@ extension HTTPServer where C.Duration == Duration {
     /// A request head parsed once, retained while its body is framed across reads.
     private struct PendingRequest {
         let head: RequestHead
-        let headerLength: Int
+        /// Absolute index in the read buffer where this request's body begins (just past its header
+        /// section) — the cursor start plus the head's length, so framing works on a pipelined remainder.
+        let bodyStart: Int
     }
 
     private enum AssembleStep {
@@ -247,8 +277,10 @@ extension HTTPServer where C.Duration == Duration {
     ///
     /// Resumes scanning from `offset`, re-checking the last three octets so a terminator split across
     /// reads is not missed; this keeps the total header scan O(n) rather than O(n²) over many chunks.
-    private static func headerSectionEnd(_ buffer: [UInt8], from offset: inout Int) -> Int? {
-        var index = max(offset, 3)
+    private static func headerSectionEnd(
+        _ buffer: [UInt8], start: Int, from offset: inout Int
+    ) -> Int? {
+        var index = max(offset, start + 3)
         while index < buffer.count {
             if buffer[index] == 0x0A, buffer[index - 1] == 0x0D,
                 buffer[index - 2] == 0x0A, buffer[index - 3] == 0x0D
@@ -258,7 +290,7 @@ extension HTTPServer where C.Duration == Duration {
             index += 1
         }
         // Resume near the tail next time so a CRLF CRLF split across reads is still matched.
-        offset = max(3, buffer.count - 3)
+        offset = max(start + 3, buffer.count - 3)
         return nil
     }
 
@@ -266,12 +298,14 @@ extension HTTPServer where C.Duration == Duration {
     ///
     /// The caller invokes this only after ``headerSectionEnd(_:from:)`` confirms the CRLF CRLF
     /// terminator, so a failure here is a genuine malformed-head error, never "need more bytes".
-    private func parseHeadStep(_ buffer: [UInt8]) -> HeadStep {
+    private func parseHeadStep(_ buffer: [UInt8], start: Int) -> HeadStep {
         let outcome: Result<PendingRequest, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
             Result { () throws(HTTP1ParseError) in
-                var reader = ByteReader(raw)
+                // Parse from the request's start cursor (a zero-copy rebase), not buffer index 0, so a
+                // pipelined remainder left in place still parses correctly (audit L3).
+                var reader = ByteReader(UnsafeRawBufferPointer(rebasing: raw[start...]))
                 let head = try RequestParser.parseHead(&reader, limits: limits)
-                return PendingRequest(head: head, headerLength: reader.position)
+                return PendingRequest(head: head, bodyStart: start + reader.position)
             }
         }
         switch outcome {
@@ -287,7 +321,7 @@ extension HTTPServer where C.Duration == Duration {
         _ buffer: [UInt8], _ pending: PendingRequest, chunked: inout ChunkedProgress
     ) -> BodyStep {
         let head = pending.head
-        let start = pending.headerLength
+        let start = pending.bodyStart
         switch head.framing {
             case .none:
                 return .complete(

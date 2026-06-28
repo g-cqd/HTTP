@@ -92,10 +92,14 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         let connections = try await transport.start()
         await withDiscardingTaskGroup { group in
             if quicTransport != nil {
-                group.addTask { await self.runHTTP3() }
+                group.addTask(priority: .userInitiated) { await self.runHTTP3() }
             }
             for await connection in connections {
-                group.addTask { await self.accept(connection) }
+                // `.userInitiated` matches the transport queues' QoS (audit: tail-latency variance): the
+                // request handler runs on the cooperative pool, and without this its threads sit a tier
+                // below the I/O queues — every continuation resume becomes a QoS downgrade hop, and the
+                // pool gets descheduled under contention, fattening p99/p99.9.
+                group.addTask(priority: .userInitiated) { await self.accept(connection) }
             }
         }
     }
@@ -144,7 +148,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             await connection.close()
             return
         }
-        await serve(connection)
+        // Pin the serve task to the connection's preferred executor when it has one (the kqueue/epoll
+        // loop): read → parse → route → respond → write then run inline on the loop thread with no hop
+        // to the cooperative pool — median-latency parity with the blocking backbone (audit R4). `nil`
+        // (every other backbone) means no preference: the global pool, exactly as before.
+        await withTaskExecutorPreference(connection.preferredTaskExecutor) {
+            await serve(connection)
+        }
         connectionCounts.withLock { counts in
             counts.total -= 1
             guard let current = counts.perHost[host] else {
@@ -206,7 +216,21 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                 await self.serveHTTP2(connection, deadline: deadline, initialBytes: buffer)
             }
             else {
-                while await self.serveOne(connection, deadline: deadline, buffer: &buffer) {
+                // A per-connection response buffer, reused across keep-alive exchanges so the
+                // serializer allocates no fresh response storage after the first (audit: tail-latency
+                // variance — fewer per-request mallocs, less allocator-lock contention).
+                var responseBuffer: [UInt8] = []
+                // A cursor marking where the next request begins in `buffer`; advancing it past a
+                // consumed request is O(1), so a pipelined remainder is never memmoved to the front per
+                // request (audit L3 — the keep-alive ring buffer). serveOne compacts the prefix lazily.
+                var bufferStart = 0
+                while await self.serveOne(
+                    connection,
+                    deadline: deadline,
+                    buffer: &buffer,
+                    start: &bufferStart,
+                    responseBuffer: &responseBuffer
+                ) {
                     // Loop until serveOne returns false (close); the work is the call itself.
                 }
             }

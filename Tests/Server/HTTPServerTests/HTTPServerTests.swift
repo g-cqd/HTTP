@@ -86,6 +86,45 @@ struct HTTPServerTests {
         #expect(!wire.contains(" 400 "))  // a clean EOF on a boundary is not an error
     }
 
+    @Test("a 3-deep pipeline is served in order — the cursor advances per request, no shift (L3)")
+    func threeDeepPipeline() async {
+        let responder = ClosureResponder { request, _ in
+            ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
+        }
+        // Three requests buffered together: the keep-alive cursor advances past each consumed request
+        // in place (no per-request `removeFirst` memmove) and each later head parses from a non-zero
+        // offset. All three must be served, in order (audit L3 — the ring buffer).
+        let wire = await serve(
+            request: "GET /a HTTP/1.1\r\nHost: x\r\n\r\nGET /b HTTP/1.1\r\nHost: x\r\n\r\n"
+                + "GET /c HTTP/1.1\r\nHost: x\r\n\r\n",
+            responder: responder
+        )
+        #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 3)
+        #expect(wire.contains("\r\n\r\n/a"))
+        #expect(wire.contains("\r\n\r\n/b"))
+        #expect(wire.hasSuffix("\r\n\r\n/c"))  // /c served last (order preserved)
+    }
+
+    @Test("a pipelined request with a body frames head + body from a non-zero cursor (L3)")
+    func pipelinedRequestWithBody() async {
+        let responder = ClosureResponder { request, body in
+            ServerResponse(
+                HTTPResponse(status: .ok), body: body.isEmpty ? Array(request.path.utf8) : body
+            )
+        }
+        // Two bodied POSTs pipelined: the second request's head AND its Content-Length body are framed
+        // at a non-zero buffer offset (the cursor), exercising the `bodyStart` math (audit L3).
+        let wire = await serve(
+            request: "POST /one HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
+                + "POST /two HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nworld",
+            responder: responder
+        )
+        #expect(wire.ranges(of: "HTTP/1.1 200 OK").count == 2)
+        #expect(wire.contains("\r\n\r\nhello"))  // first body echoed
+        // second body echoed, framed from a non-zero cursor
+        #expect(wire.hasSuffix("\r\n\r\nworld"))
+    }
+
     @Test("honors Connection: close — serves one request then stops")
     func honorsConnectionClose() async {
         let responder = ClosureResponder { request, _ in
