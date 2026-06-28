@@ -75,6 +75,18 @@ struct ChunkedBodyDecoderTests {
         }
     }
 
+    @Test("rejects a bare LF before the CR in a chunk line (smuggling, RFC 9112 §2.2)")
+    func rejectsBareLineFeed() {
+        // A bare LF in the chunk-size line, and inside a chunk-extension — both let an upstream proxy
+        // reframe the body differently from this server (request smuggling).
+        #expect(throws: HTTP1ParseError.malformedChunk) {
+            _ = try decodeWhole("5\nhello\r\n0\r\n\r\n")
+        }
+        #expect(throws: HTTP1ParseError.malformedChunk) {
+            _ = try decodeWhole("1;a\nb\r\nA\r\n0\r\n\r\n")
+        }
+    }
+
     @Test(
         "rejects a malformed trailer field-line (audit H1-F3, RFC 9112 §7.1.2)",
         arguments: [

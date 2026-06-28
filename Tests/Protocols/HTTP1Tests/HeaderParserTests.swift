@@ -70,6 +70,13 @@ struct HeaderParserTests {
         }
     }
 
+    @Test("rejects a bare LF inside a field-line (smuggling, RFC 9112 §2.2)")
+    func rejectsBareLineFeed() {
+        #expect(throws: HTTP1ParseError.malformedHeaders) {
+            try parseHeaders("Host: example.com\nX-Smuggled: 1\r\n\r\n")
+        }
+    }
+
     @Test("enforces the maximum field count (→ 431)")
     func enforcesFieldCount() {
         let limits = HTTPLimits(maxFieldCount: 1)

@@ -47,7 +47,11 @@ public enum HeaderParser {
             totalSize += lineRange.count + 2  // include the CRLF in the section-size budget
             guard totalSize <= limits.maxHeaderListSize else { throw .headerSectionTooLarge }
             guard fields.count < limits.maxFieldCount else { throw .tooManyFields }
-
+            // Strict CRLF: a bare LF inside a field-line is a smuggling vector (RFC 9112 §2.2). The
+            // field-value validator would also reject an embedded LF, but fail closed here explicitly.
+            if reader.slice(in: lineRange).withUnsafeBytes({ $0.contains(lineFeed) }) {
+                throw .malformedHeaders
+            }
             fields.append(try parseFieldLine(reader.slice(in: lineRange)))
         }
     }

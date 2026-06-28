@@ -160,6 +160,11 @@ public enum ChunkedBodyDecoder {
             guard reader.remaining <= maxLength else { throw error }
             return .needMore
         }
+        // Strict CRLF: a bare LF before the terminating CR (in a chunk-size, chunk-ext, or trailer line)
+        // is a request-smuggling differential vs strict parsers — reject it (RFC 9112 §2.2).
+        if let bareLF = reader.firstIndex(of: lf), bareLF < crIndex {
+            throw .malformedChunk
+        }
         guard crIndex - reader.position <= maxLength else { throw error }
         let lfIndex = crIndex + 1
         guard lfIndex < reader.count else {
