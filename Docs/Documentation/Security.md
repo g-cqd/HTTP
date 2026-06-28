@@ -116,6 +116,31 @@ Traced in `Documentation/audit/2026-06-25-deep-hardening-audit.md`:
 Single-source-of-truth refactor: the HTTP/2 and HTTP/3 request mappers were unified into one
 `HTTPCore.RequestMapper`, so the §8.3 / §4.3 pseudo-header + field validation lives in exactly one place.
 
+### Mutual TLS + application authentication (G3 + G7)
+Client authentication is **layered**, not either/or — the two stages compose:
+
+1. **Transport (mutual TLS).** With `TransportTLS.clientAuth = .required` (or `.optional`), the TLS
+   backbone verifies the client certificate against the `verifyPeer` trust hook (custom CA / pinning)
+   *before any request is read*. The verified leaf subject is captured at handshake
+   (`TransportConnection.tlsPeerSubject`) and stamped by `HTTPServer.stampingClientCertSubject(_:from:)`
+   as the **server-asserted** `X-Client-Cert-Subject` (`HTTPFieldName.xClientCertSubject`) on the request
+   — on the h1, h2, **and** h3 paths. Any inbound value is stripped first, and a subject embedding CR/LF
+   is dropped rather than forged (RFC 9110 §5.5; CWE-93), so a handler only ever sees a subject the server
+   itself verified.
+2. **Application (HTTPAuth).** `BasicAuthMiddleware` / `JWTMiddleware` / `ForwardAuthMiddleware` then
+   verify a principal and assert it as `X-Auth-Subject` (`HTTPFieldName.xAuthSubject`).
+
+Both can be required at once — e.g. `.required` mTLS **and** `JWTMiddleware` — for zero-trust /
+service-to-service deployments: the caller must present a trusted certificate *and* a valid token. Because
+the verified certificate subject arrives as a request header, an authorization middleware or handler can
+cross-check the two identities (e.g. require `X-Client-Cert-Subject` to match the JWT `sub`).
+`SecurityHeadersMiddleware` is independent of both layers — it stamps response hardening headers
+regardless of how the client authenticated.
+
+> Caveat: only the certificate **leaf subject** is surfaced (a string header). Full SAN / certificate
+> chain as request-scoped context is a documented follow-up — it needs a typed request context (the same
+> shape as richer JWT claims), not a header.
+
 ## Pending (tracked)
 
 These are **not yet enforced** — do not rely on them until the referenced milestone lands.

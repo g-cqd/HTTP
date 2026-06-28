@@ -11,6 +11,11 @@ public import HTTPCore
 
 /// Stamps security response headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
 /// and optionally `Strict-Transport-Security` / `Content-Security-Policy`).
+///
+/// This middleware is independent of client authentication — it runs regardless of how, or whether, the
+/// client authenticated. For pairing mutual TLS (`TransportTLS.clientAuth`, which surfaces the verified
+/// client-cert subject as `X-Client-Cert-Subject`) with the `HTTPAuth` middlewares, see *Mutual TLS +
+/// application authentication* in `Docs/Documentation/Security.md`.
 public struct SecurityHeadersMiddleware: HTTPMiddleware {
     private let contentTypeOptions: Bool
     private let frameOptions: String?
