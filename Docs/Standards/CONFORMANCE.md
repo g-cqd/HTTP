@@ -81,7 +81,25 @@ connection error, while an RST-closed id (and any late DATA on either) keeps the
 
 ## WebSocket — Autobahn TestSuite (RFC 6455)
 
-Not yet wired. The recommended approach is the `crossbario/autobahn-testsuite` Docker image driving a
-`fuzzingclient` against `httpd-example`'s `/ws` echo endpoint, failing on any non-`OK`/`INFORMATIONAL`
-case. Deferred: the CI image has no Docker, and the in-house WebSocket suites + the new
-`WebSocketFuzzTests` already exercise framing, masking, fragmentation, close codes, and UTF-8.
+**Wired (non-gating).** The `autobahn` CI job (`.github/workflows/ci.yml`, on `ubuntu-latest` — which,
+unlike the macOS image, has Docker) runs the `crossbario/autobahn-testsuite` `fuzzingclient` against
+`httpd-example`'s `/ws` echo: the server runs in the Swift container on the host network, Autobahn runs as
+its own container against it, and `.github/conformance/autobahn/check.py` fails the run on any `FAILED`
+case (config: `.github/conformance/autobahn/fuzzingclient.json`). It is `continue-on-error` until first
+observed green on CI, then should be promoted to gating. The in-house WebSocket suites + `WebSocketFuzzTests`
+(framing, masking, fragmentation, close codes, UTF-8) remain the always-on coverage.
+
+## HTTP/3 / QUIC — h3spec (RFC 9114 / RFC 9000)
+
+**Planned (Darwin-only).** h3 is Network.framework-provided, so an h3spec lane is a macOS job. Two
+prerequisites gate it: (1) `httpd-example` must serve h3 (a QUIC transport + a dev TLS identity — today the
+example serves h1/h2 cleartext), and (2) the `h3spec` tool (Kazu Yamamoto's QUIC/h3 conformance suite) must
+be installed on the runner (a Haskell build — no Homebrew formula yet). Until then, the sans-I/O HTTP/3 +
+QPACK engines are covered by the in-house `HTTP3Tests` / `QPACKTests` (RFC 9114 §4 framing, §6 streams,
+QPACK RFC 9204) and the real-QUIC loopback in `HTTPServerHTTP3Tests`.
+
+## HTTP/3 load (h3load)
+
+**Deferred — no portable tool.** There is no standard "h2load for HTTP/3"; a load lane needs either a
+bespoke driver over the Network.framework QUIC client (Darwin-only, benchmark-only) or a vendored
+quiche/lsquic client. Tracked as a benchmark-matrix follow-up.

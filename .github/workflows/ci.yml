@@ -238,6 +238,43 @@ jobs:
           kill "$PID" 2>/dev/null || true
           exit $rc
 
+  # ---------------------------------------------------------------------------
+  # WebSocket conformance — the Autobahn TestSuite (RFC 6455) fuzzingclient against httpd-example's /ws
+  # echo. ubuntu-latest has Docker (the macOS image does not — why this was deferred): the server runs in
+  # the Swift container on the host network, Autobahn runs as its own container against it. Non-gating
+  # (continue-on-error) until observed green on CI, then promote. CI-only — not locally reproducible here
+  # (no Docker on the dev machine). Config + report gate: .github/conformance/autobahn/.
+  # ---------------------------------------------------------------------------
+  autobahn:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start httpd-example (/ws echo) in the Swift container, host network
+        run: |
+          docker run -d --name httpd --network host -v "$PWD:/work" -w /work \
+            swiftlang/swift:nightly-noble \
+            bash -lc 'swift build -c release --product httpd-example --scratch-path /tmp/bld \
+              && exec /tmp/bld/release/httpd-example 9001 posixEpoll'
+          # Wait (covering the in-container release build) for the WebSocket listener.
+          for _ in $(seq 1 90); do
+            curl -s -o /dev/null --max-time 1 http://127.0.0.1:9001/ && break
+            sleep 2
+          done
+      - name: Run the Autobahn fuzzingclient
+        run: |
+          mkdir -p reports
+          docker run --rm --network host \
+            -v "$PWD/.github/conformance/autobahn:/config:ro" \
+            -v "$PWD/reports:/reports" \
+            crossbario/autobahn-testsuite \
+            wstest -m fuzzingclient -s /config/fuzzingclient.json
+      - name: Gate the report (no FAILED cases)
+        run: python3 .github/conformance/autobahn/check.py reports/index.json
+      - name: Stop the server
+        if: always()
+        run: docker rm -f httpd || true
+
 # NOTE: jobs run on the `macos-26` image with the Swift 6.4 development toolchain. If a specific 6.4
 # snapshot is needed beyond the image default, install it as the first step of each job with swiftly
 # (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
