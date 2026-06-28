@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#
+# scripts/pre-commit — the in-repo counterpart to the `project-hooks` binary's pre-commit gate.
+#
+# Runs the exact commands of the CI `lint` job (.github/workflows/ci.yml), so a contributor who does
+# not have the `project-hooks` binary installed (see .git/hooks/pre-commit) still gets the same
+# style/safety gate locally — including the custom_rules in .swiftlint.yml (no `as Any`,
+# no `.unsafelyUnwrapped`):
+#
+#   • swift-format (strict)
+#   • SwiftLint   (strict)  — built-in safety rules + project custom_rules
+#
+# Like the CI job, it checks the whole tree. Run it directly (`scripts/pre-commit`) or wire it as the
+# git hook: `ln -sf ../../scripts/pre-commit .git/hooks/pre-commit`. The graph-level invariants
+# (no-SwiftNIO, trap-free request path, RFC-citation presence) are enforced by their own CI jobs.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# swift-format (strict) — the primary style gate.
+echo "==> swift-format (strict)"
+swift format lint --strict --recursive Sources Tests Package.swift
+
+# SwiftLint (strict) — layered safety rules + custom_rules.
+echo "==> SwiftLint (strict)"
+if ! command -v swiftlint >/dev/null 2>&1; then
+    echo "error: swiftlint not installed (brew install swiftlint)" >&2
+    exit 1
+fi
+swiftlint lint --strict --quiet
+
+printf '\n\033[0;32mpre-commit checks passed.\033[0m\n'

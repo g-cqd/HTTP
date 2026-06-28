@@ -5,6 +5,8 @@
 # no force-try, no implicitly-unwrapped optionals. `only_rules` keeps it fast and focused.
 
 only_rules:
+  # Project-specific safety invariants (defined under `custom_rules:` below).
+  - custom_rules
   # Main Rules
   - attribute_name_spacing
   - blanket_disable_command
@@ -199,6 +201,27 @@ prefer_key_path:
   restrict_to_standard_functions: false
 unused_import:
   require_explicit_imports: true
+
+# Project-specific safety invariants (CLAUDE.md), layered on the built-in safety rules above. These
+# encode conventions that were previously enforced only by review or by the CI graph jobs (trap-lint),
+# now also gated locally on every file by the pre-commit hook. `match_kinds` keeps each scoped to real
+# code, so a mention in a comment or string literal is not a violation.
+custom_rules:
+  forbid_as_any:
+    name: "Forbidden `as Any`"
+    regex: '\bas\s+Any\b'
+    match_kinds:
+      - keyword
+      - typeidentifier
+    message: "Avoid `as Any` (CLAUDE.md) — erasing to `Any` defeats the type system; model the type."
+    severity: error
+  forbid_unsafely_unwrapped:
+    name: "Forbidden `.unsafelyUnwrapped`"
+    regex: '\.unsafelyUnwrapped\b'
+    match_kinds:
+      - identifier
+    message: "`.unsafelyUnwrapped` traps on nil in release (see the trap-lint gate) — unwrap safely."
+    severity: error
 
 included:
   - Sources

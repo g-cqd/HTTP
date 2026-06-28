@@ -115,6 +115,30 @@ jobs:
           echo "request path is trap-free"
 
   # ---------------------------------------------------------------------------
+  # RFC-citation gate. CLAUDE.md: "Always reference RFC/ISO/Norms/Standards/CVE". Every wire
+  # parser/decoder must cite the standard it implements, so the normative basis for a parse stays in the
+  # source rather than tribal knowledge. Presence-only (a citation exists in the file), not a
+  # correctness claim — but it makes "which RFC?" un-skippable in review for the files that parse bytes.
+  # ---------------------------------------------------------------------------
+  rfc-citations:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert wire parsers/decoders cite their standard
+        run: |
+          set -euo pipefail
+          missing=""
+          while IFS= read -r f; do
+            grep -qE 'RFC[[:space:]]*[0-9]|§|CVE-|ISO[[:space:]/]' "$f" || missing+="$f"$'\n'
+          done < <(find Sources/Protocols Sources/Core/HTTPCore \( -name '*Parser.swift' -o -name '*Decoder.swift' \) | sort)
+          if [ -n "$missing" ]; then
+            printf '%s\n' "$missing"
+            echo "::error::a wire parser/decoder cites no RFC/§/CVE/ISO standard — reference the norm it implements"
+            exit 1
+          fi
+          echo "every wire parser/decoder cites its standard"
+
+  # ---------------------------------------------------------------------------
   # Data-race & memory checks. Parsers must stay clean under ASan/TSan.
   # ---------------------------------------------------------------------------
   sanitizers:
@@ -127,6 +151,35 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test under ${{ matrix.sanitizer }} sanitizer
         run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+
+  # ---------------------------------------------------------------------------
+  # Optional-feature manifest paths the DEFAULT graph never compiles, so a regression in them is
+  # otherwise invisible until a downstream first opts in: the portable libssl-over-POSIX TLS backbone
+  # (HTTP_PORTABLE_TLS — C++ interop + the vendored BoringSSL build) and the Zstandard content coding
+  # (HTTP_ZSTD — the libzstd shim, Homebrew-prefix path). These are the most fragile manifest branches;
+  # build them under warnings-as-errors so a manifest or shim break is caught here. (The Linux zstd path
+  # is exercised by codings-linux; this is the macOS Homebrew-prefix path plus the TLS backbone, which
+  # has no CI lane at all. Running the gated suites — only compiled under these flags — is a follow-up.)
+  # ---------------------------------------------------------------------------
+  optional-features:
+    runs-on: macos-26
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build — portable libssl TLS (HTTP_PORTABLE_TLS)
+        env:
+          HTTP_PORTABLE_TLS: "1"
+        run: swift build --scratch-path "$SCRATCH/opt-tls"
+      - name: Build — Zstandard coding (HTTP_ZSTD)
+        env:
+          HTTP_ZSTD: "1"
+          HTTP_ZSTD_PREFIX: /opt/homebrew/opt/zstd
+        run: |
+          brew list zstd >/dev/null 2>&1 || brew install zstd
+          swift build --scratch-path "$SCRATCH/opt-zstd"
 
   # ---------------------------------------------------------------------------
   # Linux (G0). The sans-I/O engines + server runtime run on Linux over the epoll backbone; these jobs
