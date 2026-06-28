@@ -114,7 +114,15 @@ extension HTTP2Connection {
             return
         }
         writer.writeData(streamID: streamID, endStream: true, [UInt8]()[...])
-        streams[streamID] = record.stream.state == .closed ? nil : record
+        guard record.stream.state == .closed else {
+            streams[streamID] = record
+            return
+        }
+        // Closed cleanly via the empty END_STREAM: record the close reason so a later frame on this id
+        // is scoped per RFC 9113 §5.1 — matching flushStream's clean-close bookkeeping. Without it a
+        // HEADERS reuse of this id would read as an idle-stream PROTOCOL_ERROR, not STREAM_CLOSED.
+        streams[streamID] = nil
+        markStreamClosed(streamID, reason: .endStream)
     }
 
     /// The number of response-body octets buffered (window-blocked) for `streamID` — the backpressure

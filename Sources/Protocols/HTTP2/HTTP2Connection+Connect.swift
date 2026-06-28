@@ -59,6 +59,13 @@ extension HTTP2Connection {
         }
         // Nothing queued: an empty DATA frame carries END_STREAM to end the tunnel.
         writer.writeData(streamID: streamID, endStream: true, [UInt8]()[...])
-        streams[streamID] = record.stream.state == .closed ? nil : record
+        guard record.stream.state == .closed else {
+            streams[streamID] = record
+            return
+        }
+        // Record the clean close so a later frame on this id is scoped per RFC 9113 §5.1 (matching
+        // flushStream); without it a reuse of this tunnel's id would read as an idle-stream error.
+        streams[streamID] = nil
+        markStreamClosed(streamID, reason: .endStream)
     }
 }

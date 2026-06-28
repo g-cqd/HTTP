@@ -76,6 +76,27 @@ struct HTTP2StreamingTests {
         #expect(out.endStream)  // a 0-length DATA frame carries END_STREAM
     }
 
+    @Test("reusing an empty-END_STREAM-closed stream id is a STREAM_CLOSED connection error (§5.1)")
+    func reuseAfterEmptyEndStreamIsStreamClosed() throws {
+        var connection = try afterGet()
+        try connection.respondHeaders(to: Self.stream, HTTPResponse(status: .ok))
+        _ = connection.outboundBytes()
+        try connection.endStream(to: Self.stream)  // empty END_STREAM closes stream 1 cleanly
+        _ = connection.outboundBytes()
+
+        // A HEADERS frame reusing id 1 is scoped by how the stream closed (RFC 9113 §5.1): the empty
+        // END_STREAM fast path must record the clean close, so the reuse is a connection STREAM_CLOSED
+        // — not the idle-id PROTOCOL_ERROR a missing close-reason record would mis-report.
+        var thrown: HTTP2ErrorCode?
+        do {
+            _ = try connection.receive(H2Wire.get(streamID: 1))
+        }
+        catch {
+            thrown = error.code  // `receive` uses typed throws, so `error` is already an HTTP2Error
+        }
+        #expect(thrown == .streamClosed)
+    }
+
     @Test("a long streamed response survives a repeated window stall with bounded backlog (§6.9)")
     func streamSurvivesWindowStallBounded() throws {
         // 5-octet stream window vs 10-octet chunks: every chunk half-flushes, stalling 5 octets until a
