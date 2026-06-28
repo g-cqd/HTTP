@@ -20,7 +20,11 @@
 
     internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
-    internal import Darwin
+    #if canImport(Darwin)
+        internal import Darwin
+    #elseif canImport(Glibc)
+        internal import Glibc
+    #endif
     internal import Dispatch
     internal import Synchronization
 
@@ -244,7 +248,7 @@
             }
             CHTTPBoringSSL_SSL_shutdown(ssl)
             CHTTPBoringSSL_SSL_free(ssl)
-            _ = Darwin.close(descriptor)
+            _ = close(descriptor)
         }
     }
 
