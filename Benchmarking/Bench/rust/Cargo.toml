@@ -1,0 +1,25 @@
+[package]
+name = "rust-bench"
+version = "0.1.0"
+edition = "2021"
+
+# The idiomatic high-performance Rust HTTP baseline: hyper (the foundational HTTP library behind axum,
+# warp, reqwest, …) on a multi-threaded tokio runtime. Mirrors the other servers' routes (`/`,
+# `/health`). Built with `cargo build --release` by Benchmarking/Bench/run.sh.
+
+[[bin]]
+name = "rust-bench"
+path = "src/main.rs"
+
+[dependencies]
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros"] }
+bytes = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
