@@ -24,6 +24,8 @@ DerivedData/
 /tmp/swiftpm-build/HTTP/
 # Linux verification scratch (apple/container; see scripts/linux-test.sh) — never committed.
 .build-linux/
+# Python bytecode cache (e.g. from .github/conformance tooling).
+__pycache__/
 
 ## Fuzzing corpora artifacts
 *.profraw
