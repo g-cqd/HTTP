@@ -29,6 +29,11 @@ public final class POSIXKqueueConnection: TransportConnection {
     private let descriptor: Int32
     private let eventLoop: KqueueEventLoop
     private let isClosed = Atomic<Bool>(false)
+    /// A reusable receive buffer, sized to `maxLength` on first use and overwritten each read, so the hot
+    /// read path allocates no fresh chunk per `recv` (audit P1). `Mutex`-guarded because `read(2)` runs on
+    /// the event-loop thread while the copy-out runs on the awaiting task; reads on one connection are
+    /// serial (the server awaits each before the next), so the lock is always uncontended.
+    private let scratch = Mutex<[UInt8]>([])
 
     private enum WriteOutcome {
         case done
@@ -75,6 +80,62 @@ public final class POSIXKqueueConnection: TransportConnection {
             }
         } onCancel: {
             closeDescriptor()
+        }
+    }
+
+    /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
+    /// count appended (`0` at EOF) — the allocation-free read path (audit P1). `read(2)` fills the scratch
+    /// in the readiness callback; the awaiting task then copies just the received bytes into `buffer`.
+    public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
+        let count = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Int, any Error>) in
+                readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
+            }
+        } onCancel: {
+            closeDescriptor()
+        }
+        // The scratch holds the bytes `read(2)` produced (reads are serial, so it is undisturbed until
+        // this copy); take just those into the caller's accumulator. `Mutex` borrows in place — no copy.
+        if count > 0 {
+            scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+        }
+        return count
+    }
+
+    /// Fills the reused scratch from `read(2)` once readable and resumes `once` with the byte count
+    /// (`0` at EOF), re-arming on a spurious `EAGAIN` wakeup.
+    ///
+    /// Instance method so it can borrow the non-copyable `scratch` `Mutex`; `self` is captured only for
+    /// the one-shot re-arm.
+    private func readIntoScratch(maxLength: Int, into once: OnceResumer<Int>) {
+        do {
+            let bytesRead = try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
+                if buffer.count < maxLength {
+                    // Sized once on first use, then reused for the connection's lifetime.
+                    buffer = [UInt8](repeating: 0, count: maxLength)
+                }
+                return try buffer.withUnsafeMutableBytes { raw -> Int in
+                    while true {
+                        let count = read(descriptor, raw.baseAddress, maxLength)
+                        if count >= 0 {
+                            return count
+                        }
+                        if errno == EINTR { continue }
+                        if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlockOnRead() }
+                        throw TransportError.ioFailed("read errno \(errno)")
+                    }
+                }
+            }
+            once.resume(returning: bytesRead)  // 0 == EOF (a zero-length read)
+        }
+        catch is WouldBlockOnRead {
+            eventLoop.waitReadable(descriptor) { [self] in
+                readIntoScratch(maxLength: maxLength, into: once)
+            }
+        }
+        catch {
+            once.resume(throwing: error)
         }
     }
 

@@ -51,6 +51,9 @@
         private let verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
         /// `true` once the `SSL` and socket have been torn down (once-only across ``close()`` / `deinit`).
         private let lifecycle = Mutex<Bool>(false)
+        /// Reused receive buffer (audit P1) — `SSL_read` decrypts into it, then the bytes are copied once
+        /// to the caller's accumulator; no fresh per-read chunk.
+        private let scratch = Mutex<[UInt8]>([])
 
         /// Wraps an `SSL` already bound to `descriptor` via `SSL_set_fd` (the caller owns that wiring);
         /// the connection takes ownership and tears both down on ``close()``.
@@ -127,12 +130,15 @@
                         continuation.resume(returning: nil)
                         return
                     }
-                    var buffer = [UInt8](repeating: 0, count: max(1, maxLength))
-                    let count = buffer.withUnsafeMutableBytes { raw in
-                        CHTTPBoringSSL_SSL_read(self.ssl, raw.baseAddress, Int32(raw.count))
+                    // One uninitialized allocation sized to what `SSL_read` returns — no 16 KB memset and
+                    // no `removeLast` trim (mirrors `POSIXSocket.readBuffer`; CLAUDE.md allocation rules).
+                    var count: Int32 = 0
+                    let buffer = [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) {
+                        raw, filled in
+                        count = CHTTPBoringSSL_SSL_read(self.ssl, raw.baseAddress, Int32(raw.count))
+                        filled = count > 0 ? Int(count) : 0
                     }
                     if count > 0 {
-                        buffer.removeLast(buffer.count - Int(count))
                         continuation.resume(returning: buffer)
                         return
                     }
@@ -149,6 +155,46 @@
                     }
                 }
             }
+        }
+
+        /// Reads up to `maxLength` decrypted bytes into the reused scratch and appends them to `buffer`
+        /// (audit P1), returning the count appended (`0` once the peer closes).
+        func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
+            let count = try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Int, any Error>) in
+                queue.async { [self] in
+                    if lifecycle.withLock(\.self) {
+                        continuation.resume(returning: 0)
+                        return
+                    }
+                    let read: Int32 = scratch.withLock { (b: inout [UInt8]) in
+                        if b.count < maxLength {
+                            // Sized once on first use, then reused (so `b.count >= maxLength`).
+                            b = [UInt8](repeating: 0, count: max(1, maxLength))
+                        }
+                        return b.withUnsafeMutableBytes { raw in
+                            CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, Int32(maxLength))
+                        }
+                    }
+                    if read > 0 {
+                        continuation.resume(returning: Int(read))
+                        return
+                    }
+                    let status = CHTTPBoringSSL_SSL_get_error(ssl, read)
+                    if status == SSL_ERROR_ZERO_RETURN || status == SSL_ERROR_SYSCALL {
+                        continuation.resume(returning: 0)
+                    }
+                    else {
+                        continuation.resume(
+                            throwing: TransportError.ioFailed("SSL_read error \(status)")
+                        )
+                    }
+                }
+            }
+            if count > 0 {
+                scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+            }
+            return count
         }
 
         /// Sends `bytes` to the peer, encrypting and writing them in full.

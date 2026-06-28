@@ -34,6 +34,9 @@
         private let descriptor: Int32
         private let eventLoop: EpollEventLoop
         private let isClosed = Atomic<Bool>(false)
+        /// Reused receive buffer for the read path — the Linux mirror of the ``POSIXKqueueConnection``
+        /// scratch (audit P1).
+        private let scratch = Mutex<[UInt8]>([])
 
         private enum WriteOutcome {
             case done
@@ -80,6 +83,59 @@
                 }
             } onCancel: {
                 closeDescriptor()
+            }
+        }
+
+        /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer` (audit P1),
+        /// returning the count appended (`0` at EOF) — the allocation-free read path.
+        public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
+            let count = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Int, any Error>) in
+                    readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
+                }
+            } onCancel: {
+                closeDescriptor()
+            }
+            if count > 0 {
+                scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+            }
+            return count
+        }
+
+        /// Fills the reused scratch from `read(2)` once readable and resumes `once` with the byte count
+        /// (`0` at EOF), re-arming on a spurious `EAGAIN`.
+        ///
+        /// Instance method so it can borrow the non-copyable `scratch`; `self` is captured only for the
+        /// one-shot re-arm.
+        private func readIntoScratch(maxLength: Int, into once: OnceResumer<Int>) {
+            do {
+                let bytesRead = try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
+                    if buffer.count < maxLength {
+                        // Sized once on first use, then reused for the connection's lifetime.
+                        buffer = [UInt8](repeating: 0, count: maxLength)
+                    }
+                    return try buffer.withUnsafeMutableBytes { raw -> Int in
+                        while true {
+                            let count = read(descriptor, raw.baseAddress, maxLength)
+                            if count >= 0 {
+                                return count
+                            }
+                            if errno == EINTR { continue }
+                            if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlockOnRead() }
+                            throw TransportError.ioFailed("read errno \(errno)")
+                        }
+                    }
+                }
+                once.resume(returning: bytesRead)  // 0 == EOF (a zero-length read)
+            }
+            catch is WouldBlockOnRead {
+                eventLoop.waitReadable(descriptor) { [self] in
+                    readIntoScratch(maxLength: maxLength, into: once)
+                }
+            }
+            catch {
+                once.resume(throwing: error)
             }
         }
 

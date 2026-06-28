@@ -144,9 +144,11 @@ extension HTTPServer where C.Duration == Duration {
                     by: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
                 )
             )
-            let chunk: [UInt8]?
+            let received: Int
             do {
-                chunk = try await connection.receive(maxLength: 16_384)
+                // Reads straight into the backbone's reused scratch and appends only the received bytes to
+                // `buffer` — no fresh per-read chunk allocation (audit P1).
+                received = try await connection.receive(into: &buffer, maxLength: 16_384)
             }
             catch {
                 deadline.disarm()
@@ -160,14 +162,13 @@ extension HTTPServer where C.Duration == Duration {
             if deadline.hasLapsed {
                 return .cleanClose  // timeout (the close surfaced as EOF)
             }
-            guard let chunk, !chunk.isEmpty else {
+            guard received > 0 else {
                 // EOF: graceful on a request boundary, truncation mid-request.
                 if buffer.isEmpty {
                     return .cleanClose
                 }
                 throw HTTP1ParseError.incompleteHeaders
             }
-            buffer.append(contentsOf: chunk)
         }
     }
 

@@ -45,6 +45,15 @@ public protocol TransportConnection: Sendable {
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
     func receive(maxLength: Int) async throws -> [UInt8]?
 
+    /// Receives up to `maxLength` inbound bytes, **appending** them to `buffer`, and returns the number
+    /// of bytes appended (`0` at EOF).
+    ///
+    /// This is the allocation-lean read path: a backbone that owns a reusable read buffer overrides it to
+    /// read straight into that scratch and copy only the received bytes into `buffer` — no fresh per-read
+    /// chunk. The default below adapts ``receive(maxLength:)`` for backbones that cannot (Network.framework
+    /// hands back its own `Data`).
+    func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int
+
     /// Sends `bytes` to the peer, completing once they are handed to the OS.
     func send(_ bytes: [UInt8]) async throws
 
@@ -63,4 +72,17 @@ extension TransportConnection {
     /// No client certificate by default; a TLS backbone doing mutual TLS overrides this once the
     /// handshake settles.
     public var tlsPeerSubject: String? { nil }
+
+    /// Default ``receive(into:maxLength:)``: read one chunk via ``receive(maxLength:)`` and append it.
+    ///
+    /// Used by backbones that cannot read into a caller buffer (Network.framework returns its own `Data`)
+    /// and the in-memory test fakes — behaviour-identical to the prior `receive` + `append`. The POSIX
+    /// backbones override it to drop the per-read allocation.
+    public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
+        guard let chunk = try await receive(maxLength: maxLength), !chunk.isEmpty else {
+            return 0
+        }
+        buffer.append(contentsOf: chunk)
+        return chunk.count
+    }
 }

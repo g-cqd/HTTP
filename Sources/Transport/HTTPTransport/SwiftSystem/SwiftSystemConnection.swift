@@ -35,6 +35,8 @@ public final class SwiftSystemConnection: TransportConnection {
     private let descriptor: FileDescriptor
     private let ioQueue: DispatchQueue
     private let isClosed = Atomic<Bool>(false)
+    /// Reused receive buffer — see ``POSIXKqueueConnection`` (audit P1).
+    private let scratch = Mutex<[UInt8]>([])
 
     /// Wraps an accepted socket `descriptor`; I/O is serialized on a queue targeting `targetQueue`.
     init(
@@ -79,6 +81,41 @@ public final class SwiftSystemConnection: TransportConnection {
         } onCancel: {
             shutdownDescriptor()
         }
+    }
+
+    /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
+    /// count appended (`0` at EOF) — the allocation-free read path (audit P1).
+    public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
+        let count = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Int, any Error>) in
+                ioQueue.async { [self] in
+                    do {
+                        let bytesRead = try scratch.withLock { (b: inout [UInt8]) throws -> Int in
+                            if b.count < maxLength {
+                                // Sized once on first use, then reused.
+                                b = [UInt8](repeating: 0, count: maxLength)
+                            }
+                            return try b.withUnsafeMutableBytes { raw in
+                                try descriptor.read(
+                                    into: UnsafeMutableRawBufferPointer(rebasing: raw[..<maxLength])
+                                )
+                            }
+                        }
+                        continuation.resume(returning: bytesRead)
+                    }
+                    catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+        } onCancel: {
+            shutdownDescriptor()
+        }
+        if count > 0 {
+            scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+        }
+        return count
     }
 
     /// Writes all of `bytes` (handling short writes), walking a `RawSpan` over the payload.
