@@ -40,6 +40,10 @@ DURATION="${DURATION:-10s}"
 CONNECTIONS="${CONNECTIONS:-64}"
 RATE="${RATE:-}"
 WARMUP="${WARMUP:-2s}"
+# Repeat the whole field N times and report **best-of-N** per cell. A single sequential pass on a
+# colocated box thermally throttles, so servers measured later look slower than they are; sampling each
+# server at N points in the run and keeping its best result cancels that ordering bias. ROUNDS=3+ advised.
+ROUNDS="${ROUNDS:-1}"
 BACKBONE="${BACKBONE:-swiftSystem}"                  # legacy single-backbone override (still honored)
 # Our server is measured across ALL its transport backbones — each a row labeled ours(<backbone>) — so
 # this one battletest covers every competitor technology AND every one of our own variants. Subset by
@@ -79,6 +83,43 @@ wait_ready() {
     return 1
 }
 
+# --- thermal settling -------------------------------------------------------------------------------
+# A colocated box thermally throttles under sustained load, so a server measured on a hot box reads
+# slower than it is (the bias that made later-in-sequence servers look weak). There is no sudo-free
+# thermal sysctl on Apple Silicon, so gate on a CPU **calibration probe** instead: time a fixed compute
+# task on the idle box; when it returns near the coolest time seen, the box has recovered. Each
+# measurement then starts from a comparable thermal baseline. Disable with THERMAL_SETTLE=0.
+THERMAL_SETTLE="${THERMAL_SETTLE:-1}"
+THERMAL_TOLERANCE="${THERMAL_TOLERANCE:-12}"  # percent over the coolest probe still "reasonable"
+THERMAL_COOLDOWN="${THERMAL_COOLDOWN:-3}"     # seconds idle between probes while still hot
+THERMAL_MAX_WAIT="${THERMAL_MAX_WAIT:-40}"    # cap the wait per settle (never stall forever)
+THERMAL_BASELINE=""                           # coolest probe (ms) seen so far; set on first probe
+
+# Milliseconds for a fixed CPU task (best of 2, to damp P/E-core placement noise). Lower = cooler.
+cool_probe_ms() {
+    local best="" t i
+    for i in 1 2; do
+        t=$( { /usr/bin/time -p awk 'BEGIN{s=0;for(i=0;i<6000000;i++)s+=i}'; } 2>&1 \
+            | awk '/real/{printf "%.0f", $2*1000}')
+        { [ -z "$best" ] || [ "${t:-0}" -lt "$best" ]; } && best="$t"
+    done
+    printf '%s' "${best:-0}"
+}
+
+# Wait (idle, no server load) until the box is near its coolest compute baseline.
+settle_thermal() {
+    [ "$THERMAL_SETTLE" = "1" ] || return 0
+    local waited=0 p limit
+    while :; do
+        p=$(cool_probe_ms)
+        [ "${p:-0}" -gt 0 ] || return 0  # probe unavailable — do not gate
+        { [ -z "$THERMAL_BASELINE" ] || [ "$p" -lt "$THERMAL_BASELINE" ]; } && THERMAL_BASELINE="$p"
+        limit=$(( THERMAL_BASELINE * (100 + THERMAL_TOLERANCE) / 100 ))
+        { [ "$p" -le "$limit" ] || [ "$waited" -ge "$THERMAL_MAX_WAIT" ]; } && return 0
+        sleep "$THERMAL_COOLDOWN"; waited=$(( waited + THERMAL_COOLDOWN ))
+    done
+}
+
 # bench_one <url> <method> <server-label> <scenario-key> — one warmed oha pass; appends a row
 # "<scenkey>\t<label>\t<rps>\t<p50>\t<p99>\t<p999>" to _results.tsv, or N/A when the route is missing
 # (success rate below 99% — e.g. nginx/caddy on /echo).
@@ -90,6 +131,7 @@ bench_one() {
     if [ "$method" = "POST" ]; then
         common+=(-m POST -d "$ECHO_BODY" -H "Content-Type: application/json")
     fi
+    settle_thermal  # wait for the box to cool to its baseline first, so every server is measured fairly
     if [ "$WARMUP" != "0" ]; then
         oha -z "$WARMUP" "${common[@]}" "$url" >/dev/null 2>&1 || true
     fi
@@ -151,9 +193,11 @@ sed "s#__PAYLOAD__#$PAYLOAD#g" "$SCRIPT_DIR/servers/nginx.conf" >"$NGINX_CONF"
 sed "s#__PAYLOAD__#$PAYLOAD#g" "$SCRIPT_DIR/servers/Caddyfile" >"$CADDY_CONF"
 
 : > "$RESULTS_DIR/_results.tsv"
-echo "scenarios=[$SCENARIOS]  connections=$CONNECTIONS  duration=$DURATION  ncpu=$NCPU"
+echo "scenarios=[$SCENARIOS]  connections=$CONNECTIONS  duration=$DURATION  ncpu=$NCPU  rounds=$ROUNDS"
 echo
 
+for round in $(seq 1 "$ROUNDS"); do
+[ "$ROUNDS" -gt 1 ] && echo "════════════════ round $round/$ROUNDS ════════════════"
 for s in $SERVERS; do
     SERVER_PID=""
     case "$s" in
@@ -267,8 +311,9 @@ for s in $SERVERS; do
     esac
     sleep 0.4
 done
+done  # rounds
 
-# --- report: one table per scenario (sorted by rps), then a throughput matrix -----------------------
+# --- report: one table per scenario (best-of-N rps per server), then a throughput matrix ------------
 echo
 SCEN_KEYS=""
 for scen in $SCENARIOS; do
@@ -280,7 +325,10 @@ for entry in $SCEN_KEYS; do
     echo "### $scen"
     echo "| server | rps | p50 (ms) | p99 (ms) | p99.9 (ms) |"
     echo "|---|---:|---:|---:|---:|"
-    awk -F'\t' -v k="$key" '$1==k {print}' "$RESULTS_DIR/_results.tsv" \
+    awk -F'\t' -v k="$key" '$1==k {
+            v = ($3=="N/A" ? -1 : $3+0)
+            if (!($2 in seen) || v > best[$2]) { seen[$2]=1; best[$2]=v; row[$2]=$0 }
+        } END { for (l in row) print row[l] }' "$RESULTS_DIR/_results.tsv" \
         | sort -t$'\t' -k3 -nr \
         | while IFS=$'\t' read -r _ label rps p50 p99 p999; do
             printf '| %s | %s | %s | %s | %s |\n' "$label" "$rps" "$p50" "$p99" "$p999"
