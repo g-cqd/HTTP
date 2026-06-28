@@ -3,16 +3,18 @@
 //  HTTPAuthTests
 //
 //  Signs compact JWS tokens (RFC 7515) for the verification tests — HS256 / ES256 / RS256, plus an
-//  unsigned `alg:none` token — reusing `HTTPAuth`'s internal base64url codec.
+//  unsigned `alg:none` token — reusing the shared, Foundation-free ``Base64`` codec.
 //
 
 // swiftlint:disable sorted_imports - swift-format's OrderedImports sorts `_`-prefixed modules last
 import Crypto
 import Foundation
+import HTTPCore
 import _CryptoExtras
-// swiftlint:enable sorted_imports
 
 @testable import HTTPAuth
+
+// swiftlint:enable sorted_imports
 
 /// Builds signed (and deliberately unsigned) JWTs for tests.
 enum TokenFactory {
@@ -22,7 +24,7 @@ enum TokenFactory {
             .authenticationCode(
                 for: Data(signingInput.utf8), using: SymmetricKey(data: secret)
             )
-        return signingInput + "." + Base64URL.encode(Array(mac))
+        return signingInput + "." + Base64.encode(Array(mac), alphabet: .urlSafe, padded: false)
     }
 
     static func es256(
@@ -30,7 +32,8 @@ enum TokenFactory {
     ) throws -> String {
         let signingInput = segment(header) + "." + segment(payload)
         let signature = try key.signature(for: Data(signingInput.utf8))
-        return signingInput + "." + Base64URL.encode(Array(signature.rawRepresentation))
+        let raw = Array(signature.rawRepresentation)
+        return signingInput + "." + Base64.encode(raw, alphabet: .urlSafe, padded: false)
     }
 
     static func rs256(
@@ -38,7 +41,8 @@ enum TokenFactory {
     ) throws -> String {
         let signingInput = segment(header) + "." + segment(payload)
         let signature = try key.signature(for: Data(signingInput.utf8), padding: .insecurePKCS1v1_5)
-        return signingInput + "." + Base64URL.encode(Array(signature.rawRepresentation))
+        let raw = Array(signature.rawRepresentation)
+        return signingInput + "." + Base64.encode(raw, alphabet: .urlSafe, padded: false)
     }
 
     /// An `alg:none` token with an empty signature segment (the classic forgery attempt).
@@ -47,6 +51,6 @@ enum TokenFactory {
     }
 
     private static func segment(_ json: String) -> String {
-        Base64URL.encode(Array(json.utf8))
+        Base64.encode(json.utf8, alphabet: .urlSafe, padded: false)
     }
 }

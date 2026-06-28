@@ -69,8 +69,8 @@ public struct BasicAuthMiddleware: HTTPMiddleware {
         }
         let parts = header.split(separator: " ", maxSplits: 1)
         guard parts.count == 2, parts[0].lowercased() == "basic",
-            let data = Data(base64Encoded: String(parts[1])),
-            let decoded = String(data: data, encoding: .utf8),
+            let data = Base64.decode(parts[1].utf8, alphabet: .standard, padded: true),
+            let decoded = String(bytes: data, encoding: .utf8),
             let colon = decoded.firstIndex(of: ":")
         else {
             return nil

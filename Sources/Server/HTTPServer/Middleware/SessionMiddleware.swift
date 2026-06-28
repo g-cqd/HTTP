@@ -11,7 +11,6 @@
 //  id. Stateless: the signed cookie is the whole session, so it needs no server-side store.
 //
 
-internal import Foundation
 public import HTTPCore
 
 /// Issues and verifies HMAC-signed session cookies, exposing the verified id as `X-Session-ID`.
@@ -72,19 +71,21 @@ public struct SessionMiddleware: HTTPMiddleware {
             return nil
         }
         let parts = raw.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
-        guard parts.count == 2, let mac = Self.base64urlDecode(String(parts[1])) else {
+        guard parts.count == 2,
+            let mac = Base64.decode(parts[1].utf8, alphabet: .urlSafe, padded: false)
+        else {
             return nil
         }
         let id = String(parts[0])
         let expected = HMACSHA256.authenticationCode(key: key, message: Array(id.utf8))
-        let valid = HMACSHA256.constantTimeEquals(Array(mac), expected)
+        let valid = HMACSHA256.constantTimeEquals(mac, expected)
         return valid ? id : nil
     }
 
     /// Signs `id` as `<id>.<base64url(HMAC-SHA256(id))>`.
     private func sign(_ id: String) -> String {
         let mac = HMACSHA256.authenticationCode(key: key, message: Array(id.utf8))
-        return id + "." + Self.base64urlEncode(Data(mac))
+        return id + "." + Base64.encode(mac, alphabet: .urlSafe, padded: false)
     }
 
     /// A 128-bit random hex session id (`SystemRandomNumberGenerator`).
@@ -93,38 +94,5 @@ public struct SessionMiddleware: HTTPMiddleware {
         let high = UInt64.random(in: .min ... .max, using: &rng)
         let low = UInt64.random(in: .min ... .max, using: &rng)
         return String(high, radix: 16) + String(low, radix: 16)
-    }
-
-    /// Base64url without padding (cookie-safe; RFC 4648 §5).
-    private static func base64urlEncode(_ data: Data) -> String {
-        var encoded = data.base64EncodedString()
-        encoded = encoded.replacingOccurrences(of: "+", with: "-")
-        encoded = encoded.replacingOccurrences(of: "/", with: "_")
-        while encoded.hasSuffix("=") {
-            encoded.removeLast()
-        }
-        return encoded
-    }
-
-    /// Decodes a base64url (unpadded) string, or nil if malformed.
-    ///
-    /// Strict (RFC 4648 §5): rejects any byte outside the URL alphabet — standard `+`/`/`, embedded `=`
-    /// padding, and whitespace — so a tag cannot be silently rewritten into an equivalent encoding before
-    /// the constant-time compare (audit F8; matches `HTTPAuth/Base64URL`).
-    private static func base64urlDecode(_ string: String) -> Data? {
-        for scalar in string.unicodeScalars {
-            switch scalar {
-                case "A" ... "Z", "a" ... "z", "0" ... "9", "-", "_":
-                    continue
-                default:
-                    return nil
-            }
-        }
-        var standard = string.replacingOccurrences(of: "-", with: "+")
-        standard = standard.replacingOccurrences(of: "_", with: "/")
-        while standard.count % 4 != 0 {
-            standard += "="
-        }
-        return Data(base64Encoded: standard)
     }
 }

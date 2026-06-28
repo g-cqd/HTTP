@@ -13,7 +13,9 @@
 // swiftlint:disable sorted_imports - swift-format's OrderedImports sorts `_`-prefixed modules last
 public import Crypto
 internal import Foundation
+internal import HTTPCore
 public import _CryptoExtras
+
 // swiftlint:enable sorted_imports
 
 /// Verifies compact JWS tokens (RFC 7519) against a single bound key/algorithm.
@@ -81,7 +83,7 @@ public enum JWT {
     /// `audience`/`issuer`; non-finite numeric claims are rejected. By default a token MUST carry `exp`
     /// (`requireExpiration`) so an unbounded-lifetime token is not silently accepted.
     public static func verify(
-        _ token: String,
+        _ token: some StringProtocol,
         key: Key,
         audience: String? = nil,
         issuer: String? = nil,
@@ -119,26 +121,28 @@ public enum JWT {
     }
 
     /// The decoded pieces of a compact JWS, or nil if it is not three valid base64url segments.
-    private static func parse(_ token: String) -> ParsedToken? {
+    private static func parse(_ token: some StringProtocol) -> ParsedToken? {
         let segments = token.split(separator: ".", omittingEmptySubsequences: false)
         guard segments.count == 3 else {
             return nil
         }
-        let header = String(segments[0])
-        let payload = String(segments[1])
-        guard let headerBytes = Base64URL.decode(header),
-            let payloadBytes = Base64URL.decode(payload),
-            let signature = Base64URL.decode(String(segments[2])),
+        // Decode straight from each segment's `UTF8View` — no `String(segments[i])` materialization. The
+        // signing input is sliced from `token` below, so the segments are only ever fed to the decoder.
+        guard let headerBytes = Base64.decode(segments[0].utf8, alphabet: .urlSafe, padded: false),
+            let payloadBytes = Base64.decode(segments[1].utf8, alphabet: .urlSafe, padded: false),
+            let signature = Base64.decode(segments[2].utf8, alphabet: .urlSafe, padded: false),
             let jose = decodeHeader(headerBytes)
         else {
             return nil
         }
+        // The JWS signing input is `header.payload` — the token up to (but excluding) the second '.', i.e.
+        // where the payload segment ends. Slice those bytes from `token` directly (no rebuilt `String`).
         return ParsedToken(
             algorithm: jose.alg,
             hasCriticalHeader: jose.crit != nil,
             payload: payloadBytes,
             signature: signature,
-            signingInput: Array("\(header).\(payload)".utf8)
+            signingInput: Array(token[..<segments[1].endIndex].utf8)
         )
     }
 
@@ -148,24 +152,26 @@ public enum JWT {
         over signingInput: [UInt8],
         key: Key
     ) -> Bool {
+        // `[UInt8]` conforms to `DataProtocol`/`ContiguousBytes`, so the signature and signing input go
+        // straight into swift-crypto — no per-verify `Data(...)` copy of either buffer.
         switch key {
             case .hs256(let secret):
                 return HMAC<SHA256>
                     .isValidAuthenticationCode(
-                        Data(signature),
-                        authenticating: Data(signingInput),
+                        signature,
+                        authenticating: signingInput,
                         using: SymmetricKey(data: secret)
                     )
             case .es256(let publicKey):
-                let data = Data(signature)
-                guard let parsed = try? P256.Signing.ECDSASignature(rawRepresentation: data) else {
+                guard let parsed = try? P256.Signing.ECDSASignature(rawRepresentation: signature)
+                else {
                     return false
                 }
-                return publicKey.isValidSignature(parsed, for: Data(signingInput))
+                return publicKey.isValidSignature(parsed, for: signingInput)
             case .rs256(let publicKey):
-                let parsed = _RSA.Signing.RSASignature(rawRepresentation: Data(signature))
+                let parsed = _RSA.Signing.RSASignature(rawRepresentation: signature)
                 return publicKey.isValidSignature(
-                    parsed, for: Data(signingInput), padding: .insecurePKCS1v1_5
+                    parsed, for: signingInput, padding: .insecurePKCS1v1_5
                 )
         }
     }

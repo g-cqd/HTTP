@@ -71,7 +71,10 @@ public struct JWTMiddleware: HTTPMiddleware {
     }
 
     /// The token from `Authorization: Bearer <token>` (RFC 6750 §2.1), or nil.
-    private static func bearerToken(_ request: HTTPRequest) -> String? {
+    ///
+    /// Returns the borrowed `Substring` — `JWT.verify` takes `some StringProtocol`, so the token reaches
+    /// the verifier with no `String(parts[1])` materialization.
+    private static func bearerToken(_ request: HTTPRequest) -> Substring? {
         guard let header = request.headerFields[.authorization] else {
             return nil
         }
@@ -79,6 +82,6 @@ public struct JWTMiddleware: HTTPMiddleware {
         guard parts.count == 2, parts[0].lowercased() == "bearer" else {
             return nil
         }
-        return String(parts[1])
+        return parts[1]
     }
 }

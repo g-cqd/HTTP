@@ -77,7 +77,7 @@ public enum WebSocketHandshake {
 
     /// `Sec-WebSocket-Accept` for a client key: base64(SHA-1(key ‖ GUID)) (RFC 6455 §4.2.2).
     public static func accept(for key: String) -> String {
-        Data(SHA1.hash(Array((key + guid).utf8))).base64EncodedString()
+        Base64.encode(SHA1.hash(Array((key + guid).utf8)), alphabet: .standard, padded: true)
     }
 
     /// Whether `fields[name]` offers `token`, case-insensitively, within its comma-separated list
@@ -98,6 +98,6 @@ public enum WebSocketHandshake {
 
     /// Whether `key` is a base64 encoding of exactly 16 octets (RFC 6455 §4.1).
     private static func isValidKey(_ key: String) -> Bool {
-        Data(base64Encoded: key)?.count == 16
+        Base64.decode(key, alphabet: .standard, padded: true)?.count == 16
     }
 }
