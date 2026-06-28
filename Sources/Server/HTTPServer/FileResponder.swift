@@ -186,15 +186,19 @@ public struct FileResponder: HTTPResponder {
         return inRoot(root + "/" + components.joined(separator: "/"))
     }
 
-    /// The standardized form of `absolutePath` if it stays inside the root, else nil (CWE-22 jail).
+    /// The real (symlink-resolved) form of `absolutePath` if it stays inside the root, else nil.
+    ///
+    /// Resolves symlinks before the containment check (CWE-22): rejecting `..`/`.` components is not
+    /// enough, because a symlink *inside* the root that points outside it (e.g. `root/link -> /etc`) has
+    /// no `..` yet escapes — lexical standardization does not follow links. The root is resolved too so
+    /// both sides are canonical (`resolvingSymlinksInPath` also standardizes away `.`/`..`).
     func inRoot(_ absolutePath: String) -> String? {
-        let standardized = URL(fileURLWithPath: absolutePath).standardizedFileURL.path
-        let rootStandardized = URL(fileURLWithPath: root).standardizedFileURL.path
-        guard standardized == rootStandardized || standardized.hasPrefix(rootStandardized + "/")
-        else {
+        let resolved = URL(fileURLWithPath: absolutePath).resolvingSymlinksInPath().path
+        let rootResolved = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
+        guard resolved == rootResolved || resolved.hasPrefix(rootResolved + "/") else {
             return nil
         }
-        return standardized
+        return resolved
     }
 
     /// Classifies `path`: a regular file (with size + mtime), a directory, or missing.

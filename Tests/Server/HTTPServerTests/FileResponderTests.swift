@@ -79,6 +79,37 @@ struct FileResponderTests {
         }
     }
 
+    @Test("a symlink inside the root pointing outside it is rejected (CWE-22 symlink escape)")
+    func symlinkEscape() async {
+        let manager = FileManager.default
+        let base = manager.temporaryDirectory
+            .appendingPathComponent("fileresponder-symlink-\(UUID().uuidString)")
+        let root = base.appendingPathComponent("docroot")
+        let outside = base.appendingPathComponent("secret")
+        try? manager.createDirectory(at: root, withIntermediateDirectories: true)
+        try? manager.createDirectory(at: outside, withIntermediateDirectories: true)
+        manager.createFile(
+            atPath: outside.appendingPathComponent("passwd").path, contents: Data("TOP SECRET".utf8)
+        )
+        manager.createFile(
+            atPath: root.appendingPathComponent("ok.txt").path, contents: Data("ok".utf8)
+        )
+        // A symlink inside the docroot pointing to the sibling secret dir — no `..` appears in the URL.
+        try? manager.createSymbolicLink(
+            at: root.appendingPathComponent("link"), withDestinationURL: outside
+        )
+        defer { try? manager.removeItem(at: base) }
+
+        let responder = FileResponder(root: root.path)
+        // A genuine in-root file still serves — symlink resolution must not over-reject.
+        let inside = await responder.respond(to: get("/ok.txt"), body: [])
+        #expect(inside.head.status == .ok)
+        // The symlink escape is refused.
+        let escape = await responder.respond(to: get("/link/passwd"), body: [])
+        #expect(escape.head.status == .forbidden)
+        #expect(escape.body.isEmpty)
+    }
+
     @Test("HEAD sends Content-Length but no body (RFC 9112 §6.3)")
     func head() async {
         await withRoot(["a.txt": Array("0123456789".utf8)]) { responder in
