@@ -28,6 +28,16 @@
     internal import Dispatch
     internal import Synchronization
 
+    /// Closes a raw socket descriptor, qualified per platform — the global `close` is shadowed by the
+    /// connection's own `close()` method, and resolves from `Darwin` on Apple / `Glibc` on Linux.
+    private func closeFD(_ descriptor: Int32) {
+        #if canImport(Darwin)
+            _ = Darwin.close(descriptor)
+        #else
+            _ = Glibc.close(descriptor)
+        #endif
+    }
+
     /// A ``TransportConnection`` backed by a libssl `SSL` over a blocking accepted socket.
     ///
     /// All `SSL`/fd access is confined to ``queue`` (libssl `SSL` objects are not thread-safe), so the
@@ -47,7 +57,8 @@
 
         private let ssl: OpaquePointer
         private let descriptor: Int32
-        private let queue = DispatchQueue(label: "http.transport.portable-tls")
+        // `.userInitiated`: the per-connection serial I/O queue runs latency-sensitive TLS read/write.
+        private let queue = DispatchQueue(label: "http.transport.portable-tls", qos: .userInitiated)
         private let negotiated = Mutex<String?>(nil)
         private let subject = Mutex<String?>(nil)
         /// The client-auth policy and the trust hook over the DER chain (G3), applied post-handshake.
@@ -248,7 +259,7 @@
             }
             CHTTPBoringSSL_SSL_shutdown(ssl)
             CHTTPBoringSSL_SSL_free(ssl)
-            _ = close(descriptor)
+            closeFD(descriptor)
         }
     }
 

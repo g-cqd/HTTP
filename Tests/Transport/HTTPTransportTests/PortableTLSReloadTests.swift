@@ -14,7 +14,11 @@
 
     internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
-    internal import Darwin
+    #if canImport(Darwin)
+        internal import Darwin
+    #elseif canImport(Glibc)
+        internal import Glibc
+    #endif
     internal import Dispatch
     import Testing
 
@@ -96,12 +100,12 @@
             defer { CHTTPBoringSSL_SSL_CTX_free(context) }
             CHTTPBoringSSL_SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nil)
             guard let ssl = CHTTPBoringSSL_SSL_new(context) else {
-                _ = Darwin.close(descriptor)
+                _ = close(descriptor)
                 return nil
             }
             defer {
                 CHTTPBoringSSL_SSL_free(ssl)
-                _ = Darwin.close(descriptor)
+                _ = close(descriptor)
             }
             CHTTPBoringSSL_SSL_set_fd(ssl, descriptor)
             guard CHTTPBoringSSL_SSL_connect(ssl) == 1 else {

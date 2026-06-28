@@ -16,7 +16,11 @@
 
     internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
-    internal import Darwin
+    #if canImport(Darwin)
+        internal import Darwin
+    #elseif canImport(Glibc)
+        internal import Glibc
+    #endif
     internal import Dispatch
     import HTTPTestSupport
     import Testing
@@ -35,7 +39,11 @@
 
             var descriptors = [Int32](repeating: 0, count: 2)
             let paired = descriptors.withUnsafeMutableBufferPointer { buffer in
-                socketpair(AF_UNIX, SOCK_STREAM, 0, buffer.baseAddress)
+                #if canImport(Darwin)
+                    socketpair(AF_UNIX, SOCK_STREAM, 0, buffer.baseAddress)
+                #else
+                    socketpair(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0, buffer.baseAddress)
+                #endif
             }
             #expect(paired == 0)
             let serverDescriptor = descriptors[0]
@@ -85,7 +93,7 @@
             defer {
                 CHTTPBoringSSL_SSL_free(clientSSL)
                 CHTTPBoringSSL_SSL_CTX_free(clientContext)
-                _ = Darwin.close(clientDescriptor)
+                _ = close(clientDescriptor)
             }
 
             // Server drives the handshake, reads the request, echoes it.

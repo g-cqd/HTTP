@@ -29,6 +29,16 @@
     internal import Dispatch
     internal import Synchronization
 
+    /// Closes a raw socket descriptor, qualified per platform (resolves from `Darwin` on Apple /
+    /// `Glibc` on Linux, where the bare `close` import differs).
+    private func closeFD(_ descriptor: Int32) {
+        #if canImport(Darwin)
+            _ = Darwin.close(descriptor)
+        #else
+            _ = Glibc.close(descriptor)
+        #endif
+    }
+
     /// The portable libssl-over-POSIX-socket TLS backbone (`HTTP_PORTABLE_TLS`).
     ///
     /// State lives in a `Mutex`; the blocking `accept()` runs on `acceptQueue`, and each accepted
@@ -40,7 +50,10 @@
         public let backbone: TransportBackbone = .portableTLS
 
         private let configuration: TransportConfiguration
-        private let acceptQueue = DispatchQueue(label: "http.transport.portable-tls.accept")
+        private let acceptQueue = DispatchQueue(
+            label: "http.transport.portable-tls.accept",
+            qos: .userInitiated
+        )
         private let state = Mutex<State>(State())
         private let connectionIDs = ConnectionIDAllocator()
 
@@ -128,7 +141,7 @@
                 return current
             }
             if let descriptor {
-                _ = close(descriptor)
+                closeFD(descriptor)
             }
         }
 
@@ -209,14 +222,14 @@
             // concurrent ``reload(tls:)`` that swaps and frees it cannot pull it out from under us; the
             // new `SSL` then retains the context it handshakes with.
             guard let context = state.withLock(\.context) else {
-                _ = close(clientFD)
+                closeFD(clientFD)
                 return
             }
             _ = CHTTPBoringSSL_SSL_CTX_up_ref(context.pointer)
             let ssl = CHTTPBoringSSL_SSL_new(context.pointer)
             CHTTPBoringSSL_SSL_CTX_free(context.pointer)
             guard let ssl else {
-                _ = close(clientFD)
+                closeFD(clientFD)
                 return
             }
             CHTTPBoringSSL_SSL_set_fd(ssl, clientFD)
