@@ -47,6 +47,21 @@ struct BackboneConformanceTests {
     }
 
     @Test(
+        "scatter-gather send(head, body) delivers head then body intact (writev path)",
+        .timeLimit(.minutes(1)), arguments: socketBackbones)
+    func scatterGatherRoundTrip(_ backbone: TransportBackbone) async throws {
+        let transport = makeTransport(backbone)
+        let stream = try await transport.start()
+        // A 4 KiB body forces a genuine two-iovec writev and a multi-chunk client read.
+        let head = Array("HTTP/1.1 200 OK\r\nContent-Length: 4096\r\n\r\n".utf8)
+        let body = [UInt8](repeating: UInt8(ascii: "x"), count: 4_096)
+        try await assertLoopbackScatterGather(
+            stream: stream, port: transport.boundPort, head: head, body: body
+        )
+        await transport.shutdown()
+    }
+
+    @Test(
         "cancellation unblocks a stalled receive instead of deadlocking",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func cancellationUnblocksStalledReceive(_ backbone: TransportBackbone) async throws {

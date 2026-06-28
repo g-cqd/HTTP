@@ -57,6 +57,14 @@ public protocol TransportConnection: Sendable {
     /// Sends `bytes` to the peer, completing once they are handed to the OS.
     func send(_ bytes: [UInt8]) async throws
 
+    /// Sends `head` immediately followed by `body` as one logical message (a response: header section
+    /// then body), completing once both are handed to the OS.
+    ///
+    /// The default coalesces into a single buffer and calls ``send(_:)``; an event-driven POSIX backbone
+    /// overrides it with a `writev` scatter-gather that puts both buffers on the wire in one syscall with
+    /// no coalesce copy (audit #4 / L4).
+    func send(_ head: [UInt8], _ body: [UInt8]) async throws
+
     /// Closes the connection gracefully, flushing any pending output.
     func close() async
 
@@ -98,5 +106,20 @@ extension TransportConnection {
         }
         buffer.append(contentsOf: chunk)
         return chunk.count
+    }
+
+    /// Default ``send(_:_:)``: coalesce `head` + `body` into one buffer and send it (the copy a `writev`
+    /// override avoids).
+    ///
+    /// Backbones without a raw socket fd (Network.framework / QUIC) keep this.
+    public func send(_ head: [UInt8], _ body: [UInt8]) async throws {
+        if body.isEmpty {
+            try await send(head)
+        }
+        else {
+            var combined = head
+            combined.append(contentsOf: body)
+            try await send(combined)
+        }
     }
 }

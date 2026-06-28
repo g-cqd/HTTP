@@ -165,6 +165,35 @@ public final class POSIXKqueueConnection: TransportConnection {
         }
     }
 
+    /// Scatter-gather send: writes `head` then `body` in one `writev` syscall — no coalesce copy
+    /// (audit #4 / L4) — re-arming on writability whenever the socket buffer fills.
+    ///
+    /// An empty `body` falls back to the single-buffer ``send(_:)``.
+    public func send(_ head: [UInt8], _ body: [UInt8]) async throws {
+        guard !body.isEmpty else {
+            try await send(head)
+            return
+        }
+        let descriptor = self.descriptor
+        let eventLoop = self.eventLoop
+        try await withTaskCancellationHandler {
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                let once = OnceResumer(continuation)
+                Self.writevRemaining(
+                    head: head,
+                    body: body,
+                    offset: 0,
+                    descriptor: descriptor,
+                    eventLoop: eventLoop,
+                    once: once
+                )
+            }
+        } onCancel: {
+            closeDescriptor()
+        }
+    }
+
     /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
     public func close() async {
         closeDescriptor()
@@ -256,6 +285,77 @@ public final class POSIXKqueueConnection: TransportConnection {
                 eventLoop.waitWritable(descriptor) {
                     writeRemaining(
                         bytes: bytes,
+                        offset: remaining,
+                        descriptor: descriptor,
+                        eventLoop: eventLoop,
+                        once: once
+                    )
+                }
+        }
+    }
+
+    /// Writes `head` then `body` via `writev`, advancing one combined offset across the two buffers and
+    /// re-arming on writability when the socket buffer fills — iterative (event-driven), not recursive.
+    private static func writevRemaining(
+        head: [UInt8],
+        body: [UInt8],
+        offset: Int,
+        descriptor: Int32,
+        eventLoop: KqueueEventLoop,
+        once: OnceResumer<Void>
+    ) {
+        var offset = offset
+        let total = head.count + body.count
+        let outcome: WriteOutcome = head.withUnsafeBytes { headRaw in
+            body.withUnsafeBytes { bodyRaw in
+                guard let headBase = headRaw.baseAddress, let bodyBase = bodyRaw.baseAddress else {
+                    // Both buffers are non-empty by construction (body guarded, head is the status line).
+                    return WriteOutcome.done
+                }
+                while offset < total {
+                    // Gather vector for the unwritten tail: still within the head (head slice + whole
+                    // body), or already past it (a body slice only).
+                    var iovecs: [iovec]
+                    if offset < head.count {
+                        let headPtr = UnsafeMutableRawPointer(mutating: headBase + offset)
+                        let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase)
+                        iovecs = [
+                            iovec(iov_base: headPtr, iov_len: head.count - offset),
+                            iovec(iov_base: bodyPtr, iov_len: body.count)
+                        ]
+                    }
+                    else {
+                        let bodyOffset = offset - head.count
+                        let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase + bodyOffset)
+                        iovecs = [iovec(iov_base: bodyPtr, iov_len: body.count - bodyOffset)]
+                    }
+                    let written = writev(descriptor, &iovecs, Int32(iovecs.count))
+                    if written > 0 {
+                        offset += written
+                    }
+                    else if written < 0, errno == EINTR {
+                        continue  // interrupted before any byte — retry (audit T-F3)
+                    }
+                    else if written < 0, errno == EWOULDBLOCK || errno == EAGAIN {
+                        return .wouldBlock(offset: offset)
+                    }
+                    else {
+                        return .failed(errno: errno)
+                    }
+                }
+                return .done
+            }
+        }
+        switch outcome {
+            case .done:
+                once.resume(returning: ())
+            case .failed(let code):
+                once.resume(throwing: TransportError.ioFailed("writev errno \(code)"))
+            case .wouldBlock(let remaining):
+                eventLoop.waitWritable(descriptor) {
+                    writevRemaining(
+                        head: head,
+                        body: body,
                         offset: remaining,
                         descriptor: descriptor,
                         eventLoop: eventLoop,

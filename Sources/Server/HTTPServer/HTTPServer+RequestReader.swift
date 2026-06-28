@@ -98,11 +98,22 @@ extension HTTPServer where C.Duration == Duration {
                 version: framed.parsed.version, request: request, response: head
             )
         }
-        ResponseSerializer.serialize(
-            head, body: response.body, omitBody: request.method == .head, into: &responseBuffer
+        // Serialize the head into the reused buffer; send it scatter-gather with the untouched body
+        // buffer (one `writev`, no coalesce copy on the POSIX backbones — audit #4/L4). A HEAD or a
+        // body-forbidden status (1xx/204/304) sends the head alone.
+        let sendsBody = ResponseSerializer.serializeHead(
+            head,
+            bodyLength: response.body.count,
+            omitBody: request.method == .head,
+            into: &responseBuffer
         )
         do {
-            try await connection.send(responseBuffer)
+            if sendsBody {
+                try await connection.send(responseBuffer, response.body)
+            }
+            else {
+                try await connection.send(responseBuffer)
+            }
         }
         catch {
             return false

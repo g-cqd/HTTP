@@ -59,8 +59,32 @@ public enum ResponseSerializer {
         omitBody: Bool = false,
         into output: inout [UInt8]
     ) {
+        // Serialize the head, then append the body in place when the status/method allow one.
+        let sendsBody = serializeHead(
+            response,
+            bodyLength: body.count,
+            omitBody: omitBody,
+            into: &output
+        )
+        if sendsBody { output.append(contentsOf: body) }
+    }
+
+    /// Serializes only the response **head** (status-line + header section + terminating CRLF) into
+    /// `output`, framing `Content-Length` from `bodyLength`; the body is sent separately.
+    ///
+    /// Returns whether the caller should still write the `bodyLength` body octets — `false` for a `HEAD`
+    /// response (`omitBody`) or a body-forbidden status (1xx / 204 / 304, RFC 9110 §6.4.1). This is the
+    /// scatter-gather entry point: a `writev` send can put the head and the untouched body buffer on the
+    /// wire in one syscall, with no coalesce copy (audit #4 / L4); ``serialize(_:body:omitBody:into:)``
+    /// is the coalescing wrapper. `output` is cleared keeping capacity (the per-connection reuse, CC6).
+    public static func serializeHead(
+        _ response: HTTPResponse,
+        bodyLength: Int,
+        omitBody: Bool = false,
+        into output: inout [UInt8]
+    ) -> Bool {
         output.removeAll(keepingCapacity: true)
-        output.reserveCapacity(64 + (omitBody ? 0 : body.count))
+        output.reserveCapacity(64)
 
         // Status-line: HTTP-version SP status-code SP [ reason-phrase ] CRLF (RFC 9112 §3.1).
         output.append(contentsOf: statusLinePrefix)
@@ -72,11 +96,10 @@ public enum ResponseSerializer {
         // Auto-frame the body with Content-Length unless a framing header is already present, or the
         // status forbids content — 1xx / 204 / 304 carry no body and MUST NOT be framed (RFC 9110
         // §6.4.1), which is also what lets a 101 hand the connection cleanly to WebSocket.
+        let forbids = Self.forbidsContent(response.status)
         var fields = response.headerFields
-        if !Self.forbidsContent(response.status), !fields.contains(.contentLength),
-            !fields.contains(.transferEncoding)
-        {
-            fields.append("\(body.count)", for: .contentLength)
+        if !forbids, !fields.contains(.contentLength), !fields.contains(.transferEncoding) {
+            fields.append("\(bodyLength)", for: .contentLength)
         }
         for field in fields {
             field.name.appendRawNameUTF8(to: &output)
@@ -87,9 +110,9 @@ public enum ResponseSerializer {
         }
         output.append(contentsOf: crlf)  // blank line terminates the header section
 
-        // A body-forbidden status (1xx/204/304) must emit no body octets either: an unframed body on
-        // a keep-alive connection would be read as the start of the next response (RFC 9110 §6.4.1).
-        if !omitBody, !Self.forbidsContent(response.status) { output.append(contentsOf: body) }
+        // A body-forbidden status (1xx/204/304) or a HEAD response writes no body octets: an unframed
+        // body on a keep-alive connection would be read as the next response's start (RFC 9110 §6.4.1).
+        return !omitBody && !forbids
     }
 
     /// Whether `status` forbids a response body: 1xx Informational, 204 No Content, 304 Not Modified
