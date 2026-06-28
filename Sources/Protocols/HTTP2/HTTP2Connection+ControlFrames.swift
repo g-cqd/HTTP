@@ -4,8 +4,8 @@
 //
 //  RFC 9113 — the connection-level control-frame handlers split out of the receive pump: SETTINGS
 //  (§6.5) and PING (§6.7), each charged against the flood budget and acknowledged, plus the
-//  validate-only PRIORITY (§6.3) and GOAWAY (§6.8) handlers. Kept beside HTTP2Connection.swift so the
-//  core file stays focused on the preface/decode/dispatch loop.
+//  validate-only PRIORITY (§6.3) and GOAWAY (§6.8) handlers and the RST_STREAM (§6.4) handler. Kept
+//  beside HTTP2Connection.swift so the core file stays focused on the preface/decode/dispatch loop.
 //
 
 extension HTTP2Connection {
@@ -81,5 +81,37 @@ extension HTTP2Connection {
         }
         try chargeControlFrame()
         writer.writeFrame(.ping, flags: .ack, streamID: .connection, payload: frame.payload)
+    }
+
+    // MARK: RST_STREAM
+
+    /// Handles a received RST_STREAM (RFC 9113 §6.4): closes the stream, charges the Rapid-Reset budget
+    /// when it was still active, and surfaces the peer's error code as a `.streamReset` event.
+    mutating func receiveReset(
+        _ frame: HTTP2FrameDecoder.Frame,
+        into events: inout [Event]
+    ) throws(HTTP2Error) {
+        guard frame.payload.count == 4 else {
+            throw .connection(.frameSizeError, "RST_STREAM payload must be 4 octets")
+        }
+        guard frame.header.streamID != .connection, frame.header.streamID <= lastPeerStreamID else {
+            throw .connection(.protocolError, "RST_STREAM on an idle or connection-level stream")
+        }
+        // Resetting a stream the server is still working on is the Rapid Reset signature
+        // (CVE-2023-44487). A clock-free per-connection cap on such resets fails closed with
+        // ENHANCE_YOUR_CALM before the cheap-to-send / costly-to-process churn does damage.
+        if streams[frame.header.streamID] != nil {
+            try chargeStreamReset()
+        }
+        // The 4-octet error code is big-endian (RFC 9113 §6.4); read it as one unaligned load rather
+        // than re-rolling the shift-and-or by hand (the payload is exactly 4 octets, guarded above).
+        let code = frame.payload.withUnsafeBytes {
+            UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self))
+        }
+        streams[frame.header.streamID] = nil
+        markStreamClosed(frame.header.streamID, reason: .reset)
+        events.append(
+            .streamReset(streamID: frame.header.streamID, code: HTTP2ErrorCode(code: code))
+        )
     }
 }
