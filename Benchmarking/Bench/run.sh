@@ -65,7 +65,7 @@ cleanup() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; SERVER_PID="
 trap 'cleanup' EXIT INT TERM
 
 wait_ready() {
-    for _ in $(seq 1 80); do
+    for _ in $(seq 1 150); do   # up to ~15s: cold gunicorn/uvicorn workers import Django slowly
         curl -fksS -o /dev/null --max-time 1 "$1" 2>/dev/null && return 0
         sleep 0.1
     done
@@ -88,9 +88,13 @@ bench_one() {
     fi
     oha -z "$DURATION" "${common[@]}" --output-format json "$url" >"$json" 2>/dev/null || {
         printf '%s\t%s\tN/A\t-\t-\t-\n' "$key" "$label" >>"$RESULTS_DIR/_results.tsv"; return; }
-    local success rps p50 p99 p999
-    success=$(jq -r '.summary.successRate // 0' "$json")
-    if awk "BEGIN{exit !($success < 0.99)}"; then
+    # A route counts only when ≥99% of responses are 2xx. oha's successRate treats a 4xx/5xx as a
+    # "successful" HTTP exchange, so a server that 404s a route it doesn't implement (nginx/caddy on
+    # /echo) would otherwise post a bogus throughput — gate on the 2xx share instead.
+    local total twoxx rps p50 p99 p999
+    total=$(jq -r '[.statusCodeDistribution[]?] | add // 0' "$json")
+    twoxx=$(jq -r '[.statusCodeDistribution | to_entries[]? | select(.key|startswith("2")) | .value] | add // 0' "$json")
+    if [ "${total:-0}" = "0" ] || awk "BEGIN{exit !($twoxx < 0.99 * $total)}"; then
         printf '%s\t%s\tN/A\t-\t-\t-\n' "$key" "$label" >>"$RESULTS_DIR/_results.tsv"; return
     fi
     rps=$(jq -r '.summary.requestsPerSec // .summary.rps // 0' "$json")
@@ -114,10 +118,16 @@ run_all_scenarios() {
 # Build a nested Swift package from a copy OUTSIDE the repo (SwiftPM mis-resolves a package nested in
 # another package's git tree). Echoes the built binary path, or nothing on failure.
 build_swift_pkg() {
-    local src="$1" product="$2" work="$SWIFT_PKG_WORK/$product"
-    rm -rf "$work" && mkdir -p "$work" && cp -R "$src/." "$work/" && rm -rf "$work/.build"
-    ( cd "$work" && swift build -c release ) >"$RESULTS_DIR/$product.build.log" 2>&1
+    local src="$1"
+    local product="$2"
+    local work="$SWIFT_PKG_WORK/$product"
     local bin="$work/.build/release/$product"
+    # Reuse an existing build unless a source file is newer (a cold SwiftNIO build is minutes); the
+    # rebuild always happens out-of-tree because SwiftPM mis-resolves a package nested in the repo.
+    if [ ! -x "$bin" ] || [ -n "$(find "$src" -name '*.swift' -newer "$bin" 2>/dev/null | head -1)" ]; then
+        rm -rf "$work" && mkdir -p "$work" && cp -R "$src/." "$work/" && rm -rf "$work/.build"
+        ( cd "$work" && swift build -c release ) >"$RESULTS_DIR/$product.build.log" 2>&1
+    fi
     [ -x "$bin" ] && printf '%s' "$bin"
 }
 
