@@ -82,4 +82,42 @@ struct HPACKDynamicTableTests {
         #expect(table.isEmpty)
         #expect(table.size == 0)
     }
+
+    @Test("O(1) exact/name indices match a brute-force scan (duplicates + eviction)")
+    func indexLookupsMatchBruteForce() {
+        // A small cap forces eviction; shared names and repeated values force duplicates — the cases a
+        // sequence-keyed hash index must get right (newest wins; an evicted entry's mapping is dropped
+        // only when no newer duplicate has replaced it).
+        var table = HPACKDynamicTable(maxSize: 200)
+        let names = ["a", "bb", "ccc", "a", "bb"]
+        for round in 0 ..< 16 {
+            table.add(HPACKField(name: names[round % names.count], value: "v\(round % 4)"))
+
+            // Reference: the newest live entry (HPACK index 62 up) matching exactly / by name.
+            func bruteExact(_ field: HPACKField) -> Int? {
+                for position in 0 ..< table.count where table.field(at: 62 + position) == field {
+                    return 62 + position
+                }
+                return nil
+            }
+            func bruteName(_ name: String) -> Int? {
+                for position in 0 ..< table.count
+                where table.field(at: 62 + position)?.name == name {
+                    return 62 + position
+                }
+                return nil
+            }
+
+            for position in 0 ..< table.count {
+                guard let live = table.field(at: 62 + position) else { continue }
+                #expect(table.index(of: live) == bruteExact(live))
+                #expect(table.index(forName: live.name) == bruteName(live.name))
+                // The exact index must round-trip back to an equal field.
+                #expect(table.index(of: live).flatMap(table.field(at:)) == live)
+            }
+            // An absent field / name resolves to nil through both lookups.
+            #expect(table.index(of: HPACKField(name: "zzz", value: "absent")) == nil)
+            #expect(table.index(forName: "zzz") == nil)
+        }
+    }
 }

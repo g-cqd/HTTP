@@ -37,7 +37,10 @@ public enum QPACKInstructions {
 
     /// An Insert With Name Reference to the static table (RFC 9204 §4.3.2: the `1` + `T=1` pattern, a
     /// 6-bit-prefix static name index, then the literal value).
-    public static func insertWithStaticName(index: Int, value: [UInt8]) -> [UInt8] {
+    public static func insertWithStaticName(
+        index: Int,
+        value: some Collection<UInt8>
+    ) -> [UInt8] {
         var output: [UInt8] = []
         QPACKInteger.encode(index, prefixBits: 6, firstByte: 0xC0, into: &output)  // 1, T=1
         QPACKString.encode(value, prefixBits: 7, into: &output)
@@ -46,7 +49,10 @@ public enum QPACKInstructions {
 
     /// An Insert With Literal Name (RFC 9204 §4.3.3: the `01` pattern, a 5-bit-prefix literal name — the
     /// H bit is set by the string codec — then the literal value).
-    public static func insertWithLiteralName(name: [UInt8], value: [UInt8]) -> [UInt8] {
+    public static func insertWithLiteralName(
+        name: some Collection<UInt8>,
+        value: some Collection<UInt8>
+    ) -> [UInt8] {
         var output: [UInt8] = []
         QPACKString.encode(name, prefixBits: 5, firstByte: 0x40, into: &output)  // 01, + H
         QPACKString.encode(value, prefixBits: 7, into: &output)

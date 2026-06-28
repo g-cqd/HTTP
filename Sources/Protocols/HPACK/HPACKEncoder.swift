@@ -59,11 +59,11 @@ public struct HPACKEncoder {
 
     /// The combined index of an exact `(name, value)` match (static first, then dynamic), or nil.
     private func exactIndex(of field: HPACKField) -> Int? {
-        HPACKStaticTable.exactIndex[field] ?? dynamicTable.firstIndex { $0 == field }
+        HPACKStaticTable.exactIndex[field] ?? dynamicTable.index(of: field)
     }
 
     /// The combined index of a name-only match (static first, then dynamic), or nil.
     private func nameIndex(of name: String) -> Int? {
-        HPACKStaticTable.nameIndex[name] ?? dynamicTable.firstIndex { $0.name == name }
+        HPACKStaticTable.nameIndex[name] ?? dynamicTable.index(forName: name)
     }
 }

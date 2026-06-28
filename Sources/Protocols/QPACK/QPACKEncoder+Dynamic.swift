@@ -81,13 +81,17 @@ extension QPACKEncoder {
             return
         }
         forgetRecentField(field)
-        let value = Array(field.value.utf8)
+        // Pass the `UTF8View`s straight to the instruction encoder (which takes `some Collection<UInt8>`)
+        // — no `Array(field.*.utf8)` copy on the insert path.
         if let nameIndex = QPACKStaticTable.nameIndex[field.name] {
-            encoderStream += QPACKInstructions.insertWithStaticName(index: nameIndex, value: value)
+            encoderStream += QPACKInstructions.insertWithStaticName(
+                index: nameIndex, value: field.value.utf8
+            )
         }
         else {
-            let name = Array(field.name.utf8)
-            encoderStream += QPACKInstructions.insertWithLiteralName(name: name, value: value)
+            encoderStream += QPACKInstructions.insertWithLiteralName(
+                name: field.name.utf8, value: field.value.utf8
+            )
         }
         table.insert(field)  // room was ensured above, so this never evicts
     }
