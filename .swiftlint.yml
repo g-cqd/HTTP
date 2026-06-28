@@ -207,3 +207,4 @@ included:
 
 excluded:
   - .build
+  - Benchmarking  # throwaway load-test comparison subjects (own SwiftPM package), not library code
