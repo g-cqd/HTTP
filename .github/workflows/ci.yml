@@ -129,6 +129,48 @@ jobs:
         run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
 
   # ---------------------------------------------------------------------------
+  # Linux (G0). The sans-I/O engines + server runtime run on Linux over the epoll backbone; these jobs
+  # build and run the full suite in the official Swift container on ubuntu-latest (locally reproduced by
+  # scripts/linux-test.sh via apple/container). HTTP_WARNINGS_AS_ERRORS is intentionally off here:
+  # swift-crypto's NIST-curve keys are not Sendable on Linux (CryptoKit's are), so HTTPAuth emits
+  # @preconcurrency warnings the Apple build does not — re-enable once those are addressed. HTTP/3/QUIC is
+  # Network.framework-provided, so it (and its tests) is excluded from the Linux build graph.
+  # ---------------------------------------------------------------------------
+  build-test-linux:
+    runs-on: ubuntu-latest
+    container: swiftlang/swift:nightly-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build --scratch-path "$SCRATCH"
+      - name: Test (full suite)
+        run: swift test --scratch-path "$SCRATCH"
+
+  release-test-linux:
+    runs-on: ubuntu-latest
+    container: swiftlang/swift:nightly-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Test (release)
+        run: swift test -c release --scratch-path "$SCRATCH"
+
+  sanitizers-linux:
+    runs-on: ubuntu-latest
+    container: swiftlang/swift:nightly-noble
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, thread]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test under ${{ matrix.sanitizer }} sanitizer (Linux)
+        run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+
+  # ---------------------------------------------------------------------------
   # Benchmark smoke run (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). Non-gating: it guards
   # against the harness failing to build or a benchmark crashing — not perf drift (runner noise is
   # too high to gate on). Promote to a `benchmark baseline check` once a runner baseline is captured.
