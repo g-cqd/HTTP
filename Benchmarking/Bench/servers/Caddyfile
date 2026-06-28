@@ -16,4 +16,18 @@
 
 	@health path /health
 	respond @health "OK\n" 200
+
+	# Parity routes (the heavier-workload scenarios). Caddy cannot echo a POST body without a plugin,
+	# so it does not implement /echo — the harness marks that cell N/A.
+	@json path /json
+	handle @json {
+		header Content-Type application/json
+		respond `{"message":"Hello, World!"}` 200
+	}
+
+	@payload path /payload
+	respond @payload "__PAYLOAD__" 200
+
+	@hello path_regexp hello ^/hello/(.+)$
+	respond @hello "Hello, {re.hello.1}!\n" 200
 }

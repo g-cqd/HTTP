@@ -161,6 +161,16 @@ enum HTTPDExample {
                 .text("Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 + HTTP/3 server.\n")
             }
             Route.get("/health") { _, _, _ in .text("OK\n") }
+            // JSON serialization (the comparative-benchmark `/json` scenario): a small object encoded
+            // to `application/json`.
+            Route.get("/json") { _, _, _ in
+                .json(Array(#"{"message":"Hello, World!"}"#.utf8))
+            }
+            // ~1 KiB of compressible text (the `/payload` scenario): 32 × 32 B = 1024 B, mirroring the
+            // other benchmark servers byte-for-byte (a body worth gzipping).
+            Route.get("/payload") { _, _, _ in
+                .text(String(repeating: "from-scratch swift http server. ", count: 32))
+            }
             // A `:name` path parameter (RFC 3986 §3.3) plus an optional `?greeting=` query parameter.
             Route.get("/hello/:name") { request, parameters, _ in
                 let greeting = request.query["greeting"] ?? "Hello"
