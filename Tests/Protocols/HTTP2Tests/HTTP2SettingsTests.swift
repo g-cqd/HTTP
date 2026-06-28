@@ -84,4 +84,12 @@ struct HTTP2SettingsTests {
         settings.maxHeaderListSize = 16_384
         #expect(try applied(settings.encodePayload()) == settings)
     }
+
+    @Test("encoding clamps an out-of-range value instead of trapping (parity with HTTP/3)")
+    func encodeClampsOutOfRange() throws {
+        var settings = HTTP2Settings()
+        settings.headerTableSize = Int.max  // far beyond the 32-bit wire field
+        let restored = try applied(settings.encodePayload())  // must not trap
+        #expect(restored.headerTableSize == Int(UInt32.max))
+    }
 }

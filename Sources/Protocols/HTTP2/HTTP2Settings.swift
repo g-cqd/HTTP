@@ -94,17 +94,20 @@ public struct HTTP2Settings: Sendable, Equatable {
     }
 
     /// Serializes these settings into a SETTINGS frame payload (RFC 9113 §6.5.1).
+    ///
+    /// Values are clamped to the 32-bit wire field (`UInt32(clamping:)`) so a caller-set out-of-range
+    /// property cannot trap the encoder — parity with the HTTP/3 SETTINGS encoder.
     public func encodePayload() -> [UInt8] {
         var output: [UInt8] = []
-        append(.headerTableSize, UInt32(headerTableSize), to: &output)
+        append(.headerTableSize, UInt32(clamping: headerTableSize), to: &output)
         append(.enablePush, enablePush ? 1 : 0, to: &output)
         if let maxConcurrentStreams {
-            append(.maxConcurrentStreams, UInt32(maxConcurrentStreams), to: &output)
+            append(.maxConcurrentStreams, UInt32(clamping: maxConcurrentStreams), to: &output)
         }
-        append(.initialWindowSize, UInt32(initialWindowSize), to: &output)
-        append(.maxFrameSize, UInt32(maxFrameSize), to: &output)
+        append(.initialWindowSize, UInt32(clamping: initialWindowSize), to: &output)
+        append(.maxFrameSize, UInt32(clamping: maxFrameSize), to: &output)
         if let maxHeaderListSize {
-            append(.maxHeaderListSize, UInt32(maxHeaderListSize), to: &output)
+            append(.maxHeaderListSize, UInt32(clamping: maxHeaderListSize), to: &output)
         }
         if enableConnectProtocol {
             append(.enableConnectProtocol, 1, to: &output)
