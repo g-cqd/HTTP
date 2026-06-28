@@ -27,6 +27,21 @@ struct CompressionMiddlewareTests {
         #expect(Array(response.body.prefix(3)) == [0x1f, 0x8b, 0x08])  // gzip magic + deflate
     }
 
+    @Test("a response marked Cache-Control: no-transform is not compressed (RFC 9110 §5.5)")
+    func honorsNoTransform() async {
+        let body = Array(String(repeating: "compress me ", count: 256).utf8)
+        let responder = ClosureResponder { _, _ in
+            var fields = HTTPFields()
+            _ = fields.append("text/plain", for: .contentType)
+            _ = fields.append("no-transform", for: .cacheControl)
+            return ServerResponse(HTTPResponse(status: .ok, headerFields: fields), body: body)
+        }
+        .wrapped(by: CompressionMiddleware())
+        let response = await responder.respond(to: get("gzip"), body: [])
+        #expect(response.head.headerFields[.contentEncoding] == nil)  // left identity
+        #expect(response.body == body)
+    }
+
     @Test("the gzip member decodes back to the original (RFC 1952 round-trip)")
     func roundTrips() throws {
         let body = Array(String(repeating: "round trip payload ", count: 300).utf8)

@@ -174,6 +174,13 @@ public struct CompressionMiddleware: HTTPMiddleware {
         guard !response.head.headerFields.contains(.contentEncoding) else {
             return false
         }
+        // `Cache-Control: no-transform` forbids re-encoding the payload (RFC 9110 §5.5); it is also the
+        // per-response opt-out for the BREACH-class length oracle on bodies mixing a secret with
+        // attacker-reflected input.
+        let cacheControl = response.head.headerFields.values(for: .cacheControl)
+        guard !cacheControl.contains(where: { $0.lowercased().contains("no-transform") }) else {
+            return false
+        }
         guard let type = response.head.headerFields[.contentType]?.lowercased() else {
             return true
         }
