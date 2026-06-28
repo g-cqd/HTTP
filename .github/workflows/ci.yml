@@ -171,6 +171,26 @@ jobs:
         run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
 
   # ---------------------------------------------------------------------------
+  # Opt-in content codings on Linux (G0): Brotli (libbrotli) + zstd (libzstd), the system-lib codings the
+  # default graph never links. apt-install the dev packages, then run the coding round-trip suites under
+  # HTTP_BROTLI/HTTP_ZSTD (prefix /usr). gzip needs no flag — system zlib, covered by build-test-linux.
+  # ---------------------------------------------------------------------------
+  codings-linux:
+    runs-on: ubuntu-latest
+    container: swiftlang/swift:nightly-noble
+    env:
+      HTTP_BROTLI: "1"
+      HTTP_BROTLI_PREFIX: /usr
+      HTTP_ZSTD: "1"
+      HTTP_ZSTD_PREFIX: /usr
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libbrotli + libzstd
+        run: apt-get update -qq && apt-get install -y -qq libbrotli-dev libzstd-dev
+      - name: Coding round-trips (Brotli + zstd + Linux gzip/inflate)
+        run: swift test --scratch-path "$SCRATCH" --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+
+  # ---------------------------------------------------------------------------
   # Benchmark smoke run (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). Non-gating: it guards
   # against the harness failing to build or a benchmark crashing — not perf drift (runner noise is
   # too high to gate on). Promote to a `benchmark baseline check` once a runner baseline is captured.

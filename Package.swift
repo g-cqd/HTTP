@@ -524,3 +524,35 @@ if Context.environment["HTTP_ZSTD"] != nil {
         target.swiftSettings = settings
     }
 }
+
+// The opt-in Brotli content coding (RFC 7932) on the non-Apple path: a `CBrotli` C shim over libbrotli,
+// since Apple's Compression (which backs `br` on Darwin) is absent on Linux. Gated by `HTTP_BROTLI` so the
+// DEFAULT build graph never links libbrotli; the Swift side (BrotliLinux + the `br` arms of
+// CompressionMiddleware/InflateLinux/DecompressionMiddleware) guards on `#if canImport(CBrotli)`. The
+// libbrotli prefix is `HTTP_BROTLI_PREFIX` (the Homebrew `brotli` default on macOS; set it to `/usr` on a
+// Linux distro). Mirror of the HTTP_ZSTD block above.
+if Context.environment["HTTP_BROTLI"] != nil {
+    let brotliPrefix = Context.environment["HTTP_BROTLI_PREFIX"] ?? "/opt/homebrew/opt/brotli"
+    let brotliInclude = brotliPrefix + "/include"
+    let brotliLib = brotliPrefix + "/lib"
+    package.targets.append(
+        .target(
+            name: "CBrotli",
+            path: "Sources/Core/CBrotli",
+            cSettings: [.unsafeFlags(["-I", brotliInclude])],
+            linkerSettings: [
+                .unsafeFlags(["-L", brotliLib]),
+                .linkedLibrary("brotlienc"),
+                .linkedLibrary("brotlidec"),
+                .linkedLibrary("brotlicommon")
+            ]
+        )
+    )
+    for target in package.targets
+    where ["HTTPServer", "HTTPServerTests"].contains(target.name) {
+        target.dependencies.append("CBrotli")
+        var settings = target.swiftSettings ?? []
+        settings.append(.unsafeFlags(["-Xcc", "-I" + brotliInclude]))
+        target.swiftSettings = settings
+    }
+}

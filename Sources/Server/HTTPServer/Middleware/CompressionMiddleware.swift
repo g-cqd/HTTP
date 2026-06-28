@@ -148,8 +148,9 @@ public struct CompressionMiddleware: HTTPMiddleware {
             case .br:
                 #if canImport(Compression)
                     return Brotli.compress(body)
+                #elseif canImport(CBrotli)
+                    return Brotli.compress(body)  // Linux: libbrotli (BrotliLinux)
                 #else
-                    // No Brotli encoder where Apple's Compression is absent (Linux, gap G0).
                     return nil
                 #endif
             #if canImport(CZstd)

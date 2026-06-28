@@ -52,7 +52,7 @@ Reset CVE-2023-44487, CONTINUATION flood CVE-2024-27316, request smuggling, deco
 | Platform | HTTP/1.1 | HTTP/2 | WebSocket | HTTP/3 | TLS | Compression (out) |
 |---|:--:|:--:|:--:|:--:|---|---|
 | macOS 15+ / iOS 18+ | ✅ | ✅ | ✅ | ✅ | Network.framework | br · gzip · zstd† |
-| Linux (glibc · x86-64 / arm64) | ✅ | ✅ | ✅ | — | portable BoringSSL† | zstd† (gzip · br: in progress) |
+| Linux (glibc · x86-64 / arm64) | ✅ | ✅ | ✅ | — | portable BoringSSL† | gzip · zstd† · br† |
 
 The sans-I/O engines (h1/h2/h3, HPACK/QPACK, WebSocket) are pure Swift and identical on every platform;
 only the I/O floor differs — Network.framework / kqueue on Apple, an `epoll` backbone on Linux. The full
@@ -60,8 +60,9 @@ test suite runs on both (CI: `ubuntu-latest` + macOS; locally, `scripts/linux-te
 **HTTP/3 is Apple-only** in v1 — QUIC is provided by Network.framework; a portable QUIC story is a separate
 follow-up.
 
-† Opt-in build flags: `HTTP_ZSTD` (zstd coding) and `HTTP_PORTABLE_TLS` (the vendored, symbol-prefixed
-BoringSSL TLS backbone — the default Apple build uses Network.framework's TLS). See
+† Opt-in build flags: `HTTP_ZSTD` (zstd) and `HTTP_BROTLI` (Brotli, via system libbrotli) codings, and
+`HTTP_PORTABLE_TLS` (the vendored, symbol-prefixed BoringSSL TLS backbone — the default Apple build uses
+Network.framework's TLS). On Linux gzip is always available (system zlib). See
 [ADR 0004](Docs/Documentation/adr/0004-portable-tls-backbone.md).
 
 ## Requirements
