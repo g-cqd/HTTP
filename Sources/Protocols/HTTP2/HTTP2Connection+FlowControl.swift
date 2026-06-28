@@ -61,9 +61,10 @@ extension HTTP2Connection {
         // just per-stream: the receive window replenishes during buffering, so without this a peer that
         // opens many concurrent streams could buffer maxConcurrentStreams × maxBodySize before any
         // END_STREAM dispatches them — a memory-exhaustion vector. The current stream's record was
-        // removed above, so sum the rest plus this stream's running + incoming bytes (RFC 9113 §6.9).
-        let otherStreamsBuffered = streams.values.reduce(0) { $0 + $1.body.count }
-        guard otherStreamsBuffered + record.body.count + body.count <= limits.maxBodySize else {
+        // removed above, so `totalBufferedBody` is exactly the rest; add this stream's running +
+        // incoming bytes (RFC 9113 §6.9). O(1) — the table maintains the sum (see ``HTTP2StreamTable``).
+        guard streams.totalBufferedBody + record.body.count + body.count <= limits.maxBodySize
+        else {
             throw .stream(
                 streamID,
                 .enhanceYourCalm,

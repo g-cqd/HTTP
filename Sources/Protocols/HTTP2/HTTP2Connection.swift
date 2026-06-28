@@ -78,7 +78,9 @@ public struct HTTP2Connection {
     private var decoder: HPACKDecoder
     var encoder: HPACKEncoder
     var accumulator: HTTP2HeaderBlockAccumulator
-    var streams: [HTTP2StreamID: StreamRecord] = [:]
+    /// The open streams, keyed by id, with an O(1) running buffered-body total for the connection-wide
+    /// body budget (see ``HTTP2StreamTable`` / `receiveData`, RFC 9113 §6.9).
+    var streams = HTTP2StreamTable()
     /// The connection-level send window — total DATA octets the peer will currently accept across all
     /// streams (RFC 9113 §6.9.1).
     ///

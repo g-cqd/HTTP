@@ -179,6 +179,9 @@ extension HTTP3Connection {
         guard !state.sawTrailers else {
             throw .connection(.h3FrameUnexpected, "a DATA frame after trailers")
         }
+        // This stream's bytes are still counted in the table's running total (its record is unchanged
+        // until the write-back below), so capture them now to net them out of the cross-stream sum.
+        let bufferedBeforeAppend = state.body.count
         state.body.append(contentsOf: payload)
         // A tunnel stream's DATA is opaque WebSocket bytes (RFC 9220), drained each receive batch as
         // `tunnelData` rather than a request body, so the request-body / content-length bounds do not
@@ -192,11 +195,10 @@ extension HTTP3Connection {
         }
         // Bound the connection's *total* buffered (un-dispatched) request body across all streams, not
         // just per-stream: as in HTTP/2, the engine would otherwise buffer up to the concurrent-stream
-        // count × maxBodySize before any stream's FIN dispatches it — a memory-exhaustion vector. Sum the
-        // other streams plus this stream's running total (RFC 9114 §4.1; CWE-400/770).
-        let otherStreamsBuffered = streams.reduce(0) { sum, entry in
-            entry.key == streamID ? sum : sum + entry.value.body.count
-        }
+        // count × maxBodySize before any stream's FIN dispatches it — a memory-exhaustion vector. The
+        // table's running total still counts this stream's pre-append bytes, so net them out to get the
+        // other streams' total in O(1) (RFC 9114 §4.1; CWE-400/770; see ``HTTP3StreamTable``).
+        let otherStreamsBuffered = streams.totalBufferedBody - bufferedBeforeAppend
         guard otherStreamsBuffered + state.body.count <= limits.maxBodySize else {
             throw .stream(
                 streamID,
@@ -309,8 +311,9 @@ extension HTTP3Connection {
         requiredInsertCount: Int,
         _ state: inout StreamState
     ) throws(HTTP3Error) {
-        let alreadyBlocked = streams.values.reduce(0) { $0 + ($1.blockedSection == nil ? 0 : 1) }
-        guard alreadyBlocked < localSettings.qpackBlockedStreams else {
+        // O(1) — the table maintains the blocked-section count; this stream is not yet blocked (its
+        // `blockedSection` is set just below), so the running total is exactly the other streams'.
+        guard streams.blockedSectionCount < localSettings.qpackBlockedStreams else {
             throw .connection(
                 qpack: .decompressionFailed, "more blocked streams than the limit permits"
             )

@@ -110,8 +110,9 @@ public struct HTTP3Connection {
 
     /// Queued outbound actions, drained by ``outbound()``.
     var actions: [Action] = []
-    /// Per-stream receive state, keyed by QUIC stream id.
-    var streams: [QUICStreamID: StreamState] = [:]
+    /// Per-stream receive state, keyed by QUIC stream id, with O(1) running buffered-body and
+    /// blocked-section totals for the connection-wide budgets (see ``HTTP3StreamTable``).
+    var streams = HTTP3StreamTable()
 
     /// The peer's critical stream ids — each a singleton; a second of any kind is a creation error.
     var peerControlStream: QUICStreamID?
