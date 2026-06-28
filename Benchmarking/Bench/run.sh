@@ -16,9 +16,12 @@
 # nginx/caddy are static servers: they serve /, /json, /payload, /hello but not /echo (no body echo
 # without a scripting module) — the harness marks unsupported cells N/A via oha's success rate.
 #
-# Competitors (run only if their toolchain/binary is present):
-#   ours · nginx · caddy · hummingbird (SwiftNIO) · go (net/http) · bun (Bun.serve) · rust (hyper+tokio)
+# The field (run only if their toolchain/binary is present):
+#   ours — measured on EVERY transport backbone (posixKqueue · posixDispatch · swiftSystem ·
+#          networkFramework), one row each as ours(<backbone>)
+#   nginx · caddy · hummingbird (SwiftNIO) · go (net/http) · bun (Bun.serve) · rust (hyper+tokio)
 #   · vapor (SwiftNIO) · django-wsgi (gunicorn) · django-asgi (uvicorn)
+# So this single battletest covers every competitor technology AND every one of our own variants.
 #
 # The two SwiftNIO framework packages (hummingbird, vapor) are nested inside this repo, which SwiftPM
 # mis-resolves ("product not found") — so they are built from a copy outside the repo tree.
@@ -37,7 +40,11 @@ DURATION="${DURATION:-10s}"
 CONNECTIONS="${CONNECTIONS:-64}"
 RATE="${RATE:-}"
 WARMUP="${WARMUP:-2s}"
-BACKBONE="${BACKBONE:-swiftSystem}"
+BACKBONE="${BACKBONE:-swiftSystem}"                  # legacy single-backbone override (still honored)
+# Our server is measured across ALL its transport backbones — each a row labeled ours(<backbone>) — so
+# this one battletest covers every competitor technology AND every one of our own variants. Subset by
+# overriding, e.g. BACKBONES="posixKqueue swiftSystem".
+BACKBONES="${BACKBONES:-posixKqueue posixDispatch swiftSystem networkFramework}"
 SERVERS="${SERVERS:-ours nginx caddy hummingbird go bun rust vapor django-wsgi django-asgi}"
 SCENARIOS="${SCENARIOS:-GET:/ GET:/json GET:/payload GET:/hello/world POST:/echo}"
 ECHO_BODY="${ECHO_BODY:-{\"x\":1\}}"
@@ -151,14 +158,18 @@ for s in $SERVERS; do
     SERVER_PID=""
     case "$s" in
         ours)
-            echo "→ ours($BACKBONE) …"
-            env HTTPD_MAX_CONN=1000000 HTTPD_QUIET=1 "$OURS_BIN" "$PORT_OURS" "$BACKBONE" \
-                >"$RESULTS_DIR/ours.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_OURS/" \
-                && run_all_scenarios "ours($BACKBONE)" "http://127.0.0.1:$PORT_OURS" \
-                || echo "  ours: never ready"
-            cleanup; reap_port "$PORT_OURS" ;;
+            # One row per backbone, so the field includes every one of our own variants.
+            for bb in $BACKBONES; do
+                echo "→ ours($bb) …"
+                env HTTPD_MAX_CONN=1000000 HTTPD_QUIET=1 "$OURS_BIN" "$PORT_OURS" "$bb" \
+                    >"$RESULTS_DIR/ours-$bb.server.log" 2>&1 &
+                SERVER_PID=$!
+                wait_ready "http://127.0.0.1:$PORT_OURS/" \
+                    && run_all_scenarios "ours($bb)" "http://127.0.0.1:$PORT_OURS" \
+                    || echo "  ours($bb): never ready (see results/ours-$bb.server.log)"
+                cleanup; reap_port "$PORT_OURS"
+                sleep 0.4
+            done ;;
         nginx)
             command -v nginx >/dev/null || { echo "skip nginx"; continue; }
             echo "→ nginx …"

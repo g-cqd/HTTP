@@ -88,8 +88,12 @@ launch() {
     local server="$1" mw="$2" workers="$3" log="$RESULTS_DIR/$1.server.log"
     case "$server" in
         ours)  # one process, all cores; worker count is N/A (no GIL)
+            # Default to the event-driven posixKqueue backbone — a flat thread count and a tight latency
+            # tail under concurrency. Override with OURS_BACKBONE=swiftSystem to benchmark the blocking
+            # reference (best single-connection median, but a fat p99/p99.9 tail from thread
+            # oversubscription — audit 2026-06-28 tail-latency variance).
             env HTTPD_MAX_CONN=1000000 BENCH_MIDDLEWARE="$mw" BENCH_JSON="$OURS_JSON" \
-                "$OURS_BIN" "$PORT" swiftSystem >"$log" 2>&1 &
+                "$OURS_BIN" "$PORT" "${OURS_BACKBONE:-posixKqueue}" >"$log" 2>&1 &
             ;;
         django-wsgi)
             env "${COMMON_FORK_ENV[@]}" BENCH_MIDDLEWARE="$mw" \

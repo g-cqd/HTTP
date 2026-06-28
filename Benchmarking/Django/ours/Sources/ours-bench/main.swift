@@ -34,7 +34,7 @@ import HTTPTransport
 let arguments = CommandLine.arguments
 let port: UInt16 = arguments.count > 1 ? (UInt16(arguments[1]) ?? 8_080) : 8_080
 let backbone: TransportBackbone =
-    arguments.count > 2 ? (TransportBackbone(rawValue: arguments[2]) ?? .swiftSystem) : .swiftSystem
+    arguments.count > 2 ? (TransportBackbone(rawValue: arguments[2]) ?? .recommended) : .recommended
 let useMiddleware = ProcessInfo.processInfo.environment["BENCH_MIDDLEWARE"] == "1"
 
 // A ~1 KiB compressible body for the middleware (gzip) scenario — short bodies fall below gzip's
@@ -151,12 +151,15 @@ if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = 
 
 // MARK: - Serve
 
+// HTTPD_LOOPS=N → shard the kqueue/epoll backbone across N event loops (audit R4 sweep); nil = auto.
+let loopCount = ProcessInfo.processInfo.environment["HTTPD_LOOPS"].flatMap(Int.init)
 let configuration = TransportConfiguration(
     host: "127.0.0.1",
     port: port,
     backbone: backbone,
     tls: nil,
-    reusePort: false
+    reusePort: false,
+    eventLoopCount: loopCount
 )
 let server = HTTPServer(
     transport: TransportFactory.make(configuration),
