@@ -145,6 +145,16 @@ struct HTTP3RequestStreamTests: HTTP3WireFixtures {
         #expect(resetStreamCode(&connection) == HTTP3ErrorCode.h3MessageError.rawValue)
     }
 
+    @Test("a server-initiated bidirectional stream is H3_STREAM_CREATION_ERROR (RFC 9114 §6.1)")
+    func serverInitiatedBidiRejected() {
+        var connection = HTTP3Connection()
+        // QUICStreamID(1): low bits 0b01 — server-initiated bidirectional, never a request stream.
+        let serverBidi = QUICStreamID(1)
+        #expect(
+            errorCode(feeding: &connection, serverBidi, requestStream(requestFieldSection()))
+                == HTTP3ErrorCode.h3StreamCreationError.rawValue)
+    }
+
     @Test("DATA before HEADERS on a request stream is H3_FRAME_UNEXPECTED (§4.1)")
     func dataBeforeHeaders() {
         var connection = HTTP3Connection()

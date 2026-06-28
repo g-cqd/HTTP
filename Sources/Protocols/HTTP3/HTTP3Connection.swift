@@ -266,6 +266,12 @@ public struct HTTP3Connection {
         fin: Bool,
         into events: inout [Event]
     ) throws(HTTP3Error) {
+        // RFC 9114 §6.1: HTTP/3 request streams are client-initiated bidirectional; the protocol does
+        // not use server-initiated bidirectional streams. The sans-I/O engine validates the id class
+        // itself rather than trusting the transport to deliver only client streams (audit P0-16).
+        if streams[streamID] == nil, streamID.kind == .serverBidirectional {
+            throw .connection(.h3StreamCreationError, "a server-initiated bidirectional stream")
+        }
         var state =
             streams[streamID]
             ?? StreamState(
