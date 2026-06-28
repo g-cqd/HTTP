@@ -27,7 +27,9 @@ struct NetworkFrameworkMutualTLSTests {
     func requiredClientAuthSurfacesSubject() async throws {
         let clientCN = "mTLS-test-client"
         let clientIdentity = try Self.clientIdentity(commonName: clientCN)
-        let transport = try Self.mutualTLSTransport()
+        // `.required` now demands an explicit verify hook (audit F4); accept any presented cert here so
+        // this test still exercises subject surfacing.
+        let transport = try Self.mutualTLSTransport { _ in true }
         let connections = try await transport.start()
         let port = try #require(NWEndpoint.Port(rawValue: transport.boundPort))
 
@@ -55,10 +57,23 @@ struct NetworkFrameworkMutualTLSTests {
         "required client-auth rejects a client that presents no certificate",
         .timeLimit(.minutes(1)))
     func requiredClientAuthRejectsNoCertificate() async throws {
-        let transport = try Self.mutualTLSTransport()
+        // `.required` demands an explicit verify hook (audit F4); the rejection here is by the missing
+        // client cert, not the hook, so accept-any is fine.
+        let transport = try Self.mutualTLSTransport { _ in true }
         // No local identity on the client: the required client-auth handshake must fail, so the
         // listener never surfaces a connection (the probe stays empty until it times out).
         try await Self.expectNoConnection(from: transport, clientIdentity: nil)
+    }
+
+    @Test("required client-auth without a verifyPeer hook is rejected at setup (audit F4)")
+    func requiredClientAuthWithoutHookIsRejected() async throws {
+        // Fail closed: a `.required` listener with no verify hook would otherwise accept ANY presented
+        // client certificate, so the configuration must be rejected up front rather than silently trust
+        // every client.
+        let transport = try Self.mutualTLSTransport()  // nil verifyPeer
+        await #expect(throws: TransportError.self) {
+            _ = try await transport.start()
+        }
     }
 
     @Test(

@@ -23,9 +23,46 @@ public enum HTTPDate {
         let hour = secondOfDay / 3_600
         let minute = (secondOfDay % 3_600) / 60
         let second = secondOfDay % 60
-        return
-            "\(weekdays[weekday]), \(pad(day)) \(months[month - 1]) \(year) "
-            + "\(pad(hour)):\(pad(minute)):\(pad(second)) GMT"
+        // IMF-fixdate is exactly 29 ASCII octets ("Sun, 06 Nov 1994 08:49:37 GMT"); fill the buffer in a
+        // single allocation rather than the ~8 that interpolation + `pad` made per response (audit F10 —
+        // a Date header is on every response). Offsets: Www[0-2] ","[3] " "[4] DD[5-6] " "[7] Mon[8-10]
+        // " "[11] YYYY[12-15] " "[16] HH[17-18] ":"[19] MM[20-21] ":"[22] SS[23-24] " "[25] GMT[26-28].
+        let zero = UInt8(ascii: "0")
+        return String(unsafeUninitializedCapacity: 29) { buffer in
+            func put(_ text: String, at offset: Int) {
+                var index = offset
+                for byte in text.utf8 {
+                    buffer[index] = byte
+                    index += 1
+                }
+            }
+            func put2(_ value: Int, at offset: Int) {
+                buffer[offset] = zero + UInt8(value / 10)
+                buffer[offset + 1] = zero + UInt8(value % 10)
+            }
+            put(weekdays[weekday], at: 0)
+            buffer[3] = UInt8(ascii: ",")
+            buffer[4] = UInt8(ascii: " ")
+            put2(day, at: 5)
+            buffer[7] = UInt8(ascii: " ")
+            put(months[month - 1], at: 8)
+            buffer[11] = UInt8(ascii: " ")
+            // 4 digits, defensive for any input range
+            let yyyy = ((year % 10_000) + 10_000) % 10_000
+            buffer[12] = zero + UInt8(yyyy / 1_000)
+            buffer[13] = zero + UInt8((yyyy / 100) % 10)
+            buffer[14] = zero + UInt8((yyyy / 10) % 10)
+            buffer[15] = zero + UInt8(yyyy % 10)
+            buffer[16] = UInt8(ascii: " ")
+            put2(hour, at: 17)
+            buffer[19] = UInt8(ascii: ":")
+            put2(minute, at: 20)
+            buffer[22] = UInt8(ascii: ":")
+            put2(second, at: 23)
+            buffer[25] = UInt8(ascii: " ")
+            put("GMT", at: 26)
+            return 29
+        }
     }
 
     /// Year/month/day from days since 1970-01-01 (Hinnant's civil-from-days; no recursion, no leap
@@ -43,11 +80,6 @@ public enum HTTPDate {
         let day = dayOfYear - (153 * monthPrime + 2) / 5 + 1  // [1, 31]
         let month = monthPrime < 10 ? monthPrime + 3 : monthPrime - 9  // [1, 12]
         return (month <= 2 ? year + 1 : year, month, day)
-    }
-
-    /// A two-digit, zero-padded decimal (the date fields are all `0...99`).
-    private static func pad(_ value: Int) -> String {
-        value < 10 ? "0\(value)" : "\(value)"
     }
 
     /// Parses an HTTP-date into seconds since the Unix epoch (UTC), or nil if malformed (RFC 9110

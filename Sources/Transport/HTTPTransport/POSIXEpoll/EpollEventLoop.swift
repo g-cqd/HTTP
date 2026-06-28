@@ -39,9 +39,16 @@
             var isRunning = true
         }
 
-        init() {
+        init() throws {
             // CLOEXEC keeps the epoll fd from leaking across a prefork `exec` (matches POSIXSocket hygiene).
-            epfd = epoll_create1(Int32(EPOLL_CLOEXEC))
+            // Fail loud on syscall failure (fd exhaustion — EMFILE/ENFILE): a `-1` epfd would make every
+            // `epoll_ctl`/`epoll_wait` silently no-op, leaving the server accepting connections it never
+            // serves. Surfaced as a `TransportError` so `start()` (already `throws`) reports it.
+            let fd = epoll_create1(Int32(EPOLL_CLOEXEC))
+            guard fd >= 0 else {
+                throw TransportError.ioFailed("epoll_create1 failed (errno \(errno))")
+            }
+            epfd = fd
         }
 
         deinit {

@@ -39,4 +39,21 @@ struct LoggingTests {
         #expect(entry.metadata["request_id"] == .string("req-123"))
         #expect(entry.metadata["duration_ms"] != nil)  // a measured latency is always attached
     }
+
+    @Test("the access log records the path without its query string (audit F5)")
+    func redactsQueryStringFromPath() async {
+        let store = CapturingLogHandler.Store()
+        let logger = Logger(label: "test.access") { _ in CapturingLogHandler(store) }
+        let request = HTTPRequest(
+            method: .get,
+            scheme: "https",
+            authority: "x",
+            path: "/search?token=secret&q=hi",
+            headerFields: HTTPFields()
+        )
+        _ = await LoggingMiddleware(logger)
+            .respond(to: request, body: [], next: StubResponder(status: .ok))
+        // The query string (which routinely carries tokens/PII) must not reach the log sink.
+        #expect(store.entries.first?.metadata["path"] == .string("/search"))
+    }
 }

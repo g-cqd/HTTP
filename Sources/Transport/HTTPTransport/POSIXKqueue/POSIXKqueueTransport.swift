@@ -63,7 +63,7 @@ public final class POSIXKqueueTransport: ServerTransport {
             reusePort: configuration.reusePort,
             backlog: configuration.backlog
         )
-        let eventLoop = KqueueEventLoop()
+        let eventLoop = try KqueueEventLoop()
         eventLoop.start()
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
         state.withLock {

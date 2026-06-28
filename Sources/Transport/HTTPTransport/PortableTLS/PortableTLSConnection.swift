@@ -95,14 +95,15 @@
                     self.negotiated.withLock {
                         $0 = OpenSSLTLS.negotiatedApplicationProtocol(of: self.ssl)
                     }
-                    // Client-auth policy (G3): a presented chain is run through `verifyPeer` (a nil hook
-                    // accepts any presented chain); an absent chain is allowed under `.optional`/`.none`
-                    // and unreachable under `.required` (the handshake already failed without a cert).
+                    // Client-auth policy (G3): a presented chain is run through `verifyPeer`; a nil hook
+                    // fails closed — it rejects the presented chain rather than trusting it blindly (audit
+                    // F4). An absent chain is allowed under `.optional`/`.none` and unreachable under
+                    // `.required` (the handshake already failed without a cert).
                     let chain = OpenSSLTLS.peerDERChain(of: self.ssl)
                     let accepted =
                         chain.isEmpty
                         ? (self.clientAuth != .required)
-                        : (self.verifyPeer?(chain) ?? true)
+                        : (self.verifyPeer?(chain) ?? false)
                     guard accepted else {
                         continuation.resume(
                             throwing: TransportError.tlsConfigurationFailed(

@@ -54,6 +54,12 @@ public struct QueryParameters: Sendable, Equatable {
 
     /// Percent-decodes `slice` (RFC 3986 §2.1), mapping `+` to space; a malformed `%XX` stays literal.
     private static func percentDecoded(_ slice: Substring) -> String {
+        // Fast path (audit F10): with neither a `%` escape nor a `+`, the value is the slice verbatim, so
+        // return it directly and skip the two byte-buffer allocations the decode loop makes. Most query
+        // values are unescaped, so this is the common case.
+        if !slice.utf8.contains(where: { $0 == UInt8(ascii: "%") || $0 == UInt8(ascii: "+") }) {
+            return String(slice)
+        }
         let source = Array(slice.utf8)
         var output: [UInt8] = []
         output.reserveCapacity(source.count)

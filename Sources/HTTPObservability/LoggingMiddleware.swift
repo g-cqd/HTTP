@@ -35,7 +35,7 @@ public struct LoggingMiddleware<C: Clock>: HTTPMiddleware where C.Duration == Du
         let response = await next.respond(to: request, body: body)
         var metadata: Logger.Metadata = [
             "method": .string(request.method.rawValue),
-            "path": .string(request.path),
+            "path": .string(Self.pathOnly(request.path)),
             "status": .string(String(response.head.status.code)),
             "duration_ms": .stringConvertible(Self.milliseconds(start.duration(to: clock.now)))
         ]
@@ -44,6 +44,14 @@ public struct LoggingMiddleware<C: Clock>: HTTPMiddleware where C.Duration == Du
         }
         logger.info(message, metadata: metadata)
         return response
+    }
+
+    /// The request path without its query string.
+    ///
+    /// Query strings routinely carry tokens/PII and an access log is a common credential sink (audit F5).
+    /// Mirrors OTel `url.path` (path only).
+    private static func pathOnly(_ target: String) -> String {
+        String(target.prefix { $0 != "?" && $0 != "#" })
     }
 
     /// `duration` as fractional milliseconds (monotonic, so never negative).

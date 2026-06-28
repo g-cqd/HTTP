@@ -107,7 +107,19 @@ public struct SessionMiddleware: HTTPMiddleware {
     }
 
     /// Decodes a base64url (unpadded) string, or nil if malformed.
+    ///
+    /// Strict (RFC 4648 §5): rejects any byte outside the URL alphabet — standard `+`/`/`, embedded `=`
+    /// padding, and whitespace — so a tag cannot be silently rewritten into an equivalent encoding before
+    /// the constant-time compare (audit F8; matches `HTTPAuth/Base64URL`).
     private static func base64urlDecode(_ string: String) -> Data? {
+        for scalar in string.unicodeScalars {
+            switch scalar {
+                case "A" ... "Z", "a" ... "z", "0" ... "9", "-", "_":
+                    continue
+                default:
+                    return nil
+            }
+        }
         var standard = string.replacingOccurrences(of: "-", with: "+")
         standard = standard.replacingOccurrences(of: "_", with: "/")
         while standard.count % 4 != 0 {

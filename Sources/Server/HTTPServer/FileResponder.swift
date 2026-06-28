@@ -6,8 +6,9 @@
 //  directory and serves it with a content type (via the system `UTType` registry), `Last-Modified` /
 //  `ETag` validators (from the file's mtime + size), conditional-request short-circuiting (`If-None-Match`
 //  / `If-Modified-Since` → 304), and byte ranges (`206` / `416`, reusing the ``RangeMiddleware`` parser).
-//  Path resolution is traversal-safe (CWE-22): a `..`/`.` component is rejected and the resolved path must
-//  stay under the root. A file larger than `streamingThreshold` is streamed in chunks (P6) rather than
+//  Path resolution is traversal-safe (CWE-22 / CWE-59): a `..`/`.` component is rejected and the
+//  symlink-resolved path must stay under the root (a symlink under the root cannot escape). A file larger
+//  than `streamingThreshold` is streamed in chunks (P6) rather than
 //  buffered. Production niceties (G5): precompressed `.br`/`.gz` sidecars (``serveFile`` →
 //  ``FileResponder+Precompressed``), an opt-in directory autoindex (``FileResponder+Autoindex``), and a
 //  `try_files`-style SPA fallback for a missing path.
@@ -48,6 +49,14 @@ public struct FileResponder: HTTPResponder {
         case file(size: Int, modified: Int)
         case directory
         case missing
+    }
+
+    /// A file became unreadable, or shorter than its advertised length, between ``classify(_:)`` and the
+    /// read — surfaced so the response fails closed (`500` / stream error) instead of under-delivering the
+    /// `Content-Length` already on the wire (audit F1).
+    private enum ReadError: Error {
+        case unreadable
+        case truncated
     }
 
     /// Resolves the request path to a file under the root and serves it, or `403`/`404`/`405`.
@@ -163,7 +172,12 @@ public struct FileResponder: HTTPResponder {
             return ServerResponse(head)  // HEAD: the header section only (RFC 9112 §6.3)
         }
         guard length > streamingThreshold else {
-            return ServerResponse(head, body: Self.readRange(path, offset: low, length: length))
+            guard let body = Self.readRange(path, offset: low, length: length) else {
+                // The file went unreadable/short between classify and read — fail closed rather than emit
+                // a body that contradicts the Content-Length already set above (audit F1).
+                return ServerResponse(HTTPResponse(status: .internalServerError))
+            }
+            return ServerResponse(head, body: body)
         }
         let offset = low  // an immutable copy the @Sendable producer can capture
         let stream = ResponseStream(contentLength: length) { writer in
@@ -277,17 +291,29 @@ public struct FileResponder: HTTPResponder {
         return mime.hasPrefix("text/") ? "\(mime); charset=utf-8" : mime
     }
 
-    /// Reads `length` octets at `offset` from `path` into a buffer (the small-file path).
-    private static func readRange(_ path: String, offset: Int, length: Int) -> [UInt8] {
-        guard length > 0, let handle = FileHandle(forReadingAtPath: path) else {
+    /// Reads exactly `length` octets at `offset` from `path` (the small-file path).
+    ///
+    /// Returns `nil` if the file cannot deliver that many — so the caller fails closed instead of
+    /// shipping a short body under a declared `Content-Length` (audit F1). An empty range
+    /// (`length == 0`) is the valid empty body.
+    private static func readRange(_ path: String, offset: Int, length: Int) -> [UInt8]? {
+        guard length > 0 else {
             return []
+        }
+        guard let handle = FileHandle(forReadingAtPath: path) else {
+            return nil
         }
         defer { try? handle.close() }
-        try? handle.seek(toOffset: UInt64(offset))
-        guard let data = try? handle.read(upToCount: length) else {
-            return []
+        do {
+            try handle.seek(toOffset: UInt64(offset))
+            guard let data = try handle.read(upToCount: length), data.count == length else {
+                return nil  // open/seek succeeded but the file is now shorter than promised
+            }
+            return [UInt8](data)
         }
-        return [UInt8](data)
+        catch {
+            return nil
+        }
     }
 
     /// Streams `length` octets at `offset` from `path` to `writer` in chunks (the large-file path).
@@ -297,8 +323,13 @@ public struct FileResponder: HTTPResponder {
         length: Int,
         to writer: any ResponseBodyWriter
     ) async throws {
-        guard length > 0, let handle = FileHandle(forReadingAtPath: path) else {
+        guard length > 0 else {
             return
+        }
+        guard let handle = FileHandle(forReadingAtPath: path) else {
+            // The header section (incl. Content-Length) is already committed — fail the stream rather than
+            // under-deliver and desync the connection (audit F1).
+            throw ReadError.unreadable
         }
         defer { try? handle.close() }
         try handle.seek(toOffset: UInt64(offset))
@@ -306,7 +337,8 @@ public struct FileResponder: HTTPResponder {
         while remaining > 0 {
             guard let data = try handle.read(upToCount: min(64 * 1_024, remaining)), !data.isEmpty
             else {
-                break
+                // EOF before the advertised length — never stop silently short.
+                throw ReadError.truncated
             }
             try await writer.write([UInt8](data))
             remaining -= data.count

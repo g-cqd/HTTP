@@ -70,7 +70,7 @@
                 backlog: configuration.backlog
             )
             let listenFD = listener.descriptor
-            let eventLoop = EpollEventLoop()
+            let eventLoop = try EpollEventLoop()
             eventLoop.start()
             let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
             state.withLock {

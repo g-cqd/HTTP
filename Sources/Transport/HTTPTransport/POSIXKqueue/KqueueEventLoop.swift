@@ -29,8 +29,15 @@ final class KqueueEventLoop: Sendable {
         var isRunning = true
     }
 
-    init() {
-        kq = kqueue()
+    init() throws {
+        // Fail loud on syscall failure (fd exhaustion — EMFILE/ENFILE): a `-1` kq would make every
+        // `kevent` silently no-op, leaving the server accepting connections it never serves. Surfaced as a
+        // `TransportError` so `start()` (already `throws`) reports it instead of going silently dark.
+        let fd = kqueue()
+        guard fd >= 0 else {
+            throw TransportError.ioFailed("kqueue failed (errno \(errno))")
+        }
+        kq = fd
     }
 
     deinit {

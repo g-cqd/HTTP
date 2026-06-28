@@ -24,6 +24,14 @@ public struct TracingMiddleware: HTTPMiddleware {
         // No configuration — the tracer comes from InstrumentationSystem.bootstrap.
     }
 
+    /// The request path without its query string.
+    ///
+    /// Query strings routinely carry tokens/PII and become queryable fields on exported spans (audit F5).
+    /// OTel models `url.path` as the path only.
+    private static func pathOnly(_ target: String) -> String {
+        String(target.prefix { $0 != "?" && $0 != "#" })
+    }
+
     /// Extracts upstream context, opens a `.server` span, tags it, and ends it with the response.
     public func respond(
         to request: HTTPRequest,
@@ -36,7 +44,7 @@ public struct TracingMiddleware: HTTPMiddleware {
         )
         return await withSpan(request.method.rawValue, context: context, ofKind: .server) { span in
             span.attributes["http.request.method"] = request.method.rawValue
-            span.attributes["url.path"] = request.path
+            span.attributes["url.path"] = Self.pathOnly(request.path)
             if let requestID = request.headerFields[.xRequestID] {
                 span.attributes["http.request.id"] = requestID
             }

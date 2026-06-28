@@ -55,7 +55,11 @@
         }
 
         deinit {
-            // No teardown beyond ARC.
+            // Deliberately no fd close here (audit F11): `close()` routes the shutdown through the event
+            // loop so the descriptor is closed exactly once, serialized against any in-flight readiness
+            // handler — an unsynchronized close would race a reuse of the fd number. `deinit` can run on
+            // any thread, so it must not close directly. The owner (the accept loop's consumer) is
+            // responsible for calling `close()`; dropping a connection without it leaks the fd.
         }
 
         /// Reads up to `maxLength` bytes once the socket is readable, or `nil` at end of stream.

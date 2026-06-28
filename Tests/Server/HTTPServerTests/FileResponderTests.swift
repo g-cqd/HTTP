@@ -110,6 +110,23 @@ struct FileResponderTests {
         #expect(escape.body.isEmpty)
     }
 
+    @Test("an unreadable file fails closed with 500, not a 200 with a short body (audit F1)")
+    func unreadableFileFailsClosed() async {
+        // Root bypasses POSIX permissions, so the unreadable case cannot be staged there.
+        if getuid() == 0 {
+            return
+        }
+        await withTree(["locked.txt": Array("secret".utf8)]) { responder, root in
+            // Readable by `classify` (a stat works) but not by `open` — the failure path F1 hardened.
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0], ofItemAtPath: root.path + "/locked.txt"
+            )
+            let response = await responder.respond(to: get("/locked.txt"), body: [])
+            #expect(response.head.status == .internalServerError)
+            #expect(response.body.isEmpty)
+        }
+    }
+
     @Test("HEAD sends Content-Length but no body (RFC 9112 §6.3)")
     func head() async {
         await withRoot(["a.txt": Array("0123456789".utf8)]) { responder in

@@ -129,6 +129,15 @@ enum NetworkFrameworkTLS {
                 "optional client-auth requires the portable TLS backbone (HTTP_PORTABLE_TLS)"
             )
         }
+        // Fail closed: required client-auth with no verify hook would accept ANY presented client cert
+        // (the verify block replaces the platform's default trust evaluation), so surface the
+        // misconfiguration at setup rather than silently trusting every client (audit F4).
+        guard clientAuth != .required || verifyPeer != nil else {
+            throw TransportError.tlsConfigurationFailed(
+                "required client-auth needs an explicit verifyPeer hook "
+                    + "(a nil hook would accept any presented client certificate)"
+            )
+        }
         let options = NWProtocolTLS.Options()
         let security = options.securityProtocolOptions
         sec_protocol_options_set_local_identity(security, identity)
@@ -151,10 +160,11 @@ enum NetworkFrameworkTLS {
     /// and install a verify block handing the DER chain (leaf-first) to the caller's trust hook.
     ///
     /// The verify block is what lets a self-signed or privately-issued client cert be accepted at all —
-    /// the platform's default trust evaluation would reject it — so a `nil` `verifyPeer` accepts any
-    /// *presented* chain (presence is still enforced by the required flag) and a hook returning `false`
-    /// fails the handshake. Both the flag and the block are needed: the flag makes the server send the
-    /// CertificateRequest, the block decides acceptance.
+    /// the platform's default trust evaluation would reject it — so the `verifyPeer` hook decides
+    /// acceptance. ``options(identity:applicationProtocols:minVersion:maxVersion:clientAuth:verifyPeer:)``
+    /// rejects a `.required` policy with a nil hook (audit F4), so by the time we get here `verifyPeer` is
+    /// non-nil; a `nil` here therefore fails closed. Both the flag and the block are needed: the flag makes
+    /// the server send the CertificateRequest, the block decides acceptance.
     private static func configureMutualTLS(
         _ security: sec_protocol_options_t,
         verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
@@ -165,7 +175,7 @@ enum NetworkFrameworkTLS {
                 .map {
                     [UInt8](SecCertificateCopyData($0) as Data)
                 }
-            complete(verifyPeer?(chain) ?? !chain.isEmpty)
+            complete(verifyPeer?(chain) ?? false)  // fail closed if no hook (audit F4)
         }
         sec_protocol_options_set_verify_block(security, verify, verifyQueue)
     }
