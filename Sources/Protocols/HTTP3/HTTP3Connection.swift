@@ -284,7 +284,7 @@ public struct HTTP3Connection {
         try dispatch(streamID, into: &events)
     }
 
-    /// Routes a stream to its kind-specific handler (control/QPACK in +Streams; request in +Streams).
+    /// Reads a stream's classified kind and routes it to the matching handler (RFC 9114 §6).
     mutating func dispatch(
         _ streamID: QUICStreamID,
         into events: inout [Event]
@@ -292,6 +292,20 @@ public struct HTTP3Connection {
         guard let kind = streams[streamID]?.kind else {
             return
         }
+        try dispatchClassified(streamID, kind: kind, into: &events)
+    }
+
+    /// Runs the handler for a stream's classified `kind` (the handlers live in +Streams / +Request).
+    ///
+    /// A still-`unclassifiedUni` unidirectional stream goes to ``classifyUniStream(_:into:)``, which
+    /// reads its §6.2 Stream Type and then routes the buffered remainder back here directly under the
+    /// now-known kind — so classification never re-enters ``dispatch(_:into:)`` (the engine stays
+    /// recursion-free).
+    mutating func dispatchClassified(
+        _ streamID: QUICStreamID,
+        kind: StreamKind,
+        into events: inout [Event]
+    ) throws(HTTP3Error) {
         switch kind {
             case .unclassifiedUni:
                 try classifyUniStream(streamID, into: &events)

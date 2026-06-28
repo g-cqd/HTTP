@@ -41,7 +41,9 @@ extension HTTP3Connection {
             streamID, role: HTTP3StreamRole(streamType: decoded.type), state: &state
         )
         streams[streamID] = state
-        try dispatch(streamID, into: &events)  // process the remainder under the now-known kind
+        // Route the buffered remainder straight to the now-known kind's handler rather than back
+        // through `dispatch`, so unidirectional classification never re-enters it (no recursion).
+        try dispatchClassified(streamID, kind: state.kind, into: &events)
     }
 
     /// Assigns a unidirectional stream's role, enforcing the critical-stream singletons (§6.2.1) and
