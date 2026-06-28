@@ -23,7 +23,11 @@ public enum JWT {
         case malformed
         case algorithmMismatch
         case badSignature
+        /// The JOSE header carried a `crit` parameter this verifier does not understand (RFC 7515 §4.1.11).
+        case unsupportedCriticalHeader
         case expired
+        /// `exp` was absent and `requireExpiration` (the default) demands a bounded lifetime.
+        case missingExpiration
         case notYetValid
         case audienceMismatch
         case issuerMismatch
@@ -60,20 +64,31 @@ public enum JWT {
         public let expiration: Double?
         /// The `nbf` claim — not-valid-before, in epoch seconds.
         public let notBefore: Double?
+        /// The `iat` claim — issued-at, in epoch seconds.
+        public let issuedAt: Double?
     }
 
-    /// Verifies `token` against `key`, validating `exp`/`nbf` (± `leeway`) and the optional `audience` /
-    /// `issuer` at `now` (epoch seconds); returns the claims or the first failure.
+    /// Verifies `token` against `key`, validating the claims at `now` (epoch seconds) and returning the
+    /// claims or the first failure.
+    ///
+    /// Rejects `alg:"none"`, an `alg` that differs from `key` (algorithm confusion), and any unrecognized
+    /// `crit` JOSE header (RFC 7515 §4.1.11). Validates `exp`/`nbf`/`iat` (± `leeway`) and the optional
+    /// `audience`/`issuer`; non-finite numeric claims are rejected. By default a token MUST carry `exp`
+    /// (`requireExpiration`) so an unbounded-lifetime token is not silently accepted.
     public static func verify(
         _ token: String,
         key: Key,
         audience: String? = nil,
         issuer: String? = nil,
         now: Double,
-        leeway: Double = 0
+        leeway: Double = 0,
+        requireExpiration: Bool = true
     ) -> Result<Claims, Error> {
         guard let parsed = parse(token) else {
             return .failure(.malformed)
+        }
+        guard !parsed.hasCriticalHeader else {
+            return .failure(.unsupportedCriticalHeader)
         }
         guard parsed.algorithm != "none", parsed.algorithm == key.algorithm else {
             return .failure(.algorithmMismatch)
@@ -89,7 +104,8 @@ public enum JWT {
             audience: audience,
             issuer: issuer,
             now: now,
-            leeway: leeway
+            leeway: leeway,
+            requireExpiration: requireExpiration
         )
         if let failure {
             return .failure(failure)
@@ -108,12 +124,13 @@ public enum JWT {
         guard let headerBytes = Base64URL.decode(header),
             let payloadBytes = Base64URL.decode(payload),
             let signature = Base64URL.decode(String(segments[2])),
-            let algorithm = decodeAlgorithm(headerBytes)
+            let jose = decodeHeader(headerBytes)
         else {
             return nil
         }
         return ParsedToken(
-            algorithm: algorithm,
+            algorithm: jose.alg,
+            hasCriticalHeader: jose.crit != nil,
             payload: payloadBytes,
             signature: signature,
             signingInput: Array("\(header).\(payload)".utf8)
@@ -148,9 +165,9 @@ public enum JWT {
         }
     }
 
-    /// The `alg` header value (RFC 7515 §4.1.1), or nil if the JOSE header is not decodable.
-    private static func decodeAlgorithm(_ bytes: [UInt8]) -> String? {
-        (try? JSONDecoder().decode(JOSEHeader.self, from: Data(bytes)))?.alg
+    /// The decoded JOSE header (`alg` plus any `crit`), or nil if it is not a decodable header (§4.1.1).
+    private static func decodeHeader(_ bytes: [UInt8]) -> JOSEHeader? {
+        try? JSONDecoder().decode(JOSEHeader.self, from: Data(bytes))
     }
 
     /// The registered claims from the payload, or nil if it is not a decodable claims object.
@@ -163,7 +180,8 @@ public enum JWT {
             issuer: payload.iss,
             audience: payload.aud?.values ?? [],
             expiration: payload.exp,
-            notBefore: payload.nbf
+            notBefore: payload.nbf,
+            issuedAt: payload.iat
         )
     }
 
@@ -173,13 +191,26 @@ public enum JWT {
         audience: String?,
         issuer: String?,
         now: Double,
-        leeway: Double
+        leeway: Double,
+        requireExpiration: Bool
     ) -> Error? {
+        // Reject non-finite numeric claims: a JSON `exp: 1e400` decodes to `+Inf` and would never expire.
+        for value in [claims.expiration, claims.notBefore, claims.issuedAt] {
+            if let value, !value.isFinite {
+                return .malformed
+            }
+        }
+        guard claims.expiration != nil || !requireExpiration else {
+            return .missingExpiration  // an unbounded-lifetime token is not accepted by default
+        }
         if let expiration = claims.expiration, now > expiration + leeway {
             return .expired
         }
         if let notBefore = claims.notBefore, now + leeway < notBefore {
             return .notYetValid
+        }
+        if let issuedAt = claims.issuedAt, issuedAt > now + leeway {
+            return .notYetValid  // issued in the future beyond the allowed clock skew
         }
         if let audience, !claims.audience.contains(audience) {
             return .audienceMismatch
@@ -193,14 +224,16 @@ public enum JWT {
     /// The decoded pieces of a compact JWS the verifier works over.
     private struct ParsedToken {
         let algorithm: String
+        let hasCriticalHeader: Bool
         let payload: [UInt8]
         let signature: [UInt8]
         let signingInput: [UInt8]
     }
 
-    /// The JOSE header — only `alg` is consulted (RFC 7515 §4.1.1).
+    /// The JOSE header — `alg` is consulted; a present `crit` (§4.1.11) makes the token unverifiable here.
     private struct JOSEHeader: Decodable {
         let alg: String
+        let crit: [String]?
     }
 
     /// The registered claims as decoded from the payload (RFC 7519 §4.1).
@@ -210,6 +243,7 @@ public enum JWT {
         let aud: Audience?
         let exp: Double?
         let nbf: Double?
+        let iat: Double?
     }
 
     /// `aud` is either a single string or an array of strings (RFC 7519 §4.1.3).

@@ -85,8 +85,65 @@ struct JWTTests {
 
     @Test("a not-yet-valid token is rejected (nbf > now)")
     func notYetValid() {
-        let token = TokenFactory.hs256(header: hsHeader, payload: #"{"nbf":1500}"#, secret: secret)
+        let token = TokenFactory.hs256(
+            header: hsHeader, payload: #"{"nbf":1500,"exp":2000}"#, secret: secret
+        )
         #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.notYetValid))
+    }
+
+    @Test("a token without exp is rejected by default (unbounded lifetime)")
+    func missingExpiration() {
+        let token = TokenFactory.hs256(header: hsHeader, payload: #"{"sub":"x"}"#, secret: secret)
+        #expect(
+            JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.missingExpiration))
+    }
+
+    @Test("a token without exp is accepted when requireExpiration is disabled")
+    func missingExpirationOptOut() {
+        let token = TokenFactory.hs256(header: hsHeader, payload: #"{"sub":"x"}"#, secret: secret)
+        let result = JWT.verify(
+            token, key: .hs256(secret), now: 1_000, requireExpiration: false
+        )
+        guard case .success(let claims) = result else {
+            Issue.record("expected success with requireExpiration disabled")
+            return
+        }
+        #expect(claims.subject == "x")
+    }
+
+    @Test("an unrecognized crit JOSE header is rejected (RFC 7515 §4.1.11)")
+    func criticalHeader() {
+        let token = TokenFactory.hs256(
+            header: #"{"alg":"HS256","crit":["b64"],"b64":false}"#,
+            payload: #"{"exp":2000}"#,
+            secret: secret
+        )
+        #expect(
+            JWT.verify(token, key: .hs256(secret), now: 1_000)
+                == .failure(.unsupportedCriticalHeader))
+    }
+
+    @Test("a token issued in the future is rejected (iat > now)")
+    func issuedInFuture() {
+        let token = TokenFactory.hs256(
+            header: hsHeader, payload: #"{"iat":1500,"exp":2000}"#, secret: secret
+        )
+        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.notYetValid))
+    }
+
+    @Test("a non-finite exp is rejected, not treated as eternal")
+    func nonFiniteExpiration() {
+        let token = TokenFactory.hs256(header: hsHeader, payload: #"{"exp":1e400}"#, secret: secret)
+        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.malformed))
+    }
+
+    @Test("a non-strict base64url segment is rejected (JWS malleability)")
+    func nonStrictBase64url() {
+        // A '+' (standard alphabet) and a '=' (padding) are not valid base64url and must be refused.
+        #expect(
+            JWT.verify("aa+a.bbbb.cccc", key: .hs256(secret), now: 1_000) == .failure(.malformed))
+        #expect(
+            JWT.verify("aaaa.bb=b.cccc", key: .hs256(secret), now: 1_000) == .failure(.malformed))
     }
 
     @Test("a signature under the wrong key is rejected")

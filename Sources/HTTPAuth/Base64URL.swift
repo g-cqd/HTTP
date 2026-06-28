@@ -11,7 +11,19 @@ internal import Foundation
 /// Unpadded base64url (RFC 4648 §5) decode/encode for JWT segments.
 enum Base64URL {
     /// Decodes an unpadded base64url string to bytes, or nil if malformed.
+    ///
+    /// Strict (RFC 7515 §2 / RFC 4648 §5): only the URL alphabet `[A-Za-z0-9-_]` is accepted — standard
+    /// `+`/`/`, embedded `=` padding, and whitespace are rejected, so a token segment cannot be silently
+    /// rewritten into an equivalent-but-different encoding (JWS malleability).
     static func decode(_ string: String) -> [UInt8]? {
+        for scalar in string.unicodeScalars {
+            switch scalar {
+                case "A" ... "Z", "a" ... "z", "0" ... "9", "-", "_":
+                    continue
+                default:
+                    return nil
+            }
+        }
         var standard = string.replacingOccurrences(of: "-", with: "+")
         standard = standard.replacingOccurrences(of: "_", with: "/")
         while standard.count % 4 != 0 {
