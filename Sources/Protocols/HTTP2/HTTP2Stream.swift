@@ -83,9 +83,4 @@ public struct HTTP2Stream: Sendable, Equatable {
                 throw .stream(id, .internalError, "cannot send DATA in this state")
         }
     }
-
-    /// Closes the stream on RST_STREAM, sent or received (RFC 9113 §5.1 / §6.4).
-    public mutating func reset() {
-        state = .closed
-    }
 }

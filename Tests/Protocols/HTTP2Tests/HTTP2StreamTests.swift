@@ -48,8 +48,7 @@ struct HTTP2StreamTests {
 
     @Test("a frame on a closed stream is a STREAM_CLOSED stream error (§5.1)")
     func frameOnClosedStream() {
-        var subject = stream()
-        subject.reset()
+        var subject = HTTP2Stream(id: HTTP2StreamID(1), state: .closed)
         #expect(errorCode { try subject.receiveData(endStream: false) } == .streamClosed)
         #expect(errorCode { try subject.receiveHeaders(endStream: false) } == .streamClosed)
     }
@@ -59,14 +58,6 @@ struct HTTP2StreamTests {
         var subject = stream()
         try subject.receiveHeaders(endStream: false)  // → open
         #expect(errorCode { try subject.receiveHeaders(endStream: false) } == .protocolError)
-    }
-
-    @Test("RST_STREAM closes the stream from any state")
-    func resetCloses() throws {
-        var subject = stream()
-        try subject.receiveHeaders(endStream: false)
-        subject.reset()
-        #expect(subject.state == .closed)
     }
 
     private func errorCode(_ body: () throws -> Void) -> HTTP2ErrorCode? {

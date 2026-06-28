@@ -60,15 +60,4 @@ public enum HTTP3StreamRole: Sendable, Equatable, Hashable {
                 self = .reserved(streamType)
         }
     }
-
-    /// Whether this is a critical stream whose closure is a fatal error (RFC 9114 §6.2.1 — the control
-    /// and QPACK streams; their closure is H3_CLOSED_CRITICAL_STREAM).
-    public var isCritical: Bool {
-        switch self {
-            case .control, .qpackEncoder, .qpackDecoder:
-                true
-            case .request, .push, .reserved:
-                false
-        }
-    }
 }

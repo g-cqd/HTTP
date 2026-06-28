@@ -207,7 +207,7 @@ let package = Package(
             linkerSettings: [.linkedLibrary("z")]
         ),
         // Test-only support: the deterministic async toolkit ported from ADTestKit (TestClock,
-        // AsyncEventProbe, AsyncGate, ThreadGate, TaskProviderSpy) plus shared fakes, seeded fuzzing,
+        // AsyncEventProbe, AsyncGate, ThreadGate) plus shared fakes, seeded fuzzing,
         // constrained-stack recursion guards, oracles, and the allocation counter. Linked by every
         // test target. Depends on apple/swift-collections (HeapModule) — confined here, so it never
         // reaches a downstream consumer's graph.
