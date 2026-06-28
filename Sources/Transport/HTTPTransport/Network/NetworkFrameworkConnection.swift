@@ -55,56 +55,59 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
     }
 
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
+    ///
+    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
+    /// (audit CC4); cancelling the serve task cancels the `NWConnection`, which fires this receive's
+    /// completion with an error so the continuation resumes instead of leaking.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
-        try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation { continuation in
-                connection.receive(
-                    minimumIncompleteLength: 1,
-                    maximumLength: max(1, maxLength)
-                ) { data, _, isComplete, error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    }
-                    else if let data, !data.isEmpty {
-                        continuation.resume(returning: [UInt8](data))
-                    }
-                    else if isComplete {
-                        continuation.resume(returning: nil)  // peer half-closed
-                    }
-                    else {
-                        continuation.resume(returning: [])
-                    }
+        try await withUnsafeThrowingContinuation { continuation in
+            connection.receive(
+                minimumIncompleteLength: 1,
+                maximumLength: max(1, maxLength)
+            ) { data, _, isComplete, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                }
+                else if let data, !data.isEmpty {
+                    continuation.resume(returning: [UInt8](data))
+                }
+                else if isComplete {
+                    continuation.resume(returning: nil)  // peer half-closed
+                }
+                else {
+                    continuation.resume(returning: [])
                 }
             }
-        } onCancel: {
-            cancelUnderlying()
         }
     }
 
     /// Sends `bytes` to the peer, completing once Network.framework has accepted them.
     public func send(_ bytes: [UInt8]) async throws {
-        try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Void, any Error>) in
-                connection.send(
-                    content: Data(bytes),
-                    completion: .contentProcessed { error in
-                        if let error {
-                            continuation.resume(throwing: error)
-                        }
-                        else {
-                            continuation.resume()
-                        }
+        try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Void, any Error>) in
+            connection.send(
+                content: Data(bytes),
+                completion: .contentProcessed { error in
+                    if let error {
+                        continuation.resume(throwing: error)
                     }
-                )
-            }
-        } onCancel: {
-            cancelUnderlying()
+                    else {
+                        continuation.resume()
+                    }
+                }
+            )
         }
     }
 
     /// Cancels the underlying connection.
     public func close() async {
+        cancelUnderlying()
+    }
+
+    /// Cancels the underlying connection synchronously to unblock a parked receive/send (audit CC4) —
+    /// the server's once-per-connection cancellation handler calls this; `NWConnection.cancel()` is
+    /// idempotent.
+    public func cancel() {
         cancelUnderlying()
     }
 

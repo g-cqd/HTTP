@@ -73,26 +73,22 @@ public final class SwiftSystemConnection: TransportConnection {
     }
 
     /// Reads up to `maxLength` bytes once the socket is readable, or `nil` at end of stream.
+    ///
+    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
+    /// (audit CC4); cancelling the serve task closes the fd through the loop, which fires the parked
+    /// readiness handler against the closed descriptor so this continuation resumes with an error.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
-        try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation { continuation in
-                readAvailable(maxLength: maxLength, into: OnceResumer(continuation))
-            }
-        } onCancel: {
-            closeDescriptor()
+        try await withUnsafeThrowingContinuation { continuation in
+            readAvailable(maxLength: maxLength, into: OnceResumer(continuation))
         }
     }
 
     /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
     /// count appended (`0` at EOF) — the allocation-free read path (audit P1).
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-        let count = try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Int, any Error>) in
-                readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
-            }
-        } onCancel: {
-            closeDescriptor()
+        let count = try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Int, any Error>) in
+            readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
         }
         if count > 0 {
             scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
@@ -102,18 +98,20 @@ public final class SwiftSystemConnection: TransportConnection {
 
     /// Writes all of `bytes`, re-arming on writability whenever the socket buffer is full.
     public func send(_ bytes: [UInt8]) async throws {
-        try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Void, any Error>) in
-                writeRemaining(bytes: bytes, offset: 0, once: OnceResumer(continuation))
-            }
-        } onCancel: {
-            closeDescriptor()
+        try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Void, any Error>) in
+            writeRemaining(bytes: bytes, offset: 0, once: OnceResumer(continuation))
         }
     }
 
     /// Closes the descriptor (idempotent, serialized on the loop to avoid an fd-reuse race).
     public func close() async {
+        closeDescriptor()
+    }
+
+    /// Closes the descriptor synchronously to unblock a parked read/write (audit CC4) — the server's
+    /// once-per-connection cancellation handler calls this; it is the idempotent ``closeDescriptor()``.
+    public func cancel() {
         closeDescriptor()
     }
 

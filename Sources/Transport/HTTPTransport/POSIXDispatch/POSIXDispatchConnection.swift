@@ -64,39 +64,39 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// Reads up to `maxLength` currently-buffered bytes, or `nil` at end of stream.
     ///
     /// Arms a read source; when the socket is readable, one non-blocking `read(2)` returns what is
-    /// buffered. Cancellation closes the descriptor to unblock a stalled read.
+    /// buffered.
+    ///
+    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
+    /// (audit CC4); cancelling the serve task closes the fd, which runs the parked waiter's `fail`
+    /// closure so this continuation resumes (EOF) instead of leaking.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
         let fd = descriptor
-        return try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
-                let once = OnceResumer(continuation)
-                queue.async { [self] in
-                    guard !isClosed.load(ordering: .acquiring) else {
-                        once.resume(returning: nil)
-                        return
-                    }
-                    let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-                    waiter.withLock { $0 = Waiter(source: source) { once.resume(returning: nil) } }
-                    source.setEventHandler { [self] in
-                        do {
-                            let bytes = try Self.readAvailable(fd, maxLength)
-                            clearWaiter(source)
-                            once.resume(returning: bytes)
-                        }
-                        catch is WouldBlock {
-                            // Spurious readiness — leave the source armed; it fires again.
-                        }
-                        catch {
-                            clearWaiter(source)
-                            once.resume(throwing: error)
-                        }
-                    }
-                    source.resume()
+        return try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
+            let once = OnceResumer(continuation)
+            queue.async { [self] in
+                guard !isClosed.load(ordering: .acquiring) else {
+                    once.resume(returning: nil)
+                    return
                 }
+                let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+                waiter.withLock { $0 = Waiter(source: source) { once.resume(returning: nil) } }
+                source.setEventHandler { [self] in
+                    do {
+                        let bytes = try Self.readAvailable(fd, maxLength)
+                        clearWaiter(source)
+                        once.resume(returning: bytes)
+                    }
+                    catch is WouldBlock {
+                        // Spurious readiness — leave the source armed; it fires again.
+                    }
+                    catch {
+                        clearWaiter(source)
+                        once.resume(throwing: error)
+                    }
+                }
+                source.resume()
             }
-        } onCancel: {
-            closeDescriptor()
         }
     }
 
@@ -124,20 +124,16 @@ public final class POSIXDispatchConnection: TransportConnection {
             return
         }
         let fd = descriptor
-        try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Void, any Error>) in
-                let once = OnceResumer(continuation)
-                queue.async { [self] in
-                    guard !isClosed.load(ordering: .acquiring) else {
-                        once.resume(throwing: TransportError.ioFailed("connection closed"))
-                        return
-                    }
-                    writeFrom(0, fd: fd, bytes: bytes, once: once)
+        try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Void, any Error>) in
+            let once = OnceResumer(continuation)
+            queue.async { [self] in
+                guard !isClosed.load(ordering: .acquiring) else {
+                    once.resume(throwing: TransportError.ioFailed("connection closed"))
+                    return
                 }
+                writeFrom(0, fd: fd, bytes: bytes, once: once)
             }
-        } onCancel: {
-            closeDescriptor()
         }
     }
 
@@ -199,6 +195,12 @@ public final class POSIXDispatchConnection: TransportConnection {
 
     /// Closes the connection idempotently.
     public func close() async {
+        closeDescriptor()
+    }
+
+    /// Closes the descriptor synchronously to unblock a parked read/write (audit CC4) — the server's
+    /// once-per-connection cancellation handler calls this; it is the idempotent ``closeDescriptor()``.
+    public func cancel() {
         closeDescriptor()
     }
 

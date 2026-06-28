@@ -68,23 +68,23 @@ public final class POSIXKqueueConnection: TransportConnection {
     }
 
     /// Reads up to `maxLength` bytes once the socket is readable, or `nil` at end of stream.
+    ///
+    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
+    /// (audit CC4); cancelling the serve task closes the fd, which fires the parked readiness handler
+    /// against the closed descriptor so this continuation resumes with an error instead of leaking.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
         let descriptor = self.descriptor
         let eventLoop = self.eventLoop
-        return try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation { continuation in
-                let once = OnceResumer(continuation)
-                eventLoop.waitReadable(descriptor) {
-                    Self.readAvailable(
-                        descriptor: descriptor,
-                        maxLength: maxLength,
-                        eventLoop: eventLoop,
-                        into: once
-                    )
-                }
+        return try await withUnsafeThrowingContinuation { continuation in
+            let once = OnceResumer(continuation)
+            eventLoop.waitReadable(descriptor) {
+                Self.readAvailable(
+                    descriptor: descriptor,
+                    maxLength: maxLength,
+                    eventLoop: eventLoop,
+                    into: once
+                )
             }
-        } onCancel: {
-            closeDescriptor()
         }
     }
 
@@ -92,13 +92,9 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// count appended (`0` at EOF) — the allocation-free read path (audit P1). `read(2)` fills the scratch
     /// in the readiness callback; the awaiting task then copies just the received bytes into `buffer`.
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-        let count = try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Int, any Error>) in
-                readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
-            }
-        } onCancel: {
-            closeDescriptor()
+        let count = try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Int, any Error>) in
+            readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
         }
         // The scratch holds the bytes `read(2)` produced (reads are serial, so it is undisturbed until
         // this copy); take just those into the caller's accumulator. `Mutex` borrows in place — no copy.
@@ -148,20 +144,16 @@ public final class POSIXKqueueConnection: TransportConnection {
     public func send(_ bytes: [UInt8]) async throws {
         let descriptor = self.descriptor
         let eventLoop = self.eventLoop
-        try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Void, any Error>) in
-                let once = OnceResumer(continuation)
-                Self.writeRemaining(
-                    bytes: bytes,
-                    offset: 0,
-                    descriptor: descriptor,
-                    eventLoop: eventLoop,
-                    once: once
-                )
-            }
-        } onCancel: {
-            closeDescriptor()
+        try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Void, any Error>) in
+            let once = OnceResumer(continuation)
+            Self.writeRemaining(
+                bytes: bytes,
+                offset: 0,
+                descriptor: descriptor,
+                eventLoop: eventLoop,
+                once: once
+            )
         }
     }
 
@@ -176,26 +168,28 @@ public final class POSIXKqueueConnection: TransportConnection {
         }
         let descriptor = self.descriptor
         let eventLoop = self.eventLoop
-        try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Void, any Error>) in
-                let once = OnceResumer(continuation)
-                Self.writevRemaining(
-                    head: head,
-                    body: body,
-                    offset: 0,
-                    descriptor: descriptor,
-                    eventLoop: eventLoop,
-                    once: once
-                )
-            }
-        } onCancel: {
-            closeDescriptor()
+        try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Void, any Error>) in
+            let once = OnceResumer(continuation)
+            Self.writevRemaining(
+                head: head,
+                body: body,
+                offset: 0,
+                descriptor: descriptor,
+                eventLoop: eventLoop,
+                once: once
+            )
         }
     }
 
     /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
     public func close() async {
+        closeDescriptor()
+    }
+
+    /// Closes the descriptor synchronously to unblock a parked read/write (audit CC4) — the server's
+    /// once-per-connection cancellation handler calls this; it is the idempotent ``closeDescriptor()``.
+    public func cancel() {
         closeDescriptor()
     }
 

@@ -71,36 +71,32 @@
         }
 
         /// Reads up to `maxLength` bytes once the socket is readable, or `nil` at end of stream.
+        ///
+        /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
+        /// (audit CC4); cancelling the serve task closes the fd, which fires the parked readiness handler
+        /// against the closed descriptor so this continuation resumes with an error instead of leaking.
         public func receive(maxLength: Int) async throws -> [UInt8]? {
             let descriptor = self.descriptor
             let eventLoop = self.eventLoop
-            return try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation { continuation in
-                    let once = OnceResumer(continuation)
-                    eventLoop.waitReadable(descriptor) {
-                        Self.readAvailable(
-                            descriptor: descriptor,
-                            maxLength: maxLength,
-                            eventLoop: eventLoop,
-                            into: once
-                        )
-                    }
+            return try await withUnsafeThrowingContinuation { continuation in
+                let once = OnceResumer(continuation)
+                eventLoop.waitReadable(descriptor) {
+                    Self.readAvailable(
+                        descriptor: descriptor,
+                        maxLength: maxLength,
+                        eventLoop: eventLoop,
+                        into: once
+                    )
                 }
-            } onCancel: {
-                closeDescriptor()
             }
         }
 
         /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer` (audit P1),
         /// returning the count appended (`0` at EOF) — the allocation-free read path.
         public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-            let count = try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
-                    (continuation: UnsafeContinuation<Int, any Error>) in
-                    readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
-                }
-            } onCancel: {
-                closeDescriptor()
+            let count = try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Int, any Error>) in
+                readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
             }
             if count > 0 {
                 scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
@@ -148,25 +144,27 @@
         public func send(_ bytes: [UInt8]) async throws {
             let descriptor = self.descriptor
             let eventLoop = self.eventLoop
-            try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
-                    (continuation: UnsafeContinuation<Void, any Error>) in
-                    let once = OnceResumer(continuation)
-                    Self.writeRemaining(
-                        bytes: bytes,
-                        offset: 0,
-                        descriptor: descriptor,
-                        eventLoop: eventLoop,
-                        once: once
-                    )
-                }
-            } onCancel: {
-                closeDescriptor()
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                let once = OnceResumer(continuation)
+                Self.writeRemaining(
+                    bytes: bytes,
+                    offset: 0,
+                    descriptor: descriptor,
+                    eventLoop: eventLoop,
+                    once: once
+                )
             }
         }
 
         /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
         public func close() async {
+            closeDescriptor()
+        }
+
+        /// Closes the descriptor synchronously to unblock a parked read/write (audit CC4) — the server's
+        /// once-per-connection cancellation handler calls this; it is the idempotent ``closeDescriptor()``.
+        public func cancel() {
             closeDescriptor()
         }
 

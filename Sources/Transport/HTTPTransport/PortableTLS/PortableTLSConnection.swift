@@ -256,6 +256,12 @@
             closeDescriptor()
         }
 
+        /// Closes the descriptor synchronously to unblock a parked read/write (audit CC4) — the server's
+        /// once-per-connection cancellation handler calls this; it is the idempotent ``closeDescriptor()``.
+        func cancel() {
+            closeDescriptor()
+        }
+
         private func closeDescriptor() {
             guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else {
                 return
@@ -369,27 +375,25 @@
 
         // MARK: - Readiness (one-shot, on the loop)
 
+        /// Awaits socket readability for the ciphertext pump.
+        ///
+        /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
+        /// (audit CC4); cancelling the serve task closes the fd, which fires this parked readiness handler
+        /// against the closed descriptor so the continuation resumes instead of leaking.
         private func awaitReadable() async throws {
-            try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
-                    (continuation: UnsafeContinuation<Void, any Error>) in
-                    let once = OnceResumer(continuation)
-                    eventLoop.waitReadable(descriptor) { once.resume(returning: ()) }
-                }
-            } onCancel: {
-                closeDescriptor()
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                let once = OnceResumer(continuation)
+                eventLoop.waitReadable(descriptor) { once.resume(returning: ()) }
             }
         }
 
+        /// Awaits socket writability for the ciphertext pump — see ``awaitReadable()`` on cancellation.
         private func awaitWritable() async throws {
-            try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
-                    (continuation: UnsafeContinuation<Void, any Error>) in
-                    let once = OnceResumer(continuation)
-                    eventLoop.waitWritable(descriptor) { once.resume(returning: ()) }
-                }
-            } onCancel: {
-                closeDescriptor()
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                let once = OnceResumer(continuation)
+                eventLoop.waitWritable(descriptor) { once.resume(returning: ()) }
             }
         }
     }

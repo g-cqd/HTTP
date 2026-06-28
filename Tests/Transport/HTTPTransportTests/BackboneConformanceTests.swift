@@ -76,7 +76,16 @@ struct BackboneConformanceTests {
         var iterator = stream.makeAsyncIterator()
         let connection = try #require(await iterator.next())
 
-        let receiveTask = Task { try await connection.receive(maxLength: 64) }
+        // The server hoists cancellation to one handler per connection (audit CC4): cancelling the serve
+        // task closes the fd via `connection.cancel()`, which unblocks a stalled receive. The receive no
+        // longer carries its own handler, so this exercises the same contract — `cancel()` on cancellation.
+        let receiveTask = Task {
+            try await withTaskCancellationHandler {
+                try await connection.receive(maxLength: 64)
+            } onCancel: {
+                connection.cancel()
+            }
+        }
         // Give recv(2) a moment to actually park in the kernel before cancelling — there is no portable
         // hook for "the syscall is now blocked". The deadlock detection below is probe-driven, not a
         // timed race: the probe `wait` returns the instant the read unblocks, and only elapses its

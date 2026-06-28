@@ -179,6 +179,22 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     func serve(_ connection: any TransportConnection) async {
         activeConnections.withLock { $0[connection.id] = connection }
         defer { activeConnections.withLock { $0[connection.id] = nil } }
+        // One cancellation handler covers the connection's whole serve loop (audit CC4): cancelling the
+        // serve task closes the fd once via `cancel()`, which unblocks whatever read/write is parked in a
+        // continuation right now — instead of registering a task-status record on every receive/send the
+        // keep-alive loop awaits. The I/O bodies run directly, with no per-op handler.
+        await withTaskCancellationHandler {
+            await serveBody(connection)
+        } onCancel: {
+            connection.cancel()
+        }
+    }
+
+    /// The protocol-dispatch + keep-alive serve work, run inside the connection-wide cancellation handler
+    /// installed by ``serve(_:)`` (audit CC4).
+    ///
+    /// Closes the connection on every exit path.
+    private func serveBody(_ connection: any TransportConnection) async {
         // TLS ALPN (RFC 7301) settles the protocol before any byte is read: "h2" commits the
         // connection to HTTP/2 (RFC 9113 §3.3), so the engine — not the preface sniffer — drives it
         // (a malformed preface then earns a GOAWAY instead of mis-routing to HTTP/1.1). Any other

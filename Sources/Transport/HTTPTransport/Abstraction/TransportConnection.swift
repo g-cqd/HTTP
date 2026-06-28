@@ -68,6 +68,15 @@ public protocol TransportConnection: Sendable {
     /// Closes the connection gracefully, flushing any pending output.
     func close() async
 
+    /// Closes the connection's descriptor **now**, synchronously, to unblock any pending I/O.
+    ///
+    /// The synchronous counterpart of ``close()``: the server registers one ``cancel()`` per connection
+    /// as the cancellation handler covering its whole serve loop, so cancelling that task closes the fd
+    /// once and resumes any read/write parked in a continuation — instead of registering a task-status
+    /// record per I/O op on the hot path (audit CC4). A socket backbone overrides it to call its
+    /// idempotent sync close; the in-memory fakes keep the no-op default below.
+    func cancel()
+
     /// The task executor this connection's serve task should prefer, or `nil` to use the global
     /// cooperative pool.
     ///
@@ -94,6 +103,12 @@ extension TransportConnection {
     ///
     /// The kqueue/epoll backbones override this to return their loop so the serve task runs inline on it.
     public var preferredTaskExecutor: (any TaskExecutor)? { nil }
+
+    /// No-op by default — an in-memory fake (no socket) has nothing to unblock; a socket backbone
+    /// overrides this to close its descriptor synchronously (audit CC4).
+    public func cancel() {
+        // No descriptor to close: a fake's I/O completes without parking on a syscall.
+    }
 
     /// Default ``receive(into:maxLength:)``: read one chunk via ``receive(maxLength:)`` and append it.
     ///
