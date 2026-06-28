@@ -26,13 +26,16 @@ struct StructuredFieldsTests {
         #expect(throws: SF.ParseError.integerOutOfRange) { try SF.parseItem("1000000000000000") }
     }
 
-    @Test("decimals: fractional digits, sign, and the 3-fraction-digit cap")
+    @Test("decimals: fractional digits, sign, the 3-fraction- and 12-integer-digit caps (§4.2.4)")
     func decimals() throws {
         #expect(try SF.parseItem("4.5").bareItem == .decimal(4.5))
         #expect(try SF.parseItem("-1.25").bareItem == .decimal(-1.25))
         #expect(try SF.parseItem("1.000").bareItem == .decimal(1.0))
+        #expect(try SF.parseItem("123456789012.5").bareItem == .decimal(123_456_789_012.5))
         #expect(throws: SF.ParseError.invalidDecimal) { try SF.parseItem("1.2345") }
         #expect(throws: SF.ParseError.invalidDecimal) { try SF.parseItem("1.") }
+        // >12 digits before the decimal point is rejected (matches the serializer — symmetric codec).
+        #expect(throws: SF.ParseError.invalidDecimal) { try SF.parseItem("1234567890123.5") }
     }
 
     @Test("strings: plain, and the two legal escapes")

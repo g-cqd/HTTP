@@ -72,6 +72,11 @@ extension StructuredFields.Parser {
         guard digits.last != dot, let dotIndex = digits.firstIndex(of: dot) else {
             throw .invalidDecimal
         }
+        // §4.2.4: at most 12 digits before the decimal point (the serializer enforces the same, so the
+        // codec stays symmetric — it must not accept what it cannot round-trip).
+        guard dotIndex <= 12 else {
+            throw .invalidDecimal
+        }
         guard digits.count - dotIndex - 1 <= 3 else {
             throw .invalidDecimal
         }
