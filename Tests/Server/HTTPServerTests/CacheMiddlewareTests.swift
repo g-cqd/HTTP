@@ -139,4 +139,22 @@ struct CacheMiddlewareTests {
         let evicted = await middleware.respond(to: get(path: "/a"), body: [], next: next)
         #expect(evicted.head.headerFields[.age] == nil)
     }
+
+    @Test("a cache hit promotes an entry so it survives a later eviction (intrusive-list touch)")
+    func hitPromotesPastEviction() async {
+        let middleware = CacheMiddleware(maxBytes: 600)  // ~two entries (256 overhead each)
+        let next = responder(cacheControl: "max-age=60", body: "")
+        _ = await middleware.respond(to: get(path: "/a"), body: [], next: next)  // store /a
+        _ = await middleware.respond(to: get(path: "/b"), body: [], next: next)  // store /b
+        // Touch /a so it is most-recently-used; /b becomes the LRU.
+        let promoted = await middleware.respond(to: get(path: "/a"), body: [], next: next)
+        #expect(promoted.head.headerFields[.age] != nil)
+        // Store /c — over the two-entry cap, so the LRU (/b) is evicted.
+        _ = await middleware.respond(to: get(path: "/c"), body: [], next: next)
+        // Check /a first: a hit re-promotes without a store, so it does not perturb /b's state.
+        let aSurvives = await middleware.respond(to: get(path: "/a"), body: [], next: next)
+        #expect(aSurvives.head.headerFields[.age] != nil)  // promoted earlier, retained
+        let bEvicted = await middleware.respond(to: get(path: "/b"), body: [], next: next)
+        #expect(bEvicted.head.headerFields[.age] == nil)  // was the LRU, dropped by /c
+    }
 }

@@ -9,6 +9,11 @@
 //  flood of distinct keys cannot grow it without bound (CWE-400). A stale entry may still be served
 //  within its RFC 5861 §3 `stale-while-revalidate` window while a single background revalidation runs.
 //
+//  Recency is an intrusive doubly-linked list of nodes (a `[key: Node]` index plus head/tail), so a
+//  hit's move-to-front, an insertion, and an eviction are each O(1) regardless of how many entries the
+//  cache holds — a 16 MiB default cache can hold thousands of small responses, and the previous
+//  array-based recency was O(n) on every hit.
+//
 
 internal import HTTPCore
 internal import Synchronization
@@ -35,9 +40,33 @@ final class ResponseCache: Sendable {
         case staleWhileRevalidate(response: ServerResponse, age: Int)
     }
 
+    /// One entry in the recency list: the stored value plus its neighbours.
+    ///
+    /// Unlinking and re-inserting at the front are O(1). Confined to the `Mutex`, never touched off the
+    /// lock.
+    private final class Node {
+        let key: String
+        var entry: Entry
+        var prev: Node?
+        var next: Node?
+
+        init(key: String, entry: Entry) {
+            self.key = key
+            self.entry = entry
+        }
+
+        deinit {
+            // No teardown beyond ARC; neighbours are mended on unlink before a node is dropped.
+        }
+    }
+
     private struct State {
-        var entries: [String: Entry] = [:]
-        var recency: [String] = []  // most-recently-used first
+        /// The entries by key; the value is the same `Node` threaded into the recency list.
+        var nodes: [String: Node] = [:]
+        /// The most-recently-used node (the front of the list), or nil when empty.
+        var head: Node?
+        /// The least-recently-used node (the eviction end), or nil when empty.
+        var tail: Node?
         var bytes = 0
         /// Keys with a background revalidation already running — single-flight (RFC 5861 §3).
         var revalidating: Set<String> = []
@@ -67,21 +96,22 @@ final class ResponseCache: Sendable {
         now: Int
     ) -> Lookup? {
         state.withLock { state in
-            guard let entry = state.entries[key], Self.matches(entry, request) else {
+            guard let node = state.nodes[key], Self.matches(node.entry, request) else {
                 return nil
             }
+            let entry = node.entry
             let age = now - entry.storedAt
             guard age >= 0 else {
                 return nil  // stored in the future (clock skew) — treat as unusable
             }
             if age < entry.freshFor {
-                Self.touch(&state, key)
+                Self.touch(node, &state)
                 return .fresh(response: entry.response, age: age)
             }
             guard let window = entry.staleWhileRevalidate, age < entry.freshFor + window else {
                 return nil  // past freshness and outside any stale-while-revalidate window
             }
-            Self.touch(&state, key)
+            Self.touch(node, &state)
             return .staleWhileRevalidate(response: entry.response, age: age)
         }
     }
@@ -89,21 +119,23 @@ final class ResponseCache: Sendable {
     /// Stores `entry` under `key`, evicting least-recently-used entries to stay under the byte cap.
     func store(_ key: String, _ entry: Entry) {
         state.withLock { state in
-            if let existing = state.entries[key] {
-                state.bytes -= existing.cost
-                state.recency.removeAll { $0 == key }
+            if let existing = state.nodes[key] {
+                state.bytes -= existing.entry.cost
+                Self.unlink(existing, &state)
+                state.nodes[key] = nil
             }
             guard entry.cost <= maxBytes else {
-                state.entries[key] = nil  // larger than the whole cache — not storable
+                // Larger than the whole cache — not storable (any prior variant was purged above).
                 return
             }
-            state.entries[key] = entry
-            state.recency.insert(key, at: 0)
+            let node = Node(key: key, entry: entry)
+            state.nodes[key] = node
+            Self.insertAtHead(node, &state)
             state.bytes += entry.cost
-            while state.bytes > maxBytes, let evicted = state.recency.last {
-                state.bytes -= state.entries[evicted]?.cost ?? 0
-                state.entries[evicted] = nil
-                state.recency.removeLast()
+            while state.bytes > maxBytes, let lru = state.tail {
+                state.bytes -= lru.entry.cost
+                Self.unlink(lru, &state)
+                state.nodes[lru.key] = nil
             }
         }
     }
@@ -129,9 +161,37 @@ final class ResponseCache: Sendable {
             }
     }
 
-    /// Moves `key` to the front of the recency order (most-recently-used).
-    private static func touch(_ state: inout State, _ key: String) {
-        state.recency.removeAll { $0 == key }
-        state.recency.insert(key, at: 0)
+    /// Moves `node` to the front of the recency order (most-recently-used) — O(1).
+    private static func touch(_ node: Node, _ state: inout State) {
+        guard state.head !== node else {
+            return  // already most-recently-used
+        }
+        unlink(node, &state)
+        insertAtHead(node, &state)
+    }
+
+    /// Splices `node` out of the recency list, mending its neighbours and the head/tail ends — O(1).
+    private static func unlink(_ node: Node, _ state: inout State) {
+        node.prev?.next = node.next
+        node.next?.prev = node.prev
+        if state.head === node {
+            state.head = node.next
+        }
+        if state.tail === node {
+            state.tail = node.prev
+        }
+        node.prev = nil
+        node.next = nil
+    }
+
+    /// Inserts `node` at the front of the recency list (most-recently-used) — O(1).
+    private static func insertAtHead(_ node: Node, _ state: inout State) {
+        node.prev = nil
+        node.next = state.head
+        state.head?.prev = node
+        state.head = node
+        if state.tail == nil {
+            state.tail = node
+        }
     }
 }
