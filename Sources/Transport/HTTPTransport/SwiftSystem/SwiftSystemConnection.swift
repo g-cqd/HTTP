@@ -44,6 +44,16 @@ public final class SwiftSystemConnection: TransportConnection {
     /// the loop thread while the copy-out runs on the awaiting (pinned) task; reads on one connection are
     /// serial, so the lock is uncontended.
     private let scratch = Mutex<[UInt8]>([])
+    /// Cached resumer for the hot read path (``receive(into:)``).
+    ///
+    /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
+    /// Sound because reads on one connection are serialized — the prior continuation is always taken
+    /// before the next op installs its own.
+    private let readResumer = OnceResumer<Int>()
+    /// Cached resumer for the hot write path (``send(_:)`` and the ``send(_:_:)`` writev override).
+    ///
+    /// Reused the same way: writes on one connection are serial and never overlap a read.
+    private let writeResumer = OnceResumer<Void>()
 
     private enum WriteOutcome {
         case done
@@ -88,7 +98,8 @@ public final class SwiftSystemConnection: TransportConnection {
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
         let count = try await withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<Int, any Error>) in
-            readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
+            readResumer.reset(continuation)
+            readIntoScratch(maxLength: maxLength, into: readResumer)
         }
         if count > 0 {
             scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
@@ -100,7 +111,8 @@ public final class SwiftSystemConnection: TransportConnection {
     public func send(_ bytes: [UInt8]) async throws {
         try await withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<Void, any Error>) in
-            writeRemaining(bytes: bytes, offset: 0, once: OnceResumer(continuation))
+            writeResumer.reset(continuation)
+            writeRemaining(bytes: bytes, offset: 0, once: writeResumer)
         }
     }
 

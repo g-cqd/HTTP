@@ -42,6 +42,16 @@
         /// Reused receive buffer for the read path — the Linux mirror of the ``POSIXKqueueConnection``
         /// scratch (audit P1).
         private let scratch = Mutex<[UInt8]>([])
+        /// Cached resumer for the hot read path (``receive(into:)``).
+        ///
+        /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
+        /// Sound because reads on one connection are serialized — the prior continuation is always taken
+        /// before the next op installs its own.
+        private let readResumer = OnceResumer<Int>()
+        /// Cached resumer for the hot write path (``send(_:)`` and the ``send(_:_:)`` sendmsg override).
+        ///
+        /// Reused the same way: writes on one connection are serial and never overlap a read.
+        private let writeResumer = OnceResumer<Void>()
 
         private enum WriteOutcome {
             case done
@@ -96,7 +106,8 @@
         public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
             let count = try await withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Int, any Error>) in
-                readIntoScratch(maxLength: maxLength, into: OnceResumer(continuation))
+                readResumer.reset(continuation)
+                readIntoScratch(maxLength: maxLength, into: readResumer)
             }
             if count > 0 {
                 scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
@@ -146,13 +157,13 @@
             let eventLoop = self.eventLoop
             try await withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Void, any Error>) in
-                let once = OnceResumer(continuation)
+                writeResumer.reset(continuation)
                 Self.writeRemaining(
                     bytes: bytes,
                     offset: 0,
                     descriptor: descriptor,
                     eventLoop: eventLoop,
-                    once: once
+                    once: writeResumer
                 )
             }
         }

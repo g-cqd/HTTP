@@ -34,6 +34,16 @@ public final class POSIXDispatchConnection: TransportConnection {
     private let queue: DispatchQueue
     private let isClosed = Atomic<Bool>(false)
     private let waiter = Mutex<Waiter?>(nil)
+    /// Cached resumer for the read path (``receive(maxLength:)`` — this backbone has no scratch override).
+    ///
+    /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
+    /// Sound because reads on one connection are serialized — the prior continuation is always taken
+    /// before the next op installs its own.
+    private let readResumer = OnceResumer<[UInt8]?>()
+    /// Cached resumer for the write path (``send(_:)``).
+    ///
+    /// Reused the same way: writes on one connection are serial and never overlap a read.
+    private let writeResumer = OnceResumer<Void>()
 
     /// A parked read or write: its readiness source plus a closure that fails the awaiting continuation
     /// (read → EOF, write → error) when the connection is torn down out from under it.
@@ -73,26 +83,28 @@ public final class POSIXDispatchConnection: TransportConnection {
         let fd = descriptor
         return try await withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
-            let once = OnceResumer(continuation)
+            readResumer.reset(continuation)
             queue.async { [self] in
                 guard !isClosed.load(ordering: .acquiring) else {
-                    once.resume(returning: nil)
+                    readResumer.resume(returning: nil)
                     return
                 }
                 let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-                waiter.withLock { $0 = Waiter(source: source) { once.resume(returning: nil) } }
+                waiter.withLock {
+                    $0 = Waiter(source: source) { [self] in readResumer.resume(returning: nil) }
+                }
                 source.setEventHandler { [self] in
                     do {
                         let bytes = try Self.readAvailable(fd, maxLength)
                         clearWaiter(source)
-                        once.resume(returning: bytes)
+                        readResumer.resume(returning: bytes)
                     }
                     catch is WouldBlock {
                         // Spurious readiness — leave the source armed; it fires again.
                     }
                     catch {
                         clearWaiter(source)
-                        once.resume(throwing: error)
+                        readResumer.resume(throwing: error)
                     }
                 }
                 source.resume()
@@ -126,13 +138,13 @@ public final class POSIXDispatchConnection: TransportConnection {
         let fd = descriptor
         try await withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<Void, any Error>) in
-            let once = OnceResumer(continuation)
+            writeResumer.reset(continuation)
             queue.async { [self] in
                 guard !isClosed.load(ordering: .acquiring) else {
-                    once.resume(throwing: TransportError.ioFailed("connection closed"))
+                    writeResumer.resume(throwing: TransportError.ioFailed("connection closed"))
                     return
                 }
-                writeFrom(0, fd: fd, bytes: bytes, once: once)
+                writeFrom(0, fd: fd, bytes: bytes, once: writeResumer)
             }
         }
     }
