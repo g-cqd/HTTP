@@ -22,6 +22,8 @@ DerivedData/
 
 ## Build / scratch (we direct artifacts to /tmp/swiftpm-build/HTTP)
 /tmp/swiftpm-build/HTTP/
+# Linux verification scratch (apple/container; see scripts/linux-test.sh) — never committed.
+.build-linux/
 
 ## Fuzzing corpora artifacts
 *.profraw
