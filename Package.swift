@@ -197,6 +197,15 @@ let package = Package(
             path: "Sources/Protocols/CWSDeflate",
             linkerSettings: [.linkedLibrary("z")]
         ),
+        // G0 — a one-shot gzip (RFC 1952) compress + gzip/zlib/raw inflate C shim over the system zlib,
+        // for the Linux content codings (Apple's Compression framework is absent there). Links the system
+        // zlib like CCRC32/CWSDeflate; depended on only `.when(platforms: [.linux])`, so it never enters
+        // the apple graph (where Darwin Compression backs gzip).
+        .target(
+            name: "CZlibCoding",
+            path: "Sources/Core/CZlibCoding",
+            linkerSettings: [.linkedLibrary("z")]
+        ),
         // Test-only support: the deterministic async toolkit ported from ADTestKit (TestClock,
         // AsyncEventProbe, AsyncGate, ThreadGate, TaskProviderSpy) plus shared fakes, seeded fuzzing,
         // constrained-stack recursion guards, oracles, and the allocation counter. Linked by every
@@ -335,7 +344,9 @@ let package = Package(
             name: "HTTPServer",
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
-                "HTTPConcurrency"
+                "HTTPConcurrency",
+                // Linux gzip coding (zlib); on Darwin gzip is Apple's Compression, so this stays off the graph.
+                .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
             ],
             path: "Sources/Server/HTTPServer",
             exclude: appleCompressionSources
@@ -344,7 +355,8 @@ let package = Package(
             name: "HTTPServerTests",
             dependencies: [
                 "HTTPServer", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket", "HTTPTransport",
-                "HTTPTestSupport"
+                "HTTPTestSupport",
+                .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
             ],
             path: "Tests/Server/HTTPServerTests",
             exclude: darwinOnlyServerTestSources + appleCompressionTestSources
@@ -421,7 +433,8 @@ let package = Package(
 // var so downstream consumers' builds stay green.
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
-for target in package.targets where !["CHTTPTestMalloc", "CCRC32", "CEpoll"].contains(target.name) {
+for target in package.targets
+where !["CHTTPTestMalloc", "CCRC32", "CEpoll", "CZlibCoding"].contains(target.name) {
     var settings = (target.swiftSettings ?? []) + strictSwiftSettings
     if treatWarningsAsErrors {
         settings.append(.treatAllWarnings(as: .error))

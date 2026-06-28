@@ -159,8 +159,9 @@ public struct CompressionMiddleware: HTTPMiddleware {
             case .gzip:
                 #if canImport(Compression)
                     return Gzip.compress(body)
+                #elseif canImport(CZlibCoding)
+                    return Gzip.compress(body)  // Linux: system zlib (GzipLinux)
                 #else
-                    // No gzip encoder where Apple's Compression is absent (Linux, gap G0).
                     return nil
                 #endif
         }
