@@ -17,6 +17,13 @@ public protocol QUICConnection: Sendable {
     /// The ALPN-negotiated application protocol (RFC 7301) — `"h3"` for HTTP/3 — or `nil` if unknown.
     var negotiatedApplicationProtocol: String? { get }
 
+    /// The subject of the verified TLS client certificate (mutual TLS, RFC 9001), or `nil` if the peer
+    /// presented none — the QUIC peer of ``TransportConnection/tlsPeerSubject``. The HTTP/3 runtime
+    /// stamps it onto the request as the server-asserted `X-Client-Cert-Subject` (zero-trust), stripping
+    /// any inbound value so a handler only ever sees a subject the server verified. Defaults to `nil`
+    /// until a backbone captures it at handshake.
+    var tlsPeerSubject: String? { get }
+
     /// A stream of inbound, peer-initiated QUIC streams, finishing when the connection closes.
     func inboundStreams() -> AsyncStream<any QUICStream>
 
@@ -25,4 +32,9 @@ public protocol QUICConnection: Sendable {
 
     /// Closes the whole connection with a QUIC application error code (RFC 9000 §19.19 CONNECTION_CLOSE).
     func close(errorCode: UInt64) async
+}
+
+extension QUICConnection {
+    /// No verified client-certificate subject unless a backbone captures one at handshake.
+    public var tlsPeerSubject: String? { nil }
 }

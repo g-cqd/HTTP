@@ -38,6 +38,31 @@ struct HTTPServerHTTP3Tests {
     }
 
     @Test(
+        "an HTTP/3 client cannot spoof X-Client-Cert-Subject — it is stripped (audit P0-1)",
+        .timeLimit(.minutes(1)))
+    func http3StripsSpoofedClientCertSubject() async throws {
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        // Echo back whatever X-Client-Cert-Subject the handler sees (or `<none>`).
+        let echo = ClosureResponder { request, _ in
+            let subject = request.headerFields[.xClientCertSubject] ?? "<none>"
+            return ServerResponse(HTTPResponse(status: .ok), body: Array(subject.utf8))
+        }
+        let (status, body) = try await serveAndGet(
+            transport: LegacyQUICTransport(
+                configuration: TransportConfiguration(
+                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls
+                )
+            ),
+            responder: echo,
+            extraHeaders: [HeaderField(name: "x-client-cert-subject", value: "attacker")]
+        )
+        #expect(status == "200")
+        // The dev TLS presents no client certificate, so the verified subject is nil and the spoofed
+        // inbound header must be stripped — the handler sees no subject, not the attacker's value.
+        #expect(body == Array("<none>".utf8))
+    }
+
+    @Test(
         "an HTTP/3 GET over the modern QUIC backbone returns the response", .timeLimit(.minutes(1)))
     func http3GetModern() async throws {
         guard #available(macOS 26, iOS 26, *) else {
@@ -93,7 +118,8 @@ struct HTTPServerHTTP3Tests {
     /// Starts `transport`, drives the HTTP/3 server over it, and performs one GET, returning the reply.
     private func serveAndGet(
         transport: any QUICServerTransport,
-        responder: any HTTPResponder
+        responder: any HTTPResponder,
+        extraHeaders: [HeaderField] = []
     ) async throws -> (status: String?, body: [UInt8]) {
         let connections = try await transport.start()
         let port = transport.boundPort
@@ -112,12 +138,14 @@ struct HTTPServerHTTP3Tests {
             serving.cancel()
             Task { await transport.shutdown() }
         }
-        return try await get(port: port, path: "/")
+        return try await get(port: port, path: "/", extraHeaders: extraHeaders)
     }
 
     // MARK: A minimal HTTP/3 client over Network.framework QUIC
 
-    private func get(port: UInt16, path: String) async throws -> (status: String?, body: [UInt8]) {
+    private func get(
+        port: UInt16, path: String, extraHeaders: [HeaderField] = []
+    ) async throws -> (status: String?, body: [UInt8]) {
         let connection = NWConnection(
             host: "127.0.0.1",
             port: NWEndpoint.Port(rawValue: port) ?? .any,
@@ -127,12 +155,14 @@ struct HTTPServerHTTP3Tests {
         try await ready(connection)
 
         let section = QPACKEncoder()
-            .encode([
-                HeaderField(name: ":method", value: "GET"),
-                HeaderField(name: ":scheme", value: "https"),
-                HeaderField(name: ":authority", value: "127.0.0.1"),
-                HeaderField(name: ":path", value: path)
-            ])
+            .encode(
+                [
+                    HeaderField(name: ":method", value: "GET"),
+                    HeaderField(name: ":scheme", value: "https"),
+                    HeaderField(name: ":authority", value: "127.0.0.1"),
+                    HeaderField(name: ":path", value: path)
+                ] + extraHeaders
+            )
         try await sendComplete(Self.frame(0x01, section), on: connection)  // HEADERS + FIN
         let response = try await receiveAll(from: connection)
         return try Self.decode(response)

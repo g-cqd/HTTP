@@ -159,17 +159,26 @@ extension HTTPServer {
             for event in events {
                 switch event {
                     case .request(let id, let request, let body):
+                        // Stamp the verified mutual-TLS subject as the server-asserted
+                        // X-Client-Cert-Subject, stripping any inbound value so an h3 client cannot
+                        // spoof it (audit P0-1) — the same chokepoint the h1/h2 paths use.
+                        let stamped = Self.stampingClientCertSubject(
+                            request, subject: quic.tlsPeerSubject
+                        )
                         await respondHTTP3(
                             id,
-                            request: request,
+                            request: stamped,
                             body: body,
                             stream: stream,
                             engine: engine,
                             quic: quic
                         )
                     case .extendedConnect(let id, let request, let proto):
+                        let stamped = Self.stampingClientCertSubject(
+                            request, subject: quic.tlsPeerSubject
+                        )
                         webSocket = await acceptHTTP3Tunnel(
-                            id, request: request, protocol: proto, on: stream, engine: engine
+                            id, request: stamped, protocol: proto, on: stream, engine: engine
                         )
                     case .tunnelData(_, let bytes):
                         webSocket = await pumpHTTP3Tunnel(

@@ -28,9 +28,24 @@ extension HTTPServer {
         _ request: HTTPRequest,
         from connection: any TransportConnection
     ) -> HTTPRequest {
+        stampingClientCertSubject(request, subject: connection.tlsPeerSubject)
+    }
+
+    /// Stamps `subject` (a verified TLS client-certificate subject, or `nil`) as the server-asserted
+    /// ``HTTPFieldName/xClientCertSubject``, always stripping any inbound value first.
+    ///
+    /// The subject-taking peer of `stampingClientCertSubject(_:from:)`, for transports whose connection
+    /// is not a ``TransportConnection`` — the HTTP/3 path passes ``QUICConnection/tlsPeerSubject``. The
+    /// strip runs unconditionally, so a `nil` subject still removes a spoofed inbound header (a client
+    /// cannot forge the field even when mutual TLS is off); CR/LF-bearing subjects are dropped by
+    /// `HTTPField`'s `field-value` validation rather than forged (CWE-93).
+    static func stampingClientCertSubject(
+        _ request: HTTPRequest,
+        subject: String?
+    ) -> HTTPRequest {
         var request = request
         request.headerFields.removeAll(named: .xClientCertSubject)
-        if let subject = connection.tlsPeerSubject {
+        if let subject {
             _ = request.headerFields.append(subject, for: .xClientCertSubject)
         }
         return request
