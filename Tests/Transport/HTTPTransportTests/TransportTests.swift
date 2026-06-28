@@ -14,11 +14,18 @@ struct TransportTests {
     @Test("the factory wires each real backbone flag to its implementation")
     func factorySelectsBackbone() {
         // `.fake` binds no port; `.portableTLS` needs a TLS identity + the opt-in HTTP_PORTABLE_TLS
-        // build, so it is covered by the gated portable-TLS suite, not this cleartext battery.
-        // `.posixEpoll` is Linux-only (Glibc) — the factory traps for it off Linux, so it is excluded
-        // here and verified by the Linux suite once that toolchain lands (G0).
-        for backbone in TransportBackbone.allCases
-        where backbone != .fake && backbone != .portableTLS && backbone != .posixEpoll {
+        // build, so it is covered by the gated portable-TLS suite, not this cleartext battery. The rest
+        // are platform-specific and the factory traps for an off-platform backbone, so each side tests
+        // only its own: the Network.framework / kqueue / Dispatch / swift-system stack on Darwin, the
+        // epoll stack on Linux (Glibc).
+        #if canImport(Darwin)
+            let platformBackbones = TransportBackbone.allCases.filter {
+                $0 != .fake && $0 != .portableTLS && $0 != .posixEpoll
+            }
+        #else
+            let platformBackbones: [TransportBackbone] = [.posixEpoll]
+        #endif
+        for backbone in platformBackbones {
             let configuration = TransportConfiguration(port: 0, backbone: backbone)
             #expect(TransportFactory.make(configuration).backbone == backbone)
         }

@@ -73,9 +73,37 @@ let strictSwiftSettings: [SwiftSetting] = [
         "Middleware/Gzip.swift",
         "Middleware/Inflate.swift"
     ]
+    // Test files that exercise the Darwin-only transports (Network.framework + its QUIC) — excluded from
+    // the Linux test build, like the backbones they cover. The sans-I/O engine tests, the portable-backbone
+    // tests, and the gated PortableTLS suite stay cross-platform.
+    let darwinOnlyTransportTestSources = [
+        "BackboneConformanceTests.swift",
+        "CertificateReloadTests.swift",
+        "LegacyQUICTransportTests.swift",
+        "LoopbackSupport.swift",
+        "ModernQUICTransportTests.swift",
+        "NetworkFrameworkMutualTLSTests.swift",
+        "NetworkFrameworkTLSTests.swift",
+        // raw BSD-socket options; SO_NOSIGPIPE is Darwin-only (the epoll tests cover Linux)
+        "POSIXSocketTests.swift"
+    ]
+    let darwinOnlyServerTestSources = [
+        "HTTPServerHTTP3Tests.swift",
+        "HTTPServerWebSocketHTTP3Tests.swift"
+    ]
+    // Tests of the Apple-`Compression` codings (Brotli/gzip/inflate). Excluded on Linux until the
+    // zlib/libbrotli Linux codings land (A3); the zstd suite self-gates on `canImport(CZstd)`.
+    let appleCompressionTestSources = [
+        "CompressionMiddlewareTests.swift",
+        "DecompressionMiddlewareTests.swift",
+        "DecompressionFuzzTests.swift"
+    ]
 #else
     let darwinOnlyTransportSources: [String] = []
     let appleCompressionSources: [String] = []
+    let darwinOnlyTransportTestSources: [String] = []
+    let darwinOnlyServerTestSources: [String] = []
+    let appleCompressionTestSources: [String] = []
 #endif
 
 let package = Package(
@@ -297,7 +325,8 @@ let package = Package(
         .testTarget(
             name: "HTTPTransportTests",
             dependencies: ["HTTPTransport", "HTTPTestSupport"],
-            path: "Tests/Transport/HTTPTransportTests"
+            path: "Tests/Transport/HTTPTransportTests",
+            exclude: darwinOnlyTransportTestSources
         ),
         // M4 — the server runtime: wires a transport backbone to the HTTP/1.1 and HTTP/2 engines via
         // an HTTPResponder, fanning connections out across cores and sniffing the protocol (HTTP/2
@@ -317,7 +346,8 @@ let package = Package(
                 "HTTPServer", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket", "HTTPTransport",
                 "HTTPTestSupport"
             ],
-            path: "Tests/Server/HTTPServerTests"
+            path: "Tests/Server/HTTPServerTests",
+            exclude: darwinOnlyServerTestSources + appleCompressionTestSources
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with

@@ -19,8 +19,11 @@ import _CryptoExtras
 @Suite("HTTPAuth — JWT verification (RFC 7519)")
 struct JWTTests {
     let secret: [UInt8] = Array("0123456789abcdef0123456789abcdef".utf8)
-    static let ecKey = P256.Signing.PrivateKey()
-    static let rsaKey = try? _RSA.Signing.PrivateKey(keySize: .bits2048)
+    // `nonisolated(unsafe)`: immutable test-fixture keys, read-only across parallel tests. CryptoKit marks
+    // these `Sendable` on Darwin, but swift-crypto does not on Linux, so the static-let global needs the
+    // explicit opt-out to compile there.
+    nonisolated(unsafe) static let ecKey = P256.Signing.PrivateKey()
+    nonisolated(unsafe) static let rsaKey = try? _RSA.Signing.PrivateKey(keySize: .bits2048)
 
     private let hsHeader = #"{"alg":"HS256","typ":"JWT"}"#
 

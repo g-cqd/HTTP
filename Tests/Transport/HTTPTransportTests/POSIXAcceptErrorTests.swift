@@ -9,10 +9,15 @@
 //  with it every live connection's I/O) on the way to a retry.
 //
 
-import Darwin
 import Testing
 
 @testable import HTTPTransport
+
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#endif
 
 @Suite("POSIXSocket accept-error classification (audit F-EMFILE)")
 struct POSIXAcceptErrorTests {
