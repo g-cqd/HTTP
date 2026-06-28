@@ -18,8 +18,16 @@ public import HTTPCore
 /// malformed, exceeds the absolute cap, or exceeds the ratio cap is rejected with `413 Content Too Large`
 /// (CWE-409 decompression-bomb defense).
 public struct DecompressionMiddleware: HTTPMiddleware {
-    /// The content codings this middleware decodes; any other is passed through untouched.
-    private static let supported: Set<String> = ["gzip", "x-gzip", "deflate", "br"]
+    /// The content codings this middleware decodes; any other is passed through untouched. `br` needs a
+    /// Brotli decoder — Apple's Compression on Darwin, the opt-in libbrotli shim on Linux — so it is only
+    /// claimed where one is present (else a `br` body passes through, rather than being wrongly rejected).
+    #if canImport(Compression) || canImport(CBrotli)
+        private static let supported: Set<String> = ["gzip", "x-gzip", "deflate", "br"]
+    #elseif canImport(CZlibCoding)
+        private static let supported: Set<String> = ["gzip", "x-gzip", "deflate"]
+    #else
+        private static let supported: Set<String> = []
+    #endif
 
     private let maxDecompressedSize: Int
     private let maxRatio: Int
@@ -49,7 +57,7 @@ public struct DecompressionMiddleware: HTTPMiddleware {
         // a small body must not be allowed to expand without bound (CWE-409).
         let product = body.count.multipliedReportingOverflow(by: maxRatio)
         let cap = min(maxDecompressedSize, product.overflow ? Int.max : product.partialValue)
-        #if canImport(Compression)
+        #if canImport(Compression) || canImport(CZlibCoding)
             guard let inflated = Inflate.decompress(body, encoding: encoding, maxOutput: cap) else {
                 // A bomb past the cap, an over-ratio body, or a malformed member — fail closed.
                 return ServerResponse(HTTPResponse(status: .contentTooLarge))
@@ -59,9 +67,8 @@ public struct DecompressionMiddleware: HTTPMiddleware {
             _ = decoded.headerFields.setValue(String(inflated.count), for: .contentLength)
             return await next.respond(to: decoded, body: inflated)
         #else
-            // No inbound decoder where Apple's Compression is absent (Linux); the coded body passes
-            // through untouched, exactly as an unrecognized `Content-Encoding` does (a `libz`/`libbrotli`
-            // decoder is a G0 follow-up). `cap` is computed for parity but unused on this path.
+            // No inbound decoder available in this build; the coded body passes through untouched, exactly
+            // as an unrecognized `Content-Encoding` does. `cap` is computed for parity but unused here.
             _ = cap
             return await next.respond(to: request, body: body)
         #endif
