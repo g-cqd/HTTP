@@ -1,85 +1,109 @@
-# Bench — comparative load battletest
+# Bench — consolidated comparative load battletest
 
-End-to-end "vs the best" yardstick for the HTTP server. It drives our `httpd-example` and any
-installed reference servers with the **same** load generator on **identical** routes, and reports
-throughput (rps) and tail latency (p50/p99/p99.9) side by side.
+End-to-end "vs the field" yardstick for the HTTP server. One runner (`run.sh`) drives our
+`httpd-example` and every installed reference server with the **same** load generator (`oha`) across a
+**set of route scenarios** on **identical** routes, and prints one throughput/tail-latency table per
+scenario. It measures the whole socket-to-socket path — accept, parse, route, serialize, write.
 
-This complements — it does not replace — the in-package microbenchmarks (`swift package
---package-path Benchmarks benchmark`), which lock per-engine **instructions** and **mallocs/op**.
-This harness measures the whole socket-to-socket path: accept, parse, route, serialize, write.
+This complements the in-package microbenchmarks (`swift package --package-path Benchmarking/Benchmarks
+benchmark`), which lock per-engine **instructions** and **mallocs/op**; this harness is the wall-clock,
+many-servers comparison. A representative run is recorded in [`RESULTS.md`](RESULTS.md).
 
-> **Iron Law.** We optimize only what we can measure, and prove every change with a second
-> measurement. Here that means: report **percentiles, not averages** (the p99/p99.9 tail is what
-> users feel), run in **release**, pin the workload, and — when chasing latency — drive a
-> **constant rate** (`RATE=…`) so the numbers are free of coordinated omission.
+> **Iron Law.** Optimize only what you can measure; prove every change with a second measurement.
+> Report **percentiles, not averages** (the p99/p99.9 tail is what users feel), run in **release**, pin
+> the workload, and run on a **quiet** machine (absolute rps is contention-sensitive — see caveats).
 
 ## Quick start
 
 ```sh
-brew install oha            # required load generator (HTTP/1.1 + HTTP/2)
-brew install jq             # optional, for parsed tables
-./Benchmarking/Bench/run.sh              # ours vs any installed reference servers, route / , 64 conns, 10s
+brew install oha jq                 # required: load generator + JSON parser
+./Benchmarking/Bench/run.sh         # every installed server, all scenarios, 64 conns, 10s each
 ```
 
-Useful knobs (all env vars):
+It works with only `ours` present; each other competitor is run if its toolchain/binary is installed,
+and skipped (with a note) otherwise. Raw `oha` JSON + each server's log land in
+`Benchmarking/Bench/results/` (git-ignored).
 
-| var | default | meaning |
-|---|---|---|
-| `ROUTE` | `/` | path hit on every server (`/`, `/health`) |
-| `CONNECTIONS` | `64` | concurrent connections (closed loop) |
-| `DURATION` | `10s` | wall-clock per run |
-| `RATE` | _(unset)_ | per-connection request rate → **open loop**, coordinated-omission-free latency |
-| `BACKBONE` | `swiftSystem` | our transport: `swiftSystem` \| `posixKqueue` \| `posixDispatch` \| `networkFramework` |
-| `SERVERS` | `ours nginx caddy hummingbird` | which to run (present ones only) |
-| `HTTP2` | `0` | `1` → full **HTTP/2-over-TLS** run (self-signed cert, ALPN, `oha --http2 --insecure`) |
-| `WARMUP` | `2s` | throwaway pre-measurement pass to warm TLS/caches; `0` skips it |
-
-Compare backbones (our four I/O strategies, same engine):
-
-```sh
-for b in swiftSystem posixKqueue posixDispatch networkFramework; do
-  SERVERS=ours BACKBONE=$b ./Benchmarking/Bench/run.sh
-done
-```
-
-Compare the modern HTTP/2-over-TLS path (needs `openssl` for the self-signed cert):
-
-```sh
-HTTP2=1 SERVERS="ours nginx caddy" ./Benchmarking/Bench/run.sh   # ours forced onto networkFramework (only TLS backbone)
-```
-
-## Reference servers (the yardsticks)
+## Competitors
 
 | server | role | install | port |
 |---|---|---|---|
-| **ours** (`httpd-example`) | the subject | built from this repo (release) | 8080 |
-| **Hummingbird** | in-language SwiftNIO baseline — "are we competitive without NIO?" | `Benchmarking/Bench/hummingbird/` (SwiftPM) | 8083 |
+| **ours** (`httpd-example`) | the subject (built `-c release` at the current tree) | this repo | 8080 |
 | **nginx** | C throughput/latency ceiling | `brew install nginx` | 8081 |
-| **Caddy** | modern Go, native h1/h2/h3 | `brew install caddy` | 8082 |
+| **caddy** | modern Go server (h1/h2/h3) | `brew install caddy` | 8082 |
+| **hummingbird** | SwiftNIO framework — "are we competitive without NIO?" | `Bench/hummingbird/` (SwiftPM, auto-built) | 8083 |
+| **go** | Go `net/http` stdlib | `brew install go` | 8084 |
+| **bun** | `Bun.serve` native server | `brew install oven-sh/bun/bun` | 8085 |
+| **rust** | `hyper` + `tokio` (release) | `brew install rust` | 8086 |
+| **vapor** | SwiftNIO framework | `Bench/vapor/` (SwiftPM, auto-built) | 8088 |
+| **django-wsgi** | Django sync views under gunicorn, workers = cores | `Bench/django/` (auto venv) | 8087 |
+| **django-asgi** | Django async views under uvicorn, workers = cores | `Bench/django/` (auto venv) | 8087 |
 
-`run.sh` launches each present server on its port, mirrors the routes (`Benchmarking/Bench/servers/*`), runs `oha`,
-parses the JSON, and prints a markdown table. Missing servers are skipped with a note — so it works
-with just `ours` out of the box.
+The two SwiftNIO packages (hummingbird, vapor) are nested in this repo, which SwiftPM mis-resolves
+("product not found") — so the harness copies each **outside the repo tree** to build it, and reuses the
+build until its sources change. The Django venv is created and `pip install`-ed on first run.
+
+## Scenarios (the shared parity route set)
+
+Every programmable server implements the same routes, so each scenario is an identical workload:
+
+| scenario | exercises |
+|---|---|
+| `GET /` | framework floor (tiny text) |
+| `GET /json` | serialize `{"message":"Hello, World!"}` |
+| `GET /payload` | ~1 KiB compressible body |
+| `GET /hello/world` | router + path/query parameter |
+| `POST /echo` | request read + body round-trip |
+
+nginx and caddy are static servers: they serve `/`, `/json`, `/payload`, `/hello`, but **cannot echo a
+POST body** without a scripting module — so `POST /echo` shows **N/A** for them. The harness marks any
+cell N/A when fewer than 99% of responses are 2xx (a server 404-ing a route it lacks).
+
+## Knobs (env vars)
+
+| var | default | meaning |
+|---|---|---|
+| `SERVERS` | all ten above | space-separated subset to run (present ones only) |
+| `SCENARIOS` | `GET:/ GET:/json GET:/payload GET:/hello/world POST:/echo` | `METHOD:PATH` tokens to drive |
+| `CONNECTIONS` | `64` | concurrent connections (closed loop) |
+| `DURATION` | `10s` | measured wall-clock per scenario |
+| `WARMUP` | `2s` | throwaway pre-measurement pass; `0` skips it |
+| `RATE` | _(unset)_ | per-connection request rate → **open loop**, coordinated-omission-free latency |
+| `BACKBONE` | `swiftSystem` | ours' transport: `swiftSystem` \| `posixKqueue` \| `posixDispatch` \| `networkFramework` |
+| `DJANGO_WORKERS` | CPU cores | gunicorn/uvicorn worker count |
+| `ECHO_BODY` | `{"x":1}` | request body for `POST /echo` |
+
+Examples:
+
+```sh
+# A subset of servers + scenarios:
+SERVERS="ours rust go nginx" SCENARIOS="GET:/json POST:/echo" ./Benchmarking/Bench/run.sh
+
+# Heavier load, longer measurement:
+CONNECTIONS=128 DURATION=20s ./Benchmarking/Bench/run.sh
+
+# Compare our four I/O backbones (same engine):
+for b in swiftSystem posixKqueue posixDispatch networkFramework; do
+  SERVERS=ours BACKBONE=$b ./Benchmarking/Bench/run.sh
+done
+
+# Open-loop, coordinated-omission-free tail latency at a fixed rate:
+RATE=2000 SERVERS="ours nginx rust" ./Benchmarking/Bench/run.sh
+```
 
 ## Methodology & caveats
 
-- **Release only.** The harness builds `httpd-example` with `-c release`; debug numbers are fiction.
+- **Release only.** `httpd-example` and rust are built `-c release`; debug numbers are fiction.
 - **Loopback.** Runs hit `127.0.0.1`, so the NIC is out of the picture — this isolates
-  framing/IO/allocation cost. A NIC-bound run is a separate, machine-specific exercise. (The cleartext
-  runs also skip TLS; the `HTTP2=1` run includes a real TLS handshake, amortized by `WARMUP` + keepalive.)
-- **Absolutes are soft; rankings are firm.** On a laptop, repeated runs of the same config can swing
-  ~3× in absolute rps from thermal drift under sustained load. Trust the **within-run ranking** and the
-  **before/after delta** (measured back-to-back), not the absolute figure. Pin/cool the host for
-  trustworthy tail absolutes.
-- **Connection cap.** Our default per-client cap (20) is a single-IP DoS guard that a loopback test
-  trips; `run.sh` launches us with `HTTPD_MAX_CONN=1000000`. Reference servers raise theirs too.
-- **Closed vs open loop.** Default is closed-loop (`-c N`): max throughput. For tail-latency claims,
-  set `RATE` for an open-loop run that doesn't hide queueing delay (coordinated omission).
-- **h2 / h3.** `HTTP2=1 ./Benchmarking/Bench/run.sh` automates the h2-over-TLS comparison: it generates a self-signed
-  cert, fills it into `servers/nginx-tls.conf` + `servers/Caddyfile-tls`, launches ours on
-  `networkFramework`+TLS, and drives `oha --http2 --insecure` against all three. (Cleartext h2c is
-  prior-knowledge only — curl can, oha can't — so it is not benchmarked here.) h3 still needs an
-  h3-capable client (a browser, or `h2load --npn h3`) and is not yet wired into `run.sh`.
-- **Warm up.** `oha -z` includes ramp; for tighter numbers raise `DURATION` and discard the first run.
-
-Results (raw `oha` JSON + each server's stdout/stderr) land in `Benchmarking/Bench/results/` (git-ignored).
+  framing/IO/allocation cost. A NIC-bound run is a separate, machine-specific exercise.
+- **Quiet box.** Absolute rps is contention-sensitive: a run taken while a second benchmark was active
+  showed nginx/caddy depressed 2–5×. Trust the **within-run ranking** and back-to-back **before/after
+  deltas**; for trustworthy absolutes, run with nothing else loading the machine.
+- **Closed vs open loop.** Default is closed-loop (`-c N`, max throughput). For tail-latency claims set
+  `RATE` for an open-loop run that doesn't hide queueing delay (coordinated omission).
+- **N/A** means the route returned <99% 2xx (unimplemented) — not that the server failed.
+- **Django on bleeding-edge Python** (3.14 here) is flaky: gunicorn/uvicorn `[standard]` (uvloop /
+  httptools) may lack wheels and fall back to a slow/contended loop, or crash a scenario. Treat the
+  faster of the two Django rows as representative.
+- **Per-client cap.** Our default per-client connection cap (a single-IP DoS guard) trips on a loopback
+  test; `run.sh` launches us with `HTTPD_MAX_CONN=1000000` and `HTTPD_QUIET=1` (no access-log print).

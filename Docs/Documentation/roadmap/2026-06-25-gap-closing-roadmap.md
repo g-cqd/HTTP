@@ -12,7 +12,8 @@ Same rules as the completion roadmap: sequential on `main`, no worktrees, each p
 project gates — **build + full tests + ASan/fuzz on touched paths + swift-format/SwiftLint `--strict`,
 signed commit**. Tick a box only when its gate is green and committed.
 
-Baseline: `main`, 846 tests green (per the completion roadmap change log).
+Baseline: `main`, 846 tests at roadmap creation; **~950 green on macOS as of 2026-06-28** (W1 + W2 shipped,
+G0 epoll cleartext verified on Linux).
 
 ## Legend
 - [ ] not started · [~] in progress · [x] done (gate green + committed)
@@ -45,15 +46,16 @@ independently shippable.
 
 ## W1 — Response-side & operations surface
 
-### [~] G2 — Outbound Brotli (+ Zstd) · Effort M · Risk ● — *Darwin shipped; Zstd deferred (D2), Linux shim → G0*
+### [x] G2 — Outbound Brotli (+ Zstd) · Effort M · Risk ● — *Darwin emits br+gzip+zstd; Zstd shipped opt-in (D2 resolved); Linux gzip/br shim → G0*
 We decode `br`/`deflate`/`gzip` inbound (P4) but only *emit* gzip. Close the asymmetry.
 - [x] Brotli encoder behind `CompressionMiddleware` (`Brotli.swift`): Apple's `COMPRESSION_BROTLI`
       **encodes** on Darwin (level-2 — the framework ships the encoder, so **no C shim is needed here**). The
       `libbrotlienc` C shim (pattern: `CCRC32`/`CWSDeflate`) is only for the portable/Linux path → G0.
 - [x] Proper `Accept-Encoding` negotiation: q-values, `identity`, ordering preference (br > gzip when both
       accepted), `Vary: Accept-Encoding`, min-size + content-type allowlist (skip already-compressed types).
-- [ ] Optional Zstd (`COMPRESSION_ZLIB` has no zstd; gate behind a `libzstd` shim — ship only if cheap)
-      — **deferred (D2)**: Brotli-out covers the table-stakes case.
+- [x] Optional Zstd (`COMPRESSION_ZLIB` has no zstd) — **shipped opt-in 2026-06-28** (`Zstd.swift`, RFC 8878)
+      behind the `CZstd` shim, gated by `HTTP_ZSTD` so the default build never links libzstd. (D2 resolved by
+      shipping, not deferring — it is also the cross-platform coding on Linux until gzip/br land there → G0.)
 - _Gate:_ per-codec round-trip + negotiation tests (br chosen over gzip, q=0 exclusion, identity
       fallback), streaming responses still skip compression, decompression-bomb caps unaffected; ASan clean.
       ✓ green: `CompressionMiddlewareTests` — 14 cases incl. the Brotli (RFC 7932) round-trip; ASan + lint clean.
@@ -140,14 +142,15 @@ Network.framework exposes client-cert challenge + verify blocks; surface them.
       passively awaiting `.ready` deadlocks.)_
 - [x] Surface the **verified client identity** (leaf subject) as the server-asserted `.xClientCertSubject`
       header — the connection→request seam the stack already uses for `.xRequestID`/`.xAuthSubject`,
-      stripping any inbound spoof. Full SAN / cert chain is a documented header-only limitation (richer
+      stripping any inbound spoof; **extended to the HTTP/3 path 2026-06-28** (commit `4f7d6de`, so h1/h2/h3
+      all stamp + strip). Full SAN / cert chain is a documented header-only limitation (richer
       request-scoped context → G0, same shape as G7's claims).
 - [ ] `SecurityHeadersMiddleware`/docs note on pairing mTLS with auth (follow-up).
 - _Gate:_ ✓ required-auth rejects no-cert + pin-rejected cert; pinning hook honored over the DER chain;
       real-loopback integration test with a `DevTLSIdentity` client surfaces its subject; server-stamp test
       strips a spoofed subject and rejects a CR/LF-injecting one (CWE-93). (`.optional` allow-both → G0.)
 
-### [~] G4 — Graceful config & certificate reload · Effort L · Risk ■ — *Darwin shipped; SNI multi-cert → G0*
+### [x] G4 — Graceful config & certificate reload · Effort L · Risk ■ — *hot responder + cert reload (Darwin); SNI multi-cert + portable hot reload on the BoringSSL backbone*
 Today a cert rotation or route change needs a restart. Make both hot.
 - [x] **Hot cert reload:** `ServerTransport.reload(tls:)` (default throws `.unsupported`; Network.framework
       implements it). Restart-based — the only TLS backbone fixes the server identity at listen time, and
@@ -174,42 +177,60 @@ Today a cert rotation or route change needs a restart. Make both hot.
 
 ## W3 — Linux deployability (the big one)
 
-### [ ] G0 — Linux support · Effort XL · Risk ▲ — *start now, parallel track*
+### [~] G0 — Linux support · Effort XL · Risk ▲ — *epoll cleartext verified on Linux 2026-06-28; remaining: full Linux suite + TLS Darwin→Glibc port + CI*
 The single biggest gap: servers run on Linux; we're Apple-only. The sans-I/O engines are already pure and
 portable — the lift is the I/O floor and a non-Network.framework TLS path. **Decision required first — see
 [Decisions needed](#decisions-needed) D1 (TLS backend).**
-- [~] **`POSIXEpoll` transport backbone** (`Sources/Transport/HTTPTransport/POSIXEpoll/`) — **WIP authored
-      2026-06-27, unverified on Linux.** `EpollEventLoop` (epoll readiness loop modeled on `KqueueEventLoop`,
-      with epoll's combined-mask one-shot model), `POSIXEpollConnection` (read/`send(MSG_NOSIGNAL)`), and
+- [x] **`POSIXEpoll` transport backbone** (`Sources/Transport/HTTPTransport/POSIXEpoll/`) — **authored +
+      verified on Linux 2026-06-28** (commit `e2ff9da`; apple/container, Swift 6.5-dev / Ubuntu noble /
+      aarch64). `EpollEventLoop` (epoll readiness loop modeled on `KqueueEventLoop`, with epoll's
+      combined-mask one-shot model), `POSIXEpollConnection` (read/`send(MSG_NOSIGNAL)`), and
       `POSIXEpollTransport` (accept loop reusing the now-portable `POSIXSocket`); `SO_REUSEPORT` prefork,
-      EINTR/EAGAIN parity, dual-stack via `getaddrinfo`. Gated `#if canImport(Glibc)` (inert + 936-suite
-      green on macOS). **Remaining:** (a) gate the Darwin-only backbones (`#if canImport(Darwin)`) so the
-      whole `HTTPTransport` target compiles on Linux; (b) build + run the suite on a Linux toolchain (epoll
-      cannot be compiled or tested on Darwin); (c) the `ubuntu-latest` CI job.
+      EINTR/EAGAIN parity, dual-stack via `getaddrinfo`. A new `CEpoll` C shim re-exports `<sys/epoll.h>`
+      (absent from Swift's Glibc module), depended on `.when(platforms: [.linux])`. The Darwin/Network
+      backbones (kqueue, Network.framework + QUIC, Dispatch, swift-system) are excluded from the Linux build
+      graph and the `TransportFactory` cases are `#if canImport`-guarded. **The whole library +
+      `httpd-example` build on Linux and the epoll backbone serves real HTTP/1.1 end to end** — `GET /`,
+      `/health`, `/hello/:name` (path params), `POST /echo` (body) all answer `200` with the full middleware
+      chain (ETag/CORS/security-headers/Date). **Remaining for the full Linux gate:** gate the Darwin-only
+      *test* files (Network/kqueue/QUIC backbone tests) → run `swift test` + ASan on Linux; then CI (below).
 - [x] **Portable TLS path** (D1) — **shipped 2026-06-27 (macOS arm64)**, see
       **[ADR 0004](../adr/0004-portable-tls-backbone.md)** (Phases 1–6). A TLS backbone that is *not*
       Network.framework: `PortableTLS{Transport,Connection}` over the existing `POSIXSocket` accept loop +
       ALPN / TLS-1.3-floor / strict-ALPN policy; mTLS (G3), `.optional`, SNI multi-cert, and hot reload
       (G4) all work — the features Network.framework cannot do. **Now on vendored, symbol-prefixed
       BoringSSL (Phase 6, commit `79e821d`)** — self-contained, no system OpenSSL, no `HTTP_OPENSSL_PREFIX`;
-      `scripts/vendor-boringssl.sh` regenerates the tree. Remaining for Linux: the `POSIXEpoll` backbone
-      (below) + the multi-arch symbol-mangling/CI (ADR 0004 §6.5, needs a Linux runner).
+      `scripts/vendor-boringssl.sh` regenerates the tree. **Remaining for Linux:**
+      `PortableTLS{Transport,Connection}` still `import Darwin`/`Dispatch` and need a **Darwin→Glibc port**
+      before the gated TLS suite runs on Linux (the vendored tree itself already carries the Linux asm); then
+      the multi-arch symbol-mangling/CI (ADR 0004 §6.5, needs a Linux runner). The epoll backbone (below) is
+      now done, so this is the single blocker for TLS-over-Linux (h2/WS-over-TLS).
 - [x] **Foundation-usage audit** — done 2026-06-27, see
       [Linux-readiness audit](../audit/2026-06-27-linux-readiness-audit.md). All ~27 Foundation users in
       Sources touch only swift-corelibs-foundation-available APIs (`Data`/`Dispatch`/`Process`/`URL`/
       `FileManager`/`JSONDecoder`/`NSLock`); no Darwin-only Foundation surface. `DevTLSIdentity` makes its
-      PKCS#12 via the `openssl` CLI (not Security.framework), so it is portable too.
+      PKCS#12 via the `openssl` CLI (not Security.framework), so it is portable too. The **first real Linux
+      compile (2026-06-28)** surfaced a few upper-layer couplings the static survey missed —
+      `WebSocketHandshake`/`SessionMiddleware` CryptoKit (SHA1/HMAC) → pure-Swift (FIPS/RFC vectors green),
+      `FileResponder` `UTType` → a gated built-in MIME table, the `Compression` framework gated — each fixed
+      portably and re-validated by the (unchanged) 950-test macOS suite.
 - [x] **`Synchronization` / atomics** — done 2026-06-27 (same audit). 34 files use `Synchronization`
       (`Mutex`, 8× `Atomic`, 15× `ContinuousClock`); all present in the Swift 6 Linux toolchain. Core's
       `NowProvider` is already `Darwin`/`Glibc`-guarded.
-- [ ] **HTTP/3:** flag h3 as **Darwin-only in v1** (QUIC is platform-provided via Network.framework); a
-      Linux QUIC story (quiche/lsquic shim, or wait for a portable Swift QUIC) is a separate XL follow-up —
-      do **not** block Linux h1/h2 on it.
+- [x] **HTTP/3 flagged Darwin-only in v1** — the QUIC backbones (Network.framework-provided) are excluded
+      from the Linux build graph and the `TransportFactory` cases are `#if canImport(Network)`-guarded, so
+      Linux h1/h2/WS do not depend on it. A Linux QUIC story (quiche/lsquic shim, or a portable Swift QUIC)
+      stays a separate XL follow-up (D3).
+- [ ] **Linux content codings:** gzip via the already-linked zlib + Brotli via `libbrotli` so Linux emits
+      gzip/br out (and the inbound decoders), not only zstd.
 - [ ] **CI:** GitHub Actions `ubuntu-latest` job — build + full suite + ASan; publish the cross-platform
-      support matrix in the README.
+      support matrix in the README. *(The library + example already build and serve HTTP/1.1 on Linux; the
+      full `swift test` suite has not yet been run there — see the POSIXEpoll item's remaining work.)*
 - _Gate:_ full test suite green on Linux (h1/h2/WS; h3 skipped-with-note), the bench harness runs on Linux,
-      ASan clean, no regression on Darwin. Land incrementally: **(a)** epoll backbone + cleartext suite
-      green on Linux, **(b)** portable TLS + h2/WS-over-TLS green, **(c)** CI + docs.
+      ASan clean, no regression on Darwin. Land incrementally: **(a)** epoll backbone + cleartext path on
+      Linux — ✓ **done 2026-06-28** (builds + serves HTTP/1.1 end-to-end; gating the Darwin-only test files
+      to run the full suite + ASan on Linux is the tail of this step); **(b)** portable TLS + h2/WS-over-TLS
+      green — needs the `PortableTLS*` Darwin→Glibc port; **(c)** CI + docs.
 
 ---
 
@@ -250,12 +271,14 @@ These are forks the team should resolve before the dependent phase starts:
   stays apple-only), and **vendored BoringSSL (option a) as the drop-in productionization** behind the
   same seam. Ratification point: system-OpenSSL-first vs. vendor-up-front — the seam makes it low-regret.
 - **D2 — Zstd scope (G2).** Ship Zstd-out now (needs a `libzstd` shim) or defer until a consumer asks?
-  *Recommendation:* defer; Brotli-out covers the table-stakes case.
+  **Resolved 2026-06-28 — shipped opt-in** behind `HTTP_ZSTD` (default build never links libzstd); it also
+  doubles as Linux's cross-platform coding until gzip/br land there.
 - **D3 — Linux QUIC/HTTP/3 (G0 follow-up).** Accept h3 as Darwin-only in v1, or invest in a portable QUIC
-  (quiche/lsquic shim) as a dedicated XL track? *Recommendation:* Darwin-only v1; revisit when a portable
-  Swift QUIC matures.
+  (quiche/lsquic shim) as a dedicated XL track? **Resolved — Darwin-only v1** (the QUIC backbones are
+  excluded from the Linux build graph; G0's HTTP/3 item is `[x]`); revisit when a portable Swift QUIC matures.
 - **D4 — JWKS fetching (G7).** Static keys only, or ship a cached remote-JWKS fetcher (adds an HTTP client
-  dependency direction)? *Recommendation:* static first; remote JWKS as a follow-up.
+  dependency direction)? **Resolved — static first** (G7 shipped with a static key source); remote JWKS
+  remains a follow-up.
 
 ## Effort summary
 
@@ -485,3 +508,41 @@ in the project docs.)
   (one-way TLS + ALPN, mTLS `.none`/`.optional`/`.required` + `verifyPeer`, SNI multi-cert, hot reload,
   `curl` interop). **Only remaining: Phase 6** — vendor BoringSSL behind the same shim to retire the
   system-OpenSSL link and make the default-off backbone self-contained + reproducible (XL).
+- 2026-06-27 — **portable TLS Phase 6 (vendored BoringSSL) shipped — the backbone is self-contained.**
+  BoringSSL vendored as a symbol-prefixed tree behind the same `CHTTPBoringSSL` shim (commit `79e821d`;
+  `scripts/vendor-boringssl.sh` regenerates it), retiring the system-OpenSSL link and the `HTTP_OPENSSL_PREFIX`
+  requirement — the default-off backbone (`HTTP_PORTABLE_TLS`) no longer needs a Homebrew OpenSSL. The
+  vendored tree already carries the Linux asm + cross-platform prefix symbols. ADR 0004's six-phase rollout
+  is complete on macOS arm64; multi-arch symbol-mangling + a Linux runner remain.
+- 2026-06-28 — **G2 Zstd shipped opt-in — G2 complete (D2 resolved by shipping)** (commit `0a17e66`):
+  outbound Zstd (RFC 8878, `Zstd.swift`) via the `CZstd` shim, gated by `HTTP_ZSTD` so the default build never
+  links libzstd. Chosen over deferral because it is also the only cross-platform content coding on Linux until
+  gzip/br land there. Darwin now emits br+gzip+zstd; the Linux gzip/br shim folds into G0.
+- 2026-06-28 — **W3 / G0: Linux epoll backbone shipped + verified — cleartext HTTP/1.1 serves end-to-end on
+  Linux** (commit `e2ff9da`). The `POSIXEpoll` backbone (`EpollEventLoop` / `POSIXEpollConnection` /
+  `POSIXEpollTransport`) + a new `CEpoll` shim re-exporting `<sys/epoll.h>` (absent from Swift's Glibc
+  module), over the now-portable `POSIXSocket` plumbing (`SO_REUSEPORT` prefork, EINTR/EAGAIN, dual-stack).
+  The Darwin/Network backbones (kqueue, Network.framework + QUIC, Dispatch, swift-system) are excluded from
+  the Linux build graph and the `TransportFactory` cases `#if canImport`-guarded — so **HTTP/3 is now
+  build-level Darwin-only**. Verified on apple/container (Swift 6.5-dev / Ubuntu noble / aarch64): the whole
+  library + `httpd-example` build, and the epoll backbone answers `GET /`, `/health`, `/hello/:name`,
+  `POST /echo` with the full middleware chain (bind/accept/read/write over `epoll(7)`, the HTTP/1.1 engine,
+  `Router`, middleware). The first real Linux compile surfaced upper-layer couplings the static survey missed
+  — `WebSocketHandshake`/`SessionMiddleware` CryptoKit (SHA1/HMAC) → pure-Swift (FIPS/RFC vectors green),
+  `FileResponder` `UTType` → a gated MIME table, the `Compression` framework gated (Linux gets zstd-out) —
+  all fixed portably; the 950-test macOS suite is unchanged. See the
+  [Linux-readiness audit](../audit/2026-06-27-linux-readiness-audit.md) §Verification (2026-06-28).
+  **G0 remaining:** gate the Darwin-only *test* files → run the full suite + ASan on Linux; the `PortableTLS*`
+  Darwin→Glibc port for TLS-over-Linux; Linux gzip/br codings; the `ubuntu-latest` CI job + README matrix.
+- 2026-06-28 — **Over-defensive-antipattern audit remediation (F1–F11)** (commit `1407f4c`) + a batch of
+  HTTP/2 / HTTP/3 / HPACK / HTTP/1 conformance hardening (P0-1…P0-16) — e.g. h3 rejects server-initiated bidi
+  streams (RFC 9114 §6.1), h1 rejects bare-LF framing, `FileResponder` resolves symlinks in the path jail
+  (CWE-22), JWT verification hardened. Not gap-closing G-items, but they keep the ~950-test suite green under
+  the new Linux compile and are cross-referenced from the audit docs.
+- 2026-06-28 — **Status reconciliation against the codebase** (full G0–G7 re-survey vs. `Sources/`). Findings:
+  **W1** (G1 observability, G2 compression, G5 static, G7 auth) and **W2** (G3 mTLS, G4 reload) shipped as
+  logged. Markers updated: **G2 → `[x]`** (Zstd shipped opt-in), **G4 → `[x]`** (all sub-items done), **G0 →
+  `[~]`** with the POSIXEpoll backbone `[x]` and HTTP/3-Darwin-only `[x]` (epoll cleartext verified on Linux).
+  **Open items:** G0 (Linux TLS Darwin→Glibc port, full Linux test suite + ASan, Linux gzip/br codings, CI +
+  README matrix), G3 `SecurityHeadersMiddleware`/docs mTLS-pairing note, G6 Conformance CI (Autobahn / h3spec
+  / h3load — infra, not locally verifiable). Baseline updated to ~950 macOS tests.
