@@ -34,7 +34,12 @@ public enum JWT {
     }
 
     /// A verification key bound to one JWS algorithm (RFC 7518); the binding is the confusion defense.
-    public enum Key: Sendable {
+    ///
+    /// `@unchecked Sendable`: the payloads are immutable public keys. CryptoKit marks
+    /// `P256.Signing.PublicKey` `Sendable` on Darwin, but swift-crypto does not on Linux, so a checked
+    /// conformance fails to compile there; the keys carry no mutable state, so the unchecked conformance is
+    /// sound on both platforms.
+    public enum Key: @unchecked Sendable {
         case hs256([UInt8])  // shared secret
         case es256(P256.Signing.PublicKey)
         case rs256(_RSA.Signing.PublicKey)
