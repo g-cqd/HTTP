@@ -6,7 +6,7 @@
 //  parser: it validates that each value the model holds is representable on the wire (integer range,
 //  decimal digits, string / token / key grammar) and fails with a typed ``StructuredFields/
 //  SerializeError`` otherwise. Grammar predicates are reused from the parser so there is one source of
-//  truth for what each production admits. Includes a self-contained RFC 4648 base64 encoder.
+//  truth for what each production admits. Byte sequences (§4.1.3) encode through the shared ``Base64``.
 //
 
 extension StructuredFields {
@@ -122,22 +122,24 @@ extension StructuredFields {
     }
 
     private static func serializeToken(_ token: String) throws(SerializeError) -> String {
-        let bytes = Array(token.utf8)
-        guard let first = bytes.first, Parser.isAlpha(first) || first == Parser.star else {
+        // Validate over the borrowed `UTF8View` directly — no `Array(token.utf8)` copy just to scan.
+        let utf8 = token.utf8
+        guard let first = utf8.first, Parser.isAlpha(first) || first == Parser.star else {
             throw .invalidToken
         }
-        for byte in bytes where !Parser.isTokenByte(byte) {
+        for byte in utf8 where !Parser.isTokenByte(byte) {
             throw .invalidToken
         }
         return token
     }
 
     private static func serializeKey(_ key: String) throws(SerializeError) -> String {
-        let bytes = Array(key.utf8)
-        guard let first = bytes.first, Parser.isLCAlpha(first) || first == Parser.star else {
+        // Validate over the borrowed `UTF8View` directly — no `Array(key.utf8)` copy just to scan.
+        let utf8 = key.utf8
+        guard let first = utf8.first, Parser.isLCAlpha(first) || first == Parser.star else {
             throw .invalidKey
         }
-        for byte in bytes where !Parser.isKeyByte(byte) {
+        for byte in utf8 where !Parser.isKeyByte(byte) {
             throw .invalidKey
         }
         return key
@@ -155,7 +157,8 @@ extension StructuredFields {
         let thousandths = Int64(scaled)
         let magnitude = thousandths.magnitude
         let integerPart = magnitude / 1_000
-        guard String(integerPart).count <= 12 else {
+        // ≤ 12 integer digits (RFC 8941 §4.1.3.2) ⇔ < 10¹² — counted arithmetically, no `String` alloc.
+        guard integerPart < 1_000_000_000_000 else {
             throw .invalidDecimal
         }
         var fraction = String(magnitude % 1_000)
@@ -168,38 +171,6 @@ extension StructuredFields {
     }
 
     private static func base64Encode(_ bytes: [UInt8]) -> String {
-        let alphabet = Array(
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".utf8
-        )
-        let pad = UInt8(ascii: "=")
-        var output: [UInt8] = []
-        output.reserveCapacity((bytes.count + 2) / 3 * 4)
-        var offset = 0
-        while offset + 3 <= bytes.count {
-            let chunk =
-                (UInt32(bytes[offset]) << 16) | (UInt32(bytes[offset + 1]) << 8)
-                | UInt32(bytes[offset + 2])
-            output.append(alphabet[Int((chunk >> 18) & 0x3F)])
-            output.append(alphabet[Int((chunk >> 12) & 0x3F)])
-            output.append(alphabet[Int((chunk >> 6) & 0x3F)])
-            output.append(alphabet[Int(chunk & 0x3F)])
-            offset += 3
-        }
-        let remaining = bytes.count - offset
-        if remaining == 1 {
-            let chunk = UInt32(bytes[offset]) << 16
-            output.append(alphabet[Int((chunk >> 18) & 0x3F)])
-            output.append(alphabet[Int((chunk >> 12) & 0x3F)])
-            output.append(pad)
-            output.append(pad)
-        }
-        else if remaining == 2 {
-            let chunk = (UInt32(bytes[offset]) << 16) | (UInt32(bytes[offset + 1]) << 8)
-            output.append(alphabet[Int((chunk >> 18) & 0x3F)])
-            output.append(alphabet[Int((chunk >> 12) & 0x3F)])
-            output.append(alphabet[Int((chunk >> 6) & 0x3F)])
-            output.append(pad)
-        }
-        return String(decoding: output, as: Unicode.UTF8.self)
+        Base64.encode(bytes, alphabet: .standard, padded: true)
     }
 }

@@ -3,9 +3,9 @@
 //  HTTPCore
 //
 //  The lexical helpers behind the RFC 8941 parser: octet constants, the character-class predicates the
-//  grammar is defined in terms of (DIGIT / ALPHA / key / token / base64), number assembly with the
-//  §3.3.1/§3.3.2 range and digit caps, and a self-contained RFC 4648 base64 decoder (HTTPCore avoids
-//  Foundation, so it cannot lean on `Data(base64Encoded:)`).
+//  grammar is defined in terms of (DIGIT / ALPHA / key / token / base64), and number assembly with the
+//  §3.3.1/§3.3.2 range and digit caps. Byte sequences (§3.3.5) decode through the shared, Foundation-free
+//  ``Base64`` codec.
 //
 
 extension StructuredFields.Parser {
@@ -86,77 +86,8 @@ extension StructuredFields.Parser {
         return .decimal(Double(sign) * magnitude)
     }
 
-    /// Decodes a padded RFC 4648 base64 octet string, or `nil` if it is not valid base64.
+    /// Decodes a padded RFC 4648 §4 base64 octet string (§3.3.5), or `nil` if it is not valid base64.
     static func decodeBase64(_ input: [UInt8]) -> [UInt8]? {
-        if input.isEmpty {
-            return []
-        }
-        guard input.count % 4 == 0 else {
-            return nil
-        }
-        let pad = UInt8(ascii: "=")
-        var output: [UInt8] = []
-        output.reserveCapacity(input.count / 4 * 3)
-        var offset = 0
-        while offset < input.count {
-            let isLastQuantum = offset + 4 == input.count
-            guard let v0 = base64Value(input[offset]),
-                let v1 = base64Value(input[offset + 1])
-            else {
-                return nil
-            }
-            var quantum = (UInt32(v0) << 18) | (UInt32(v1) << 12)
-            let third = input[offset + 2]
-            let fourth = input[offset + 3]
-            if third == pad {
-                guard fourth == pad, isLastQuantum else {
-                    return nil
-                }
-                output.append(UInt8((quantum >> 16) & 0xFF))
-            }
-            else {
-                guard let v2 = base64Value(third) else {
-                    return nil
-                }
-                quantum |= UInt32(v2) << 6
-                if fourth == pad {
-                    guard isLastQuantum else {
-                        return nil
-                    }
-                    output.append(UInt8((quantum >> 16) & 0xFF))
-                    output.append(UInt8((quantum >> 8) & 0xFF))
-                }
-                else {
-                    guard let v3 = base64Value(fourth) else {
-                        return nil
-                    }
-                    quantum |= UInt32(v3)
-                    output.append(UInt8((quantum >> 16) & 0xFF))
-                    output.append(UInt8((quantum >> 8) & 0xFF))
-                    output.append(UInt8(quantum & 0xFF))
-                }
-            }
-            offset += 4
-        }
-        return output
-    }
-
-    private static func base64Value(_ byte: UInt8) -> UInt8? {
-        if byte >= UInt8(ascii: "A"), byte <= UInt8(ascii: "Z") {
-            return byte - UInt8(ascii: "A")  // A–Z → 0–25
-        }
-        if byte >= UInt8(ascii: "a"), byte <= UInt8(ascii: "z") {
-            return byte - UInt8(ascii: "a") + 26  // a–z → 26–51
-        }
-        if isDigit(byte) {
-            return byte - zero + 52  // 0–9 → 52–61
-        }
-        if byte == UInt8(ascii: "+") {
-            return 62
-        }
-        if byte == UInt8(ascii: "/") {
-            return 63
-        }
-        return nil
+        Base64.decode(input, alphabet: .standard, padded: true)
     }
 }

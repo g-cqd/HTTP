@@ -54,34 +54,53 @@ public struct QueryParameters: Sendable, Equatable {
 
     /// Percent-decodes `slice` (RFC 3986 §2.1), mapping `+` to space; a malformed `%XX` stays literal.
     private static func percentDecoded(_ slice: Substring) -> String {
+        let utf8 = slice.utf8
         // Fast path (audit F10): with neither a `%` escape nor a `+`, the value is the slice verbatim, so
-        // return it directly and skip the two byte-buffer allocations the decode loop makes. Most query
-        // values are unescaped, so this is the common case.
-        if !slice.utf8.contains(where: { $0 == UInt8(ascii: "%") || $0 == UInt8(ascii: "+") }) {
+        // return it directly and skip the decode buffer. Most query values are unescaped (common case).
+        if !utf8.contains(where: { $0 == UInt8(ascii: "%") || $0 == UInt8(ascii: "+") }) {
             return String(slice)
         }
-        let source = Array(slice.utf8)
+        // Decode straight off the borrowed `UTF8View` — no `Array(slice.utf8)` copy of the whole value.
         var output: [UInt8] = []
-        output.reserveCapacity(source.count)
-        var index = 0
-        while index < source.count {
-            let byte = source[index]
+        output.reserveCapacity(utf8.count)
+        var index = utf8.startIndex
+        let end = utf8.endIndex
+        while index < end {
+            let byte = utf8[index]
             if byte == UInt8(ascii: "+") {
                 output.append(UInt8(ascii: " "))
-                index += 1
+                index = utf8.index(after: index)
             }
-            else if byte == UInt8(ascii: "%"), index + 2 < source.count,
-                let high = hexValue(source[index + 1]), let low = hexValue(source[index + 2])
+            else if byte == UInt8(ascii: "%"),
+                let escape = decodeEscape(utf8, after: index, end: end)
             {
-                output.append(high << 4 | low)
-                index += 3
+                output.append(escape.byte)
+                index = escape.next
             }
             else {
                 output.append(byte)
-                index += 1
+                index = utf8.index(after: index)
             }
         }
         return String(decoding: output, as: Unicode.UTF8.self)
+    }
+
+    /// Decodes the `%XX` escape that begins at `percent`, returning the byte and the index just past it,
+    /// or nil when the two hex digits are not both present (the `%` is then left literal).
+    private static func decodeEscape(
+        _ utf8: Substring.UTF8View,
+        after percent: Substring.UTF8View.Index,
+        end: Substring.UTF8View.Index
+    ) -> (byte: UInt8, next: Substring.UTF8View.Index)? {
+        let high = utf8.index(after: percent)
+        guard high < end else {
+            return nil
+        }
+        let low = utf8.index(after: high)
+        guard low < end, let hi = hexValue(utf8[high]), let lo = hexValue(utf8[low]) else {
+            return nil
+        }
+        return (hi << 4 | lo, utf8.index(after: low))
     }
 
     /// The value of a single hex digit, or nil if `byte` is not `[0-9A-Fa-f]`.

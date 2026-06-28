@@ -12,63 +12,84 @@
 extension StructuredFields {
     /// Parses a single Item field value (RFC 8941 §4.2, field type "item").
     public static func parseItem(_ source: String) throws(ParseError) -> Item {
-        var parser = Parser(source)
-        parser.skipSP()
-        guard !parser.isAtEnd else {
-            throw .empty
+        var source = source
+        let outcome: Result<Item, ParseError> = source.withUTF8 { buffer in
+            Result { () throws(ParseError) in
+                var parser = Parser(ByteReader(UnsafeRawBufferPointer(buffer)))
+                parser.skipSP()
+                guard !parser.isAtEnd else {
+                    throw .empty
+                }
+                let item = try parser.parseItem()
+                parser.skipSP()
+                guard parser.isAtEnd else {
+                    throw .trailingCharacters
+                }
+                return item
+            }
         }
-        let item = try parser.parseItem()
-        parser.skipSP()
-        guard parser.isAtEnd else {
-            throw .trailingCharacters
-        }
-        return item
+        return try outcome.get()
     }
 
     /// Parses a List field value (RFC 8941 §4.2, field type "list"); an empty value is an empty list.
     public static func parseList(_ source: String) throws(ParseError) -> [Member] {
-        var parser = Parser(source)
-        parser.skipSP()
-        let members = try parser.parseListMembers()
-        parser.skipSP()
-        guard parser.isAtEnd else {
-            throw .trailingCharacters
+        var source = source
+        let outcome: Result<[Member], ParseError> = source.withUTF8 { buffer in
+            Result { () throws(ParseError) in
+                var parser = Parser(ByteReader(UnsafeRawBufferPointer(buffer)))
+                parser.skipSP()
+                let members = try parser.parseListMembers()
+                parser.skipSP()
+                guard parser.isAtEnd else {
+                    throw .trailingCharacters
+                }
+                return members
+            }
         }
-        return members
+        return try outcome.get()
     }
 
     /// Parses a Dictionary field value (RFC 8941 §4.2, field type "dictionary"); empty → empty.
     public static func parseDictionary(_ source: String) throws(ParseError) -> [DictionaryEntry] {
-        var parser = Parser(source)
-        parser.skipSP()
-        let entries = try parser.parseDictionaryMembers()
-        parser.skipSP()
-        guard parser.isAtEnd else {
-            throw .trailingCharacters
+        var source = source
+        let outcome: Result<[DictionaryEntry], ParseError> = source.withUTF8 { buffer in
+            Result { () throws(ParseError) in
+                var parser = Parser(ByteReader(UnsafeRawBufferPointer(buffer)))
+                parser.skipSP()
+                let entries = try parser.parseDictionaryMembers()
+                parser.skipSP()
+                guard parser.isAtEnd else {
+                    throw .trailingCharacters
+                }
+                return entries
+            }
         }
-        return entries
+        return try outcome.get()
     }
 
     /// A bounded forward cursor over a field value's ASCII octets (RFC 8941 §4.2).
-    struct Parser {
-        private let bytes: [UInt8]
-        private var index: Int
+    ///
+    /// Backed by a borrowed ``ByteReader`` (a `~Escapable` cursor over a `RawSpan`) rather than an owned
+    /// `[UInt8]`, so parsing reads the field value's UTF-8 in place — no `Array(source.utf8)` copy. The
+    /// three entry points borrow the bytes via `String.withUTF8`.
+    struct Parser: ~Escapable {
+        private var reader: ByteReader
 
-        init(_ source: String) {
-            self.bytes = Array(source.utf8)
-            self.index = 0
+        @_lifetime(copy reader)
+        init(_ reader: consuming ByteReader) {
+            self.reader = reader
         }
 
         var isAtEnd: Bool {
-            index >= bytes.count
+            reader.isAtEnd
         }
 
         private var current: UInt8? {
-            index < bytes.count ? bytes[index] : nil
+            reader.peek()
         }
 
         private mutating func advance() {
-            index += 1
+            reader.advance()
         }
 
         mutating func skipSP() {
