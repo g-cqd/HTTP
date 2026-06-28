@@ -79,7 +79,9 @@ public struct Route: Sendable {
     ///
     /// A catch-all segment matches (and captures, joined by `/`) every remaining component.
     func match(_ components: [Substring]) -> RouteParameters? {
-        var captured: [String: String] = [:]
+        // Captured as borrowed `Substring` slices of the request path — no per-parameter `String` copy at
+        // match time; the `String` is materialized lazily, only if the handler reads the parameter (P6).
+        var captured: [String: Substring] = [:]
         var index = 0
         for segment in segments {
             switch segment {
@@ -92,17 +94,17 @@ public struct Route: Sendable {
                     guard index < components.count else {
                         return nil
                     }
-                    captured[name] = String(components[index])
+                    captured[name] = components[index]
                     index += 1
                 case .catchAll(let name):
-                    captured[name] = components[index...].joined(separator: "/")
-                    return RouteParameters(captured)
+                    captured[name] = components[index...].joined(separator: "/")[...]
+                    return RouteParameters(slices: captured)
             }
         }
         guard index == components.count else {
             return nil
         }
-        return RouteParameters(captured)
+        return RouteParameters(slices: captured)
     }
 
     /// Runs the route's handler for `parameters`, wrapping it in this route's group middleware when any
