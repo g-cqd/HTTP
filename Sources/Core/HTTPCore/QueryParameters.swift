@@ -37,6 +37,23 @@ public struct QueryParameters: Sendable, Equatable {
         if let fragment = query.firstIndex(of: "#") {
             query = query[..<fragment]
         }
+        return Self(pairs(query))
+    }
+
+    /// Parses an `application/x-www-form-urlencoded` body — the same encoding as the query component,
+    /// without a leading `?` (RFC 1866 §8.2.1 / the WHATWG URL form-encoding) — into decoded pairs.
+    ///
+    /// `+` is a space and later duplicates win, exactly as for the query; combine with
+    /// ``RequestBody/urlEncodedForm()`` to read a POSTed form.
+    public static func parse(form body: some StringProtocol) -> Self {
+        Self(pairs(Substring(body)))
+    }
+
+    /// Parses `&`-separated `name=value` pairs (percent-decoded, `+`→space); later duplicates win, and
+    /// an empty name is skipped.
+    ///
+    /// Shared by the query and form-body entry points.
+    private static func pairs(_ query: Substring) -> [String: String] {
         var values: [String: String] = [:]
         for pair in query.split(separator: "&", omittingEmptySubsequences: true) {
             if let separator = pair.firstIndex(of: "=") {
@@ -49,7 +66,7 @@ public struct QueryParameters: Sendable, Equatable {
                 if !name.isEmpty { values[name] = "" }
             }
         }
-        return Self(values)
+        return values
     }
 
     /// Percent-decodes `slice` (RFC 3986 §2.1), mapping `+` to space; a malformed `%XX` stays literal.

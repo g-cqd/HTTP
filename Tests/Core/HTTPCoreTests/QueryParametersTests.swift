@@ -63,6 +63,14 @@ struct QueryParametersTests {
         #expect(query.nope == nil)
     }
 
+    @Test("parses an application/x-www-form-urlencoded body (Phase 2.2)")
+    func parsesForm() {
+        let form = QueryParameters.parse(form: "email=a%40b.com&name=John+Doe&flag")
+        #expect(form["email"] == "a@b.com")
+        #expect(form["name"] == "John Doe")
+        #expect(form["flag"]?.isEmpty == true)
+    }
+
     @Test("HTTPRequest.query parses the request target")
     func requestQueryAccessor() {
         let request = HTTPRequest(method: .get, path: "/items?id=42&sort=asc")
