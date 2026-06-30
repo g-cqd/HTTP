@@ -256,32 +256,13 @@ public struct FileResponder: HTTPResponder {
     ) -> Bool {
         let ifNoneMatch = request.headerFields.values(for: .ifNoneMatch)
         if !ifNoneMatch.isEmpty {
-            return matchesETag(ifNoneMatch, etag)
+            return EntityTag.weakMatches(ifNoneMatch, etag)
         }
         guard let ifModifiedSince = request.headerFields[.ifModifiedSince].flatMap(HTTPDate.parse)
         else {
             return false
         }
         return modified <= ifModifiedSince
-    }
-
-    /// Whether any `If-None-Match` entry matches `etag` under weak comparison (RFC 9110 §13.1.2).
-    private static func matchesETag(_ ifNoneMatch: [String], _ etag: String) -> Bool {
-        let target = opaque(etag)
-        for value in ifNoneMatch {
-            for element in value.split(separator: ",") {
-                let candidate = element.trimmingCharacters(in: .whitespaces)
-                if candidate == "*" || opaque(candidate) == target {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    /// An entity-tag's value with any weak `W/` prefix removed (RFC 9110 §8.8.3).
-    private static func opaque(_ tag: some StringProtocol) -> String {
-        tag.hasPrefix("W/") ? String(tag.dropFirst(2)) : String(tag)
     }
 
     /// The content type for `path` by filename extension (``mimeType(forExtension:)`` — the system

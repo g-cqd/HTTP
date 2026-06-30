@@ -13,7 +13,6 @@
 //  *before* it mutates state; a response-decorating middleware runs too late to prevent the mutation.
 //
 
-internal import Foundation
 public import HTTPCore
 
 /// Adds validators and evaluates the conditional-request preconditions (RFC 9110 §13).
@@ -63,7 +62,7 @@ public struct ConditionalRequestMiddleware: HTTPMiddleware {
     ) -> Bool {
         let ifMatch = request.headerFields.values(for: .ifMatch)
         if !ifMatch.isEmpty {
-            return !strongMatches(ifMatch, etag)
+            return !EntityTag.strongMatches(ifMatch, etag)
         }
         let ifUnmodifiedSince = request.headerFields[.ifUnmodifiedSince].flatMap(HTTPDate.parse)
         guard let ifUnmodifiedSince, let lastModified else {
@@ -82,7 +81,7 @@ public struct ConditionalRequestMiddleware: HTTPMiddleware {
     ) -> Bool {
         let ifNoneMatch = request.headerFields.values(for: .ifNoneMatch)
         if !ifNoneMatch.isEmpty {
-            return matches(ifNoneMatch, etag)
+            return EntityTag.weakMatches(ifNoneMatch, etag)
         }
         let ifModifiedSince = request.headerFields[.ifModifiedSince].flatMap(HTTPDate.parse)
         guard let ifModifiedSince, let lastModified else {
@@ -103,42 +102,5 @@ public struct ConditionalRequestMiddleware: HTTPMiddleware {
             _ = head.headerFields.setValue(lastModified, for: .lastModified)
         }
         return ServerResponse(head)
-    }
-
-    /// Whether any `If-None-Match` entry matches `etag` under weak comparison (RFC 9110 §13.1.2);
-    /// `*` matches any current representation.
-    private func matches(_ ifNoneMatch: [String], _ etag: String) -> Bool {
-        let target = Self.opaque(etag)
-        for value in ifNoneMatch {
-            for element in value.split(separator: ",") {
-                let candidate = element.trimmingCharacters(in: .whitespaces)
-                if candidate == "*" || Self.opaque(candidate) == target {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    /// Whether any `If-Match` entry matches `etag` under strong comparison (RFC 9110 §13.1.1) — a weak
-    /// (`W/`) tag never matches; `*` matches any current representation.
-    private func strongMatches(_ ifMatch: [String], _ etag: String) -> Bool {
-        guard !etag.hasPrefix("W/") else {
-            return false
-        }
-        for value in ifMatch {
-            for element in value.split(separator: ",") {
-                let candidate = element.trimmingCharacters(in: .whitespaces)
-                if candidate == "*" || (!candidate.hasPrefix("W/") && candidate == etag) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    /// The opaque-tag of an entity-tag — its value with any weak `W/` prefix removed (RFC 9110 §8.8.3).
-    private static func opaque(_ tag: some StringProtocol) -> String {
-        tag.hasPrefix("W/") ? String(tag.dropFirst(2)) : String(tag)
     }
 }
