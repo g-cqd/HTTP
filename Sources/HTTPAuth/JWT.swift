@@ -156,7 +156,7 @@ public enum JWT {
         // straight into swift-crypto — no per-verify `Data(...)` copy of either buffer.
         switch key {
             case .hs256(let secret):
-                return HMAC<SHA256>
+                return HMAC<Crypto.SHA256>
                     .isValidAuthenticationCode(
                         signature,
                         authenticating: signingInput,

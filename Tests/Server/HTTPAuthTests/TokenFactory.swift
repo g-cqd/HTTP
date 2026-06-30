@@ -20,7 +20,7 @@ import _CryptoExtras
 enum TokenFactory {
     static func hs256(header: String, payload: String, secret: [UInt8]) -> String {
         let signingInput = segment(header) + "." + segment(payload)
-        let mac = HMAC<SHA256>
+        let mac = HMAC<Crypto.SHA256>
             .authenticationCode(
                 for: Data(signingInput.utf8), using: SymmetricKey(data: secret)
             )

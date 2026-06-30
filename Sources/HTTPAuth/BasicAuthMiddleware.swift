@@ -82,8 +82,8 @@ public struct BasicAuthMiddleware: HTTPMiddleware {
     /// Constant-time string equality via double-HMAC under an ephemeral key (length-independent).
     private static func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
         let key = SymmetricKey(size: .bits256)
-        let left = HMAC<SHA256>.authenticationCode(for: Data(lhs.utf8), using: key)
-        return HMAC<SHA256>
+        let left = HMAC<Crypto.SHA256>.authenticationCode(for: Data(lhs.utf8), using: key)
+        return HMAC<Crypto.SHA256>
             .isValidAuthenticationCode(
                 left, authenticating: Data(rhs.utf8), using: key
             )

@@ -1,18 +1,17 @@
 //
 //  SHA256.swift
-//  HTTPServer
+//  HTTPCore
 //
-//  FIPS 180-4 §6.2 — SHA-256, the hash under the session cookie's HMAC (``HMACSHA256``). A pure-Swift
-//  implementation so signed-cookie integrity needs no CryptoKit (Apple-only) and the server stays
-//  cross-platform; it runs over a short cookie id per request, where throughput is irrelevant. The
-//  computation is data-independent (no secret-dependent branch or index), so it does not leak the key
-//  through timing.
+//  FIPS 180-4 §6.2 — SHA-256, a pure-Swift hash so signed-cookie integrity (``HMACSHA256``), HKDF
+//  (``HKDF``), and any consumer need no CryptoKit (Apple-only) and the package stays cross-platform and
+//  zero-dependency. The computation is data-independent (no secret-dependent branch or index), so it does
+//  not leak a key through timing. Public so the auth / session layers above share one primitive.
 //
 
-/// FIPS 180-4 §6.2 SHA-256 — a 256-bit digest, used only as the hash inside ``HMACSHA256``.
-enum SHA256 {
+/// FIPS 180-4 §6.2 SHA-256 — a 256-bit digest (the hash under ``HMACSHA256`` and ``HKDF``).
+public enum SHA256 {
     /// The 32-byte SHA-256 digest of `message` (FIPS 180-4 §6.2.2).
-    static func hash(_ message: [UInt8]) -> [UInt8] {
+    public static func hash(_ message: [UInt8]) -> [UInt8] {
         // §5.3.3 — the initial hash value.
         var h: [UInt32] = [
             0x6A09_E667, 0xBB67_AE85, 0x3C6E_F372, 0xA54F_F53A,
