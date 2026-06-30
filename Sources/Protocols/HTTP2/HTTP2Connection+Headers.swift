@@ -121,6 +121,9 @@ extension HTTP2Connection {
         record.effectiveBodyLimit = min(
             limits.maxBodySize, resolveBodyLimit(request) ?? limits.maxBodySize
         )
+        // Whether this route consumes its body as a stream (Phase 1.4): surface it incrementally rather
+        // than buffering one `request`. A tunnel (below) is never a streaming-body request.
+        record.isStreaming = resolveStreamsBody(request)
         // An Extended CONNECT (RFC 8441 §4) opens a tunnel rather than a request: surface it for the
         // driver to accept, and route this stream's DATA as opaque tunnel bytes from here on.
         if let connectProtocol {
@@ -135,7 +138,12 @@ extension HTTP2Connection {
             return
         }
         streams[streamID] = record
-        if endStream {
+        // A streaming route surfaces its head now (and its end too, when HEADERS carried END_STREAM);
+        // every other route buffers and surfaces a single `request` once END_STREAM arrives.
+        if record.isStreaming {
+            try emitRequestHead(streamID, endStream: endStream, into: &events)
+        }
+        else if endStream {
             try emitRequest(streamID, into: &events)
         }
     }

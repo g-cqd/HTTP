@@ -54,6 +54,14 @@ extension HTTP2Connection {
             if endStream { events.append(.tunnelClosed(streamID: streamID)) }
             return
         }
+        // A streaming route (Phase 1.4) delivers each chunk as it arrives rather than buffering the body
+        // to END_STREAM; the dedicated helper keeps this function within its complexity budget.
+        if record.isStreaming {
+            try receiveStreamingData(
+                streamID, &record, body: body, length: length, endStream: endStream, into: &events
+            )
+            return
+        }
         guard record.body.count + body.count <= record.effectiveBodyLimit else {
             throw .stream(streamID, .enhanceYourCalm, "request body exceeds the route limit")
         }
@@ -76,6 +84,33 @@ extension HTTP2Connection {
         streams[streamID] = record
         if endStream {
             try emitRequest(streamID, into: &events)
+        }
+    }
+
+    /// Delivers a streaming route's DATA chunk incrementally (Phase 1.4): bound the running total against
+    /// the per-route cap, replenish the receive window, surface the chunk, and end the body at END_STREAM.
+    ///
+    /// The window is replenished normally (`consumeReceiveWindows`), so memory is bounded by the per-route
+    /// limit, not by handler consumption; sub-limit back-pressure is the HTTP/2 follow-up (ADR 0006).
+    private mutating func receiveStreamingData(
+        _ streamID: HTTP2StreamID,
+        _ record: inout StreamRecord,
+        body: ArraySlice<UInt8>,
+        length: Int,
+        endStream: Bool,
+        into events: inout [Event]
+    ) throws(HTTP2Error) {
+        record.bodyReceivedTotal += body.count
+        guard record.bodyReceivedTotal <= record.effectiveBodyLimit else {
+            throw .stream(streamID, .enhanceYourCalm, "request body exceeds the route limit")
+        }
+        consumeReceiveWindows(streamID, &record, by: length, endStream: endStream)
+        streams[streamID] = record
+        if !body.isEmpty {
+            events.append(.requestBodyChunk(streamID: streamID, bytes: Array(body)))
+        }
+        if endStream {
+            try emitRequestEnd(streamID, into: &events)
         }
     }
 

@@ -29,12 +29,32 @@ extension HTTPServer {
         let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
             currentResolver?.resolve(method: request.method, path: request.path)?.bodyLimit
         }
+        // Whether the matched route streams its request body (Phase 1.4) — the engine then surfaces the
+        // body incrementally (requestHead/requestBodyChunk/requestEnd) instead of one buffered request.
+        let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool = { [self] request in
+            currentResolver?.resolve(method: request.method, path: request.path)?.streamsBody
+                ?? false
+        }
         var engine = HTTP2Connection(
-            localSettings: settings, limits: limits, resolveBodyLimit: resolveBodyLimit
+            localSettings: settings,
+            limits: limits,
+            resolveBodyLimit: resolveBodyLimit,
+            resolveStreamsBody: resolveStreamsBody
         )
         // Per-stream WebSocket tunnels (engine + resolved handler) for active WebSocket-over-HTTP/2
         // streams (RFC 8441) — a single connection can multiplex tunnels to different WebSocket routes.
         var webSockets: [HTTP2StreamID: HTTP2WebSocketTunnel] = [:]
+        // In-flight streaming-route requests (Phase 1.4): each feeds an incremental body stream the
+        // handler consumes; the response is sent at its `requestEnd`.
+        var streaming: [HTTP2StreamID: HTTP2StreamingRequest] = [:]
+        defer {
+            // Connection closing: end every in-flight body stream and cancel its handler (no response
+            // can still be sent), so no streaming request task or continuation leaks.
+            for pending in streaming.values {
+                pending.continuation.finish()
+                pending.task.cancel()
+            }
+        }
         var inbound = initialBytes
         var sentGoAway = false  // graceful shutdown queues GOAWAY once (RFC 9113 §6.8)
         while true {
@@ -50,24 +70,16 @@ extension HTTPServer {
                 break
             }
             inbound = []
-            for event in events {
-                if case .request(let streamID, let request, let body) = event {
-                    // Native streaming (P6b) when the response has a body stream, else buffered; either
-                    // returns true on a connection-fatal fault (GOAWAY queued + flushed), so close.
-                    if await respondToRequest(
-                        streamID: streamID,
-                        request: request,
-                        body: body,
-                        engine: &engine,
-                        connection: connection,
-                        deadline: deadline
-                    ) {
-                        return
-                    }
-                }
-                else {
-                    await handleHTTP2Tunnel(event, engine: &engine, webSockets: &webSockets)
-                }
+            // Returns true on a connection-fatal fault (GOAWAY queued + flushed) — close the connection.
+            if await serveHTTP2Events(
+                events,
+                engine: &engine,
+                connection: connection,
+                deadline: deadline,
+                webSockets: &webSockets,
+                streaming: &streaming
+            ) {
+                return
             }
             queueGoAwayIfDraining(&engine, &sentGoAway)  // RFC 9113 §6.8 graceful shutdown
             let outbound = engine.outboundBytes()

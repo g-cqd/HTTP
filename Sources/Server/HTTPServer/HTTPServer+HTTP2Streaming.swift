@@ -47,6 +47,27 @@ extension HTTPServer {
         let response = await current.respond(
             to: request, body: requestBody(body, for: request), context: context
         )
+        return await sendHTTP2Response(
+            streamID: streamID,
+            response: response,
+            engine: &engine,
+            connection: connection,
+            deadline: deadline
+        )
+    }
+
+    /// Sends `response` on `streamID` — natively streamed (P6b / RFC 9113 §8.1) when it carries a body
+    /// stream, else buffered.
+    ///
+    /// Returns true on a connection-fatal fault (GOAWAY queued + flushed). Shared by the buffered request
+    /// path and the streaming-request response path (Phase 1.4).
+    func sendHTTP2Response(
+        streamID: HTTP2StreamID,
+        response: ServerResponse,
+        engine: inout HTTP2Connection,
+        connection: any TransportConnection,
+        deadline: IdleDeadline<C.Instant>
+    ) async -> Bool {
         if let bodyStream = response.stream {
             return await streamHTTP2Response(
                 withAltSvc(response.head),

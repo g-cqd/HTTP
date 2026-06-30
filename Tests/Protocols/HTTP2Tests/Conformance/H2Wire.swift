@@ -27,10 +27,14 @@ enum H2Wire {
         localSettings: HTTP2Settings = HTTP2Settings(),
         limits: HTTPLimits = .default,
         resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
+        resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool = { _ in false },
         clientSettings: [(id: UInt16, value: UInt32)] = []
     ) throws -> HTTP2Connection {
         var connection = HTTP2Connection(
-            localSettings: localSettings, limits: limits, resolveBodyLimit: resolveBodyLimit
+            localSettings: localSettings,
+            limits: limits,
+            resolveBodyLimit: resolveBodyLimit,
+            resolveStreamsBody: resolveStreamsBody
         )
         _ = connection.outboundBytes()  // discard the server SETTINGS preface
         var wire = clientPreface

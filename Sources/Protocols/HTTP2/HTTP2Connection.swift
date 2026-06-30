@@ -22,7 +22,21 @@ public struct HTTP2Connection {
     /// A high-level event surfaced to the connection driver.
     public enum Event: Sendable, Equatable {
         /// A complete request arrived on a stream (all HEADERS and body received).
+        ///
+        /// The buffered default — surfaced for every route that does not opt into request streaming.
         case request(streamID: HTTP2StreamID, request: HTTPRequest, body: [UInt8])
+
+        /// (Streaming routes only, Phase 1.4) the request head — HEADERS decoded — with its body to follow
+        /// as ``requestBodyChunk`` then ``requestEnd``, rather than one buffered ``request``.
+        case requestHead(streamID: HTTP2StreamID, request: HTTPRequest)
+
+        /// (Streaming routes only) a decoded request-body DATA chunk for a stream whose head already
+        /// surfaced as ``requestHead`` — delivered as it arrives, not buffered.
+        case requestBodyChunk(streamID: HTTP2StreamID, bytes: [UInt8])
+
+        /// (Streaming routes only) the request body ended — END_STREAM reached, content-length validated —
+        /// for a stream whose head surfaced as ``requestHead``.
+        case requestEnd(streamID: HTTP2StreamID)
 
         /// An Extended CONNECT opened a tunnel on a stream (RFC 8441 §4) — `protocol` names it (e.g.
         /// `"websocket"`, RFC 9220). The driver accepts with ``acceptTunnel(_:)`` or resets the stream.
@@ -75,6 +89,14 @@ public struct HTTP2Connection {
         ///
         /// Enforced in `receiveData` before buffering (RFC 9110 §15.5.14).
         var effectiveBodyLimit = Int.max
+        /// (Phase 1.4) whether the matched route consumes its body as a stream, resolved at HEADERS time.
+        ///
+        /// When set, the engine surfaces `requestHead` / `requestBodyChunk` / `requestEnd` and does not
+        /// buffer the body toward a single `request`.
+        var isStreaming = false
+        /// Total request-body octets received, for the Phase 1.2 per-route cap — tracked separately from
+        /// `body` because a streaming stream delivers and drops each chunk instead of buffering.
+        var bodyReceivedTotal = 0
     }
 
     private var phase = Phase.awaitingPreface
@@ -148,6 +170,11 @@ public struct HTTP2Connection {
     ///
     /// Defaults to "no per-route limit".
     let resolveBodyLimit: @Sendable (HTTPRequest) -> Int?
+    /// Resolves whether the matched route consumes its request body as a stream (Phase 1.4), from a
+    /// request head at HEADERS time.
+    ///
+    /// Defaults to "no streaming route" — the engine buffers and surfaces one `request`.
+    let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool
 
     /// Creates a connection that advertises `localSettings`, queuing the server SETTINGS preface (§3.4).
     ///
@@ -157,6 +184,7 @@ public struct HTTP2Connection {
         localSettings: HTTP2Settings = HTTP2Settings(),
         limits: HTTPLimits = .default,
         resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
+        resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool = { _ in false },
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // A server MUST NOT advertise ENABLE_PUSH with a non-zero value (RFC 9113 §6.5.2).
@@ -170,6 +198,7 @@ public struct HTTP2Connection {
         self.maxConcurrentStreams = advertised.maxConcurrentStreams ?? limits.maxConcurrentStreams
         self.limits = limits
         self.resolveBodyLimit = resolveBodyLimit
+        self.resolveStreamsBody = resolveStreamsBody
         self.decoder = HPACKDecoder(
             maxDynamicTableSize: advertised.headerTableSize,
             limits: limits
@@ -356,7 +385,7 @@ public struct HTTP2Connection {
         guard let record = streams[streamID] else {
             return
         }
-        try validateContentLength(record)
+        try validateContentLength(record, bodyCount: record.body.count)
         controlFrameBudget = max(0, controlFrameBudget - 1)  // useful work drains the flood budget
         events.append(.request(streamID: streamID, request: record.request, body: record.body))
         // The body now belongs to the dispatched event; drop the engine's copy so a half-closed stream
@@ -365,16 +394,46 @@ public struct HTTP2Connection {
         streams[streamID]?.body = []
     }
 
-    /// A declared `content-length` must match the body received; absent is fine, anything else is a
-    /// malformed request (RFC 9113 §8.1.1) and a stream error.
-    private func validateContentLength(_ record: StreamRecord) throws(HTTP2Error) {
+    /// (Streaming routes, Phase 1.4) surfaces the request head — and, when HEADERS carried END_STREAM so
+    /// there is no body, its end immediately (content-length 0 validated).
+    mutating func emitRequestHead(
+        _ streamID: HTTP2StreamID, endStream: Bool, into events: inout [Event]
+    ) throws(HTTP2Error) {
+        guard let record = streams[streamID] else {
+            return
+        }
+        controlFrameBudget = max(0, controlFrameBudget - 1)  // useful work drains the flood budget
+        events.append(.requestHead(streamID: streamID, request: record.request))
+        if endStream {
+            try emitRequestEnd(streamID, into: &events)
+        }
+    }
+
+    /// (Streaming routes) ends the request body after the last DATA chunk, validating the declared
+    /// content-length against the running total received (RFC 9113 §8.1.1).
+    mutating func emitRequestEnd(
+        _ streamID: HTTP2StreamID, into events: inout [Event]
+    ) throws(HTTP2Error) {
+        guard let record = streams[streamID] else {
+            return
+        }
+        try validateContentLength(record, bodyCount: record.bodyReceivedTotal)
+        events.append(.requestEnd(streamID: streamID))
+    }
+
+    /// A declared `content-length` must match the body received (`bodyCount` — the buffered body, or a
+    /// streaming stream's running total); absent is fine, anything else is a malformed request (RFC 9113
+    /// §8.1.1) and a stream error.
+    private func validateContentLength(
+        _ record: StreamRecord, bodyCount: Int
+    ) throws(HTTP2Error) {
         switch record.request.headerFields.contentLength {
             case .absent:
                 return
             case .invalid:
                 throw .stream(record.stream.id, .protocolError, "invalid content-length")
             case .length(let declared):
-                guard declared == record.body.count else {
+                guard declared == bodyCount else {
                     throw .stream(
                         record.stream.id,
                         .protocolError,

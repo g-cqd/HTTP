@@ -1,6 +1,6 @@
 # ADR 0006 — Streaming request bodies
 
-- **Status:** Accepted (HTTP/1.1 + HTTP/3 incremental; HTTP/2 buffered-as-stream, true-incremental staged)
+- **Status:** Accepted (incremental on all three protocols; HTTP/2 sub-limit back-pressure staged)
 - **Context date:** 2026-06
 
 ## Context
@@ -34,26 +34,27 @@ protocol — without regressing the buffered hot path or the per-route body limi
   — and QUIC's per-stream flow control back-pressures the sender in turn, so an arbitrarily large upload
   is processed with bounded memory. The handler abandons the handoff on return, so the feed loop drains
   the rest of the body off the wire even if the handler stops reading early.
-- **HTTP/2 — buffered-as-stream (v1).** The sans-I/O engine still receives the whole body (bounded by the
-  per-route limit) before surfacing `.request`; for a streaming route the server wraps those bytes as a
-  one-shot `HTTPRequestBodyStream` (`HTTPServer.requestBody(_:for:)`). The handler API is **uniform across
-  protocols** — `.stream` works everywhere — but on h2 the bytes are not yet delivered incrementally off
-  the wire.
+- **HTTP/2 — incremental, limit-bounded.** The engine splits the buffered `.request` into the same
+  `.requestHead` → `.requestBodyChunk` → `.requestEnd` events, gated per route on `streamsBody`. The single
+  multiplexed serve loop must never block on a handler (the deadlock the response pump also guards
+  against), so it feeds each chunk into an *unbounded* `AsyncStream` the handler consumes — incremental
+  delivery, with memory bounded by the per-route limit the engine enforces (chunks accumulate only while
+  the handler lags, never beyond the cap). This matches HTTP/1.1's back-pressure class; sub-limit
+  back-pressure (consumption-gated window replenishment) is the remaining HTTP/2 refinement.
 
 ## Rationale
 
 - **Conditional, not wholesale.** Streaming is a new path *alongside* the buffered one, gated by
   `streamsBody`. This keeps the engine `Event` model and its conformance tests untouched (a non-streaming
   request still yields one buffered `.request`), so the change is additive and low-risk.
-- **Why h3 came before h2.** On HTTP/1.1 and HTTP/3 the read path is per-stream: HTTP/1.1's server *owns*
-  the read loop, and each HTTP/3 request rides an independent QUIC stream served by its own task, so a feed
-  loop can suspend on the handoff and let QUIC flow control back-pressure the sender — a local change. On
-  HTTP/2 the sans-I/O engine buffers DATA and the *single* multiplexed serve loop replenishes the
-  flow-control window *as it buffers*; truly incremental, back-pressured delivery requires gating window
-  replenishment on handler consumption without the loop ever blocking on the handler (or it cannot read
-  the `WINDOW_UPDATE` that unblocks the connection — the deadlock the response pump already guards
-  against). That is the harder case, staged on its own after the shared engine `Event` split landed on
-  HTTP/3.
+- **Back-pressure differs by protocol.** HTTP/3 gives true sub-limit back-pressure: each request rides an
+  independent QUIC stream served by its own task, so the feed loop suspends on a 1-slot handoff and QUIC's
+  per-stream flow control back-pressures the sender. HTTP/1.1 (the server owns the read loop, draining on
+  abandon) and HTTP/2 (the shared multiplexed loop must never block on a handler) deliver incrementally but
+  bound memory by the per-route limit rather than handler consumption. True HTTP/2 sub-limit back-pressure
+  requires consumption-gated window replenishment — debit the window as the peer sends, replenish only as
+  the handler consumes (signalled by a `Sendable` counter the loop drains, never blocking on the handler,
+  or it cannot read the `WINDOW_UPDATE` that unblocks the connection) — the documented follow-up.
 - **Back-pressure is a refinement.** The v1 stream is `AsyncStream`-backed (no *producer* back-pressure):
   the body is bounded by the per-route limit, not by handler consumption. A 1-chunk request-direction
   handoff (mirroring the response `AsyncHandoff`) bounds memory below the limit and is the planned next
@@ -61,16 +62,16 @@ protocol — without regressing the buffered hot path or the per-route body limi
 
 ## Consequences
 
-- `.stream` + `Route.streamingBody()` work end-to-end on **all three protocols**; HTTP/1.1 and HTTP/3
-  deliver incrementally with back-pressure, HTTP/2 delivers the (limit-bounded) body wrapped as a stream.
+- `.stream` + `Route.streamingBody()` work end-to-end on **all three protocols**, delivering the body
+  incrementally as it arrives; HTTP/3 adds sub-limit (QUIC flow-control) back-pressure, while HTTP/1.1 and
+  HTTP/2 bound memory by the per-route limit.
 - **Caveat — streamed-body errors surface as truncation, not status.** Once a streaming response's head
   is on the wire the server cannot send a `413`/`400`, so a chunked body that overruns the route limit
   mid-stream, or a truncated upload, ends the handler's stream early and closes the connection. The
   pre-buffer `413` is guaranteed only for Content-Length. Handlers must tolerate a body stream that ends
   abnormally.
-- **Follow-ups** (tracked): the HTTP/2 incremental `Event` split + consumption-gated window replenishment
-  for true wire-level streaming (the request-direction `AsyncHandoff` back-pressure is already in place,
-  shared with HTTP/3); and, optionally, producer back-pressure for the HTTP/1.1 reader (still
-  `AsyncStream`-backed, bounded by the per-route limit).
+- **Follow-ups** (tracked): HTTP/2 sub-limit back-pressure via consumption-gated window replenishment; and,
+  optionally, the same for the HTTP/1.1 reader (both currently `AsyncStream`-backed, bounded by the
+  per-route limit). The request-direction `AsyncHandoff` back-pressure is already in place on HTTP/3.
 - New public API (`Route.streamingBody()`, `HTTPRequestBodyStream`, `RequestBody.stream`) carries doc
   comments + RFC citations; the streaming reader lives in `HTTPServer+RequestStreaming.swift`.
