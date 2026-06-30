@@ -101,6 +101,8 @@ public struct Router: HTTPResponder, RouteResolver {
         ResolvedRoute(
             bodyLimit: route.bodyLimit,
             webSocketHandler: route.webSocketHandler,
+            webSocketHub: route.webSocketHub,
+            webSocketTopic: route.webSocketTopic,
             streamsBody: route.streamsBody
         )
     }

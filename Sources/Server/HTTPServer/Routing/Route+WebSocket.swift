@@ -51,6 +51,50 @@ extension Route {
         )
     }
 
+    /// A WebSocket route at `pattern` bound to a broadcast `hub` (Phase 2.7).
+    ///
+    /// The server registers each connection with the hub and auto-subscribes it to `topic`, so a message
+    /// the handler publishes to that topic (`await hub.publish(…, to: topic)`) reaches every connection on
+    /// it. Declared as a `GET`, like ``webSocket(_:handler:)``; hub fan-out runs on the HTTP/1.1 path.
+    public static func webSocket(
+        _ pattern: String, hub: WebSocketHub, topic: String, handler: any WebSocketHandler
+    ) -> Self {
+        Self(
+            .get,
+            Self.parse(pattern),
+            handler: { _, _, _ in Self.upgradeRequired() },
+            middleware: [],
+            webSocketHandler: handler,
+            webSocketHub: hub,
+            webSocketTopic: topic
+        )
+    }
+
+    /// A hub-backed WebSocket route built from closures — a convenience over
+    /// ``webSocket(_:hub:topic:handler:)`` wrapping a ``ClosureWebSocketHandler`` (Phase 2.7).
+    ///
+    /// The `handle` closure typically publishes to the hub (`await hub.publish(…, to: topic)`) and returns
+    /// `[]`.
+    public static func webSocket(
+        _ pattern: String,
+        hub: WebSocketHub,
+        topic: String,
+        shouldUpgrade: @escaping @Sendable (HTTPRequest) -> Bool = { _ in true },
+        isOriginAllowed: @escaping @Sendable (String?) -> Bool = { $0 == nil },
+        handle: @escaping @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
+    ) -> Self {
+        webSocket(
+            pattern,
+            hub: hub,
+            topic: topic,
+            handler: ClosureWebSocketHandler(
+                shouldUpgrade: shouldUpgrade,
+                isOriginAllowed: isOriginAllowed,
+                handle: handle
+            )
+        )
+    }
+
     /// The `426 Upgrade Required` a *non-upgrade* request to a WebSocket path receives (RFC 9110
     /// §15.5.22): a 426 must advertise the required protocol via `Upgrade`, so a conforming client retries
     /// the request as a WebSocket handshake (RFC 9110 §7.8).

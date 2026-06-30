@@ -185,6 +185,23 @@ struct HTTPServerWebSocketTests {
         #expect(containsSubsequence(sent, [0x81, 0x02, 0x68, 0x69]))  // echoed unmasked "hi"
     }
 
+    @Test("a hub-backed WebSocket route upgrades (the connection is hub-driven) (Phase 2.7)")
+    func hubBackedRouteUpgrades() async {
+        let hub = WebSocketHub()
+        let echo = ClosureWebSocketHandler { _ in [] }
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", hub: hub, topic: "chat", handler: echo) }
+        )
+        let connection = FakeConnection(id: TransportConnectionID(11), inbound: upgradeRequest())
+        await server.serve(connection)
+        // The upgrade completes on the hub-driven path; live fan-out is covered by `WebSocketHubTests`
+        // (a self-broadcast over a one-shot FakeConnection races the immediate EOF, so it is unit-tested
+        // on the hub rather than asserted here).
+        let head = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
+        #expect(head.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
+    }
+
     // MARK: Fixtures
 
     /// A no-op middleware that forwards to `next` unchanged — proves the resolver seam threads through a

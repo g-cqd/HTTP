@@ -36,6 +36,8 @@ extension HTTPServer {
         deadline: IdleDeadline<C.Instant>,
         request: HTTPRequest,
         handler: any WebSocketHandler,
+        hub: WebSocketHub?,
+        topic: String?,
         carryover: [UInt8]
     ) async {
         // Cross-site WebSocket hijacking defense (RFC 6455 §10.2, CWE-1385): the handshake is exempt
@@ -67,17 +69,25 @@ extension HTTPServer {
             connection,
             deadline: deadline,
             handler: handler,
+            hub: hub,
+            topic: topic,
             carryover: carryover,
             permessageDeflate: permessageDeflate
         )
     }
 
-    /// Pumps the ``WebSocketConnection`` over `connection`: receive → events → handler actions →
-    /// flush, looping until a Close is sent, EOF, an idle timeout, or a send failure (RFC 6455 §6).
+    /// Pumps the ``WebSocketConnection`` over `connection` until a Close, EOF, idle timeout, or send
+    /// failure (RFC 6455 §6).
+    ///
+    /// A reader task feeds inbound bytes, and a hub (Phase 2.7) feeds broadcasts, into one
+    /// ``WebSocketWakeup`` stream the pump consumes — so the server can push a frame without the pump
+    /// blocking on `receive`.
     private func driveWebSocket(
         _ connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>,
         handler: any WebSocketHandler,
+        hub: WebSocketHub?,
+        topic: String?,
         carryover: [UInt8],
         permessageDeflate: PermessageDeflateParameters?
     ) async {
@@ -85,30 +95,72 @@ extension HTTPServer {
             maxMessageSize: limits.maxBodySize,
             permessageDeflate: permessageDeflate
         )
-        var inbound = carryover
-        while true {
-            var failed = false
-            do {
-                for event in try engine.receive(inbound) {
-                    for action in await handler.handle(event) { engine.apply(action) }
-                }
-            }
-            catch {
-                // The engine queued a Close with the mapped code; flush it below, then stop.
-                failed = true
-            }
-            inbound = []
-            let outbound = engine.outboundBytes()
-            if !outbound.isEmpty, (try? await connection.send(outbound)) == nil { break }
-            if failed || engine.isClosing { break }
-
-            deadline.arm(clock.now.advanced(by: limits.keepAliveTimeout))
-            let chunk = try? await connection.receive(maxLength: 16_384)
-            deadline.disarm()
-            guard let chunk, !chunk.isEmpty else { break }  // EOF, idle timeout, or read failure
-            inbound = chunk
+        let (wakeups, continuation) = AsyncStream.makeStream(
+            of: WebSocketWakeup.self, bufferingPolicy: .bufferingNewest(256)
+        )
+        // Hub (Phase 2.7): register this connection's broadcast sink and auto-subscribe it to the topic,
+        // so a published message arrives as a `.broadcast` wakeup, applied to the engine below.
+        var token: UInt64?
+        if let hub, let topic {
+            token = await hub.register { message in continuation.yield(.broadcast(message)) }
+            if let token { await hub.subscribe(token, to: topic) }
         }
+        // Reader: feed the carryover, then inbound bytes (timed by the idle deadline), into the stream.
+        let reader = Task {
+            if !carryover.isEmpty { continuation.yield(.inbound(carryover)) }
+            while true {
+                deadline.arm(clock.now.advanced(by: limits.keepAliveTimeout))
+                let chunk = try? await connection.receive(maxLength: 16_384)
+                deadline.disarm()
+                guard let chunk, !chunk.isEmpty else {
+                    continuation.yield(.closed)  // EOF, idle timeout, or read failure
+                    return
+                }
+                continuation.yield(.inbound(chunk))
+            }
+        }
+        await pumpWebSocket(wakeups, engine: &engine, handler: handler, connection: connection)
+        reader.cancel()
+        continuation.finish()
+        if let hub, let token { await hub.remove(token) }
         await connection.close()
+    }
+
+    /// Consumes the wakeup stream: receive → events → handler actions, or a hub broadcast → send; flushes
+    /// after each, stopping on a queued Close, the reader closing, or a send failure (RFC 6455 §6).
+    private func pumpWebSocket(
+        _ wakeups: AsyncStream<WebSocketWakeup>,
+        engine: inout WebSocketConnection,
+        handler: any WebSocketHandler,
+        connection: any TransportConnection
+    ) async {
+        for await wakeup in wakeups {
+            var ended = false
+            switch wakeup {
+                case .inbound(let bytes):
+                    do {
+                        for event in try engine.receive(bytes) {
+                            for action in await handler.handle(event) { engine.apply(action) }
+                        }
+                    }
+                    catch {
+                        ended = true  // the engine queued a Close; flush it below, then stop
+                    }
+                case .broadcast(.text(let string)):
+                    engine.apply(.sendText(string))
+                case .broadcast(.binary(let bytes)):
+                    engine.apply(.sendBinary(bytes))
+                case .closed:
+                    ended = true
+            }
+            let outbound = engine.outboundBytes()
+            if !outbound.isEmpty, (try? await connection.send(outbound)) == nil {
+                return
+            }
+            if ended || engine.isClosing {
+                return
+            }
+        }
     }
 
     // MARK: WebSocket over HTTP/2 (RFC 8441 / RFC 9220)

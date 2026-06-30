@@ -41,6 +41,11 @@ public struct Route: Sendable {
     /// The WebSocket handler bound to this route (RFC 6455), or `nil` for an ordinary HTTP route.
     let webSocketHandler: (any WebSocketHandler)?
 
+    /// The broadcast hub a WebSocket route is bound to (Phase 2.7) and the topic its connections are
+    /// auto-subscribed to — both `nil` for a plain (non-hub) WebSocket route.
+    let webSocketHub: WebSocketHub?
+    let webSocketTopic: String?
+
     /// Whether this route consumes its request body incrementally (``RequestBody/stream(_:)``).
     let streamsBody: Bool
 
@@ -86,6 +91,8 @@ public struct Route: Sendable {
         middleware: [any HTTPMiddleware],
         bodyLimit: Int? = nil,
         webSocketHandler: (any WebSocketHandler)? = nil,
+        webSocketHub: WebSocketHub? = nil,
+        webSocketTopic: String? = nil,
         streamsBody: Bool = false
     ) {
         self.method = method
@@ -94,6 +101,8 @@ public struct Route: Sendable {
         self.middleware = middleware
         self.bodyLimit = bodyLimit
         self.webSocketHandler = webSocketHandler
+        self.webSocketHub = webSocketHub
+        self.webSocketTopic = webSocketTopic
         self.streamsBody = streamsBody
         // Compose the group-middleware chain once, now, terminating at a context-running responder — so a
         // request threads its parameters through the context, never rebuilding the chain (audit #9). Plain
@@ -185,6 +194,8 @@ public struct Route: Sendable {
             middleware: groupMiddleware + middleware,
             bodyLimit: bodyLimit,
             webSocketHandler: webSocketHandler,
+            webSocketHub: webSocketHub,
+            webSocketTopic: webSocketTopic,
             streamsBody: streamsBody
         )
     }
@@ -199,6 +210,8 @@ public struct Route: Sendable {
             middleware: middleware,
             bodyLimit: bytes,
             webSocketHandler: webSocketHandler,
+            webSocketHub: webSocketHub,
+            webSocketTopic: webSocketTopic,
             streamsBody: streamsBody
         )
     }
@@ -216,6 +229,8 @@ public struct Route: Sendable {
             middleware: middleware,
             bodyLimit: bodyLimit,
             webSocketHandler: webSocketHandler,
+            webSocketHub: webSocketHub,
+            webSocketTopic: webSocketTopic,
             streamsBody: true
         )
     }

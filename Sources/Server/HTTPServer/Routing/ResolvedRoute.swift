@@ -20,6 +20,13 @@ public struct ResolvedRoute: Sendable {
     /// The WebSocket handler bound to this route (RFC 6455), or `nil` for an ordinary HTTP route.
     public var webSocketHandler: (any WebSocketHandler)?
 
+    /// The broadcast hub a WebSocket route is bound to (Phase 2.7), or `nil` for a plain WebSocket — the
+    /// server registers the connection with it and auto-subscribes it to ``webSocketTopic``.
+    public var webSocketHub: WebSocketHub?
+
+    /// The topic a hub-backed WebSocket connection is auto-subscribed to (Phase 2.7).
+    public var webSocketTopic: String?
+
     /// Whether the route consumes its request body incrementally (``RequestBody/stream(_:)``) rather
     /// than buffered.
     public var streamsBody: Bool
@@ -28,10 +35,14 @@ public struct ResolvedRoute: Sendable {
     public init(
         bodyLimit: Int? = nil,
         webSocketHandler: (any WebSocketHandler)? = nil,
+        webSocketHub: WebSocketHub? = nil,
+        webSocketTopic: String? = nil,
         streamsBody: Bool = false
     ) {
         self.bodyLimit = bodyLimit
         self.webSocketHandler = webSocketHandler
+        self.webSocketHub = webSocketHub
+        self.webSocketTopic = webSocketTopic
         self.streamsBody = streamsBody
     }
 }

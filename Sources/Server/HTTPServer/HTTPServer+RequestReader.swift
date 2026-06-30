@@ -78,7 +78,8 @@ extension HTTPServer where C.Duration == Duration {
         // here. A non-upgrade GET to that path falls through to `respond` → 426 (the route's fallback);
         // a WebSocket path the responder does not declare resolves to `nil` and is served normally.
         if Self.isWebSocketUpgrade(request),
-            let handler = currentResolver?.resolveWebSocket(path: request.path)?.webSocketHandler,
+            let route = currentResolver?.resolveWebSocket(path: request.path),
+            let handler = route.webSocketHandler,
             handler.shouldUpgrade(request)
         {
             await serveWebSocket(
@@ -86,6 +87,8 @@ extension HTTPServer where C.Duration == Duration {
                 deadline: deadline,
                 request: request,
                 handler: handler,
+                hub: route.webSocketHub,
+                topic: route.webSocketTopic,
                 carryover: Array(buffer[start...])
             )
             return false
