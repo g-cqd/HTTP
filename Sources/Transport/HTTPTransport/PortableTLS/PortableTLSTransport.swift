@@ -135,11 +135,14 @@
             continuation.onTermination = { [weak self] _ in
                 Task { await self?.shutdown() }
             }
+            // Capture an immutable snapshot: `loops` is a var (built incrementally above), and the accept
+            // loop runs concurrently on `acceptQueue`, so referencing the var there is a data-race smell.
+            let acceptLoops = loops
             acceptQueue.async { [weak self] in
                 self?
                     .acceptLoop(
                         listenDescriptor: listener.descriptor,
-                        loops: loops,
+                        loops: acceptLoops,
                         continuation: continuation
                     )
             }
