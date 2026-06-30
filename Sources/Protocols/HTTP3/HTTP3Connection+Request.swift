@@ -38,6 +38,12 @@ extension HTTP3Connection {
             return
         }
         guard state.isTunnel else {
+            // A streaming route surfaces its body incrementally (Phase 1.4); every other route buffers
+            // and surfaces a single `request` once FIN closes the send side.
+            if state.isStreaming {
+                try surfaceStreamingRequest(streamID, into: &events)
+                return
+            }
             guard state.finReceived else {
                 return
             }
@@ -156,6 +162,9 @@ extension HTTP3Connection {
         state.effectiveBodyLimit = min(
             limits.maxBodySize, resolveBodyLimit(request) ?? limits.maxBodySize
         )
+        // Whether this route consumes its body as a stream (Phase 1.4): surface it incrementally rather
+        // than buffering one `request`. A tunnel (below) is never a streaming-body request.
+        state.isStreaming = resolveStreamsBody(request)
         guard let connectProtocol else {
             return
         }
@@ -195,7 +204,10 @@ extension HTTP3Connection {
             streams[streamID] = state
             return
         }
-        guard state.body.count <= state.effectiveBodyLimit else {
+        // The running total (not `body.count`, which a streaming stream drains after each chunk) bounds
+        // the whole upload against the matched route's cap (Phase 1.2, RFC 9110 §15.5.14).
+        state.bodyReceivedTotal += payload.count
+        guard state.bodyReceivedTotal <= state.effectiveBodyLimit else {
             throw .stream(streamID, .h3RequestRejected, "request body exceeds the route limit")
         }
         // Bound the connection's *total* buffered (un-dispatched) request body across all streams, not
@@ -240,6 +252,49 @@ extension HTTP3Connection {
         // The body now belongs to the dispatched event; drop the engine's copy so it no longer counts
         // against the connection buffered-body budget (handleRequestData) — mirrors the HTTP/2 engine.
         streams[streamID]?.body = []
+    }
+
+    /// Surfaces a streaming route's request incrementally (Phase 1.4): the head once (HEADERS decoded),
+    /// then each newly-buffered body chunk as it arrives — draining `body` so it never accumulates — then
+    /// the end at FIN (content-length validated, RFC 9114 §4.1.2 / §4.1).
+    private mutating func surfaceStreamingRequest(
+        _ streamID: QUICStreamID,
+        into events: inout [Event]
+    ) throws(HTTP3Error) {
+        guard var state = streams[streamID], !state.requestEmitted else {
+            return
+        }
+        // A stream still blocked on not-yet-received QPACK inserts holds until `unblockBlockedSections`
+        // decodes it (RFC 9204 §2.1.2), exactly as the buffered path does.
+        guard state.blockedSection == nil else {
+            return
+        }
+        guard state.sawHeaders, let request = state.request else {
+            guard state.finReceived else {
+                return
+            }
+            throw .stream(streamID, .h3MessageError, "request stream closed without HEADERS")
+        }
+        if !state.headEmitted {
+            state.headEmitted = true
+            events.append(.requestHead(streamID: streamID, request: request))
+        }
+        if !state.body.isEmpty {
+            events.append(.requestBodyChunk(streamID: streamID, bytes: state.body))
+            state.body = []  // delivered — drop the engine's copy so it never accumulates
+        }
+        guard state.finReceived else {
+            streams[streamID] = state
+            return
+        }
+        // A non-empty buffer at FIN is a frame whose Length ran past the stream end (RFC 9114 §7.1).
+        guard state.buffer.isEmpty else {
+            throw .connection(.h3FrameError, "a frame extends past the end of the stream")
+        }
+        try validateContentLength(request, bodyCount: state.bodyReceivedTotal, streamID: streamID)
+        state.requestEmitted = true
+        streams[streamID] = state
+        events.append(.requestEnd(streamID: streamID))
     }
 
     /// RFC 9114 §4.1.2 — a declared content-length must equal the DATA length; absent is fine.

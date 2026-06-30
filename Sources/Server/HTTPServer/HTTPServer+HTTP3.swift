@@ -29,12 +29,16 @@ extension HTTPServer {
         init(
             limits: HTTPLimits,
             enableConnectProtocol: Bool,
-            resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int?
+            resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int?,
+            resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool
         ) {
             var settings = HTTP3Settings()
             settings.enableConnectProtocol = enableConnectProtocol  // RFC 9220 — WebSocket over h3
             connection = HTTP3Connection(
-                localSettings: settings, limits: limits, resolveBodyLimit: resolveBodyLimit
+                localSettings: settings,
+                limits: limits,
+                resolveBodyLimit: resolveBodyLimit,
+                resolveStreamsBody: resolveStreamsBody
             )
         }
 
@@ -121,11 +125,18 @@ extension HTTPServer {
         let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
             currentResolver?.resolve(method: request.method, path: request.path)?.bodyLimit
         }
+        // Whether the matched route streams its request body (Phase 1.4) — the engine then surfaces the
+        // body incrementally (requestHead/requestBodyChunk/requestEnd) instead of one buffered request.
+        let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool = { [self] request in
+            currentResolver?.resolve(method: request.method, path: request.path)?.streamsBody
+                ?? false
+        }
         let engine = Engine(
             limits: limits,
             // Advertise Extended CONNECT (RFC 9220) only when the responder declares a WebSocket route.
             enableConnectProtocol: currentResolver?.hasWebSocketRoutes ?? false,
-            resolveBodyLimit: resolveBodyLimit
+            resolveBodyLimit: resolveBodyLimit,
+            resolveStreamsBody: resolveStreamsBody
         )
         let initialActions = await engine.pendingActions()
         let serverStreams = Task {
@@ -174,7 +185,7 @@ extension HTTPServer {
         while let chunk = try? await stream.receive() {
             let (events, actions) = await engine.receive(stream.id, chunk.bytes, fin: chunk.fin)
             await applyHTTP3(actions, stream: stream, engine: engine, quic: quic)
-            for event in events {
+            for (index, event) in events.enumerated() {
                 switch event {
                     case .request(let id, let request, let body):
                         await respondHTTP3(
@@ -185,6 +196,20 @@ extension HTTPServer {
                             engine: engine,
                             quic: quic
                         )
+                    case .requestHead(let id, let request):
+                        // A streaming route (Phase 1.4) takes over this stream for its lifetime: feed the
+                        // body off the wire into the handler's stream, then send its response.
+                        await serveHTTP3StreamingRequest(
+                            id,
+                            request: request,
+                            buffered: Self.trailingBody(of: events, after: index),
+                            stream: stream,
+                            engine: engine,
+                            quic: quic
+                        )
+                        return
+                    case .requestBodyChunk, .requestEnd:
+                        break  // consumed by serveHTTP3StreamingRequest — never standalone here
                     case .extendedConnect(let id, let request, let proto):
                         let tunnel = await acceptHTTP3Tunnel(
                             id, request: request, protocol: proto, on: stream, engine: engine
@@ -229,12 +254,34 @@ extension HTTPServer {
         let response = await current.respond(
             to: request, body: requestBody(body, for: request), context: context
         )
+        await sendHTTP3Response(
+            response,
+            omitBody: request.method == .head,
+            id: id,
+            stream: stream,
+            engine: engine,
+            quic: quic
+        )
+    }
+
+    /// Sends `response` on the request stream `id` — natively streamed (P6b / RFC 9114 §4.1) when it
+    /// carries a body stream, else buffered.
+    ///
+    /// Shared by the buffered and streaming-request response paths.
+    private func sendHTTP3Response(
+        _ response: ServerResponse,
+        omitBody: Bool,
+        id: QUICStreamID,
+        stream: any QUICStream,
+        engine: Engine,
+        quic: any QUICConnection
+    ) async {
         if let bodyStream = response.stream {
             // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
             await streamHTTP3Response(
                 response.head,
                 body: bodyStream,
-                omitBody: request.method == .head,
+                omitBody: omitBody,
                 id: id,
                 engine: engine,
                 on: stream
@@ -244,6 +291,84 @@ extension HTTPServer {
             let responseActions = await engine.respond(to: id, response.head, body: response.body)
             await applyHTTP3(responseActions, stream: stream, engine: engine, quic: quic)
         }
+    }
+
+    /// Drives a streaming-route request on its QUIC stream (Phase 1.4): feed the body off the wire into a
+    /// back-pressured handoff the handler consumes, then send the handler's response on the same stream.
+    ///
+    /// The handler runs in a child task and consumes the body via the stream; the feed loop suspends on a
+    /// full handoff slot until the handler takes each chunk (1-chunk backpressure), and QUIC's per-stream
+    /// flow control back-pressures the sender in turn — bounded memory for an arbitrarily large upload.
+    /// The handler abandons the handoff on return, so the feed loop resumes (dropping the rest) even if
+    /// the handler did not drain the body; the whole body is still read off the wire to FIN.
+    private func serveHTTP3StreamingRequest(
+        _ id: QUICStreamID,
+        request: HTTPRequest,
+        buffered: (chunks: [[UInt8]], ended: Bool),
+        stream: any QUICStream,
+        engine: Engine,
+        quic: any QUICConnection
+    ) async {
+        let handoff = AsyncHandoff()
+        let context = RequestContext(quic: quic, request: request)
+        let current = currentResponder  // hot-swappable responder, read once (G4a)
+        let handler = Task {
+            let response = await current.respond(
+                to: request,
+                body: .stream(HTTPRequestBodyStream(handoff: handoff)),
+                context: context
+            )
+            await handoff.abandon()  // unblock the feeder if the handler returned without draining
+            return response
+        }
+        var ended = buffered.ended
+        for chunk in buffered.chunks {
+            await handoff.offer(chunk)
+        }
+        while !ended, let chunk = try? await stream.receive() {
+            let (events, actions) = await engine.receive(id, chunk.bytes, fin: chunk.fin)
+            await applyHTTP3(actions, stream: stream, engine: engine, quic: quic)
+            for event in events {
+                if case .requestBodyChunk(_, let bytes) = event {
+                    await handoff.offer(bytes)
+                }
+                else if case .requestEnd = event {
+                    ended = true
+                }
+            }
+            if chunk.fin {
+                break
+            }
+        }
+        await handoff.finish()
+        let response = await handler.value
+        await sendHTTP3Response(
+            response,
+            omitBody: request.method == .head,
+            id: id,
+            stream: stream,
+            engine: engine,
+            quic: quic
+        )
+    }
+
+    /// Collects the body chunks (and whether `requestEnd` arrived) that follow a `requestHead` in the
+    /// same event batch — handed to ``serveHTTP3StreamingRequest`` so a HEADERS+DATA+FIN that decoded
+    /// together is not lost before the feed loop starts.
+    private static func trailingBody(
+        of events: [HTTP3Connection.Event], after index: Int
+    ) -> (chunks: [[UInt8]], ended: Bool) {
+        var chunks: [[UInt8]] = []
+        var ended = false
+        for event in events[(index + 1)...] {
+            if case .requestBodyChunk(_, let bytes) = event {
+                chunks.append(bytes)
+            }
+            else if case .requestEnd = event {
+                ended = true
+            }
+        }
+        return (chunks, ended)
     }
 
     /// Accepts (or refuses) a WebSocket-over-HTTP/3 Extended CONNECT (RFC 9220) — the same CSWSH origin

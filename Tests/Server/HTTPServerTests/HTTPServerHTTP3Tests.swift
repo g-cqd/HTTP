@@ -107,6 +107,33 @@ struct HTTPServerHTTP3Tests {
         #expect(body == Array("hello h3".utf8))
     }
 
+    @Test(
+        "a streaming HTTP/3 route receives its request body as a stream end-to-end (Phase 1.4)",
+        .timeLimit(.minutes(1)))
+    func http3StreamingRequest() async throws {
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        // `.streamingBody()` drives the true-incremental path (requestHead → requestBodyChunk →
+        // requestEnd → handler stream); the handler reports it received a stream and the byte count.
+        let router = Router {
+            Route.post("/upload") { _, body, _ in
+                .text("streaming=\(body.isStreaming) bytes=\(await body.collect().count)")
+            }
+            .streamingBody()
+        }
+        let (status, body) = try await serveAndPost(
+            transport: LegacyQUICTransport(
+                configuration: TransportConfiguration(
+                    host: "127.0.0.1", port: 0, backbone: .networkFramework, tls: tls
+                )
+            ),
+            responder: router,
+            path: "/upload",
+            body: Array("hello".utf8)
+        )
+        #expect(status == "200")
+        #expect(String(decoding: body, as: Unicode.UTF8.self) == "streaming=true bytes=5")
+    }
+
     /// A buffered responder returning `hello h3` — the default for the plain-GET acceptance tests.
     private func helloResponder() -> any HTTPResponder {
         ClosureResponder { request, _, _ in
@@ -141,6 +168,33 @@ struct HTTPServerHTTP3Tests {
         return try await get(port: port, path: "/", extraHeaders: extraHeaders)
     }
 
+    /// Starts `transport`, drives the HTTP/3 server over it, and performs one POST carrying `body`.
+    private func serveAndPost(
+        transport: any QUICServerTransport,
+        responder: any HTTPResponder,
+        path: String,
+        body: [UInt8]
+    ) async throws -> (status: String?, body: [UInt8]) {
+        let connections = try await transport.start()
+        let port = transport.boundPort
+        let server = HTTPServer(
+            transport: TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
+            responder: responder
+        )
+        let serving = Task {
+            await withDiscardingTaskGroup { group in
+                for await connection in connections {
+                    group.addTask { await server.serveHTTP3(connection) }
+                }
+            }
+        }
+        defer {
+            serving.cancel()
+            Task { await transport.shutdown() }
+        }
+        return try await post(port: port, path: path, body: body)
+    }
+
     // MARK: A minimal HTTP/3 client over Network.framework QUIC
 
     private func get(
@@ -164,6 +218,31 @@ struct HTTPServerHTTP3Tests {
                 ] + extraHeaders
             )
         try await sendComplete(Self.frame(0x01, section), on: connection)  // HEADERS + FIN
+        let response = try await receiveAll(from: connection)
+        return try Self.decode(response)
+    }
+
+    private func post(
+        port: UInt16, path: String, body: [UInt8]
+    ) async throws -> (status: String?, body: [UInt8]) {
+        let connection = NWConnection(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port) ?? .any,
+            using: Self.clientParameters()
+        )
+        defer { connection.cancel() }
+        try await ready(connection)
+
+        let section = QPACKEncoder()
+            .encode([
+                HeaderField(name: ":method", value: "POST"),
+                HeaderField(name: ":scheme", value: "https"),
+                HeaderField(name: ":authority", value: "127.0.0.1"),
+                HeaderField(name: ":path", value: path)
+            ])
+        var wire = Self.frame(0x01, section)  // HEADERS
+        wire += Self.frame(0x00, body)  // DATA
+        try await sendComplete(wire, on: connection)  // HEADERS + DATA + FIN
         let response = try await receiveAll(from: connection)
         return try Self.decode(response)
     }

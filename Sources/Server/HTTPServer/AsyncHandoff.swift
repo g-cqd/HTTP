@@ -53,6 +53,14 @@ actor AsyncHandoff {
         close(.failed)
     }
 
+    /// Consumer: signal that the consumer is gone — the request-body handler returned without draining
+    /// the stream — so a producer parked on ``offer(_:)`` resumes at once and further offers drop.
+    ///
+    /// The request-direction abandon path (the response-direction producer uses ``finish()`` / ``fail()``).
+    func abandon() {
+        close(.failed)
+    }
+
     /// Consumer: take the next item — a buffered chunk, then the terminal state once the producer ends.
     func next() async -> Item {
         if let chunk = pending {

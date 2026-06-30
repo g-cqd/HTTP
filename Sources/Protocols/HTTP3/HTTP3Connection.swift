@@ -24,7 +24,18 @@ public struct HTTP3Connection {
     /// A high-level event surfaced to the connection driver.
     public enum Event: Sendable, Equatable {
         /// A complete request arrived on a request stream (HEADERS and any DATA received, RFC 9114 §4).
+        ///
+        /// The buffered default — surfaced for every route that does not opt into request streaming.
         case request(streamID: QUICStreamID, request: HTTPRequest, body: [UInt8])
+        /// (Streaming routes only, Phase 1.4) the request head — HEADERS decoded — with its body to follow
+        /// as ``requestBodyChunk`` then ``requestEnd`` (RFC 9114 §4), rather than one buffered ``request``.
+        case requestHead(streamID: QUICStreamID, request: HTTPRequest)
+        /// (Streaming routes only) a decoded request-body DATA chunk, delivered as it arrives off the wire
+        /// for a stream whose head already surfaced as ``requestHead`` — not buffered.
+        case requestBodyChunk(streamID: QUICStreamID, bytes: [UInt8])
+        /// (Streaming routes only) the request body ended — FIN reached, content-length validated — for a
+        /// stream whose head surfaced as ``requestHead``.
+        case requestEnd(streamID: QUICStreamID)
         /// An Extended CONNECT opened a tunnel on a request stream (RFC 9220 / RFC 8441 §4) — `protocol`
         /// names it (e.g. `"websocket"`). The driver accepts with ``acceptTunnel(_:secWebSocketExtensions:)``
         /// or resets the stream. Surfaced as soon as the CONNECT HEADERS decode — it does not await FIN.
@@ -101,6 +112,16 @@ public struct HTTP3Connection {
         ///
         /// Enforced in `handleRequestData` before buffering.
         var effectiveBodyLimit = Int.max
+        /// (Phase 1.4) whether the matched route consumes its body as a stream, resolved at HEADERS time.
+        ///
+        /// When set, the engine surfaces `requestHead` / `requestBodyChunk` / `requestEnd` instead of one
+        /// buffered `request`, and drains `body` after each chunk so it never accumulates.
+        var isStreaming = false
+        /// Emit-once guard for the streaming `requestHead` event.
+        var headEmitted = false
+        /// Total request-body octets received, for the Phase 1.2 per-route cap — tracked separately from
+        /// `body` because a streaming stream drains `body` after each delivered chunk.
+        var bodyReceivedTotal = 0
         /// A request HEADERS section referencing dynamic-table entries not yet received, buffered with
         /// its Required Insert Count until the encoder stream delivers those inserts and the stream
         /// decodes once `insertCount ≥ RIC` (RFC 9204 §2.1.2 blocked stream).
@@ -115,6 +136,11 @@ public struct HTTP3Connection {
     ///
     /// Defaults to "no per-route limit".
     let resolveBodyLimit: @Sendable (HTTPRequest) -> Int?
+    /// Resolves whether the matched route consumes its request body as a stream (Phase 1.4), from a
+    /// request head at HEADERS time.
+    ///
+    /// Defaults to "no streaming route" — the engine buffers and surfaces one `request`.
+    let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool
     var decoder: QPACKDecoder
     var encoder: QPACKEncoder
     let frameDecoder: HTTP3FrameDecoder
@@ -161,6 +187,7 @@ public struct HTTP3Connection {
         localSettings: HTTP3Settings = HTTP3Settings(),
         limits: HTTPLimits = .default,
         resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
+        resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool = { _ in false },
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // Advertise a dynamic QPACK table the peer encoder may populate (RFC 9204 §3.2); a caller can
@@ -178,6 +205,7 @@ public struct HTTP3Connection {
         self.localSettings = advertised
         self.limits = limits
         self.resolveBodyLimit = resolveBodyLimit
+        self.resolveStreamsBody = resolveStreamsBody
         self.decoder = QPACKDecoder(
             maxTableCapacity: advertised.qpackMaxTableCapacity, limits: limits
         )
