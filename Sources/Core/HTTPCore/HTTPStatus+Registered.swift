@@ -77,6 +77,9 @@ extension HTTPStatus {
     public static let badGateway = HTTPStatus(unchecked: 502)
     /// `503 Service Unavailable` (RFC 9110 §15.6.4).
     public static let serviceUnavailable = HTTPStatus(unchecked: 503)
+    /// `504 Gateway Timeout` (RFC 9110 §15.6.5) — emitted when a per-request deadline elapses before
+    /// the responder produces a response (``TimeoutMiddleware``).
+    public static let gatewayTimeout = HTTPStatus(unchecked: 504)
     /// `505 HTTP Version Not Supported` (RFC 9110 §15.6.6).
     public static let httpVersionNotSupported = HTTPStatus(unchecked: 505)
 }
