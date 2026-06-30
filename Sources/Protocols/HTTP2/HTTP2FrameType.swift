@@ -6,8 +6,10 @@
 //  requires receivers to ignore frames of unknown type, so unknown values must be representable.
 //
 
+public import HTTPCore
+
 /// An HTTP/2 frame type (RFC 9113 §6); unknown values are representable and ignored (§4.1).
-public struct HTTP2FrameType: Sendable, Equatable, Hashable, RawRepresentable {
+public struct HTTP2FrameType: Sendable, Equatable, Hashable, RawRepresentable, HTTPFrameType {
     /// The 8-bit type value.
     public let rawValue: UInt8
 

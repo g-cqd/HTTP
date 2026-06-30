@@ -9,8 +9,10 @@
 //  MUST be rejected on the control stream, §7.2.1).
 //
 
+public import HTTPCore
+
 /// An HTTP/3 frame type (RFC 9114 §7.2); a varint, with unknown values representable and ignored (§9).
-public struct HTTP3FrameType: Sendable, Equatable, Hashable, RawRepresentable {
+public struct HTTP3FrameType: Sendable, Equatable, Hashable, RawRepresentable, HTTPFrameType {
     /// The frame type value (a variable-length integer).
     public let rawValue: UInt64
 

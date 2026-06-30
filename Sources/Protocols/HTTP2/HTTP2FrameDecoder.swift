@@ -13,7 +13,7 @@ public import HTTPCore
 /// Pulls complete HTTP/2 frames from an accumulating byte buffer (RFC 9113 §4).
 public struct HTTP2FrameDecoder {
     /// One fully received frame: its header and the payload octets.
-    public struct Frame: Sendable, Equatable {
+    public struct Frame: Sendable, Equatable, HTTPFrame {
         /// The frame header (RFC 9113 §4.1).
         public let header: HTTP2FrameHeader
 

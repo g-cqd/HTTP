@@ -19,7 +19,7 @@ public import HTTPCore
 /// Pulls complete HTTP/3 frames from one stream's accumulating byte buffer (RFC 9114 §7.1).
 public struct HTTP3FrameDecoder {
     /// One fully received frame: its type and payload octets.
-    public struct Frame: Sendable, Equatable {
+    public struct Frame: Sendable, Equatable, HTTPFrame {
         /// The frame type (RFC 9114 §7.2).
         public let type: HTTP3FrameType
 
