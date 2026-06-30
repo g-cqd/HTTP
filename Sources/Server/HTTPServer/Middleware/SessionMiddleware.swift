@@ -8,7 +8,8 @@
 //  continues untouched; an absent or tampered one is replaced with a fresh signed `Set-Cookie`
 //  (`HttpOnly`, `SameSite=Lax`). The verified bare id is asserted onto the request as `X-Session-ID` for
 //  the handler — any client-supplied value is stripped, so the handler only ever sees a server-verified
-//  id. Stateless: the signed cookie is the whole session, so it needs no server-side store.
+//  id. Stateless by default (the signed cookie is the whole session); pass a ``SessionStore`` to add
+//  server-side expiry and revocation (a logout that invalidates a still-unexpired cookie immediately).
 //
 
 public import HTTPCore
@@ -20,23 +21,27 @@ public struct SessionMiddleware: HTTPMiddleware {
     private let maxAge: Int?
     private let isSecure: Bool
     private let generate: @Sendable () -> String
+    private let store: (any SessionStore)?
 
     /// Creates the middleware with the HMAC `key` (keep it secret and stable across restarts).
     ///
     /// `maxAge` bounds the cookie lifetime; `isSecure` marks the cookie `Secure` (HTTPS-only, the safe
-    /// default). `generate` defaults to a 128-bit random id.
+    /// default). `generate` defaults to a 128-bit random id. Pass a `store` for server-side expiry and
+    /// revocation; omit it (the default) for a fully stateless signed-cookie session.
     public init(
         key: [UInt8],
         cookieName: String = "session",
         maxAge: Int? = 86_400,
         isSecure: Bool = true,
-        generate: @escaping @Sendable () -> String = Self.randomID
+        generate: @escaping @Sendable () -> String = Self.randomID,
+        store: (any SessionStore)? = nil
     ) {
         self.key = key
         self.cookieName = cookieName
         self.maxAge = maxAge
         self.isSecure = isSecure
         self.generate = generate
+        self.store = store
     }
 
     /// Verifies (or mints) the session, asserts the id on the request, and re-issues the cookie if new.
@@ -46,10 +51,16 @@ public struct SessionMiddleware: HTTPMiddleware {
         context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        let verified = verifiedSession(request)
+        // A cookie must pass the HMAC check and, when a store is configured, also be server-side live
+        // (unexpired and unrevoked); otherwise a fresh session is minted.
+        let verified = await live(verifiedSession(request))
         let id = verified ?? generate()
         var request = request
         _ = request.headerFields.setValue(id, for: .xSessionID)  // strip any spoof; assert verified
+        if verified == nil {
+            // Register the freshly minted session as live before the handler runs.
+            await store?.register(id)
+        }
         var response = await next.respond(to: request, body: body, context: context)
         if verified == nil {
             let cookie = SetCookie(
@@ -64,6 +75,18 @@ public struct SessionMiddleware: HTTPMiddleware {
             _ = response.head.headerFields.setCookie(cookie)
         }
         return response
+    }
+
+    /// The HMAC-verified `id` when it is also server-side live — or when there is no store (stateless);
+    /// `nil` when the store reports it expired or revoked, or when `id` is `nil`.
+    private func live(_ id: String?) async -> String? {
+        guard let id else {
+            return nil
+        }
+        guard let store else {
+            return id  // stateless: HMAC validity is the whole check
+        }
+        return await store.validate(id) ? id : nil
     }
 
     /// The verified bare session id from the request's signed cookie, or nil if absent or tampered.
