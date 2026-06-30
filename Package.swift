@@ -354,8 +354,8 @@ let package = Package(
         .testTarget(
             name: "HTTPServerTests",
             dependencies: [
-                "HTTPServer", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket", "HTTPTransport",
-                "HTTPTestSupport",
+                "HTTPServer", "HTTP1", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket",
+                "HTTPTransport", "HTTPTestSupport",
                 .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
             ],
             path: "Tests/Server/HTTPServerTests",
