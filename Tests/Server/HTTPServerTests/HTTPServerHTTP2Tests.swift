@@ -19,7 +19,7 @@ import Testing
 struct HTTPServerHTTP2Tests {
     @Test("serves an HTTP/2 prior-knowledge request end-to-end")
     func servesHTTP2Request() async throws {
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array("h2 from \(request.path)".utf8))
         }
 
@@ -53,9 +53,57 @@ struct HTTPServerHTTP2Tests {
         #expect(String(decoding: response.body, as: Unicode.UTF8.self) == "h2 from /hi")
     }
 
+    @Test("an HTTP/2 streaming route receives its body as a stream (Phase 1.4)")
+    func servesHTTP2StreamingRoute() async throws {
+        let router = Router {
+            Route.post("/upload") { _, body, _ in
+                .text("streaming=\(body.isStreaming) bytes=\(await body.collect().count)")
+            }
+            .streamingBody()
+        }
+        var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
+        let block = encoder.encode([
+            HPACKField(name: ":method", value: "POST"),
+            HPACKField(name: ":scheme", value: "http"),
+            HPACKField(name: ":path", value: "/upload"),
+            HPACKField(name: ":authority", value: "x")
+        ])
+        var wire = HTTP2ConnectionPreface.client
+        var settings: [UInt8] = []
+        HTTP2FrameHeader(payloadLength: 0, type: .settings, streamID: .connection)
+            .encode(into: &settings)
+        wire += settings
+        // HEADERS without END_STREAM — a DATA frame follows.
+        HTTP2FrameHeader(
+            payloadLength: block.count,
+            type: .headers,
+            flags: [.endHeaders],
+            streamID: HTTP2StreamID(1)
+        )
+        .encode(into: &wire)
+        wire += block
+        let body = Array("hello".utf8)
+        HTTP2FrameHeader(
+            payloadLength: body.count,
+            type: .data,
+            flags: [.endStream],
+            streamID: HTTP2StreamID(1)
+        )
+        .encode(into: &wire)
+        wire += body
+
+        let connection = FakeConnection(id: TransportConnectionID(1), inbound: wire)
+        let server = HTTPServer(transport: FakeTransport(), responder: router)
+        await server.serve(connection)
+
+        let response = try decodeHTTP2Response(await connection.sentBytes())
+        #expect(response.status == "200")
+        #expect(String(decoding: response.body, as: Unicode.UTF8.self) == "streaming=true bytes=5")
+    }
+
     @Test("an ALPN-negotiated h2 connection is driven by the engine, not the preface sniffer")
     func alpnCommitsToHTTP2() async throws {
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         // First octets that are NOT the client preface: a sniffing server would mis-route this to
         // HTTP/1.1, but ALPN "h2" commits the connection to HTTP/2 (RFC 9113 §3.3), so the engine
         // answers with a GOAWAY (PROTOCOL_ERROR) — never an HTTP/1 status line.
@@ -74,7 +122,7 @@ struct HTTPServerHTTP2Tests {
 
     @Test("a draining server sends GOAWAY after answering the in-flight request (RFC 9113 §6.8)")
     func http2DrainsWithGoAway() async throws {
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         var encoder = HPACKEncoder(maxDynamicTableSize: 4_096)
         let block = encoder.encode([
             HPACKField(name: ":method", value: "GET"),

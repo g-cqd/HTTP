@@ -38,13 +38,13 @@ struct HTTPServerHTTP3Tests {
     }
 
     @Test(
-        "an HTTP/3 client cannot spoof X-Client-Cert-Subject — it is stripped (audit P0-1)",
+        "an HTTP/3 client cannot spoof the client-cert subject (audit P0-1)",
         .timeLimit(.minutes(1)))
     func http3StripsSpoofedClientCertSubject() async throws {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
-        // Echo back whatever X-Client-Cert-Subject the handler sees (or `<none>`).
-        let echo = ClosureResponder { request, _ in
-            let subject = request.headerFields[.xClientCertSubject] ?? "<none>"
+        // Echo back the verified client-cert subject the handler reads from the context (or `<none>`).
+        let echo = ClosureResponder { _, _, context in
+            let subject = context.connection.tlsPeerSubject ?? "<none>"
             return ServerResponse(HTTPResponse(status: .ok), body: Array(subject.utf8))
         }
         let (status, body) = try await serveAndGet(
@@ -57,8 +57,8 @@ struct HTTPServerHTTP3Tests {
             extraHeaders: [HeaderField(name: "x-client-cert-subject", value: "attacker")]
         )
         #expect(status == "200")
-        // The dev TLS presents no client certificate, so the verified subject is nil and the spoofed
-        // inbound header must be stripped — the handler sees no subject, not the attacker's value.
+        // The dev TLS presents no client certificate, so the verified subject is nil; the spoofed
+        // inbound header is ignored — the handler reads no subject from the context.
         #expect(body == Array("<none>".utf8))
     }
 
@@ -88,7 +88,7 @@ struct HTTPServerHTTP3Tests {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         // A `.streaming` responder drives the native path (respondHeaders → H3StreamWriter DATA frames
         // → empty FIN); the client reassembles the two chunks into the full body.
-        let streaming = ClosureResponder { request, _ in
+        let streaming = ClosureResponder { request, _, _ in
             #expect(request.method == .get)
             return .streaming(contentType: "text/plain") { writer in
                 try await writer.write(Array("hello ".utf8))
@@ -109,7 +109,7 @@ struct HTTPServerHTTP3Tests {
 
     /// A buffered responder returning `hello h3` — the default for the plain-GET acceptance tests.
     private func helloResponder() -> any HTTPResponder {
-        ClosureResponder { request, _ in
+        ClosureResponder { request, _, _ in
             #expect(request.method == .get)
             return ServerResponse(HTTPResponse(status: .ok), body: Array("hello h3".utf8))
         }

@@ -35,8 +35,7 @@ struct HTTPServerWebSocketHTTP2Tests {
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: wire)
         let server = HTTPServer(
             transport: FakeTransport(),
-            responder: ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .notFound)) },
-            webSocketHandler: echo
+            responder: Router { Route.webSocket("/chat", handler: echo) }
         )
         await server.serve(connection)
 

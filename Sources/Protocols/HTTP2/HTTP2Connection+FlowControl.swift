@@ -54,8 +54,8 @@ extension HTTP2Connection {
             if endStream { events.append(.tunnelClosed(streamID: streamID)) }
             return
         }
-        guard record.body.count + body.count <= limits.maxBodySize else {
-            throw .stream(streamID, .enhanceYourCalm, "request body exceeds the limit")
+        guard record.body.count + body.count <= record.effectiveBodyLimit else {
+            throw .stream(streamID, .enhanceYourCalm, "request body exceeds the route limit")
         }
         // Bound the connection's *total* buffered (un-dispatched) request body across all streams, not
         // just per-stream: the receive window replenishes during buffering, so without this a peer that

@@ -20,12 +20,12 @@ struct Tag: HTTPMiddleware {
         self.recorder = recorder
     }
     func respond(
-        to request: HTTPRequest, body: [UInt8], next: any HTTPResponder
+        to request: HTTPRequest, body: RequestBody, context: RequestContext, next: any HTTPResponder
     ) async
         -> ServerResponse
     {
         recorder.add("\(name)→")
-        let response = await next.respond(to: request, body: body)
+        let response = await next.respond(to: request, body: body, context: context)
         recorder.add("→\(name)")
         return response
     }

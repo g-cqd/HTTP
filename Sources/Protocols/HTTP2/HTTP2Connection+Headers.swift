@@ -116,6 +116,11 @@ extension HTTP2Connection {
         // this stream's DATA ahead of less-urgent streams (HTTP2Connection+FlowControl.flushAll). An
         // absent or unparseable `Priority` field falls back to the default urgency (§4.1).
         record.urgency = request.priority?.urgency ?? HTTPPriority.defaultUrgency
+        // Cap this stream's buffered body to the matched route's limit, resolved from the head before any
+        // DATA is accepted (Phase 1.2) — tighter than the global maxBodySize when the route declares one.
+        record.effectiveBodyLimit = min(
+            limits.maxBodySize, resolveBodyLimit(request) ?? limits.maxBodySize
+        )
         // An Extended CONNECT (RFC 8441 §4) opens a tunnel rather than a request: surface it for the
         // driver to accept, and route this stream's DATA as opaque tunnel bytes from here on.
         if let connectProtocol {

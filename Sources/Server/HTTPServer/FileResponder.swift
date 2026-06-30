@@ -60,7 +60,11 @@ public struct FileResponder: HTTPResponder {
     }
 
     /// Resolves the request path to a file under the root and serves it, or `403`/`404`/`405`.
-    public func respond(to request: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
+    public func respond(
+        to request: HTTPRequest,
+        body _: RequestBody,
+        context _: RequestContext
+    ) async -> ServerResponse {
         guard request.method == .get || request.method == .head else {
             var head = HTTPResponse(status: .methodNotAllowed)
             _ = head.headerFields.setValue("GET, HEAD", for: .allow)

@@ -25,7 +25,9 @@ struct HotResponderReloadTests {
         var gate: AsyncGate? = nil
         var entered: AsyncEventProbe<String>? = nil
 
-        func respond(to _: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
+        func respond(
+            to _: HTTPRequest, body _: RequestBody, context _: RequestContext
+        ) async -> ServerResponse {
             entered?.record(label)
             if let gate { try? await gate.waitUntilOpen() }
             return ServerResponse(HTTPResponse(status: .ok), body: Array(label.utf8))

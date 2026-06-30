@@ -18,7 +18,7 @@ struct ConditionalRequestMiddlewareTests {
         status: HTTPStatus = .ok,
         lastModified: Int? = nil
     ) -> any HTTPResponder {
-        ClosureResponder { _, _ in
+        ClosureResponder { _, _, _ in
             var head = HTTPResponse(status: status)
             if let lastModified {
                 _ = head.headerFields.setValue(

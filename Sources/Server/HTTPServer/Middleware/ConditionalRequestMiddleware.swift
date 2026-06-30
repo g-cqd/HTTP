@@ -26,10 +26,11 @@ public struct ConditionalRequestMiddleware: HTTPMiddleware {
     /// Delegates, tags a cacheable response with an `ETag`, then applies the §13.2.2 precondition order.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        var response = await next.respond(to: request, body: body)
+        var response = await next.respond(to: request, body: body, context: context)
         guard isCacheable(request, response) else {
             return response
         }

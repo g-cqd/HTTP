@@ -19,7 +19,7 @@ struct HotCertificateReloadTests {
     @Test("reloadCertificate forwards to the transport (unsupported on the fake backbone)")
     func reloadCertificateDelegatesToTransport() async throws {
         let tls = try SharedDevTLSIdentity.value()
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let server = HTTPServer(transport: FakeTransport(), responder: responder)
         let unsupported = TransportError.unsupported(
             "TLS reload is unsupported by the fake backbone"

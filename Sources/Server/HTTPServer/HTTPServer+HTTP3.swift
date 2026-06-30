@@ -26,10 +26,16 @@ extension HTTPServer {
         /// decoder stream (RFC 9204 §4.4) — reach the right stream.
         private var roleStreams: [HTTP3StreamRole: any QUICStream] = [:]
 
-        init(limits: HTTPLimits, enableConnectProtocol: Bool) {
+        init(
+            limits: HTTPLimits,
+            enableConnectProtocol: Bool,
+            resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int?
+        ) {
             var settings = HTTP3Settings()
             settings.enableConnectProtocol = enableConnectProtocol  // RFC 9220 — WebSocket over h3
-            connection = HTTP3Connection(localSettings: settings, limits: limits)
+            connection = HTTP3Connection(
+                localSettings: settings, limits: limits, resolveBodyLimit: resolveBodyLimit
+            )
         }
 
         /// Records a freshly opened server uni stream so later role-addressed sends can find it.
@@ -110,8 +116,17 @@ extension HTTPServer {
     /// Opens the server's control + QPACK unidirectional streams concurrently (so a slow stream open
     /// never stalls request serving), then serves each inbound stream until the connection closes.
     func serveHTTP3(_ quic: any QUICConnection) async {
-        // Advertise Extended CONNECT (RFC 9220) only when a WebSocket handler can service it.
-        let engine = Engine(limits: limits, enableConnectProtocol: webSocketHandler != nil)
+        // The matched route's body limit, resolved from each request head before its DATA is buffered
+        // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
+        let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
+            currentResolver?.resolve(method: request.method, path: request.path)?.bodyLimit
+        }
+        let engine = Engine(
+            limits: limits,
+            // Advertise Extended CONNECT (RFC 9220) only when the responder declares a WebSocket route.
+            enableConnectProtocol: currentResolver?.hasWebSocketRoutes ?? false,
+            resolveBodyLimit: resolveBodyLimit
+        )
         let initialActions = await engine.pendingActions()
         let serverStreams = Task {
             await self.holdServerStreams(from: initialActions, engine: engine, on: quic)
@@ -153,36 +168,36 @@ extension HTTPServer {
         _ stream: any QUICStream, engine: Engine, quic: any QUICConnection
     ) async {
         var webSocket: WebSocketConnection?
+        // The route handler resolved at this stream's Extended CONNECT (RFC 9220); tunnel DATA carries
+        // only a stream id, so the handler is held here for the stream's lifetime rather than re-resolved.
+        var tunnelHandler: (any WebSocketHandler)?
         while let chunk = try? await stream.receive() {
             let (events, actions) = await engine.receive(stream.id, chunk.bytes, fin: chunk.fin)
             await applyHTTP3(actions, stream: stream, engine: engine, quic: quic)
             for event in events {
                 switch event {
                     case .request(let id, let request, let body):
-                        // Stamp the verified mutual-TLS subject as the server-asserted
-                        // X-Client-Cert-Subject, stripping any inbound value so an h3 client cannot
-                        // spoof it (audit P0-1) — the same chokepoint the h1/h2 paths use.
-                        let stamped = Self.stampingClientCertSubject(
-                            request, subject: quic.tlsPeerSubject
-                        )
                         await respondHTTP3(
                             id,
-                            request: stamped,
+                            request: request,
                             body: body,
                             stream: stream,
                             engine: engine,
                             quic: quic
                         )
                     case .extendedConnect(let id, let request, let proto):
-                        let stamped = Self.stampingClientCertSubject(
-                            request, subject: quic.tlsPeerSubject
+                        let tunnel = await acceptHTTP3Tunnel(
+                            id, request: request, protocol: proto, on: stream, engine: engine
                         )
-                        webSocket = await acceptHTTP3Tunnel(
-                            id, request: stamped, protocol: proto, on: stream, engine: engine
-                        )
+                        webSocket = tunnel?.socket
+                        tunnelHandler = tunnel?.handler
                     case .tunnelData(_, let bytes):
                         webSocket = await pumpHTTP3Tunnel(
-                            webSocket, bytes: bytes, on: stream, engine: engine
+                            webSocket,
+                            handler: tunnelHandler,
+                            bytes: bytes,
+                            on: stream,
+                            engine: engine
                         )
                     case .tunnelClosed:
                         webSocket = nil
@@ -206,8 +221,14 @@ extension HTTPServer {
         engine: Engine,
         quic: any QUICConnection
     ) async {
+        // Build the per-request context from the QUIC connection's verified metadata (peer, TLS subject);
+        // the verified mutual-TLS subject reaches handlers via `context.connection.tlsPeerSubject` rather
+        // than a spoofable header (audit P0-1) — the same model the h1/h2 paths use.
+        let context = RequestContext(quic: quic, request: request)
         let current = currentResponder  // hot-swappable responder, read once (G4a)
-        let response = await current.respond(to: request, body: body)
+        let response = await current.respond(
+            to: request, body: requestBody(body, for: request), context: context
+        )
         if let bodyStream = response.stream {
             // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
             await streamHTTP3Response(
@@ -228,17 +249,21 @@ extension HTTPServer {
     /// Accepts (or refuses) a WebSocket-over-HTTP/3 Extended CONNECT (RFC 9220) — the same CSWSH origin
     /// defense and permessage-deflate negotiation as the HTTP/2 tunnel.
     ///
-    /// On success it sends the engine's `200` (no FIN) and returns the per-stream ``WebSocketConnection``;
-    /// a disallowed origin, a declined upgrade, or a framing error resets the stream and returns nil.
+    /// On success it sends the engine's `200` (no FIN) and returns the per-stream ``WebSocketConnection``
+    /// paired with the route's handler; a path with no WebSocket route, a disallowed origin, a declined
+    /// upgrade, or a framing error resets the stream and returns nil.
     private func acceptHTTP3Tunnel(
         _ id: QUICStreamID,
         request: HTTPRequest,
         protocol proto: String,
         on stream: any QUICStream,
         engine: Engine
-    ) async -> WebSocketConnection? {
-        // CSWSH defense (RFC 6455 §10.2): a disallowed Origin refuses the tunnel, as on the h1/h2 paths.
-        guard let handler = webSocketHandler, proto == "websocket", handler.shouldUpgrade(request),
+    ) async -> (socket: WebSocketConnection, handler: any WebSocketHandler)? {
+        // Resolve the WebSocket route for this path; CSWSH defense (RFC 6455 §10.2): a disallowed Origin
+        // refuses the tunnel, as on the h1/h2 paths.
+        guard proto == "websocket",
+            let handler = currentResolver?.resolveWebSocket(path: request.path)?.webSocketHandler,
+            handler.shouldUpgrade(request),
             handler.isOriginAllowed(request.headerFields[.origin])
         else {
             stream.reset(errorCode: HTTP3ErrorCode.h3RequestRejected.rawValue)
@@ -254,9 +279,10 @@ extension HTTPServer {
             stream.reset(errorCode: HTTP3ErrorCode.h3InternalError.rawValue)
             return nil
         }
-        return WebSocketConnection(
+        let socket = WebSocketConnection(
             maxMessageSize: limits.maxBodySize, permessageDeflate: permessageDeflate
         )
+        return (socket, handler)
     }
 
     /// Feeds tunnel `bytes` to the stream's ``WebSocketConnection`` and writes the frames it produces back
@@ -266,11 +292,12 @@ extension HTTPServer {
     /// the stream (a violation leaves a queued Close and sets `isClosing`).
     private func pumpHTTP3Tunnel(
         _ webSocket: WebSocketConnection?,
+        handler: (any WebSocketHandler)?,
         bytes: [UInt8],
         on stream: any QUICStream,
         engine: Engine
     ) async -> WebSocketConnection? {
-        guard var socket = webSocket, let handler = webSocketHandler else {
+        guard var socket = webSocket, let handler else {
             return webSocket
         }
         let events = (try? socket.receive(bytes)) ?? []

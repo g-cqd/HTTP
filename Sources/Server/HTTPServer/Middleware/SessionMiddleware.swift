@@ -42,14 +42,15 @@ public struct SessionMiddleware: HTTPMiddleware {
     /// Verifies (or mints) the session, asserts the id on the request, and re-issues the cookie if new.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         let verified = verifiedSession(request)
         let id = verified ?? generate()
         var request = request
         _ = request.headerFields.setValue(id, for: .xSessionID)  // strip any spoof; assert verified
-        var response = await next.respond(to: request, body: body)
+        var response = await next.respond(to: request, body: body, context: context)
         if verified == nil {
             let cookie = SetCookie(
                 name: cookieName,

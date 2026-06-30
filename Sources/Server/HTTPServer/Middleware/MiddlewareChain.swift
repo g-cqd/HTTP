@@ -16,7 +16,7 @@ public import HTTPCore
 ///
 /// `MiddlewareChain([a, b, c], terminatingAt: app)` runs `a` outermost and `app` innermost. Reorder
 /// or replace by editing the array; conform new behaviour by adopting ``HTTPMiddleware``.
-public struct MiddlewareChain: HTTPResponder {
+public struct MiddlewareChain: HTTPResponder, RouteResolver {
     private let composed: any HTTPResponder
 
     /// Composes `middleware` (first outermost) around the `responder` that terminates the chain.
@@ -25,7 +25,27 @@ public struct MiddlewareChain: HTTPResponder {
     }
 
     /// Runs the request through the chain.
-    public func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
-        await composed.respond(to: request, body: body)
+    public func respond(
+        to request: HTTPRequest,
+        body: RequestBody,
+        context: RequestContext
+    ) async -> ServerResponse {
+        await composed.respond(to: request, body: body, context: context)
+    }
+
+    /// Resolves a route's metadata at the head by forwarding to the wrapped responder — a middleware
+    /// chain around a ``Router`` stays resolvable, since middleware never changes which route matches.
+    public func resolve(method: HTTPMethod, path: String) -> ResolvedRoute? {
+        (composed as? (any RouteResolver))?.resolve(method: method, path: path)
+    }
+
+    /// Resolves a WebSocket route for `path` by forwarding to the wrapped responder.
+    public func resolveWebSocket(path: String) -> ResolvedRoute? {
+        (composed as? (any RouteResolver))?.resolveWebSocket(path: path)
+    }
+
+    /// Whether the wrapped responder declares any WebSocket route (RFC 8441 / RFC 9220 advertisement).
+    public var hasWebSocketRoutes: Bool {
+        (composed as? (any RouteResolver))?.hasWebSocketRoutes ?? false
     }
 }

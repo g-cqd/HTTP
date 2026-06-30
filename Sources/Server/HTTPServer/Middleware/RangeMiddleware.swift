@@ -27,10 +27,11 @@ public struct RangeMiddleware: HTTPMiddleware {
     /// satisfiable / unsatisfiable byte-range request.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        var response = await next.respond(to: request, body: body)
+        var response = await next.respond(to: request, body: body, context: context)
         // Only a successful, bodied GET is range-able (HEAD shares GET's header section but carries no
         // body to slice; a partial of an error or empty body is meaningless).
         guard request.method == .get, response.head.status == .ok, !response.body.isEmpty else {

@@ -12,9 +12,10 @@
 import Crypto
 import Testing
 import _CryptoExtras
-// swiftlint:enable sorted_imports
 
 @testable import HTTPAuth
+
+// swiftlint:enable sorted_imports
 
 @Suite("HTTPAuth — JWT verification (RFC 7519)")
 struct JWTTests {

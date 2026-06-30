@@ -17,7 +17,7 @@ import Testing
 struct SessionMiddlewareTests {
     private let key: [UInt8] = Array("test-session-key-0123456789abcdef".utf8)
 
-    private let echo = ClosureResponder { request, _ in
+    private let echo = ClosureResponder { request, _, _ in
         ServerResponse(HTTPResponse(status: .ok, headerFields: request.headerFields))
     }
 

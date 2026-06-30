@@ -12,7 +12,6 @@
 
 public import HTTPConcurrency
 public import HTTPCore
-
 private import Synchronization
 
 /// Refuses a client that exceeds `limit` requests per window with `429 Too Many Requests` (RFC 6585).
@@ -59,7 +58,8 @@ public struct RateLimitMiddleware: HTTPMiddleware {
     /// Admits the request, or refuses it with `429` + `Retry-After` when the client is over budget.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         guard admit(key(request)) else {
@@ -67,7 +67,7 @@ public struct RateLimitMiddleware: HTTPMiddleware {
             _ = head.headerFields.setValue(String(retryAfterSeconds), for: .retryAfter)
             return ServerResponse(head)
         }
-        return await next.respond(to: request, body: body)
+        return await next.respond(to: request, body: body, context: context)
     }
 
     /// Whether `client` is within budget for the current window; counts this request either way.

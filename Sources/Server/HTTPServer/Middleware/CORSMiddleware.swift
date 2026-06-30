@@ -52,7 +52,8 @@ public struct CORSMiddleware: HTTPMiddleware {
     /// Answers a preflight directly, or decorates the delegated response with CORS headers.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         let origin = request.headerFields[.origin]
@@ -62,7 +63,7 @@ public struct CORSMiddleware: HTTPMiddleware {
             decorate(&head, origin: origin, preflight: true)
             return ServerResponse(head)
         }
-        var response = await next.respond(to: request, body: body)
+        var response = await next.respond(to: request, body: body, context: context)
         decorate(&response.head, origin: origin, preflight: false)
         return response
     }

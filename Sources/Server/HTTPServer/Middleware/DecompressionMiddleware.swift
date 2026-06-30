@@ -45,32 +45,36 @@ public struct DecompressionMiddleware: HTTPMiddleware {
     /// on; leaves an unrecognized (or absent) `Content-Encoding` untouched.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        guard !body.isEmpty, let encoding = request.headerFields[.contentEncoding]?.lowercased(),
+        // Decompression must inspect the whole body, so collect it and forward the buffered form on.
+        let bytes = await body.collect()
+        guard !bytes.isEmpty, let encoding = request.headerFields[.contentEncoding]?.lowercased(),
             Self.supported.contains(encoding)
         else {
-            return await next.respond(to: request, body: body)
+            return await next.respond(to: request, body: .collected(bytes), context: context)
         }
         // Cap the decompressed size both absolutely and by ratio (overflow-safe), then decode under it:
         // a small body must not be allowed to expand without bound (CWE-409).
-        let product = body.count.multipliedReportingOverflow(by: maxRatio)
+        let product = bytes.count.multipliedReportingOverflow(by: maxRatio)
         let cap = min(maxDecompressedSize, product.overflow ? Int.max : product.partialValue)
         #if canImport(Compression) || canImport(CZlibCoding)
-            guard let inflated = Inflate.decompress(body, encoding: encoding, maxOutput: cap) else {
+            guard let inflated = Inflate.decompress(bytes, encoding: encoding, maxOutput: cap)
+            else {
                 // A bomb past the cap, an over-ratio body, or a malformed member — fail closed.
                 return ServerResponse(HTTPResponse(status: .contentTooLarge))
             }
             var decoded = request
             decoded.headerFields.removeAll(named: .contentEncoding)  // the body is now identity
             _ = decoded.headerFields.setValue(String(inflated.count), for: .contentLength)
-            return await next.respond(to: decoded, body: inflated)
+            return await next.respond(to: decoded, body: .collected(inflated), context: context)
         #else
             // No inbound decoder available in this build; the coded body passes through untouched, exactly
             // as an unrecognized `Content-Encoding` does. `cap` is computed for parity but unused here.
             _ = cap
-            return await next.respond(to: request, body: body)
+            return await next.respond(to: request, body: .collected(bytes), context: context)
         #endif
     }
 }

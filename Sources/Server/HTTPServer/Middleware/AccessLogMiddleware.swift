@@ -21,10 +21,11 @@ public struct AccessLogMiddleware: HTTPMiddleware {
     /// Delegates, then logs the method, path, and resulting status.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        let response = await next.respond(to: request, body: body)
+        let response = await next.respond(to: request, body: body, context: context)
         sink("\(request.method.rawValue) \(request.path) -> \(response.head.status.code)")
         return response
     }

@@ -49,6 +49,7 @@ let payload = String(repeating: "from-scratch swift http server. ", count: 32)
 // paths are compiled in; the env var picks one at startup so the harness can A/B the two back-to-back.
 
 enum JSONBackend: String { case foundation, adjson }
+
 let jsonBackend =
     JSONBackend(rawValue: ProcessInfo.processInfo.environment["BENCH_JSON"] ?? "") ?? .foundation
 
@@ -102,20 +103,24 @@ let router = Router {
     // Serialize a dictionary so we pay the same encode cost Django's JsonResponse does (backend chosen
     // by BENCH_JSON: Foundation JSONSerialization, or the local ADJSON sibling).
     Route.get("/json") { _, _, _ in
-        guard let bytes = encodeHelloJSON() else { return .status(.internalServerError) }
+        guard let bytes = encodeHelloJSON() else {
+            return .status(.internalServerError)
+        }
         return .json(bytes)
     }
 
     // Router + path parameter (:name) + optional ?greeting= query parameter.
-    Route.get("/hello/:name") { request, parameters, _ in
+    Route.get("/hello/:name") { request, _, context in
         let greeting = request.query["greeting"] ?? "Hello"
-        return .text("\(greeting), \(parameters["name"] ?? "world")!")
+        return .text("\(greeting), \(context.parameters["name"] ?? "world")!")
     }
 
     // Read the request body, parse it as JSON, and re-serialize it — the same work Django's
     // json.loads(request.body) + JsonResponse(...) performs (backend chosen by BENCH_JSON).
-    Route.post("/echo") { _, _, body in
-        guard let bytes = echoJSON(body) else { return .status(.badRequest) }
+    Route.post("/echo") { _, body, _ in
+        guard let bytes = echoJSON(await body.collect()) else {
+            return .status(.badRequest)
+        }
         return .json(bytes)
     }
 
@@ -126,6 +131,7 @@ let router = Router {
 // MARK: - Middleware chain (mirrors Django's MIDDLEWARE when BENCH_MIDDLEWARE=1)
 
 let responder: any HTTPResponder
+
 if useMiddleware {
     let chain: [any HTTPMiddleware] = [
         CompressionMiddleware(),  // gzip the outgoing body  ↔ django.middleware.gzip.GZipMiddleware
@@ -144,6 +150,7 @@ else {
 // MARK: - Limits (raise the loopback-tripping connection cap)
 
 var limits = HTTPLimits.default
+
 if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = Int(raw) {
     limits.maxConnectionsPerClient = value
     limits.maxConnections = value
@@ -166,6 +173,7 @@ let server = HTTPServer(
     responder: responder,
     limits: limits
 )
+
 print(
     "ours-bench: serving HTTP/1.1 on http://127.0.0.1:\(port) via \(backbone.rawValue) "
         + "(middleware: \(useMiddleware ? "on" : "off"), json: \(jsonBackend.rawValue))"

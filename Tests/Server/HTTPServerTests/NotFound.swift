@@ -14,7 +14,9 @@ import HTTPCore
 
 /// A responder that always 404s — the WebSocket path never reaches it, so it is just a placeholder.
 struct NotFound: HTTPResponder {
-    func respond(to _: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
+    func respond(
+        to _: HTTPRequest, body _: RequestBody, context _: RequestContext
+    ) async -> ServerResponse {
         ServerResponse(HTTPResponse(status: .notFound))
     }
 }

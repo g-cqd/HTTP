@@ -21,7 +21,7 @@ struct CacheMiddlewareTests {
         vary: String? = nil,
         body: String = "payload"
     ) -> any HTTPResponder {
-        ClosureResponder { _, _ in
+        ClosureResponder { _, _, _ in
             var fields = HTTPFields()
             if let cacheControl { _ = fields.setValue(cacheControl, for: .cacheControl) }
             if let vary { _ = fields.setValue(vary, for: .vary) }

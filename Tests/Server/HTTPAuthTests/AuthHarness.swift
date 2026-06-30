@@ -15,7 +15,9 @@ import HTTPServer
 enum AuthHarness {
     /// A terminal responder echoing the request's `.xAuthSubject` onto a `200` response.
     struct EchoResponder: HTTPResponder {
-        func respond(to request: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
+        func respond(
+            to request: HTTPRequest, body _: RequestBody, context _: RequestContext
+        ) async -> ServerResponse {
             var head = HTTPResponse(status: .ok)
             if let subject = request.headerFields[.xAuthSubject] {
                 _ = head.headerFields.setValue(subject, for: .xAuthSubject)

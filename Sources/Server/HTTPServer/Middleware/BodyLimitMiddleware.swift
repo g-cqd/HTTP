@@ -21,12 +21,16 @@ public struct BodyLimitMiddleware: HTTPMiddleware {
     /// Returns `413` without delegating when `body` is too large; otherwise continues the chain.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        guard body.count <= maxBytes else {
+        // Collect to measure the decoded size, then forward the buffered form on. (Pre-buffer rejection
+        // for a streamed body is the engine's per-route limit, Phase 1.2.)
+        let bytes = await body.collect()
+        guard bytes.count <= maxBytes else {
             return ServerResponse(HTTPResponse(status: .contentTooLarge))
         }
-        return await next.respond(to: request, body: body)
+        return await next.respond(to: request, body: .collected(bytes), context: context)
     }
 }

@@ -44,7 +44,8 @@ public struct JWTMiddleware: HTTPMiddleware {
     /// Verifies the Bearer token, asserts `sub` for the handler, else challenges with `401`.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         guard let token = Self.bearerToken(request) else {
@@ -60,7 +61,7 @@ public struct JWTMiddleware: HTTPMiddleware {
         if let subject = claims.subject {
             _ = request.headerFields.setValue(subject, for: .xAuthSubject)
         }
-        return await next.respond(to: request, body: body)
+        return await next.respond(to: request, body: body, context: context)
     }
 
     /// A `401` carrying the `Bearer` challenge (RFC 6750 §3).

@@ -10,12 +10,14 @@
 //
 
 public import HTTPCore
+internal import WebSocket
 
 /// One route in a ``Router``: a method + path pattern bound to a handler (RFC 9110 §9).
 public struct Route: Sendable {
-    /// A handler for a matched route: the request, the captured path parameters, and the decoded body.
+    /// A handler for a matched route: the request, its body, and the per-request context (which carries
+    /// the captured path parameters in ``RequestContext/parameters``).
     public typealias Handler =
-        @Sendable (HTTPRequest, RouteParameters, [UInt8]) async -> ServerResponse
+        @Sendable (HTTPRequest, RequestBody, RequestContext) async -> ServerResponse
 
     /// A parsed path-pattern segment: a fixed component, a `:name` capture, or a trailing `*` catch-all.
     enum Segment: Sendable, Equatable {
@@ -32,31 +34,39 @@ public struct Route: Sendable {
     /// plain route, in which case the handler runs directly with no wrapping cost.
     let middleware: [any HTTPMiddleware]
 
+    /// The maximum request-body size for this route in octets, enforced before buffering; `nil` uses the
+    /// global ``HTTPLimits/maxBodySize`` (RFC 9110 §15.5.14).
+    let bodyLimit: Int?
+
+    /// The WebSocket handler bound to this route (RFC 6455), or `nil` for an ordinary HTTP route.
+    let webSocketHandler: (any WebSocketHandler)?
+
+    /// Whether this route consumes its request body incrementally (``RequestBody/stream(_:)``).
+    let streamsBody: Bool
+
+    /// Whether this is a WebSocket route (it carries a handler).
+    var isWebSocket: Bool { webSocketHandler != nil }
+
     /// The group-middleware chain, composed **once** at build time.
     ///
-    /// Terminates at a responder that reads the in-flight request's parameters from the
-    /// ``currentParameters`` task local; `nil` for a plain route. Precomputing it here is what lets
-    /// ``run`` avoid rebuilding a `ClosureResponder` plus the `wrapped(by:)` chain — several heap
-    /// allocations — on every request (audit #9).
+    /// Terminates at a ``GroupTerminal`` that runs the handler with the per-request context; `nil` for a
+    /// plain route. Precomputing it here is what lets ``run`` avoid rebuilding a responder plus the
+    /// `wrapped(by:)` chain — several heap allocations — on every request (audit #9).
     private let composed: (any HTTPResponder)?
-
-    /// The matched route's parameters for the in-flight request.
-    ///
-    /// Flowed to the precomputed group-middleware terminal so the chain composes once, not per request:
-    /// ``run`` binds it around the composed chain and ``GroupTerminal`` reads it back (audit #9). Empty
-    /// outside a group route.
-    @TaskLocal
-    static var currentParameters = RouteParameters()
 
     /// The innermost responder of a precomputed group-middleware chain (audit #9).
     ///
-    /// Reads the in-flight request's parameters from ``Route/currentParameters`` — bound by ``run`` around
-    /// the chain — and runs the route handler. Stable across requests, so the chain composes once.
+    /// Runs the route handler with the per-request ``RequestContext`` (carrying the matched parameters)
+    /// the chain threads down to it — no task local. Stable across requests, so the chain composes once.
     private struct GroupTerminal: HTTPResponder {
         let handler: Handler
 
-        func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
-            await handler(request, Route.currentParameters, body)
+        func respond(
+            to request: HTTPRequest,
+            body: RequestBody,
+            context: RequestContext
+        ) async -> ServerResponse {
+            await handler(request, body, context)
         }
     }
 
@@ -73,14 +83,21 @@ public struct Route: Sendable {
         _ method: HTTPMethod,
         _ segments: [Segment],
         handler: @escaping Handler,
-        middleware: [any HTTPMiddleware]
+        middleware: [any HTTPMiddleware],
+        bodyLimit: Int? = nil,
+        webSocketHandler: (any WebSocketHandler)? = nil,
+        streamsBody: Bool = false
     ) {
         self.method = method
         self.segments = segments
         self.handler = handler
         self.middleware = middleware
-        // Compose the group-middleware chain once, now, terminating at a parameter-reading responder —
-        // so a request only sets a task local, never rebuilds the chain (audit #9). Plain route ⇒ nil.
+        self.bodyLimit = bodyLimit
+        self.webSocketHandler = webSocketHandler
+        self.streamsBody = streamsBody
+        // Compose the group-middleware chain once, now, terminating at a context-running responder — so a
+        // request threads its parameters through the context, never rebuilding the chain (audit #9). Plain
+        // route ⇒ nil.
         self.composed =
             middleware.isEmpty ? nil : GroupTerminal(handler: handler).wrapped(by: middleware)
     }
@@ -139,21 +156,20 @@ public struct Route: Sendable {
         return RouteParameters(slices: captured)
     }
 
-    /// Runs the route's handler for `parameters`, wrapping it in this route's group middleware when any
-    /// is present (a plain route calls the handler directly — no per-request wrapping cost).
+    /// Runs the route's handler with `context` (carrying the matched parameters), wrapping it in this
+    /// route's group middleware when any is present (a plain route calls the handler directly — no
+    /// per-request wrapping cost).
     func run(
         _ request: HTTPRequest,
-        _ parameters: RouteParameters,
-        _ body: [UInt8]
+        _ body: RequestBody,
+        _ context: RequestContext
     ) async -> ServerResponse {
         guard let composed else {
-            return await handler(request, parameters, body)  // plain route — direct, no wrapping
+            return await handler(request, body, context)  // plain route — direct, no wrapping
         }
-        // Group middleware: the chain was composed once at build time. Flow this request's parameters
-        // to its terminal through the task local, so nothing is rebuilt per request (audit #9).
-        return await Self.$currentParameters.withValue(parameters) {
-            await composed.respond(to: request, body: body)
-        }
+        // Group middleware: the chain was composed once at build time; the context (with this request's
+        // parameters) threads down to its terminal, so nothing is rebuilt per request (audit #9).
+        return await composed.respond(to: request, body: body, context: context)
     }
 
     /// A copy with `groupSegments` prepended to the path and `groupMiddleware` wrapped outermost — the
@@ -166,7 +182,41 @@ public struct Route: Sendable {
             method,
             groupSegments + segments,
             handler: handler,
-            middleware: groupMiddleware + middleware
+            middleware: groupMiddleware + middleware,
+            bodyLimit: bodyLimit,
+            webSocketHandler: webSocketHandler,
+            streamsBody: streamsBody
+        )
+    }
+
+    /// A copy of this route that rejects a request body larger than `bytes` octets, enforced *before*
+    /// the body is buffered (RFC 9110 §15.5.14) — `Route.post("/upload") { … }.bodyLimited(to: 5 << 20)`.
+    public func bodyLimited(to bytes: Int) -> Self {
+        Self(
+            method,
+            segments,
+            handler: handler,
+            middleware: middleware,
+            bodyLimit: bytes,
+            webSocketHandler: webSocketHandler,
+            streamsBody: streamsBody
+        )
+    }
+
+    /// A copy of this route whose handler receives its request body as an incremental
+    /// ``RequestBody/stream(_:)`` rather than buffered — for processing a large upload as it arrives
+    /// (`Route.post("/upload") { … }.streamingBody()`).
+    ///
+    /// Combine with ``bodyLimited(to:)`` to bound it.
+    public func streamingBody() -> Self {
+        Self(
+            method,
+            segments,
+            handler: handler,
+            middleware: middleware,
+            bodyLimit: bodyLimit,
+            webSocketHandler: webSocketHandler,
+            streamsBody: true
         )
     }
 

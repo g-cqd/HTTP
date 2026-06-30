@@ -27,7 +27,7 @@ struct HTTPServerTests {
 
     @Test("serves a request and writes the serialized response")
     func servesRequest() async {
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array("hi from \(request.path)".utf8))
         }
         let wire = await serve(
@@ -39,8 +39,8 @@ struct HTTPServerTests {
 
     @Test("passes the decoded body to the responder")
     func passesBody() async {
-        let responder = ClosureResponder { _, body in
-            ServerResponse(HTTPResponse(status: .ok), body: body)
+        let responder = ClosureResponder { _, body, _ in
+            ServerResponse(HTTPResponse(status: .ok), body: await body.collect())
         }
         let wire = await serve(
             request: "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello",
@@ -51,7 +51,7 @@ struct HTTPServerTests {
 
     @Test("maps a smuggling/parse error to a 400 response")
     func mapsParseErrorToStatus() async {
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         // Content-Length AND Transfer-Encoding together — rejected (RFC 9112 §6.1).
         let wire = await serve(
             request:
@@ -63,7 +63,7 @@ struct HTTPServerTests {
 
     @Test("maps an unsupported Transfer-Encoding to 501 (RFC 9112 §6.1; audit H1-F5)")
     func mapsUnsupportedTransferEncodingTo501() async {
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let wire = await serve(
             request: "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: gzip\r\n\r\n",
             responder: responder
@@ -73,7 +73,7 @@ struct HTTPServerTests {
 
     @Test("keeps the connection alive and serves pipelined requests")
     func keepsConnectionAlive() async {
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
         }
         // Two requests pipelined on one persistent connection (RFC 9112 §9.3).
@@ -88,7 +88,7 @@ struct HTTPServerTests {
 
     @Test("a 3-deep pipeline is served in order — the cursor advances per request, no shift (L3)")
     func threeDeepPipeline() async {
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
         }
         // Three requests buffered together: the keep-alive cursor advances past each consumed request
@@ -107,9 +107,10 @@ struct HTTPServerTests {
 
     @Test("a pipelined request with a body frames head + body from a non-zero cursor (L3)")
     func pipelinedRequestWithBody() async {
-        let responder = ClosureResponder { request, body in
-            ServerResponse(
-                HTTPResponse(status: .ok), body: body.isEmpty ? Array(request.path.utf8) : body
+        let responder = ClosureResponder { request, body, _ in
+            let bytes = await body.collect()
+            return ServerResponse(
+                HTTPResponse(status: .ok), body: bytes.isEmpty ? Array(request.path.utf8) : bytes
             )
         }
         // Two bodied POSTs pipelined: the second request's head AND its Content-Length body are framed
@@ -127,7 +128,7 @@ struct HTTPServerTests {
 
     @Test("honors Connection: close — serves one request then stops")
     func honorsConnectionClose() async {
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
         }
         // The first request asks to close; the pipelined second must be ignored (RFC 9110 §7.6.1).
@@ -142,7 +143,7 @@ struct HTTPServerTests {
 
     @Test("an HTTP/1.0 request closes after one response by default (RFC 9112 §9.3)")
     func http10ClosesByDefault() async {
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
         }
         // Two pipelined HTTP/1.0 requests; 1.0 is non-persistent by default, so only /a is served.
@@ -155,7 +156,7 @@ struct HTTPServerTests {
 
     @Test("an HTTP/1.0 request with Connection: keep-alive persists (RFC 9112 §9.3)")
     func http10KeepAlive() async {
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
         }
         let wire = await serve(
@@ -168,7 +169,7 @@ struct HTTPServerTests {
 
     @Test("a HEAD response carries Content-Length but no body (RFC 9112 §6.3)")
     func headOmitsBody() async {
-        let responder = ClosureResponder { _, _ in
+        let responder = ClosureResponder { _, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array("0123456789".utf8))
         }
         let wire = await serve(request: "HEAD /x HTTP/1.1\r\nHost: x\r\n\r\n", responder: responder)
@@ -179,7 +180,7 @@ struct HTTPServerTests {
 
     @Test("an error response signals connection close (RFC 9112 §9.6)")
     func errorResponseSignalsClose() async {
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let wire = await serve(
             request:
                 "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n",
@@ -196,7 +197,7 @@ struct HTTPServerTests {
     func idleTimeoutClosesConnection() async {
         let clock = TestClock()
         let limits = HTTPLimits(keepAliveTimeout: .milliseconds(100))
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let connection = HangingConnection(id: TransportConnectionID(1))
         let server = HTTPServer(
             transport: FakeTransport(), responder: responder, limits: limits, clock: clock
@@ -225,7 +226,7 @@ struct HTTPServerTests {
     )
     func perClientConnectionCap() async throws {
         let limits = HTTPLimits(maxConnectionsPerClient: 2)
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let peer = TransportAddress(host: "203.0.113.7", port: 0)
         let probe = AsyncEventProbe<TransportConnectionID>()
         let connections = (1 ... 3)
@@ -258,7 +259,7 @@ struct HTTPServerTests {
     func globalConnectionCap() async throws {
         // A high per-client cap with distinct peers, so only the *global* cap can trip.
         let limits = HTTPLimits(maxConnectionsPerClient: 100, maxConnections: 2)
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let probe = AsyncEventProbe<TransportConnectionID>()
         let connections = (1 ... 3)
             .map {
@@ -289,7 +290,7 @@ struct HTTPServerTests {
         // header bytes with no terminating CRLF CRLF — the parser's size limits cannot run without
         // a terminator, so the server must cap the buffer and fail closed with 431.
         let limits = HTTPLimits(maxRequestLineLength: 1_024, maxHeaderListSize: 4 * 1_024)
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let flood = "GET / HTTP/1.1\r\nX-Pad: " + String(repeating: "A", count: 16 * 1_024)
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array(flood.utf8))
         let server = HTTPServer(transport: FakeTransport(), responder: responder, limits: limits)
@@ -301,8 +302,8 @@ struct HTTPServerTests {
 
     @Test("frames a Content-Length body delivered one octet per read (parse head once)")
     func incrementalContentLengthBody() async {
-        let responder = ClosureResponder { _, body in
-            ServerResponse(HTTPResponse(status: .ok), body: body)
+        let responder = ClosureResponder { _, body, _ in
+            ServerResponse(HTTPResponse(status: .ok), body: await body.collect())
         }
         let request = "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
         let connection = DribblingConnection(
@@ -316,8 +317,8 @@ struct HTTPServerTests {
 
     @Test("decodes a chunked body delivered across reads (head not re-parsed)")
     func incrementalChunkedBody() async {
-        let responder = ClosureResponder { _, body in
-            ServerResponse(HTTPResponse(status: .ok), body: body)
+        let responder = ClosureResponder { _, body, _ in
+            ServerResponse(HTTPResponse(status: .ok), body: await body.collect())
         }
         // Two chunks then the terminating zero-size chunk (RFC 9112 §7.1) → body "Wikipedia".
         let request =

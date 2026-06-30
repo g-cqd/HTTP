@@ -16,7 +16,7 @@ import Testing
 
 @Suite("HTTPServer — TLS ALPN enforcement (RFC 7301, ALPACA)")
 struct HTTPServerALPNTests {
-    private let ok = ClosureResponder { _, _ in
+    private let ok = ClosureResponder { _, _, _ in
         ServerResponse(HTTPResponse(status: .ok), body: Array("ok".utf8))
     }
 

@@ -29,10 +29,11 @@ public struct DateHeaderMiddleware: HTTPMiddleware {
     /// Delegates, then stamps `Date` if the responder did not set it.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        var response = await next.respond(to: request, body: body)
+        var response = await next.respond(to: request, body: body, context: context)
         if !response.head.headerFields.contains(.date) {
             _ = response.head.headerFields.append(cache.formatted(for: now()), for: .date)
         }

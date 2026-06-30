@@ -30,7 +30,7 @@ struct CompressionMiddlewareTests {
     @Test("a response marked Cache-Control: no-transform is not compressed (RFC 9110 §5.5)")
     func honorsNoTransform() async {
         let body = Array(String(repeating: "compress me ", count: 256).utf8)
-        let responder = ClosureResponder { _, _ in
+        let responder = ClosureResponder { _, _, _ in
             var fields = HTTPFields()
             _ = fields.append("text/plain", for: .contentType)
             _ = fields.append("no-transform", for: .cacheControl)
@@ -147,7 +147,7 @@ struct CompressionMiddlewareTests {
     // MARK: Helpers
 
     private func wrapped(_ body: [UInt8], contentType: String = "text/plain") -> any HTTPResponder {
-        ClosureResponder { _, _ in
+        ClosureResponder { _, _, _ in
             var fields = HTTPFields()
             _ = fields.append(contentType, for: .contentType)
             return ServerResponse(HTTPResponse(status: .ok, headerFields: fields), body: body)
@@ -156,7 +156,7 @@ struct CompressionMiddlewareTests {
     }
 
     private func wrappedStreaming() -> any HTTPResponder {
-        ClosureResponder { _, _ in
+        ClosureResponder { _, _, _ in
             var fields = HTTPFields()
             _ = fields.append("text/plain", for: .contentType)
             let payload = Array(String(repeating: "stream ", count: 512).utf8)

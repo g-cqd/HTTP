@@ -12,7 +12,7 @@ import Testing
 
 @Suite("Middleware — Date, security headers, body limit")
 struct SmallMiddlewareTests {
-    private let ok = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+    private let ok = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
 
     @Test("DateHeaderMiddleware stamps the injected time as an IMF-fixdate")
     func dateHeader() async {

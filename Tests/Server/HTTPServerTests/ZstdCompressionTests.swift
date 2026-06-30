@@ -70,7 +70,7 @@
             _ body: [UInt8],
             contentType: String = "text/plain"
         ) -> any HTTPResponder {
-            ClosureResponder { _, _ in
+            ClosureResponder { _, _, _ in
                 var fields = HTTPFields()
                 _ = fields.append(contentType, for: .contentType)
                 return ServerResponse(HTTPResponse(status: .ok, headerFields: fields), body: body)

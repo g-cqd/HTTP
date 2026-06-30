@@ -35,20 +35,23 @@ public struct TracingMiddleware: HTTPMiddleware {
     /// Extracts upstream context, opens a `.server` span, tags it, and ends it with the response.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        var context = ServiceContext.topLevel
+        var serviceContext = ServiceContext.topLevel
         InstrumentationSystem.instrument.extract(
-            request.headerFields, into: &context, using: HTTPFieldsExtractor()
+            request.headerFields, into: &serviceContext, using: HTTPFieldsExtractor()
         )
-        return await withSpan(request.method.rawValue, context: context, ofKind: .server) { span in
+        return await withSpan(
+            request.method.rawValue, context: serviceContext, ofKind: .server
+        ) { span in
             span.attributes["http.request.method"] = request.method.rawValue
             span.attributes["url.path"] = Self.pathOnly(request.path)
             if let requestID = request.headerFields[.xRequestID] {
                 span.attributes["http.request.id"] = requestID
             }
-            let response = await next.respond(to: request, body: body)
+            let response = await next.respond(to: request, body: body, context: context)
             let status = Int(response.head.status.code)
             span.attributes["http.response.status_code"] = status
             // OTel: a server span is errored only for 5xx (a 4xx is the client's fault, not the span's).

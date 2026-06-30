@@ -64,7 +64,9 @@ struct CacheStaleWhileRevalidateTests {
 
         func setBody(_ value: String) { body.withLock { $0 = value } }
 
-        func respond(to _: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
+        func respond(
+            to _: HTTPRequest, body _: RequestBody, context _: RequestContext
+        ) async -> ServerResponse {
             var fields = HTTPFields()
             _ = fields.setValue(cacheControl, for: .cacheControl)
             let head = HTTPResponse(status: .ok, headerFields: fields)

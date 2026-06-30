@@ -17,19 +17,29 @@ public import HTTPCore
 
 /// A path/method router (RFC 9110): declare routes with ``RouteBuilder``, serve them as an
 /// ``HTTPResponder``.
-public struct Router: HTTPResponder {
+public struct Router: HTTPResponder, RouteResolver {
     private let routes: [Route]
+
+    /// Whether any route declares a WebSocket handler (RFC 6455), precomputed once — drives the Extended
+    /// CONNECT advertisement (RFC 8441 / RFC 9220).
+    public let hasWebSocketRoutes: Bool
 
     /// Builds a router from a ``RouteBuilder`` route table.
     public init(@RouteBuilder _ routes: () -> [Route]) {
-        self.routes = routes()
+        let table = routes()
+        self.routes = table
+        self.hasWebSocketRoutes = table.contains(where: \.isWebSocket)
     }
 
     /// Routes `request` to the first matching route, or an auto-`OPTIONS` / `405` / `404` (RFC 9110
     /// §9.3.7, §15.5).
     ///
     /// A `HEAD` is served by the matching `GET` route (the server omits the body, RFC 9110 §9.3.2).
-    public func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
+    public func respond(
+        to request: HTTPRequest,
+        body: RequestBody,
+        context: RequestContext
+    ) async -> ServerResponse {
         // `OPTIONS *` is a server-wide capability query (RFC 9110 §9.3.7).
         if request.method == .options, request.path == "*" {
             return Self.allow(status: .noContent, methods: Self.serverMethods(routes))
@@ -47,9 +57,52 @@ public struct Router: HTTPResponder {
                 pathMethods.insert(route.method)  // path matched, method did not
                 continue
             }
-            return await route.run(request, parameters, body)
+            // Enrich the context the engine built (connection metadata, id) with this route's captures,
+            // for the handler and any group middleware below it.
+            var context = context
+            context.parameters = parameters
+            return await route.run(request, body, context)
         }
         return Self.unmatched(method: request.method, pathMethods: pathMethods)
+    }
+
+    // MARK: Route resolution (head-only)
+
+    /// Resolves the route metadata for `method` + `path` — a head-only match that runs no handler — or
+    /// `nil` when no route matches.
+    public func resolve(method: HTTPMethod, path: String) -> ResolvedRoute? {
+        let components = Self.pathComponents(of: path)
+        // HEAD is served by the matching GET route (RFC 9110 §9.3.2), as in `respond`.
+        let matchMethod: HTTPMethod = method == .head ? .get : method
+        for route in routes where route.method == matchMethod {
+            guard route.match(components) != nil else {
+                continue
+            }
+            return Self.metadata(of: route)
+        }
+        return nil
+    }
+
+    /// Resolves the WebSocket route matching `path` (method-agnostic, for an Extended CONNECT whose
+    /// `:method` is `CONNECT` while the route is declared `GET`), or `nil`.
+    public func resolveWebSocket(path: String) -> ResolvedRoute? {
+        let components = Self.pathComponents(of: path)
+        for route in routes where route.isWebSocket {
+            guard route.match(components) != nil else {
+                continue
+            }
+            return Self.metadata(of: route)
+        }
+        return nil
+    }
+
+    /// The ``ResolvedRoute`` view of a matched route.
+    private static func metadata(of route: Route) -> ResolvedRoute {
+        ResolvedRoute(
+            bodyLimit: route.bodyLimit,
+            webSocketHandler: route.webSocketHandler,
+            streamsBody: route.streamsBody
+        )
     }
 
     /// The response when no route matched the method: an automatic `OPTIONS` (`204`), a `405` with

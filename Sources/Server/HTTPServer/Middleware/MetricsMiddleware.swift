@@ -27,11 +27,12 @@ public struct MetricsMiddleware<C: Clock>: HTTPMiddleware where C.Duration == Du
     /// Times the delegated response and records its method, path, status, and duration.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         let start = clock.now
-        let response = await next.respond(to: request, body: body)
+        let response = await next.respond(to: request, body: body, context: context)
         metrics.record(
             method: request.method,
             path: request.path,

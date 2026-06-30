@@ -19,7 +19,7 @@ struct HTTPServerShutdownTests {
     @Test("a draining server answers HTTP/1 with Connection: close and stops after the exchange")
     func http1DrainsWithConnectionClose() async {
         // The responder echoes the path so the served request is identifiable on the wire.
-        let responder = ClosureResponder { request, _ in
+        let responder = ClosureResponder { request, _, _ in
             ServerResponse(HTTPResponse(status: .ok), body: Array(request.path.utf8))
         }
         // Two pipelined requests: draining must answer the first and not serve the second.
@@ -37,7 +37,7 @@ struct HTTPServerShutdownTests {
 
     @Test("shutdown is idempotent")
     func shutdownIsIdempotent() async {
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let server = HTTPServer(transport: FakeTransport(), responder: responder)
         await server.shutdown()
         await server.shutdown()  // a second call must not trap or re-shut-down the transport
@@ -55,7 +55,7 @@ struct HTTPServerShutdownTests {
             keepAliveTimeout: .seconds(3_600)
         )
         let probe = AsyncEventProbe<TransportConnectionID>()
-        let responder = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let responder = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let hanging = HangingConnection(id: TransportConnectionID(1), admissionProbe: probe)
         let server = HTTPServer(
             transport: FakeTransport(), responder: responder, limits: limits, clock: clock

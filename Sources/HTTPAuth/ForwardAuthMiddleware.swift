@@ -31,7 +31,8 @@ public struct ForwardAuthMiddleware: HTTPMiddleware {
     /// Asks the authorizer; on allow, propagates its headers and continues; on deny, returns its response.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         switch await authorize(request) {
@@ -42,7 +43,7 @@ public struct ForwardAuthMiddleware: HTTPMiddleware {
                 for (name, value) in headers {
                     _ = request.headerFields.setValue(value, for: name)
                 }
-                return await next.respond(to: request, body: body)
+                return await next.respond(to: request, body: body, context: context)
         }
     }
 }

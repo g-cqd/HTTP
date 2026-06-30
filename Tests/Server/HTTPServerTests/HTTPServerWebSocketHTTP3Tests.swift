@@ -40,8 +40,7 @@ struct HTTPServerWebSocketHTTP3Tests {
         let port = transport.boundPort
         let server = HTTPServer(
             transport: TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
-            responder: ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .notFound)) },
-            webSocketHandler: echo
+            responder: Router { Route.webSocket("/chat", handler: echo) }
         )
         let serving = Task {
             await withDiscardingTaskGroup { group in

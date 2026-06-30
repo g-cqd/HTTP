@@ -19,7 +19,7 @@ struct MetricsMiddlewareTests {
     func recordsResponse() async {
         let spy = SpyMetrics()
         let clock = ManualClock()
-        let app = ClosureResponder { _, _ in
+        let app = ClosureResponder { _, _, _ in
             clock.advance(by: .milliseconds(7))  // the handler "takes" 7 ms
             return ServerResponse(HTTPResponse(status: .created))
         }
@@ -39,7 +39,7 @@ struct MetricsMiddlewareTests {
     @Test("records exactly one metric per response — the request rate")
     func recordsPerResponse() async {
         let spy = SpyMetrics()
-        let app = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+        let app = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
         let responder = app.wrapped(by: MetricsMiddleware(spy, clock: ManualClock()))
 
         for path in ["/a", "/b", "/c"] {

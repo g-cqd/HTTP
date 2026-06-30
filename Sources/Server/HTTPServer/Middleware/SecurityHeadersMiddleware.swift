@@ -42,10 +42,11 @@ public struct SecurityHeadersMiddleware: HTTPMiddleware {
     /// Delegates, then stamps each configured header that the responder did not already set.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        var response = await next.respond(to: request, body: body)
+        var response = await next.respond(to: request, body: body, context: context)
         if contentTypeOptions { setIfAbsent("nosniff", .xContentTypeOptions, &response) }
         setIfAbsent(frameOptions, .xFrameOptions, &response)
         setIfAbsent(referrerPolicy, .referrerPolicy, &response)

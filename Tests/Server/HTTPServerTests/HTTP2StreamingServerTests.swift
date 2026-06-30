@@ -27,7 +27,7 @@ struct HTTP2StreamingServerTests {
     func streamedResponseSurvivesWindowStall() async {
         let bodyByte: UInt8 = 0x5A
         let bodyLength = 50
-        let responder = ClosureResponder { _, _ in
+        let responder = ClosureResponder { _, _, _ in
             .streaming(contentType: "application/octet-stream") { writer in
                 try await writer.write([UInt8](repeating: bodyByte, count: bodyLength))
             }

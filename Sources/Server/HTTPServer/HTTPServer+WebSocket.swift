@@ -119,16 +119,19 @@ extension HTTPServer {
     func handleHTTP2Tunnel(
         _ event: HTTP2Connection.Event,
         engine: inout HTTP2Connection,
-        webSockets: inout [HTTP2StreamID: WebSocketConnection]
+        webSockets: inout [HTTP2StreamID: HTTP2WebSocketTunnel]
     ) async {
-        guard let handler = webSocketHandler else {
-            return
-        }
         switch event {
             case .extendedConnect(let streamID, let request, let proto):
-                // Same CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the
-                // tunnel, treated like a declined upgrade.
-                guard proto == "websocket", handler.shouldUpgrade(request),
+                // Resolve the WebSocket route for this stream's path; an Extended CONNECT to a path the
+                // responder does not declare a WebSocket route for is refused (no tunnel opened). Same
+                // CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the tunnel,
+                // treated like a declined upgrade.
+                guard proto == "websocket",
+                    let handler = currentResolver?
+                        .resolveWebSocket(path: request.path)?
+                        .webSocketHandler,
+                    handler.shouldUpgrade(request),
                     handler.isOriginAllowed(request.headerFields[.origin])
                 else { return }
                 // Negotiate permessage-deflate over the RFC 8441 tunnel: echo it on the 200 and enable
@@ -140,23 +143,30 @@ extension HTTPServer {
                     streamID,
                     secWebSocketExtensions: permessageDeflate?.headerValue
                 )
-                webSockets[streamID] = WebSocketConnection(
-                    maxMessageSize: limits.maxBodySize,
-                    permessageDeflate: permessageDeflate
+                webSockets[streamID] = HTTP2WebSocketTunnel(
+                    socket: WebSocketConnection(
+                        maxMessageSize: limits.maxBodySize,
+                        permessageDeflate: permessageDeflate
+                    ),
+                    handler: handler
                 )
             case .tunnelData(let streamID, let bytes):
-                guard var socket = webSockets[streamID] else {
+                guard var tunnel = webSockets[streamID] else {
                     return
                 }
                 await driveTunnel(
-                    &socket, bytes: bytes, streamID: streamID, engine: &engine, handler: handler
+                    &tunnel.socket,
+                    bytes: bytes,
+                    streamID: streamID,
+                    engine: &engine,
+                    handler: tunnel.handler
                 )
-                if socket.isClosing {
+                if tunnel.socket.isClosing {
                     try? engine.closeTunnel(streamID)
                     webSockets[streamID] = nil
                 }
                 else {
-                    webSockets[streamID] = socket
+                    webSockets[streamID] = tunnel
                 }
             case .tunnelClosed(let streamID), .streamReset(let streamID, _):
                 webSockets[streamID] = nil

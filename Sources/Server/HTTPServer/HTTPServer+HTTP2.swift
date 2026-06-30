@@ -21,12 +21,20 @@ extension HTTPServer {
         deadline: IdleDeadline<C.Instant>,
         initialBytes: [UInt8]
     ) async {
-        // Advertise Extended CONNECT (RFC 8441 §3) only when a WebSocket handler can service it.
+        // Advertise Extended CONNECT (RFC 8441 §3) only when the responder declares a WebSocket route.
         var settings = HTTP2Settings()
-        settings.enableConnectProtocol = webSocketHandler != nil
-        var engine = HTTP2Connection(localSettings: settings, limits: limits)
-        // Per-stream WebSocket engines for active WebSocket-over-HTTP/2 tunnels (RFC 8441).
-        var webSockets: [HTTP2StreamID: WebSocketConnection] = [:]
+        settings.enableConnectProtocol = currentResolver?.hasWebSocketRoutes ?? false
+        // The matched route's body limit, resolved from each request head before its DATA is buffered
+        // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
+        let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
+            currentResolver?.resolve(method: request.method, path: request.path)?.bodyLimit
+        }
+        var engine = HTTP2Connection(
+            localSettings: settings, limits: limits, resolveBodyLimit: resolveBodyLimit
+        )
+        // Per-stream WebSocket tunnels (engine + resolved handler) for active WebSocket-over-HTTP/2
+        // streams (RFC 8441) — a single connection can multiplex tunnels to different WebSocket routes.
+        var webSockets: [HTTP2StreamID: HTTP2WebSocketTunnel] = [:]
         var inbound = initialBytes
         var sentGoAway = false  // graceful shutdown queues GOAWAY once (RFC 9113 §6.8)
         while true {

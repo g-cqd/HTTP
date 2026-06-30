@@ -13,12 +13,29 @@
 internal import HTTPCore
 
 /// One link of a middleware chain: a middleware bound to the responder that follows it.
-private struct InterceptedResponder: HTTPResponder {
+private struct InterceptedResponder: HTTPResponder, RouteResolver {
     let middleware: any HTTPMiddleware
     let next: any HTTPResponder
 
-    func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
-        await middleware.respond(to: request, body: body, next: next)
+    func respond(
+        to request: HTTPRequest,
+        body: RequestBody,
+        context: RequestContext
+    ) async -> ServerResponse {
+        await middleware.respond(to: request, body: body, context: context, next: next)
+    }
+
+    // Forward route resolution down the chain to the terminal responder (the ``Router``).
+    func resolve(method: HTTPMethod, path: String) -> ResolvedRoute? {
+        (next as? (any RouteResolver))?.resolve(method: method, path: path)
+    }
+
+    func resolveWebSocket(path: String) -> ResolvedRoute? {
+        (next as? (any RouteResolver))?.resolveWebSocket(path: path)
+    }
+
+    var hasWebSocketRoutes: Bool {
+        (next as? (any RouteResolver))?.hasWebSocketRoutes ?? false
     }
 }
 

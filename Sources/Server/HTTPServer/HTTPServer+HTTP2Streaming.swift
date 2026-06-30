@@ -41,10 +41,12 @@ extension HTTPServer {
         connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>
     ) async -> Bool {
-        // Stamp the verified mutual-TLS client identity (G3) before dispatch, like the HTTP/1 path.
-        let stamped = Self.stampingClientCertSubject(request, from: connection)
+        // Build the per-request context from the verified connection metadata, like the HTTP/1 path (G3).
+        let context = RequestContext(connection: connection, request: request)
         let current = currentResponder  // hot-swappable responder, read once (G4a)
-        let response = await current.respond(to: stamped, body: body)
+        let response = await current.respond(
+            to: request, body: requestBody(body, for: request), context: context
+        )
         if let bodyStream = response.stream {
             return await streamHTTP2Response(
                 withAltSvc(response.head),
@@ -219,9 +221,11 @@ extension HTTPServer {
         guard case .request(let id, let request, let body) = event else {
             return
         }
-        let stamped = Self.stampingClientCertSubject(request, from: connection)
+        let context = RequestContext(connection: connection, request: request)
         let current = currentResponder  // hot-swappable responder, read once (G4a)
-        let response = await current.respond(to: stamped, body: body)
+        let response = await current.respond(
+            to: request, body: requestBody(body, for: request), context: context
+        )
         let buffered = await bufferedResponse(response)
         try? engine.respond(to: id, withAltSvc(buffered.head), body: buffered.body)
     }

@@ -60,10 +60,11 @@ public struct CompressionMiddleware: HTTPMiddleware {
     /// acceptable and the body is eligible.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        var response = await next.respond(to: request, body: body)
+        var response = await next.respond(to: request, body: body, context: context)
         // A streamed body is not transformed here (no streaming compression yet, P6).
         guard response.stream == nil else {
             return response

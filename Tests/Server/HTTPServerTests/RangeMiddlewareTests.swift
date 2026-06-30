@@ -129,7 +129,7 @@ struct RangeMiddlewareTests {
     }
 
     private func served(_ text: String, status: HTTPStatus = .ok) -> any HTTPResponder {
-        ClosureResponder { _, _ in
+        ClosureResponder { _, _, _ in
             ServerResponse(HTTPResponse(status: status), body: Array(text.utf8))
         }
         .wrapped(by: RangeMiddleware())

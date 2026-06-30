@@ -28,11 +28,12 @@ public struct LoggingMiddleware<C: Clock>: HTTPMiddleware where C.Duration == Du
     /// Times the delegated response and logs its method, path, status, duration, and request id.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         let start = clock.now
-        let response = await next.respond(to: request, body: body)
+        let response = await next.respond(to: request, body: body, context: context)
         var metadata: Logger.Metadata = [
             "method": .string(request.method.rawValue),
             "path": .string(Self.pathOnly(request.path)),

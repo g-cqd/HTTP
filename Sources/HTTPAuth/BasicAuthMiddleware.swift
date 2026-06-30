@@ -41,7 +41,8 @@ public struct BasicAuthMiddleware: HTTPMiddleware {
     /// Verifies the credential, asserts the username for the handler, else challenges with `401`.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         guard let credential = Self.credential(request),
@@ -51,7 +52,7 @@ public struct BasicAuthMiddleware: HTTPMiddleware {
         }
         var request = request
         _ = request.headerFields.setValue(credential.username, for: .xAuthSubject)
-        return await next.respond(to: request, body: body)
+        return await next.respond(to: request, body: body, context: context)
     }
 
     /// A `401` carrying the `Basic` challenge (RFC 7617 §2).

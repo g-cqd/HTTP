@@ -12,7 +12,6 @@ internal import HTTP2
 public import HTTPCore
 public import HTTPTransport
 internal import Synchronization
-public import WebSocket
 
 /// An HTTP/1.1 · HTTP/2 server that drives an ``HTTPResponder`` over a ``ServerTransport``.
 ///
@@ -30,8 +29,6 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// holds the lock across the `await`, so an in-flight request finishes on the table it read while
     /// new requests pick up the new one: the graceful old/new split falls out with no drain.
     let responder: Mutex<any HTTPResponder>
-    /// Handles connections that upgrade to WebSocket (RFC 6455 §4), or nil to refuse upgrades.
-    let webSocketHandler: (any WebSocketHandler)?
     let limits: HTTPLimits
     let clock: C
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
@@ -68,14 +65,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         transport: any ServerTransport,
         responder: any HTTPResponder,
         quicTransport: (any QUICServerTransport)? = nil,
-        webSocketHandler: (any WebSocketHandler)? = nil,
         limits: HTTPLimits = .default,
         clock: C
     ) {
         self.transport = transport
         self.quicTransport = quicTransport
         self.responder = Mutex(responder)
-        self.webSocketHandler = webSocketHandler
         self.limits = limits
         self.clock = clock
     }
@@ -122,6 +117,28 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// dispatched afterward. Centralized here so the protocol-engine dispatch files need not import the
     /// synchronization primitive.
     var currentResponder: any HTTPResponder { responder.withLock(\.self) }
+
+    /// The current responder viewed as a ``RouteResolver`` when it conforms (a ``Router``, or a chain
+    /// wrapping one), else `nil`.
+    ///
+    /// The head-time seam: the engines query this — before reading the body — to enforce a per-route body
+    /// limit, dispatch a route-scoped WebSocket upgrade, and honor the streaming opt-in. A responder that
+    /// is not a ``RouteResolver`` leaves the server on its global defaults.
+    var currentResolver: (any RouteResolver)? { currentResponder as? (any RouteResolver) }
+
+    /// The ``RequestBody`` to hand a responder for `request`: an incremental ``RequestBody/stream(_:)``
+    /// when the matched route opted in (Phase 1.4), else the buffered bytes.
+    ///
+    /// On HTTP/1.1 the reader streams the body off the wire directly; on HTTP/2 / HTTP/3 the sans-I/O
+    /// engine has already received the whole body (bounded by the per-route limit), so a streaming route
+    /// is served those bytes wrapped as a one-shot stream — the handler API is uniform across protocols,
+    /// and truly incremental h2/h3 delivery is a follow-up (see `Docs/Documentation/adr/0006-…`).
+    func requestBody(_ body: [UInt8], for request: HTTPRequest) -> RequestBody {
+        let resolved = currentResolver?.resolve(method: request.method, path: request.path)
+        return resolved?.streamsBody == true
+            ? .stream(HTTPRequestBodyStream(yielding: body))
+            : .collected(body)
+    }
 
     /// Admits `connection` if it is under both the global (``HTTPLimits/maxConnections``) and
     /// per-client (``HTTPLimits/maxConnectionsPerClient``) caps, serves it for its lifetime, then
@@ -264,14 +281,12 @@ extension HTTPServer where C == ContinuousClock {
         transport: any ServerTransport,
         responder: any HTTPResponder,
         quicTransport: (any QUICServerTransport)? = nil,
-        webSocketHandler: (any WebSocketHandler)? = nil,
         limits: HTTPLimits = .default
     ) {
         self.init(
             transport: transport,
             responder: responder,
             quicTransport: quicTransport,
-            webSocketHandler: webSocketHandler,
             limits: limits,
             clock: ContinuousClock()
         )

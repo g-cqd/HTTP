@@ -10,15 +10,24 @@ public import HTTPCore
 
 /// An ``HTTPResponder`` backed by a closure.
 public struct ClosureResponder: HTTPResponder {
-    private let handler: @Sendable (HTTPRequest, [UInt8]) async -> ServerResponse
+    private let handler:
+        @Sendable (HTTPRequest, RequestBody, RequestContext) async -> ServerResponse
 
-    /// Creates a responder from a request-handling closure.
-    public init(_ handler: @escaping @Sendable (HTTPRequest, [UInt8]) async -> ServerResponse) {
+    /// Creates a responder from a request-handling closure receiving the body and per-request context.
+    public init(
+        _ handler:
+            @escaping @Sendable (HTTPRequest, RequestBody, RequestContext) async ->
+            ServerResponse
+    ) {
         self.handler = handler
     }
 
     /// Invokes the wrapped closure.
-    public func respond(to request: HTTPRequest, body: [UInt8]) async -> ServerResponse {
-        await handler(request, body)
+    public func respond(
+        to request: HTTPRequest,
+        body: RequestBody,
+        context: RequestContext
+    ) async -> ServerResponse {
+        await handler(request, body, context)
     }
 }

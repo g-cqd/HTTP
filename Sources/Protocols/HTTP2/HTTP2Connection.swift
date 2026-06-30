@@ -70,6 +70,11 @@ public struct HTTP2Connection {
         /// request's `Priority` field at creation so the send-side flusher can release a congested
         /// connection's higher-priority DATA first (see `flushAll`, HTTP2Connection+FlowControl).
         var urgency = HTTPPriority.defaultUrgency
+        /// The matched route's request-body cap (Phase 1.2), resolved at HEADERS time; `Int.max` when no
+        /// route-specific limit applies.
+        ///
+        /// Enforced in `receiveData` before buffering (RFC 9110 §15.5.14).
+        var effectiveBodyLimit = Int.max
     }
 
     private var phase = Phase.awaitingPreface
@@ -137,6 +142,12 @@ public struct HTTP2Connection {
     let limits: HTTPLimits
     /// The concurrent-stream cap advertised to and enforced against the peer (RFC 9113 §5.1.2).
     let maxConcurrentStreams: Int
+    /// Resolves the matched route's request-body limit from a request head (Phase 1.2): the engine caps
+    /// each stream's buffered body to it before buffering (RFC 9110 §15.5.14), tighter than the global
+    /// ``HTTPLimits/maxBodySize``.
+    ///
+    /// Defaults to "no per-route limit".
+    let resolveBodyLimit: @Sendable (HTTPRequest) -> Int?
 
     /// Creates a connection that advertises `localSettings`, queuing the server SETTINGS preface (§3.4).
     ///
@@ -145,6 +156,7 @@ public struct HTTP2Connection {
     public init(
         localSettings: HTTP2Settings = HTTP2Settings(),
         limits: HTTPLimits = .default,
+        resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // A server MUST NOT advertise ENABLE_PUSH with a non-zero value (RFC 9113 §6.5.2).
@@ -157,6 +169,7 @@ public struct HTTP2Connection {
         self.localSettings = advertised
         self.maxConcurrentStreams = advertised.maxConcurrentStreams ?? limits.maxConcurrentStreams
         self.limits = limits
+        self.resolveBodyLimit = resolveBodyLimit
         self.decoder = HPACKDecoder(
             maxDynamicTableSize: advertised.headerTableSize,
             limits: limits

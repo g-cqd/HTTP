@@ -41,11 +41,12 @@ public struct CacheMiddleware: HTTPMiddleware {
     /// Serves a fresh (or briefly stale) stored response or delegates, storing a cacheable result.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         guard request.method == .get else {
-            return await next.respond(to: request, body: body)
+            return await next.respond(to: request, body: body, context: context)
         }
         let directives = CacheControl(request.headerFields[.cacheControl])
         let key = Self.key(for: request)
@@ -53,9 +54,11 @@ public struct CacheMiddleware: HTTPMiddleware {
         if !directives.noStore, !directives.noCache,
             let hit = cache.lookup(key, request: request, now: instant)
         {
-            return served(hit, key: key, request: request, body: body, next: next)
+            return served(
+                hit, key: key, request: request, body: body, context: context, next: next
+            )
         }
-        let response = await next.respond(to: request, body: body)
+        let response = await next.respond(to: request, body: body, context: context)
         if !directives.noStore, let entry = Self.storableEntry(request, response, now: instant) {
             cache.store(key, entry)
         }
@@ -68,14 +71,15 @@ public struct CacheMiddleware: HTTPMiddleware {
         _ hit: ResponseCache.Lookup,
         key: String,
         request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) -> ServerResponse {
         switch hit {
             case .fresh(let response, let age):
                 return aged(response, age)
             case .staleWhileRevalidate(let response, let age):
-                revalidate(key: key, request: request, body: body, next: next)
+                revalidate(key: key, request: request, body: body, context: context, next: next)
                 return aged(response, age)
         }
     }
@@ -92,7 +96,8 @@ public struct CacheMiddleware: HTTPMiddleware {
     private func revalidate(
         key: String,
         request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) {
         guard cache.beginRevalidation(key) else {
@@ -102,7 +107,7 @@ public struct CacheMiddleware: HTTPMiddleware {
         let now = self.now
         spawn {
             defer { cache.finishRevalidation(key) }
-            let response = await next.respond(to: request, body: body)
+            let response = await next.respond(to: request, body: body, context: context)
             if let entry = Self.storableEntry(request, response, now: now()) {
                 cache.store(key, entry)
             }

@@ -151,6 +151,11 @@ extension HTTP3Connection {
     ) throws(HTTP3Error) {
         state.sawHeaders = true
         state.request = request
+        // Cap this stream's buffered body to the matched route's limit (Phase 1.2), resolved from the
+        // head before any DATA is accepted.
+        state.effectiveBodyLimit = min(
+            limits.maxBodySize, resolveBodyLimit(request) ?? limits.maxBodySize
+        )
         guard let connectProtocol else {
             return
         }
@@ -190,8 +195,8 @@ extension HTTP3Connection {
             streams[streamID] = state
             return
         }
-        guard state.body.count <= limits.maxBodySize else {
-            throw .stream(streamID, .h3RequestRejected, "request body exceeds the maximum")
+        guard state.body.count <= state.effectiveBodyLimit else {
+            throw .stream(streamID, .h3RequestRejected, "request body exceeds the route limit")
         }
         // Bound the connection's *total* buffered (un-dispatched) request body across all streams, not
         // just per-stream: as in HTTP/2, the engine would otherwise buffer up to the concurrent-stream

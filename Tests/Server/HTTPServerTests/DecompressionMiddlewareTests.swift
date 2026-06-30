@@ -18,8 +18,11 @@ import Testing
 
 @Suite("Middleware — inbound decompression, bomb-hardened (RFC 9110 §8.4, CWE-409)")
 struct DecompressionMiddlewareTests {
-    private let echo = ClosureResponder { request, body in
-        ServerResponse(HTTPResponse(status: .ok, headerFields: request.headerFields), body: body)
+    private let echo = ClosureResponder { request, body, _ in
+        ServerResponse(
+            HTTPResponse(status: .ok, headerFields: request.headerFields),
+            body: await body.collect()
+        )
     }
 
     private func request(encoding: String?) -> HTTPRequest {

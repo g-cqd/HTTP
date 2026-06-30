@@ -13,7 +13,7 @@ import HTTPCore
 /// A middleware that short-circuits the chain with `403 Forbidden`.
 struct Blocker: HTTPMiddleware {
     func respond(
-        to _: HTTPRequest, body _: [UInt8], next _: any HTTPResponder
+        to _: HTTPRequest, body _: RequestBody, context _: RequestContext, next _: any HTTPResponder
     ) async
         -> ServerResponse
     {

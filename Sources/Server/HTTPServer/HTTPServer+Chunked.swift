@@ -24,18 +24,30 @@ extension HTTPServer {
     }
 
     /// Frames a chunked body, *resuming* the decoder across reads so each octet is decoded once.
+    ///
+    /// `bodyLimit` (the matched route's cap, Phase 1.2) tightens the decoded-size bound below the global
+    /// ``HTTPLimits/maxBodySize`` when present, so an over-cap chunked body fails closed (413) before the
+    /// body grows past the limit (CWE-409).
     func frameChunkedBody(
-        _ buffer: [UInt8], head: RequestHead, start: Int, chunked: inout ChunkedProgress
+        _ buffer: [UInt8],
+        head: RequestHead,
+        start: Int,
+        chunked: inout ChunkedProgress,
+        bodyLimit: Int?
     ) -> BodyStep {
         if !chunked.started {
             chunked.started = true
             chunked.consumed = start
         }
+        var effectiveLimits = limits
+        if let bodyLimit {
+            effectiveLimits.maxBodySize = min(effectiveLimits.maxBodySize, bodyLimit)
+        }
         let result: Result<Bool, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
             Result { () throws(HTTP1ParseError) in
                 var reader = ByteReader(raw, startingAt: chunked.consumed)
                 let done = try ChunkedBodyDecoder.advance(
-                    &reader, state: &chunked.state, into: &chunked.body, limits: limits
+                    &reader, state: &chunked.state, into: &chunked.body, limits: effectiveLimits
                 )
                 chunked.consumed = reader.position
                 return done

@@ -89,7 +89,6 @@ enum HTTPDExample {
             transport: TransportFactory.make(configuration),
             responder: responder,
             quicTransport: quicTransport,
-            webSocketHandler: makeWebSocketEcho(),
             limits: makeLimits()
         )
 
@@ -173,9 +172,9 @@ enum HTTPDExample {
                 .text(String(repeating: "from-scratch swift http server. ", count: 32))
             }
             // A `:name` path parameter (RFC 3986 §3.3) plus an optional `?greeting=` query parameter.
-            Route.get("/hello/:name") { request, parameters, _ in
+            Route.get("/hello/:name") { request, _, context in
                 let greeting = request.query["greeting"] ?? "Hello"
-                return .text("\(greeting), \(parameters["name"] ?? "world")!\n")
+                return .text("\(greeting), \(context.parameters["name"] ?? "world")!\n")
             }
             // A large, compressible, range-able body — exercises CompressionMiddleware (curl
             // --compressed) and RangeMiddleware (curl -r 0-31 → 206 Partial Content).
@@ -183,8 +182,8 @@ enum HTTPDExample {
                 .text(String(repeating: "from-scratch swift http server. ", count: 256))
             }
             // Echo the request body straight back.
-            Route.post("/echo") { _, _, body in
-                ServerResponse(HTTPResponse(status: .ok), body: body)
+            Route.post("/echo") { _, body, _ in
+                ServerResponse(HTTPResponse(status: .ok), body: await body.collect())
             }
             // Surfaces the HTTPMetrics seam the MetricsMiddleware feeds (rate + errors).
             Route.get("/metrics") { _, _, _ in .text(metrics.snapshot()) }
@@ -193,8 +192,8 @@ enum HTTPDExample {
             // ``ContentNegotiation``.
             ContentNegotiation.route()
             // A trailing `*path` catch-all capturing the remaining path (RFC 3986 §3.3).
-            Route.get("/files/*path") { _, parameters, _ in
-                .text("would serve: \(parameters["path"] ?? "")\n")
+            Route.get("/files/*path") { _, _, context in
+                .text("would serve: \(context.parameters["path"] ?? "")\n")
             }
             // A route group: `/api/*` share a prefix and a scoped access log (per-group middleware).
             RouteGroup(
@@ -202,28 +201,30 @@ enum HTTPDExample {
                 middleware: [AccessLogMiddleware { print("httpd-example[api]: \($0)") }]
             ) {
                 Route.get("/ping") { _, _, _ in .text("pong\n") }
-                Route.get("/echo/:message") { _, parameters, _ in
-                    .text("\(parameters["message"] ?? "")\n")
+                Route.get("/echo/:message") { _, _, context in
+                    .text("\(context.parameters["message"] ?? "")\n")
                 }
             }
+            // A route-scoped WebSocket echo (RFC 6455): an `Upgrade: websocket` to `/ws` is driven by the
+            // server; a non-upgrade GET to `/ws` gets 426 (the route's fallback).
+            Route.webSocket("/ws", handler: makeWebSocketEcho())
         }
     }
 
-    /// A WebSocket echo handler on `/ws` (RFC 6455): every text/binary message is sent straight back.
+    /// A WebSocket echo handler (RFC 6455): every text/binary message is sent straight back.
+    ///
+    /// Bound to a path by ``Route/webSocket(_:handler:)``, so it needs no path predicate of its own.
     private static func makeWebSocketEcho() -> ClosureWebSocketHandler {
-        ClosureWebSocketHandler(
-            shouldUpgrade: { $0.path == "/ws" },
-            handle: { event in
-                switch event {
-                    case .message(let opcode, let payload):
-                        return opcode == .text
-                            ? [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
-                            : [.sendBinary(payload)]
-                    default:
-                        return []  // Ping is auto-answered by the engine; Pong/Close need no reply
-                }
+        ClosureWebSocketHandler { event in
+            switch event {
+                case .message(let opcode, let payload):
+                    return opcode == .text
+                        ? [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
+                        : [.sendBinary(payload)]
+                default:
+                    return []  // Ping is auto-answered by the engine; Pong/Close need no reply
             }
-        )
+        }
     }
 
     /// Server limits, with an optional `HTTPD_MAX_CONN` env override for benchmarking/tuning.

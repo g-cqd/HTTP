@@ -14,7 +14,7 @@ import Testing
 
 @Suite("Middleware — request id (X-Request-ID)")
 struct RequestIDMiddlewareTests {
-    private let echo = ClosureResponder { request, _ in
+    private let echo = ClosureResponder { request, _, _ in
         ServerResponse(HTTPResponse(status: .ok, headerFields: request.headerFields))
     }
 

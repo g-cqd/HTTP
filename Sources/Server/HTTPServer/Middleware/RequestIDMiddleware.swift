@@ -34,13 +34,18 @@ public struct RequestIDMiddleware: HTTPMiddleware {
     /// Resolves the id, asserts it on the request, delegates, and echoes it on the response.
     public func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
         let id = resolvedID(request)
         var request = request
         _ = request.headerFields.setValue(id, for: field)  // server-asserted: replaces any inbound
-        var response = await next.respond(to: request, body: body)
+        // Surface the resolved id on the context too, so handlers and the access log read a guaranteed
+        // correlation id from `context.id` (the server itself does not mint one on the hot path).
+        var context = context
+        context.id = id
+        var response = await next.respond(to: request, body: body, context: context)
         _ = response.head.headerFields.setValue(id, for: field)
         return response
     }

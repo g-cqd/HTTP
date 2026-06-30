@@ -25,7 +25,7 @@ struct StreamingResponseTests {
 
     @Test("a streamed response is sent with chunked transfer-coding (RFC 9112 §7.1)")
     func chunkedStreaming() async {
-        let responder = ClosureResponder { _, _ in
+        let responder = ClosureResponder { _, _, _ in
             .streaming(contentType: "text/plain") { writer in
                 try await writer.write(Array("hello".utf8))
                 try await writer.write(Array("world".utf8))
@@ -41,7 +41,7 @@ struct StreamingResponseTests {
 
     @Test("a streamed response with a known length uses Content-Length and no chunk framing")
     func contentLengthStreaming() async {
-        let responder = ClosureResponder { _, _ in
+        let responder = ClosureResponder { _, _, _ in
             let stream = ResponseStream(contentLength: 10) { writer in
                 try await writer.write(Array("0123456789".utf8))
             }
@@ -55,7 +55,7 @@ struct StreamingResponseTests {
 
     @Test("a HEAD request to a streamed route sends the header section only (RFC 9112 §6.3)")
     func headStreamedOmitsBody() async {
-        let responder = ClosureResponder { _, _ in
+        let responder = ClosureResponder { _, _, _ in
             .streaming(contentType: "text/plain") { writer in
                 try await writer.write(Array("must not be sent".utf8))
             }
@@ -68,7 +68,7 @@ struct StreamingResponseTests {
 
     @Test("serverSentEvents streams text/event-stream chunked")
     func serverSentEvents() async {
-        let responder = ClosureResponder { _, _ in
+        let responder = ClosureResponder { _, _, _ in
             .serverSentEvents { writer in
                 try await writer.write(Array("data: tick\n\n".utf8))
             }

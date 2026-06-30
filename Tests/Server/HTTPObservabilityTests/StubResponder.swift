@@ -13,7 +13,9 @@ import HTTPServer
 struct StubResponder: HTTPResponder {
     let status: HTTPStatus
 
-    func respond(to _: HTTPRequest, body _: [UInt8]) async -> ServerResponse {
+    func respond(
+        to _: HTTPRequest, body _: RequestBody, context _: RequestContext
+    ) async -> ServerResponse {
         ServerResponse(HTTPResponse(status: status))
     }
 }

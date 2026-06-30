@@ -14,7 +14,7 @@ import Testing
 
 @Suite("Middleware — composition + built-ins")
 struct HTTPMiddlewareTests {
-    private let ok = ClosureResponder { _, _ in
+    private let ok = ClosureResponder { _, _, _ in
         var fields = HTTPFields()
         _ = fields.append("text/plain", for: .contentType)
         return ServerResponse(

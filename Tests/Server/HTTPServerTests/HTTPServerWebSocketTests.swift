@@ -30,7 +30,8 @@ struct HTTPServerWebSocketTests {
         wire += maskedTextFrame("hi")  // a frame the client sends right after the request
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: wire)
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: echo) }
         )
         await server.serve(connection)
 
@@ -53,7 +54,8 @@ struct HTTPServerWebSocketTests {
         wire += Array("Sec-WebSocket-Version: 8\r\n\r\n".utf8)  // unsupported version
         let connection = FakeConnection(id: TransportConnectionID(2), inbound: wire)
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: echo) }
         )
         await server.serve(connection)
 
@@ -70,7 +72,8 @@ struct HTTPServerWebSocketTests {
             id: TransportConnectionID(3), inbound: upgradeRequest(origin: "https://evil.example")
         )
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: handler) }
         )
         await server.serve(connection)
 
@@ -88,7 +91,8 @@ struct HTTPServerWebSocketTests {
             id: TransportConnectionID(4), inbound: upgradeRequest(origin: "https://good.example")
         )
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: handler
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: handler) }
         )
         await server.serve(connection)
 
@@ -101,7 +105,8 @@ struct HTTPServerWebSocketTests {
         // A default handler (no isOriginAllowed override) must reject any browser-supplied Origin…
         let echo = ClosureWebSocketHandler { _ in [] }
         let server = HTTPServer(
-            transport: FakeTransport(), responder: NotFound(), webSocketHandler: echo
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: echo) }
         )
         let browser = FakeConnection(
             id: TransportConnectionID(5), inbound: upgradeRequest(origin: "https://evil.example")
@@ -118,7 +123,86 @@ struct HTTPServerWebSocketTests {
         #expect(admitted.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
     }
 
+    @Test("a non-upgrade GET to a WebSocket path gets 426, while other routes still serve")
+    func nonUpgradeGetToWebSocketPathGets426() async {
+        let echo = ClosureWebSocketHandler { _ in [] }
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: Router {
+                Route.get("/") { _, _, _ in .text("root") }
+                Route.webSocket("/chat", handler: echo)
+            }
+        )
+        // A plain GET (no Upgrade) to the WebSocket path falls through to the route's 426 fallback…
+        let chat = FakeConnection(id: TransportConnectionID(7), inbound: plainGet("/chat"))
+        await server.serve(chat)
+        let chatHead = String(decoding: await chat.sentBytes(), as: Unicode.UTF8.self)
+        #expect(chatHead.hasPrefix("HTTP/1.1 426 "))
+        #expect(chatHead.lowercased().contains("upgrade: websocket\r\n"))  // RFC 9110 §7.8
+        // …while an ordinary route on the same server still answers normally.
+        let root = FakeConnection(id: TransportConnectionID(8), inbound: plainGet("/"))
+        await server.serve(root)
+        let rootHead = String(decoding: await root.sentBytes(), as: Unicode.UTF8.self)
+        #expect(rootHead.hasPrefix("HTTP/1.1 200 "))
+    }
+
+    @Test("a POST to a WebSocket path is 405 — the route is declared GET (coexistence)")
+    func postToWebSocketPathIsMethodNotAllowed() async {
+        let echo = ClosureWebSocketHandler { _ in [] }
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: echo) }
+        )
+        let connection = FakeConnection(
+            id: TransportConnectionID(9),
+            inbound: Array("POST /chat HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n".utf8)
+        )
+        await server.serve(connection)
+        let head = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
+        #expect(head.hasPrefix("HTTP/1.1 405 "))
+    }
+
+    @Test("a WebSocket route behind a middleware chain still upgrades (the resolver forwards)")
+    func webSocketRouteBehindMiddlewareChainUpgrades() async {
+        let echo = ClosureWebSocketHandler { event in
+            guard case .message(let opcode, let payload) = event, opcode == .text else {
+                return []
+            }
+            return [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
+        }
+        let responder = MiddlewareChain(
+            [PassThrough()],
+            terminatingAt: Router { Route.webSocket("/chat", handler: echo) }
+        )
+        var wire = upgradeRequest()
+        wire += maskedTextFrame("hi")
+        let connection = FakeConnection(id: TransportConnectionID(10), inbound: wire)
+        let server = HTTPServer(transport: FakeTransport(), responder: responder)
+        await server.serve(connection)
+
+        let sent = await connection.sentBytes()
+        #expect(String(decoding: sent, as: Unicode.UTF8.self).hasPrefix("HTTP/1.1 101 "))
+        #expect(containsSubsequence(sent, [0x81, 0x02, 0x68, 0x69]))  // echoed unmasked "hi"
+    }
+
     // MARK: Fixtures
+
+    /// A no-op middleware that forwards to `next` unchanged — proves the resolver seam threads through a
+    /// ``MiddlewareChain`` to the inner ``Router`` (the WebSocket upgrade is decided at the head).
+    private struct PassThrough: HTTPMiddleware {
+        func respond(
+            to request: HTTPRequest,
+            body: RequestBody,
+            context: RequestContext,
+            next: any HTTPResponder
+        ) async -> ServerResponse {
+            await next.respond(to: request, body: body, context: context)
+        }
+    }
+
+    private func plainGet(_ path: String) -> [UInt8] {
+        Array("GET \(path) HTTP/1.1\r\nHost: example.com\r\n\r\n".utf8)
+    }
 
     private func upgradeRequest(origin: String? = nil) -> [UInt8] {
         var wire: [UInt8] = []

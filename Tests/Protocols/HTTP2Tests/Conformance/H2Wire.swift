@@ -26,9 +26,12 @@ enum H2Wire {
     static func handshaked(
         localSettings: HTTP2Settings = HTTP2Settings(),
         limits: HTTPLimits = .default,
+        resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
         clientSettings: [(id: UInt16, value: UInt32)] = []
     ) throws -> HTTP2Connection {
-        var connection = HTTP2Connection(localSettings: localSettings, limits: limits)
+        var connection = HTTP2Connection(
+            localSettings: localSettings, limits: limits, resolveBodyLimit: resolveBodyLimit
+        )
         _ = connection.outboundBytes()  // discard the server SETTINGS preface
         var wire = clientPreface
         wire += settings(clientSettings)

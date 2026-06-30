@@ -96,6 +96,11 @@ public struct HTTP3Connection {
         /// The request being assembled on a request stream, and its body.
         var request: HTTPRequest?
         var body: [UInt8] = []
+        /// The matched route's request-body cap (Phase 1.2), resolved at HEADERS time; `Int.max` when no
+        /// route-specific limit applies.
+        ///
+        /// Enforced in `handleRequestData` before buffering.
+        var effectiveBodyLimit = Int.max
         /// A request HEADERS section referencing dynamic-table entries not yet received, buffered with
         /// its Required Insert Count until the encoder stream delivers those inserts and the stream
         /// decodes once `insertCount ≥ RIC` (RFC 9204 §2.1.2 blocked stream).
@@ -104,6 +109,12 @@ public struct HTTP3Connection {
 
     let localSettings: HTTP3Settings
     let limits: HTTPLimits
+    /// Resolves the matched route's request-body limit from a request head (Phase 1.2): the engine caps
+    /// each stream's buffered body to it before buffering (RFC 9110 §15.5.14), tighter than the global
+    /// ``HTTPLimits/maxBodySize``.
+    ///
+    /// Defaults to "no per-route limit".
+    let resolveBodyLimit: @Sendable (HTTPRequest) -> Int?
     var decoder: QPACKDecoder
     var encoder: QPACKEncoder
     let frameDecoder: HTTP3FrameDecoder
@@ -149,6 +160,7 @@ public struct HTTP3Connection {
     public init(
         localSettings: HTTP3Settings = HTTP3Settings(),
         limits: HTTPLimits = .default,
+        resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // Advertise a dynamic QPACK table the peer encoder may populate (RFC 9204 §3.2); a caller can
@@ -165,6 +177,7 @@ public struct HTTP3Connection {
         }
         self.localSettings = advertised
         self.limits = limits
+        self.resolveBodyLimit = resolveBodyLimit
         self.decoder = QPACKDecoder(
             maxTableCapacity: advertised.qpackMaxTableCapacity, limits: limits
         )

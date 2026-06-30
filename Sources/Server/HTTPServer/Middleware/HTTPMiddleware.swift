@@ -18,14 +18,40 @@ public import HTTPCore
 /// Conform to add cross-cutting behaviour — logging, CORS, compression, auth, headers — then compose
 /// it with ``HTTPResponder/wrapped(by:)`` or ``MiddlewareChain``.
 public protocol HTTPMiddleware: Sendable {
-    /// Processes `request` (with its decoded `body`), delegating to `next` to produce the response.
+    /// Processes `request` (with its `body` and `context`), delegating to `next` to produce the response.
     ///
-    /// Call `next.respond(to:body:)` to continue the chain — passing a rewritten request/body if
-    /// desired — then return the response, possibly rewritten. Or return a response *without* calling
-    /// `next` to short-circuit (e.g. a CORS preflight or an auth rejection).
+    /// Call `next.respond(to:body:context:)` to continue the chain — passing a rewritten request, body,
+    /// or an enriched context (e.g. data added to ``RequestContext/subscript(_:)``) if desired — then
+    /// return the response, possibly rewritten. Or return a response *without* calling `next` to
+    /// short-circuit (e.g. a CORS preflight or an auth rejection).
     func respond(
         to request: HTTPRequest,
-        body: [UInt8],
+        body: RequestBody,
+        context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse
+}
+
+extension HTTPMiddleware {
+    /// Convenience: run the middleware with a buffered `body` and a default (empty) context.
+    ///
+    /// A shorthand for tests and direct invocation; the engine always calls the full
+    /// ``respond(to:body:context:next:)`` requirement.
+    public func respond(
+        to request: HTTPRequest,
+        body: [UInt8] = [],
+        next: any HTTPResponder
+    ) async -> ServerResponse {
+        await respond(to: request, body: .collected(body), context: RequestContext(), next: next)
+    }
+
+    /// Convenience: run the middleware with a buffered `body` and an explicit `context`.
+    public func respond(
+        to request: HTTPRequest,
+        body: [UInt8],
+        context: RequestContext,
+        next: any HTTPResponder
+    ) async -> ServerResponse {
+        await respond(to: request, body: .collected(body), context: context, next: next)
+    }
 }

@@ -15,7 +15,7 @@ import Testing
 
 @Suite("Middleware — rate limiting (RFC 6585 §4)")
 struct RateLimitMiddlewareTests {
-    private let ok = ClosureResponder { _, _ in ServerResponse(HTTPResponse(status: .ok)) }
+    private let ok = ClosureResponder { _, _, _ in ServerResponse(HTTPResponse(status: .ok)) }
 
     private func request(authority: String = "client-a") -> HTTPRequest {
         HTTPRequest(method: .get, scheme: "https", authority: authority, path: "/")

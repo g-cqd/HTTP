@@ -34,7 +34,7 @@ struct RouterTests {
     @Test("captures a :path parameter into RouteParameters")
     func capturesParameter() async {
         let router = Router {
-            Route.get("/users/:id") { _, parameters, _ in Self.ok(parameters["id"] ?? "?") }
+            Route.get("/users/:id") { _, _, context in Self.ok(context.parameters["id"] ?? "?") }
         }
         let response = await router.respond(to: request(.get, "/users/42"), body: [])
         #expect(response.body == Array("42".utf8))
@@ -85,7 +85,8 @@ struct RouterTests {
     @Test("the first matching route wins")
     func firstMatchWins() async {
         let router = Router {
-            Route.get("/users/:id") { _, parameters, _ in Self.ok("param:\(parameters["id"] ?? "")")
+            Route.get("/users/:id") { _, _, context in
+                Self.ok("param:\(context.parameters["id"] ?? "")")
             }
             Route.get("/users/me") { _, _, _ in Self.ok("me") }
         }
@@ -117,11 +118,13 @@ struct RouterTests {
     @Test("a parameter route inside a middleware group still receives its captured parameter (#9)")
     func groupedParameterRoute() async {
         // The route carries group middleware, so its handler runs through the precomputed chain with
-        // parameters flowed via the task local (audit #9) — the handler must still see `:id`, and the
+        // parameters carried on the context (audit #9) — the handler must still see `:id`, and the
         // group middleware must still run.
         let router = Router {
             RouteGroup("/api", middleware: [ServerHeaderMiddleware("grouped")]) {
-                Route.get("/users/:id") { _, parameters, _ in Self.ok(parameters["id"] ?? "?") }
+                Route.get("/users/:id") { _, _, context in
+                    Self.ok(context.parameters["id"] ?? "?")
+                }
             }
         }
         let response = await router.respond(to: request(.get, "/api/users/42"), body: [])
@@ -145,7 +148,7 @@ struct RouterTests {
     @Test("a trailing catch-all captures the remaining path (RFC 3986 §3.3)")
     func catchAll() async {
         let router = Router {
-            Route.get("/files/*path") { _, parameters, _ in Self.ok(parameters["path"] ?? "") }
+            Route.get("/files/*path") { _, _, context in Self.ok(context.parameters["path"] ?? "") }
         }
         let response = await router.respond(to: request(.get, "/files/css/site.css"), body: [])
         #expect(response.body == Array("css/site.css".utf8))
@@ -154,7 +157,7 @@ struct RouterTests {
     @Test("an unnamed catch-all captures under \"*\"")
     func unnamedCatchAll() async {
         let router = Router {
-            Route.get("/assets/*") { _, parameters, _ in Self.ok(parameters["*"] ?? "") }
+            Route.get("/assets/*") { _, _, context in Self.ok(context.parameters["*"] ?? "") }
         }
         let response = await router.respond(to: request(.get, "/assets/a/b"), body: [])
         #expect(response.body == Array("a/b".utf8))
@@ -203,7 +206,7 @@ struct RouterTests {
     @Test("dynamic-member access reads a captured parameter")
     func parameterDynamicMember() async {
         let router = Router {
-            Route.get("/users/:id") { _, parameters, _ in Self.ok(parameters.id ?? "?") }
+            Route.get("/users/:id") { _, _, context in Self.ok(context.parameters.id ?? "?") }
         }
         let response = await router.respond(to: request(.get, "/users/7"), body: [])
         #expect(response.body == Array("7".utf8))
