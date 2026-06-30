@@ -19,41 +19,44 @@ public import HTTPCore
 /// (RFC 9110 §8.4.1).
 public struct CompressionMiddleware: HTTPMiddleware {
     private let minimumSize: Int
+    private let encoders: [any ContentEncoder]
 
     /// Media-type fragments whose payloads are already compressed — re-encoding only adds overhead.
     private static let incompressible = [
         "image/", "video/", "audio/", "zip", "gzip", "brotli", "zstd", "compress"
     ]
 
-    /// A content coding this middleware can produce, in server-preference order — Brotli, then zstd
-    /// (only when the opt-in `CZstd` shim is present), then gzip. `CaseIterable` order is source
-    /// order, so this is exactly the br > zstd > gzip tie-break the negotiator applies (§12.5.3).
-    private enum Coding: CaseIterable {
-        case br
-        #if canImport(CZstd)
-            case zstd
+    /// The built-in content codings in server-preference order — Brotli (RFC 7932), then zstd (RFC 8878,
+    /// only when the opt-in `CZstd` shim is present), then gzip (RFC 1952).
+    ///
+    /// Each coding is included only on a build that can actually produce it, so the negotiator never
+    /// offers one it cannot encode; the order is the br > zstd > gzip tie-break it applies on equal
+    /// q-values (RFC 9110 §12.5.3).
+    public static var defaultEncoders: [any ContentEncoder] {
+        var encoders: [any ContentEncoder] = []
+        #if canImport(Compression) || canImport(CBrotli)
+            encoders.append(BrotliEncoder())
         #endif
-        case gzip
-
-        /// The `Content-Encoding` token (RFC 9110 §8.4.1 / RFC 7932 / RFC 8878 / RFC 1952).
-        var token: String {
-            switch self {
-                case .br:
-                    return "br"
-                #if canImport(CZstd)
-                    case .zstd:
-                        return "zstd"
-                #endif
-                case .gzip:
-                    return "gzip"
-            }
-        }
+        #if canImport(CZstd)
+            encoders.append(ZstdEncoder())
+        #endif
+        #if canImport(Compression) || canImport(CZlibCoding)
+            encoders.append(GzipEncoder())
+        #endif
+        return encoders
     }
 
     /// Creates the middleware; responses below `minimumSize` octets are not compressed (default 1 KiB,
     /// since tiny bodies cost more in framing overhead than they save).
-    public init(minimumSize: Int = 1_024) {
+    ///
+    /// `encoders` are the content codings to offer, tried in order (the earlier-listed one wins a q-value
+    /// tie); a `nil` (the default) uses the platform's built-in ``defaultEncoders`` (Brotli / zstd / gzip).
+    public init(
+        minimumSize: Int = 1_024,
+        encoders: [any ContentEncoder]? = nil
+    ) {
         self.minimumSize = minimumSize
+        self.encoders = encoders ?? Self.defaultEncoders
     }
 
     /// Delegates, then encodes the response body with the client's preferred coding when one is
@@ -69,37 +72,37 @@ public struct CompressionMiddleware: HTTPMiddleware {
         guard response.stream == nil else {
             return response
         }
-        guard let coding = negotiatedCoding(request) else {
+        guard let encoder = negotiatedEncoder(request) else {
             return response
         }
         // The representation now depends on Accept-Encoding (RFC 9110 §12.5.5), even if we skip below.
         addVary(&response)
-        guard isEligible(response), let encoded = compress(response.body, with: coding),
+        guard isEligible(response), let encoded = encoder.encode(response.body),
             encoded.count < response.body.count
         else {
             return response
         }
         response.body = encoded
-        _ = response.head.headerFields.setValue(coding.token, for: .contentEncoding)
+        _ = response.head.headerFields.setValue(encoder.token, for: .contentEncoding)
         _ = response.head.headerFields.setValue(String(encoded.count), for: .contentLength)
         return response
     }
 
-    /// The coding to apply for `request`, or nil to serve the representation unencoded.
+    /// The encoder to apply for `request`, or nil to serve the representation unencoded.
     ///
-    /// The best of the codings we produce that the client accepts with a non-zero quality, preferring
-    /// Brotli on a tie (RFC 9110 §12.5.3); an absent or all-zero `Accept-Encoding` yields nil (serve
-    /// `identity`).
-    private func negotiatedCoding(_ request: HTTPRequest) -> Coding? {
+    /// The best of the codings we produce that the client accepts with a non-zero quality, preferring the
+    /// earlier-listed encoder on a tie (RFC 9110 §12.5.3); an absent or all-zero `Accept-Encoding` yields
+    /// nil (serve `identity`).
+    private func negotiatedEncoder(_ request: HTTPRequest) -> (any ContentEncoder)? {
         let (explicit, wildcard) = acceptedQualities(request)
-        var chosen: Coding?
+        var chosen: (any ContentEncoder)?
         var best = 0.0
-        for coding in Coding.allCases {
-            let weight = explicit[coding.token] ?? wildcard ?? 0
+        for encoder in encoders {
+            let weight = explicit[encoder.token] ?? wildcard ?? 0
             guard weight > best else {
                 continue
             }
-            chosen = coding
+            chosen = encoder
             best = weight
         }
         return chosen
@@ -140,33 +143,6 @@ public struct CompressionMiddleware: HTTPMiddleware {
             }
         }
         return 1.0
-    }
-
-    /// Encodes `body` with `coding` — Darwin Brotli (RFC 7932), libzstd (RFC 8878), or gzip
-    /// (RFC 1952).
-    private func compress(_ body: [UInt8], with coding: Coding) -> [UInt8]? {
-        switch coding {
-            case .br:
-                #if canImport(Compression)
-                    return Brotli.compress(body)
-                #elseif canImport(CBrotli)
-                    return Brotli.compress(body)  // Linux: libbrotli (BrotliLinux)
-                #else
-                    return nil
-                #endif
-            #if canImport(CZstd)
-                case .zstd:
-                    return Zstd.compress(body)
-            #endif
-            case .gzip:
-                #if canImport(Compression)
-                    return Gzip.compress(body)
-                #elseif canImport(CZlibCoding)
-                    return Gzip.compress(body)  // Linux: system zlib (GzipLinux)
-                #else
-                    return nil
-                #endif
-        }
     }
 
     /// Whether `response` is worth compressing: large enough, not already encoded, not already-compressed media.
