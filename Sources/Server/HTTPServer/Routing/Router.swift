@@ -17,7 +17,7 @@ public import HTTPCore
 
 /// A path/method router (RFC 9110): declare routes with ``RouteBuilder``, serve them as an
 /// ``HTTPResponder``.
-public struct Router: HTTPResponder, RouteResolver {
+public struct Router: HTTPRouter {
     private let routes: [Route]
 
     /// Whether any route declares a WebSocket handler (RFC 6455), precomputed once — drives the Extended
