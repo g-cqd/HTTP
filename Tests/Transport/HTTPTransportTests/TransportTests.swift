@@ -19,8 +19,11 @@ struct TransportTests {
         // only its own: the Network.framework / kqueue / Dispatch / swift-system stack on Darwin, the
         // epoll stack on Linux (Glibc).
         #if canImport(Darwin)
+            // `.unixDomainSocket` needs a socket path (covered by its own suite); `.fake` binds no
+            // port; `.portableTLS` needs the opt-in build; `.posixEpoll` is the Linux side.
             let platformBackbones = TransportBackbone.allCases.filter {
                 $0 != .fake && $0 != .portableTLS && $0 != .posixEpoll
+                    && $0 != .unixDomainSocket
             }
         #else
             let platformBackbones: [TransportBackbone] = [.posixEpoll]

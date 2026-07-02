@@ -42,6 +42,14 @@ public struct TransportConfiguration: Sendable {
     /// by the non-event-loop backbones (swiftSystem, Dispatch, Network.framework).
     public var eventLoopCount: Int?
 
+    /// The filesystem path a ``TransportBackbone/unixDomainSocket`` listener binds (`AF_UNIX`,
+    /// POSIX.1-2017), or `nil` for the TCP backbones.
+    ///
+    /// A stale socket file at the path is unlinked before bind (the standard daemon restart
+    /// behavior); the file is left in place on shutdown. `host`/`port` are ignored for a UNIX-domain
+    /// listener and ``ServerTransport/boundPort`` stays `0`.
+    public var unixSocketPath: String?
+
     /// Creates a transport configuration.
     public init(
         host: String = "127.0.0.1",
@@ -50,7 +58,8 @@ public struct TransportConfiguration: Sendable {
         tls: TransportTLS? = nil,
         reusePort: Bool = false,
         backlog: Int32 = 1_024,
-        eventLoopCount: Int? = nil
+        eventLoopCount: Int? = nil,
+        unixSocketPath: String? = nil
     ) {
         self.host = host
         self.port = port
@@ -59,5 +68,6 @@ public struct TransportConfiguration: Sendable {
         self.reusePort = reusePort
         self.backlog = backlog
         self.eventLoopCount = eventLoopCount
+        self.unixSocketPath = unixSocketPath
     }
 }

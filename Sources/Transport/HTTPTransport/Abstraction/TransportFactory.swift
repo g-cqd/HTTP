@@ -32,9 +32,28 @@ public enum TransportFactory {
                 try makePOSIXDispatch(configuration)
             case .swiftSystem:
                 try makeSwiftSystem(configuration)
+            case .unixDomainSocket:
+                try makeUnixDomainSocket(configuration)
             case .fake:
                 FakeTransport()
         }
+    }
+
+    /// The UNIX-domain-socket listener mode of the platform's event-loop backbone: the kqueue
+    /// machinery on Darwin, epoll on Linux (only the listener's address family differs).
+    ///
+    /// Requires ``TransportConfiguration/unixSocketPath`` (checked at `start()`, where binding
+    /// happens).
+    private static func makeUnixDomainSocket(
+        _ configuration: TransportConfiguration
+    ) throws(TransportError) -> any ServerTransport {
+        #if canImport(Darwin)
+            return POSIXKqueueTransport(configuration: configuration)
+        #elseif canImport(Glibc)
+            return POSIXEpollTransport(configuration: configuration)
+        #else
+            throw .unsupported("the .unixDomainSocket backbone requires a POSIX platform")
+        #endif
     }
 
     /// The Network.framework backbone (the only h3/QUIC path) — available only on Apple platforms.

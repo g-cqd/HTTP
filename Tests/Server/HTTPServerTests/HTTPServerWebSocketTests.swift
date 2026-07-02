@@ -10,6 +10,7 @@
 
 import HTTPCore
 import HTTPTransport
+internal import Synchronization
 import Testing
 import WebSocket
 
@@ -247,7 +248,81 @@ struct HTTPServerWebSocketTests {
         #expect(head.hasPrefix("HTTP/1.1 101 Switching Protocols\r\n"))
     }
 
+    @Test("onOpen speaks first and onClose fires exactly once (lifecycle hooks)")
+    func lifecycleHooksFire() async {
+        let closes = CloseCounter()
+        var wire = upgradeRequest()
+        wire += maskedTextFrame("hi")
+        let connection = FakeConnection(id: TransportConnectionID(14), inbound: wire)
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: HookedEcho(closes: closes)) }
+        )
+        await server.serve(connection)
+
+        let sent = await connection.sentBytes()
+        #expect(String(decoding: sent, as: Unicode.UTF8.self).hasPrefix("HTTP/1.1 101 "))
+        // The onOpen greeting ("welcome", an unmasked 7-octet text frame) must precede the echo of
+        // the client's first frame — the handler spoke FIRST.
+        let welcome: [UInt8] = [0x81, 0x07] + Array("welcome".utf8)
+        let echo: [UInt8] = [0x81, 0x02] + Array("hi".utf8)
+        let welcomeAt = firstIndex(of: welcome, in: sent)
+        let echoAt = firstIndex(of: echo, in: sent)
+        #expect(welcomeAt != nil)
+        #expect(echoAt != nil)
+        if let welcomeAt, let echoAt {
+            #expect(welcomeAt < echoAt)
+        }
+        // The session ended (EOF after the client's frame): onClose fired exactly once.
+        #expect(closes.count == 1)
+    }
+
     // MARK: Fixtures
+
+    /// Counts ``WebSocketHandler/onClose()`` invocations (exactly-once assertion).
+    private final class CloseCounter: Sendable {
+        private let closes = Mutex(0)
+
+        var count: Int { closes.withLock(\.self) }
+
+        func bump() { closes.withLock { $0 += 1 } }
+
+        deinit {
+            // No teardown beyond ARC.
+        }
+    }
+
+    /// An echo handler with lifecycle hooks: greets on open, counts its close.
+    private struct HookedEcho: WebSocketHandler {
+        let closes: CloseCounter
+
+        func handle(_ event: WebSocketConnection.Event) async -> [WebSocketAction] {
+            guard case .message(let opcode, let payload) = event, opcode == .text else {
+                return []
+            }
+            return [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
+        }
+
+        func onOpen() async -> [WebSocketAction] {
+            [.sendText("welcome")]
+        }
+
+        func onClose() async {
+            closes.bump()
+        }
+    }
+
+    /// The start index of `needle` in `haystack`, or nil.
+    private func firstIndex(of needle: [UInt8], in haystack: [UInt8]) -> Int? {
+        guard needle.count <= haystack.count, !needle.isEmpty else {
+            return nil
+        }
+        for start in 0 ... (haystack.count - needle.count)
+        where Array(haystack[start ..< start + needle.count]) == needle {
+            return start
+        }
+        return nil
+    }
 
     /// A no-op middleware that forwards to `next` unchanged — proves the resolver seam threads through a
     /// ``MiddlewareChain`` to the inner ``Router`` (the WebSocket upgrade is decided at the head).

@@ -16,22 +16,6 @@ public enum ResponseSerializer {
     private static let space: UInt8 = 0x20
     private static let colon: UInt8 = 0x3A
 
-    /// Standard reason-phrases for the common status codes (RFC 9110 §15).
-    ///
-    /// A data table, so it adds no branching; unregistered codes serialize with an empty
-    /// reason-phrase (RFC 9112 §4 allows it).
-    private static let reasonPhrases: [UInt16: StaticString] = [
-        100: "Continue", 101: "Switching Protocols",
-        200: "OK", 201: "Created", 202: "Accepted", 204: "No Content", 206: "Partial Content",
-        301: "Moved Permanently", 302: "Found", 304: "Not Modified",
-        400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found",
-        405: "Method Not Allowed", 408: "Request Timeout", 413: "Content Too Large",
-        414: "URI Too Long", 416: "Range Not Satisfiable",
-        429: "Too Many Requests", 431: "Request Header Fields Too Large",
-        500: "Internal Server Error", 501: "Not Implemented", 502: "Bad Gateway",
-        503: "Service Unavailable", 505: "HTTP Version Not Supported"
-    ]
-
     /// Serializes `response` and `body` into a complete HTTP/1.1 response message.
     ///
     /// When `omitBody` is `true` the body octets are not written, but `Content-Length` is still
@@ -128,11 +112,16 @@ public enum ResponseSerializer {
         output.append(0x30 &+ UInt8(code % 10))
     }
 
-    /// Appends the registered reason-phrase for `status`, or nothing if the code is unregistered.
+    /// Appends the registered reason-phrase for `status`, or nothing if the code is unregistered
+    /// (RFC 9112 §4 allows an empty reason-phrase).
+    ///
+    /// The table is ``HTTPStatus/reasonPhrase`` — one registry serves the public API and this
+    /// status-line; the strings are literals in constant storage, so the append copies bytes without
+    /// allocating.
     private static func appendReasonPhrase(for status: HTTPStatus, to output: inout [UInt8]) {
-        guard let phrase = reasonPhrases[status.code] else {
+        guard let phrase = status.reasonPhrase else {
             return
         }
-        phrase.withUTF8Buffer { output.append(contentsOf: $0) }
+        output.append(contentsOf: phrase.utf8)
     }
 }

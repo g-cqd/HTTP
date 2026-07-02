@@ -99,6 +99,58 @@ enum POSIXSocket {
         return (rawFD, readBoundPort(of: rawFD))
     }
 
+    /// Creates, binds, and listens on a UNIX-domain stream socket at `path` (`AF_UNIX`,
+    /// POSIX.1-2017), unlinking a stale socket file first (the standard daemon restart behavior).
+    ///
+    /// The path must fit `sockaddr_un.sun_path` (103 usable octets on Darwin, 107 on Linux) — a
+    /// longer one fails closed with ``TransportError/bindFailed(_:)``. The returned descriptor is
+    /// non-blocking; peers carry no port, so the caller reports the path as the address.
+    static func makeUnixListenSocket(
+        path: String, backlog: Int32
+    ) throws -> Int32 {
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = Array(path.utf8)
+        let capacity = MemoryLayout.size(ofValue: address.sun_path) - 1  // NUL terminator
+        guard !pathBytes.isEmpty, pathBytes.count <= capacity else {
+            throw TransportError.bindFailed(
+                "unix socket path must be 1...\(capacity) octets (got \(pathBytes.count))"
+            )
+        }
+        withUnsafeMutableBytes(of: &address.sun_path) { raw in
+            raw.copyBytes(from: pathBytes)
+            raw[pathBytes.count] = 0
+        }
+        #if canImport(Darwin)
+            let rawFD = socket(AF_UNIX, SOCK_STREAM, 0)
+        #else
+            let rawFD = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+        #endif
+        guard rawFD >= 0 else {
+            throw TransportError.bindFailed("socket(AF_UNIX) errno \(errno)")
+        }
+        setNoSIGPIPE(rawFD)
+        setNonBlocking(rawFD)
+        unlink(path)  // best-effort: a stale socket file from a previous run would fail the bind
+        let length = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let bound = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(rawFD, $0, length) == 0
+            }
+        }
+        guard bound else {
+            let captured = errno
+            close(rawFD)
+            throw TransportError.bindFailed("bind(\(path)) errno \(captured)")
+        }
+        guard listen(rawFD, backlog) == 0 else {
+            let captured = errno
+            close(rawFD)
+            throw TransportError.bindFailed("listen(\(path)) errno \(captured)")
+        }
+        return rawFD
+    }
+
     /// Marks a descriptor non-blocking via `fcntl(F_SETFL, O_NONBLOCK)`.
     static func setNonBlocking(_ rawFD: Int32) {
         let flags = fcntl(rawFD, F_GETFL, 0)

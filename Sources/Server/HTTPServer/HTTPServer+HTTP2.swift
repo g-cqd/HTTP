@@ -79,6 +79,7 @@ extension HTTPServer {
                 webSockets: &webSockets,
                 streaming: &streaming
             ) {
+                await closeRemainingTunnels(&webSockets)
                 return
             }
             queueGoAwayIfDraining(&engine, &sentGoAway)  // RFC 9113 §6.8 graceful shutdown
@@ -95,6 +96,19 @@ extension HTTPServer {
             deadline.disarm()
             guard let chunk, !chunk.isEmpty else { break }
             inbound = chunk
+        }
+        await closeRemainingTunnels(&webSockets)
+    }
+
+    /// Fires the lifecycle close hook for every tunnel still open when the connection ends, so
+    /// `onClose` is exactly-once for every session however the connection dies (RFC 6455 §7).
+    private func closeRemainingTunnels(
+        _ webSockets: inout [HTTP2StreamID: HTTP2WebSocketTunnel]
+    ) async {
+        let open = webSockets.values
+        webSockets.removeAll()
+        for tunnel in open {
+            await tunnel.handler.onClose()
         }
     }
 }

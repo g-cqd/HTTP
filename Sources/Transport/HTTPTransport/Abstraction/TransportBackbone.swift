@@ -36,6 +36,17 @@ public enum TransportBackbone: String, Sendable, CaseIterable {
     /// doing its syscalls through swift-system's typed API.
     case swiftSystem
 
+    /// A UNIX-domain stream socket listener (`AF_UNIX`, POSIX.1-2017) — cleartext, for reverse-proxy
+    /// upstreams, sidecars, and same-host IPC.
+    ///
+    /// Rides the platform's event-driven readiness loop (the ``posixKqueue`` machinery on Darwin,
+    /// ``posixEpoll`` on Linux) — only the listener's address family differs, so accepted connections
+    /// get the same sharded, executor-pinned I/O (audit R4) and the same `sendfile(2)` path.
+    /// Requires ``TransportConfiguration/unixSocketPath``; `host`/`port` are ignored and `boundPort`
+    /// stays `0`. TLS is not offered on this backbone (a local socket's trust boundary is the
+    /// filesystem permission on the path).
+    case unixDomainSocket
+
     /// In-memory transport for deterministic tests (no sockets).
     case fake
 

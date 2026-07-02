@@ -22,9 +22,13 @@ internal import Synchronization
 ///
 /// Mutable state lives in a `Mutex` and the connection counters in `Atomic`s, so the type is
 /// `Sendable`. Accept runs on the first loop; each connection's I/O runs on its assigned loop (R4).
+/// Also carries the ``TransportBackbone/unixDomainSocket`` listener mode on Darwin: only the
+/// listener's address family differs (`AF_UNIX` at ``TransportConfiguration/unixSocketPath``), the
+/// accepted-connection machinery is identical.
 public final class POSIXKqueueTransport: ServerTransport {
-    /// The backbone this transport implements.
-    public let backbone: TransportBackbone = .posixKqueue
+    /// The backbone this transport implements — ``TransportBackbone/posixKqueue``, or
+    /// ``TransportBackbone/unixDomainSocket`` when configured with a socket path.
+    public var backbone: TransportBackbone { configuration.backbone }
 
     private let configuration: TransportConfiguration
     private let state = Mutex<State>(State())
@@ -60,17 +64,32 @@ public final class POSIXKqueueTransport: ServerTransport {
         state.withLock(\.boundPort)
     }
 
-    /// Binds one non-blocking listening socket, spins up N event loops, and begins accepting on the
-    /// first loop (assigning each connection round-robin to a loop).
+    /// Binds one non-blocking listening socket — TCP, or `AF_UNIX` for the
+    /// ``TransportBackbone/unixDomainSocket`` mode — spins up N event loops, and begins accepting on
+    /// the first loop (assigning each connection round-robin to a loop).
     public func start() async throws -> AsyncStream<any TransportConnection> {
         let loopCount = max(1, configuration.eventLoopCount ?? Self.defaultLoopCount())
-        let listener = try POSIXSocket.makeListenSocket(
-            host: configuration.host,
-            port: configuration.port,
-            nonBlocking: true,
-            reusePort: configuration.reusePort,
-            backlog: configuration.backlog
-        )
+        let listener: (descriptor: Int32, port: UInt16)
+        if configuration.backbone == .unixDomainSocket {
+            guard let path = configuration.unixSocketPath else {
+                throw TransportError.bindFailed(
+                    "the .unixDomainSocket backbone requires TransportConfiguration.unixSocketPath"
+                )
+            }
+            listener = (
+                try POSIXSocket.makeUnixListenSocket(path: path, backlog: configuration.backlog),
+                0  // a UNIX-domain listener has no port
+            )
+        }
+        else {
+            listener = try POSIXSocket.makeListenSocket(
+                host: configuration.host,
+                port: configuration.port,
+                nonBlocking: true,
+                reusePort: configuration.reusePort,
+                backlog: configuration.backlog
+            )
+        }
         var loops: [KqueueEventLoop] = []
         loops.reserveCapacity(loopCount)
         for _ in 0 ..< loopCount {
@@ -200,11 +219,16 @@ public final class POSIXKqueueTransport: ServerTransport {
             // Round-robin the connection onto a loop; its I/O and serve task live there for its lifetime.
             let serveLoop = loops[
                 nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
+            // A UNIX-domain peer carries no host:port — report the socket path (one shared "host",
+            // which is also the right key for the per-client connection cap: local peers are one class).
+            let peer =
+                configuration.unixSocketPath.map { TransportAddress(host: $0, port: 0) }
+                ?? POSIXSocket.peerAddress(from: address)
             continuation.yield(
                 POSIXKqueueConnection(
                     id: id,
                     descriptor: clientFD,
-                    peer: POSIXSocket.peerAddress(from: address),
+                    peer: peer,
                     eventLoop: serveLoop
                 )
             )

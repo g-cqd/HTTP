@@ -27,6 +27,21 @@ public protocol WebSocketHandler: Sendable {
 
     /// Returns the frames to send in response to `event` (RFC 6455 §5 / §6).
     func handle(_ event: WebSocketConnection.Event) async -> [WebSocketAction]
+
+    /// Called once when the connection is established — after the upgrade completes (h1 `101`, or the
+    /// Extended-CONNECT accept on h2/h3, RFC 8441 / RFC 9220) and before any peer frame is delivered.
+    ///
+    /// Returns the frames to send first (a greeting, a protocol hello); the default sends none. This
+    /// is the only place a handler can speak *first* — ``handle(_:)`` runs only when the peer sends.
+    func onOpen() async -> [WebSocketAction]
+
+    /// Called exactly once when the session ends — a clean Close handshake, an abrupt peer EOF, a
+    /// protocol failure, or the server tearing the connection down.
+    ///
+    /// The last call the handler receives for the connection; use it to release per-connection state.
+    /// (``handle(_:)``'s `.close` event fires only for a *peer-sent* Close frame — this fires for
+    /// every ending, RFC 6455 §7.) The default does nothing.
+    func onClose() async
 }
 
 extension WebSocketHandler {
@@ -40,4 +55,12 @@ extension WebSocketHandler {
     /// against cross-site WebSocket hijacking (RFC 6455 §10.2, CWE-346/1385). Override to admit specific
     /// origins, e.g. `{ $0 == "https://app.example" }`.
     public func isOriginAllowed(_ origin: String?) -> Bool { origin == nil }
+
+    /// By default a handler sends nothing on open (the pre-hooks behavior, unchanged).
+    public func onOpen() async -> [WebSocketAction] { [] }
+
+    /// By default a handler observes nothing on close (the pre-hooks behavior, unchanged).
+    public func onClose() async {
+        // Optional lifecycle hook — no per-connection state to release by default.
+    }
 }

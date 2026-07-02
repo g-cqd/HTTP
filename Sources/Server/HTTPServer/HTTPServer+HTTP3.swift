@@ -19,7 +19,7 @@ internal import WebSocket
 
 extension HTTPServer {
     /// Serializes the non-`Sendable` ``HTTP3Connection`` engine across a connection's concurrent streams.
-    private actor Engine {
+    actor Engine {
         private var connection: HTTP3Connection
         /// The server's own unidirectional streams by role (control / QPACK encoder+decoder), so
         /// role-addressed engine sends — QPACK Insert Count Increment / Section Acknowledgment on the
@@ -210,22 +210,14 @@ extension HTTPServer {
                         return
                     case .requestBodyChunk, .requestEnd:
                         break  // consumed by serveHTTP3StreamingRequest — never standalone here
-                    case .extendedConnect(let id, let request, let proto):
-                        let tunnel = await acceptHTTP3Tunnel(
-                            id, request: request, protocol: proto, on: stream, engine: engine
+                    case .extendedConnect, .tunnelData, .tunnelClosed:
+                        await handleHTTP3TunnelEvent(
+                            event,
+                            stream: stream,
+                            engine: engine,
+                            webSocket: &webSocket,
+                            tunnelHandler: &tunnelHandler
                         )
-                        webSocket = tunnel?.socket
-                        tunnelHandler = tunnel?.handler
-                    case .tunnelData(_, let bytes):
-                        webSocket = await pumpHTTP3Tunnel(
-                            webSocket,
-                            handler: tunnelHandler,
-                            bytes: bytes,
-                            on: stream,
-                            engine: engine
-                        )
-                    case .tunnelClosed:
-                        webSocket = nil
                     case .goAway:
                         break
                 }
@@ -233,6 +225,11 @@ extension HTTPServer {
             if chunk.fin || webSocket?.isClosing == true {
                 break
             }
+        }
+        // Lifecycle hook: the stream ended (FIN / EOF / reset) with the tunnel still open — every
+        // ending funnels through exactly one `onClose` (the in-loop paths clear `tunnelHandler`).
+        if let handler = tunnelHandler {
+            await handler.onClose()
         }
     }
 
@@ -369,76 +366,6 @@ extension HTTPServer {
             }
         }
         return (chunks, ended)
-    }
-
-    /// Accepts (or refuses) a WebSocket-over-HTTP/3 Extended CONNECT (RFC 9220) — the same CSWSH origin
-    /// defense and permessage-deflate negotiation as the HTTP/2 tunnel.
-    ///
-    /// On success it sends the engine's `200` (no FIN) and returns the per-stream ``WebSocketConnection``
-    /// paired with the route's handler; a path with no WebSocket route, a disallowed origin, a declined
-    /// upgrade, or a framing error resets the stream and returns nil.
-    private func acceptHTTP3Tunnel(
-        _ id: QUICStreamID,
-        request: HTTPRequest,
-        protocol proto: String,
-        on stream: any QUICStream,
-        engine: Engine
-    ) async -> (socket: WebSocketConnection, handler: any WebSocketHandler)? {
-        // Resolve the WebSocket route for this path; CSWSH defense (RFC 6455 §10.2): a disallowed Origin
-        // refuses the tunnel, as on the h1/h2 paths.
-        guard proto == "websocket",
-            let handler = currentResolver?.resolveWebSocket(path: request.path)?.webSocketHandler,
-            handler.shouldUpgrade(request),
-            handler.isOriginAllowed(request.headerFields[.origin])
-        else {
-            stream.reset(errorCode: HTTP3ErrorCode.h3RequestRejected.rawValue)
-            return nil
-        }
-        let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(request.headerFields)
-        guard
-            let accept = await engine.acceptTunnel(
-                id, secWebSocketExtensions: permessageDeflate?.headerValue
-            ),
-            (try? await stream.send(accept, fin: false)) != nil
-        else {
-            stream.reset(errorCode: HTTP3ErrorCode.h3InternalError.rawValue)
-            return nil
-        }
-        let cap = limits.effectiveWebSocketMessageSize
-        let socket = WebSocketConnection(maxMessageSize: cap, permessageDeflate: permessageDeflate)
-        return (socket, handler)
-    }
-
-    /// Feeds tunnel `bytes` to the stream's ``WebSocketConnection`` and writes the frames it produces back
-    /// as tunnel DATA (RFC 9220 over RFC 6455 §6).
-    ///
-    /// Returns the updated connection, or nil once it closes — after flushing the queued Close and FINing
-    /// the stream (a violation leaves a queued Close and sets `isClosing`).
-    private func pumpHTTP3Tunnel(
-        _ webSocket: WebSocketConnection?,
-        handler: (any WebSocketHandler)?,
-        bytes: [UInt8],
-        on stream: any QUICStream,
-        engine: Engine
-    ) async -> WebSocketConnection? {
-        guard var socket = webSocket, let handler else {
-            return webSocket
-        }
-        let events = (try? socket.receive(bytes)) ?? []
-        for event in events {
-            for action in await handler.handle(event) { socket.apply(action) }
-        }
-        let outbound = socket.outboundBytes()
-        if !outbound.isEmpty {
-            let frame = await engine.sendTunnelData(stream.id, outbound)
-            try? await stream.send(frame, fin: false)
-        }
-        guard !socket.isClosing else {
-            await engine.closeTunnel(stream.id)
-            try? await stream.send([], fin: true)
-            return nil
-        }
-        return socket
     }
 
     /// Streams a response natively on a QUIC request stream (RFC 9114 §4.1).

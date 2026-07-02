@@ -98,6 +98,15 @@ extension HTTPServer {
         let (wakeups, continuation) = AsyncStream.makeStream(
             of: WebSocketWakeup.self, bufferingPolicy: .bufferingNewest(256)
         )
+        // Lifecycle hook: the upgrade is complete — let the handler speak first (a greeting/hello),
+        // before any peer frame or broadcast is delivered.
+        for action in await handler.onOpen() { engine.apply(action) }
+        let greeting = engine.outboundBytes()
+        if !greeting.isEmpty, (try? await connection.send(greeting)) == nil {
+            await handler.onClose()
+            await connection.close()
+            return
+        }
         // Hub (Phase 2.7): register this connection's broadcast sink and auto-subscribe it to the topic,
         // so a published message arrives as a `.broadcast` wakeup, applied to the engine below.
         var token: UInt64?
@@ -124,6 +133,9 @@ extension HTTPServer {
         continuation.finish()
         if let hub, let token { await hub.remove(token) }
         await connection.close()
+        // Lifecycle hook: the session is over — every ending funnels through here exactly once
+        // (clean Close handshake, abrupt EOF, idle timeout, send failure).
+        await handler.onClose()
     }
 
     /// Consumes the wakeup stream: receive → events → handler actions, or a hub broadcast → send; flushes
@@ -195,13 +207,18 @@ extension HTTPServer {
                     streamID,
                     secWebSocketExtensions: permessageDeflate?.headerValue
                 )
-                webSockets[streamID] = HTTP2WebSocketTunnel(
+                var tunnel = HTTP2WebSocketTunnel(
                     socket: WebSocketConnection(
                         maxMessageSize: limits.effectiveWebSocketMessageSize,
                         permessageDeflate: permessageDeflate
                     ),
                     handler: handler
                 )
+                // Lifecycle hook: the tunnel is open — let the handler speak first.
+                for action in await handler.onOpen() { tunnel.socket.apply(action) }
+                let greeting = tunnel.socket.outboundBytes()
+                if !greeting.isEmpty { engine.sendTunnelData(streamID, greeting) }
+                webSockets[streamID] = tunnel
             case .tunnelData(let streamID, let bytes):
                 guard var tunnel = webSockets[streamID] else {
                     return
@@ -216,12 +233,17 @@ extension HTTPServer {
                 if tunnel.socket.isClosing {
                     try? engine.closeTunnel(streamID)
                     webSockets[streamID] = nil
+                    await tunnel.handler.onClose()  // lifecycle hook — the session is over
                 }
                 else {
                     webSockets[streamID] = tunnel
                 }
             case .tunnelClosed(let streamID), .streamReset(let streamID, _):
-                webSockets[streamID] = nil
+                // Exactly-once: only a tunnel still in the map gets its close hook (an isClosing
+                // removal above already fired it).
+                if let closed = webSockets.removeValue(forKey: streamID) {
+                    await closed.handler.onClose()
+                }
             default:
                 break
         }
