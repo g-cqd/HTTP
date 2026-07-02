@@ -151,7 +151,7 @@ struct HTTPServerHTTP3Tests {
         let connections = try await transport.start()
         let port = transport.boundPort
         let server = HTTPServer(
-            transport: TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
+            transport: try TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
             responder: responder
         )
         let serving = Task {
@@ -178,7 +178,7 @@ struct HTTPServerHTTP3Tests {
         let connections = try await transport.start()
         let port = transport.boundPort
         let server = HTTPServer(
-            transport: TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
+            transport: try TransportFactory.make(TransportConfiguration(port: 0, backbone: .fake)),
             responder: responder
         )
         let serving = Task {

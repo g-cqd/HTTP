@@ -71,7 +71,9 @@
                 throw TransportError.ioFailed("epoll_create1 failed (errno \(errno))")
             }
             epfd = fd
-            let wake = eventfd(0, Int32(EFD_CLOEXEC) | Int32(EFD_NONBLOCK))
+            // Through the CEpoll shim: Glibc's modulemap exposes neither <sys/eventfd.h> nor the
+            // EFD_* flags on any current toolchain (the same gap as <sys/epoll.h> itself).
+            let wake = CEpoll_eventfd(0, CEpoll_eventfd_wakeup_flags())
             guard wake >= 0 else {
                 close(fd)
                 throw TransportError.ioFailed("eventfd failed (errno \(errno))")

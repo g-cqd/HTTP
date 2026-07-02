@@ -22,15 +22,15 @@ struct BackboneConformanceTests {
         .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem
     ]
 
-    private func makeTransport(_ backbone: TransportBackbone) -> any ServerTransport {
-        TransportFactory.make(TransportConfiguration(port: 0, backbone: backbone))
+    private func makeTransport(_ backbone: TransportBackbone) throws -> any ServerTransport {
+        try TransportFactory.make(TransportConfiguration(port: 0, backbone: backbone))
     }
 
     @Test(
         "binds a non-zero ephemeral port after start",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func bindsEphemeralPort(_ backbone: TransportBackbone) async throws {
-        let transport = makeTransport(backbone)
+        let transport = try makeTransport(backbone)
         _ = try await transport.start()
         #expect(transport.boundPort != 0, "\(backbone.rawValue) bound no port")
         await transport.shutdown()
@@ -40,7 +40,7 @@ struct BackboneConformanceTests {
         "accepts a connection and round-trips bytes over loopback",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func loopbackRoundTrip(_ backbone: TransportBackbone) async throws {
-        let transport = makeTransport(backbone)
+        let transport = try makeTransport(backbone)
         let stream = try await transport.start()
         try await assertLoopbackEcho(stream: stream, port: transport.boundPort)
         await transport.shutdown()
@@ -50,7 +50,7 @@ struct BackboneConformanceTests {
         "scatter-gather send(head, body) delivers head then body intact (writev path)",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func scatterGatherRoundTrip(_ backbone: TransportBackbone) async throws {
-        let transport = makeTransport(backbone)
+        let transport = try makeTransport(backbone)
         let stream = try await transport.start()
         // A 4 KiB body forces a genuine two-iovec writev and a multi-chunk client read.
         let head = Array("HTTP/1.1 200 OK\r\nContent-Length: 4096\r\n\r\n".utf8)
@@ -65,7 +65,7 @@ struct BackboneConformanceTests {
         "cancellation unblocks a stalled receive instead of deadlocking",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func cancellationUnblocksStalledReceive(_ backbone: TransportBackbone) async throws {
-        let transport = makeTransport(backbone)
+        let transport = try makeTransport(backbone)
         let stream = try await transport.start()
 
         // A client that connects but never sends, so the server's read blocks indefinitely.
@@ -111,7 +111,7 @@ struct BackboneConformanceTests {
         "a BARE child-task cancel unblocks a parked receive (the receive contract, S1 regression)",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func childTaskCancelUnblocksParkedReceive(_ backbone: TransportBackbone) async throws {
-        let transport = makeTransport(backbone)
+        let transport = try makeTransport(backbone)
         let stream = try await transport.start()
 
         // A client that connects but never sends, so the server's read parks indefinitely.
@@ -154,7 +154,7 @@ struct BackboneConformanceTests {
         "a BARE child-task cancel also unblocks the parked scratch receive(into:) path",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func childTaskCancelUnblocksParkedScratchReceive(_ backbone: TransportBackbone) async throws {
-        let transport = makeTransport(backbone)
+        let transport = try makeTransport(backbone)
         let stream = try await transport.start()
 
         let endpointPort = try #require(NWEndpoint.Port(rawValue: transport.boundPort))
@@ -192,7 +192,7 @@ struct BackboneConformanceTests {
         "shutdown finishes the connection stream", .timeLimit(.minutes(1)),
         arguments: socketBackbones)
     func shutdownFinishesStream(_ backbone: TransportBackbone) async throws {
-        let transport = makeTransport(backbone)
+        let transport = try makeTransport(backbone)
         let stream = try await transport.start()
         await transport.shutdown()
         // After shutdown the stream must finish (its async iterator returns nil), not hang forever.

@@ -36,7 +36,7 @@ import WebSocket
 
 @main
 enum HTTPDExample {
-    static func main() async {
+    static func main() async throws {
         // Prefork: HTTPD_WORKERS=N makes this the supervisor (it forks N fresh worker processes and
         // never returns); each worker re-enters here with HTTPD_WORKER set and serves with
         // SO_REUSEPORT so the kernel load-balances across them. POSIX backbones only.
@@ -86,7 +86,7 @@ enum HTTPDExample {
             let quicTransport: (any QUICServerTransport)? = nil  // QUIC is Network.framework-only
         #endif
         let server = HTTPServer(
-            transport: TransportFactory.make(configuration),
+            transport: try TransportFactory.make(configuration),
             responder: responder,
             quicTransport: quicTransport,
             limits: makeLimits()
