@@ -113,17 +113,37 @@
         // MARK: - Readiness registration
 
         /// Registers one-shot interest in `fd` becoming readable; `handler` runs once when it does.
-        func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) {
+        ///
+        /// Returns `false` — with `handler` dropped, not retained — when the kernel refuses the
+        /// registration (`EBADF`: `fd` was already closed by a concurrent ``closeDescriptor(_:)``,
+        /// e.g. a cancelled receive that raced this park). The caller must then fail its parked
+        /// waiter itself: parking behind a registration that can never fire would leak the
+        /// continuation, and probing the fd instead could touch a descriptor *number* the kernel has
+        /// since reused. Mirrors ``KqueueEventLoop/waitReadable(_:_:)``.
+        @discardableResult
+        func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
             registry.withLock { $0.readHandlers[fd] = handler }
-            arm(fd)
+            guard arm(fd) else {
+                registry.withLock { _ = $0.readHandlers.removeValue(forKey: fd) }
+                return false
+            }
             triggerWakeup()
+            return true
         }
 
         /// Registers one-shot interest in `fd` becoming writable; `handler` runs once when it does.
-        func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) {
+        ///
+        /// Returns `false` with `handler` dropped when the registration is refused — see
+        /// ``waitReadable(_:_:)``.
+        @discardableResult
+        func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
             registry.withLock { $0.writeHandlers[fd] = handler }
-            arm(fd)
+            guard arm(fd) else {
+                registry.withLock { _ = $0.writeHandlers.removeValue(forKey: fd) }
+                return false
+            }
             triggerWakeup()
+            return true
         }
 
         /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races
@@ -214,18 +234,30 @@
             readHandler?()
             writeHandler?()
             // `EPOLLONESHOT` disarmed the whole fd; re-arm if a handler in the other direction is still
-            // pending (or the fired handler re-armed itself). A redundant `MOD` with the same mask is fine.
+            // pending (or the fired handler re-armed itself). A redundant `MOD` with the same mask is
+            // fine. A refused re-arm (the fd died under us) fails the still-parked handlers here — on
+            // the loop thread, serialized with the close sweep — so no waiter leaks behind it.
             let stillPending = registry.withLock {
                 $0.readHandlers[fd] != nil || $0.writeHandlers[fd] != nil
             }
-            if stillPending {
-                arm(fd)
+            if stillPending, !arm(fd) {
+                let (stranded, strandedWrite) = registry.withLock {
+                    (
+                        $0.readHandlers.removeValue(forKey: fd),
+                        $0.writeHandlers.removeValue(forKey: fd)
+                    )
+                }
+                stranded?()
+                strandedWrite?()
             }
         }
 
         /// (Re)arms `fd` for whichever directions currently have a pending handler, as a single
         /// `EPOLLONESHOT` registration — `EPOLL_CTL_ADD` the first time, `EPOLL_CTL_MOD` thereafter.
-        private func arm(_ fd: Int32) {
+        ///
+        /// Returns whether the kernel accepted the registration; on a refused first `ADD` the fd is
+        /// dropped from `registered` again so a later attempt retries the `ADD`.
+        private func arm(_ fd: Int32) -> Bool {
             let (mask, alreadyRegistered): (UInt32, Bool) = registry.withLock { registry in
                 var events = EPOLLONESHOT.rawValue
                 if registry.readHandlers[fd] != nil { events |= EPOLLIN.rawValue }
@@ -237,7 +269,12 @@
             var event = epoll_event()
             event.events = mask
             event.data.fd = fd
-            _ = epoll_ctl(epfd, alreadyRegistered ? EPOLL_CTL_MOD : EPOLL_CTL_ADD, fd, &event)
+            let operation = alreadyRegistered ? EPOLL_CTL_MOD : EPOLL_CTL_ADD
+            let accepted = epoll_ctl(epfd, operation, fd, &event) >= 0
+            if !accepted, !alreadyRegistered {
+                registry.withLock { _ = $0.registered.remove(fd) }
+            }
+            return accepted
         }
 
         /// Resets the `eventfd` counter after a wakeup (EFD_NONBLOCK, so this never blocks).

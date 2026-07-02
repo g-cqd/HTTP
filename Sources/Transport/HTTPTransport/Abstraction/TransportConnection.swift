@@ -43,6 +43,12 @@ public protocol TransportConnection: Sendable {
     var tlsPeerSubject: String? { get }
 
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
+    ///
+    /// Honors task cancellation **per call**: cancelling the task awaiting a receive — any task, not
+    /// only the serve task carrying the connection-wide handler (audit CC4), e.g. an idle-watchdog's
+    /// child task — tears the connection down (``cancel()``) and the parked call resumes promptly,
+    /// throwing `CancellationError`. Teardown rather than a bare unblock, because a byte stream cannot
+    /// abandon an in-flight read without losing its framing.
     func receive(maxLength: Int) async throws -> [UInt8]?
 
     /// Receives up to `maxLength` inbound bytes, **appending** them to `buffer`, and returns the number
@@ -51,7 +57,8 @@ public protocol TransportConnection: Sendable {
     /// This is the allocation-lean read path: a backbone that owns a reusable read buffer overrides it to
     /// read straight into that scratch and copy only the received bytes into `buffer` — no fresh per-read
     /// chunk. The default below adapts ``receive(maxLength:)`` for backbones that cannot (Network.framework
-    /// hands back its own `Data`).
+    /// hands back its own `Data`). Cancellation follows the ``receive(maxLength:)`` contract: a cancelled
+    /// call tears the connection down and throws `CancellationError` promptly.
     func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int
 
     /// Sends `bytes` to the peer, completing once they are handed to the OS.
@@ -72,9 +79,11 @@ public protocol TransportConnection: Sendable {
     ///
     /// The synchronous counterpart of ``close()``: the server registers one ``cancel()`` per connection
     /// as the cancellation handler covering its whole serve loop, so cancelling that task closes the fd
-    /// once and resumes any read/write parked in a continuation — instead of registering a task-status
-    /// record per I/O op on the hot path (audit CC4). A socket backbone overrides it to call its
-    /// idempotent sync close; the in-memory fakes keep the no-op default below.
+    /// once and resumes any read/write parked in a continuation. Socket backbones additionally install
+    /// a per-call handler around a **parked** receive (never on the data-ready hot path — audit CC4),
+    /// so a child-task cancel honors the ``receive(maxLength:)`` contract; both handlers funnel into
+    /// this idempotent close. A socket backbone overrides it to close its descriptor synchronously;
+    /// the in-memory fakes keep the no-op default below.
     func cancel()
 
     /// The task executor this connection's serve task should prefer, or `nil` to use the global

@@ -179,8 +179,22 @@
         /// `SSL_read` into the scratch, pumping ciphertext from the socket on `WANT_READ` — the shared
         /// decrypt loop.
         ///
-        /// Returns the plaintext byte count, or `0` at end of stream.
+        /// Returns the plaintext byte count, or `0` at end of stream. A read torn down by its own
+        /// task's cancellation (the ``TransportConnection`` receive contract — see ``awaitReadable()``)
+        /// surfaces as `CancellationError`.
         private func readPlaintext(maxLength: Int) async throws -> Int {
+            do {
+                return try await decryptLoop(maxLength: maxLength)
+            }
+            catch _ where Task.isCancelled {
+                // The teardown — or a pre-cancelled task finding the descriptor already closed —
+                // surfaces as a transport error; report the standard cancellation signal instead.
+                throw CancellationError()
+            }
+        }
+
+        /// The decrypt loop body of ``readPlaintext(maxLength:)``.
+        private func decryptLoop(maxLength: Int) async throws -> Int {
             while true {
                 let count = scratch.withLock { (b: inout [UInt8]) -> Int32 in
                     if b.count < maxLength {
@@ -276,8 +290,14 @@
 
         /// Drains all ciphertext `SSL` has queued in ``writeBIO`` to the socket, awaiting writability on
         /// a full send buffer.
+        ///
+        /// The close-flag guard keeps a pump resumed after ``cancel()``/``close()`` from touching the
+        /// descriptor *number*, which the kernel may already have reused for another connection.
         private func flushCiphertext() async throws {
             while CHTTPBoringSSL_BIO_ctrl_pending(writeBIO) > 0 {
+                guard !isClosed.load(ordering: .acquiring) else {
+                    throw TransportError.closed
+                }
                 let chunk = cipher.withLock { (buffer: inout [UInt8]) -> Int in
                     Int(
                         buffer.withUnsafeMutableBytes { raw in
@@ -308,9 +328,13 @@
         /// Reads one batch of ciphertext from the socket into ``readBIO`` for `SSL_read` to decrypt,
         /// awaiting readability on `EAGAIN`.
         ///
-        /// Returns `false` at socket EOF.
+        /// Returns `false` at socket EOF. The close-flag guard mirrors ``flushCiphertext()``: never
+        /// touch a since-closed (possibly reused) descriptor number.
         private func fillCiphertext() async throws -> Bool {
             while true {
+                guard !isClosed.load(ordering: .acquiring) else {
+                    throw TransportError.closed
+                }
                 do {
                     let count = try cipher.withLock { (buffer: inout [UInt8]) -> Int in
                         try buffer.withUnsafeMutableBytes { raw in
@@ -377,24 +401,48 @@
 
         /// Awaits socket readability for the ciphertext pump.
         ///
-        /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
-        /// (audit CC4); cancelling the serve task closes the fd, which fires this parked readiness handler
-        /// against the closed descriptor so the continuation resumes instead of leaking.
+        /// Honors per-park task cancellation (the ``TransportConnection`` receive contract): the
+        /// handler tears the connection down (``cancel()``), the loop's close sweep resumes this
+        /// continuation, and the check below surfaces `CancellationError` before the pump can touch
+        /// the closed descriptor — whose *number* the kernel may already have reused. A refused
+        /// registration (the descriptor died before this park) fails the waiter immediately for the
+        /// same reason. These parks sit behind `WANT_READ`/`WANT_WRITE`, off the decrypt hot path, so
+        /// the handler cost is irrelevant (audit CC4 concerned the data-ready path).
         private func awaitReadable() async throws {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Void, any Error>) in
-                let once = OnceResumer(continuation)
-                eventLoop.waitReadable(descriptor) { once.resume(returning: ()) }
+            try await withTaskCancellationHandler {
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Void, any Error>) in
+                    let once = OnceResumer(continuation)
+                    let registered = eventLoop.waitReadable(descriptor) {
+                        once.resume(returning: ())
+                    }
+                    if !registered {
+                        once.resume(throwing: TransportError.closed)
+                    }
+                }
+            } onCancel: {
+                self.cancel()
             }
+            try Task.checkCancellation()
         }
 
         /// Awaits socket writability for the ciphertext pump — see ``awaitReadable()`` on cancellation.
         private func awaitWritable() async throws {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<Void, any Error>) in
-                let once = OnceResumer(continuation)
-                eventLoop.waitWritable(descriptor) { once.resume(returning: ()) }
+            try await withTaskCancellationHandler {
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Void, any Error>) in
+                    let once = OnceResumer(continuation)
+                    let registered = eventLoop.waitWritable(descriptor) {
+                        once.resume(returning: ())
+                    }
+                    if !registered {
+                        once.resume(throwing: TransportError.closed)
+                    }
+                }
+            } onCancel: {
+                self.cancel()
             }
+            try Task.checkCancellation()
         }
     }
 

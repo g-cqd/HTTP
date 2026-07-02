@@ -76,40 +76,52 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// Arms a read source; when the socket is readable, one non-blocking `read(2)` returns what is
     /// buffered.
     ///
-    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
-    /// (audit CC4); cancelling the serve task closes the fd, which runs the parked waiter's `fail`
-    /// closure so this continuation resumes (EOF) instead of leaking.
+    /// Honors per-call task cancellation (the ``TransportConnection`` receive contract): a per-read
+    /// handler tears the connection down (``cancel()``), whose close sweep runs the parked waiter's
+    /// `fail` closure; the lapse then surfaces as `CancellationError` rather than a bare EOF. Every
+    /// receive on this backbone round-trips its serial queue anyway, so — unlike the loop-pinned
+    /// backbones (audit CC4) — there is no handler-free hot path to preserve.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
         let fd = descriptor
-        return try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
-            readResumer.reset(continuation)
-            queue.async { [self] in
-                guard !isClosed.load(ordering: .acquiring) else {
-                    readResumer.resume(returning: nil)
-                    return
-                }
-                let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-                waiter.withLock {
-                    $0 = Waiter(source: source) { [self] in readResumer.resume(returning: nil) }
-                }
-                source.setEventHandler { [self] in
-                    do {
-                        let bytes = try Self.readAvailable(fd, maxLength)
-                        clearWaiter(source)
-                        readResumer.resume(returning: bytes)
+        let bytes = try await withTaskCancellationHandler {
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
+                readResumer.reset(continuation)
+                queue.async { [self] in
+                    guard !isClosed.load(ordering: .acquiring) else {
+                        readResumer.resume(returning: nil)
+                        return
                     }
-                    catch is WouldBlock {
-                        // Spurious readiness — leave the source armed; it fires again.
+                    let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+                    waiter.withLock {
+                        $0 = Waiter(source: source) { [self] in readResumer.resume(returning: nil) }
                     }
-                    catch {
-                        clearWaiter(source)
-                        readResumer.resume(throwing: error)
+                    source.setEventHandler { [self] in
+                        do {
+                            let bytes = try Self.readAvailable(fd, maxLength)
+                            clearWaiter(source)
+                            readResumer.resume(returning: bytes)
+                        }
+                        catch is WouldBlock {
+                            // Spurious readiness — leave the source armed; it fires again.
+                        }
+                        catch {
+                            clearWaiter(source)
+                            readResumer.resume(throwing: error)
+                        }
                     }
+                    source.resume()
                 }
-                source.resume()
             }
+        } onCancel: {
+            self.cancel()
         }
+        // The close sweep resumes a parked read as EOF (`nil`); when that EOF was manufactured by this
+        // task's own cancellation, report the standard signal instead of a fake end-of-stream.
+        if bytes == nil {
+            try Task.checkCancellation()
+        }
+        return bytes
     }
 
     /// One non-blocking `read(2)` of the bytes buffered now (`nil` at EOF); throws `WouldBlock` if the

@@ -44,7 +44,7 @@ public final class SwiftSystemConnection: TransportConnection {
     /// the loop thread while the copy-out runs on the awaiting (pinned) task; reads on one connection are
     /// serial, so the lock is uncontended.
     private let scratch = Mutex<[UInt8]>([])
-    /// Cached resumer for the hot read path (``receive(into:)``).
+    /// Cached resumer for the shared scratch read core (both `receive` overloads).
     ///
     /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
     /// Sound because reads on one connection are serialized — the prior continuation is always taken
@@ -84,23 +84,21 @@ public final class SwiftSystemConnection: TransportConnection {
 
     /// Reads up to `maxLength` bytes once the socket is readable, or `nil` at end of stream.
     ///
-    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
-    /// (audit CC4); cancelling the serve task closes the fd through the loop, which fires the parked
-    /// readiness handler against the closed descriptor so this continuation resumes with an error.
+    /// Shares the reused-scratch read core with ``receive(into:maxLength:)`` (audit P1) — the returned
+    /// chunk is the only per-read allocation — and honors per-call task cancellation (the
+    /// ``TransportConnection`` receive contract).
     public func receive(maxLength: Int) async throws -> [UInt8]? {
-        try await withUnsafeThrowingContinuation { continuation in
-            readAvailable(maxLength: maxLength, into: OnceResumer(continuation))
+        let count = try await readIntoScratch(maxLength: maxLength)
+        guard count > 0 else {
+            return nil  // 0 == EOF
         }
+        return scratch.withLock { Array($0[..<count]) }
     }
 
     /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
     /// count appended (`0` at EOF) — the allocation-free read path (audit P1).
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-        let count = try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Int, any Error>) in
-            readResumer.reset(continuation)
-            readIntoScratch(maxLength: maxLength, into: readResumer)
-        }
+        let count = try await readIntoScratch(maxLength: maxLength)
         if count > 0 {
             scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
         }
@@ -119,9 +117,9 @@ public final class SwiftSystemConnection: TransportConnection {
     /// Scatter-gather send: writes `head` then `body` in one `writev` syscall — no coalesce copy
     /// (audit #3 / L4) — re-arming on writability whenever the socket buffer fills.
     ///
-    /// An empty `body` falls back to the single-buffer ``send(_:)``. No per-op cancellation handler: the
-    /// server registers one ``cancel()`` for the whole connection (audit CC4), which closes the fd and
-    /// unblocks a parked write.
+    /// An empty `body` falls back to the single-buffer ``send(_:)``. No per-op cancellation handler on
+    /// the write path: the server registers one ``cancel()`` for the whole connection (audit CC4),
+    /// which closes the fd and unblocks a parked write.
     public func send(_ head: [UInt8], _ body: [UInt8]) async throws {
         guard !body.isEmpty else {
             try await send(head)
@@ -152,13 +150,39 @@ public final class SwiftSystemConnection: TransportConnection {
         eventLoop.closeDescriptor(descriptor.rawValue)
     }
 
-    /// Fills the reused scratch via `FileDescriptor.read` once readable and resumes `once` with the byte
-    /// count (`0` at EOF), re-arming on a spurious `EAGAIN`.
+    /// The shared scratch read core: one opportunistic `FileDescriptor.read`, then — only when the
+    /// socket has nothing buffered — the parked phase under a per-park cancellation handler.
     ///
-    /// Runs on the loop thread.
-    private func readIntoScratch(maxLength: Int, into once: OnceResumer<Int>) {
+    /// The two-phase split keeps the data-ready hot path free of cancellation bookkeeping (audit CC4)
+    /// while a *parked* receive honors its own task's cancellation per the ``TransportConnection``
+    /// contract: cancellation tears the connection down (``cancel()``), the loop's close sweep resumes
+    /// the waiter, and the lapse surfaces here as `CancellationError`.
+    private func readIntoScratch(maxLength: Int) async throws -> Int {
         do {
-            let bytesRead = try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
+            if let immediate = try readScratchNow(maxLength: maxLength) {
+                return immediate
+            }
+            return try await parkForScratchRead(maxLength: maxLength)
+        }
+        catch _ where Task.isCancelled {
+            // The teardown above — or a pre-cancelled task finding the descriptor already closed —
+            // surfaces as a transport error; report the standard cancellation signal instead.
+            throw CancellationError()
+        }
+    }
+
+    /// One non-blocking `FileDescriptor.read` into the scratch: the byte count (`0` == EOF), or `nil`
+    /// when the socket has nothing buffered yet (EAGAIN — the caller parks).
+    ///
+    /// The close-flag guard runs first so a callback firing after ``cancel()`` — the loop's close
+    /// sweep — never touches the descriptor *number*, which the kernel may already have reused for
+    /// another connection.
+    private func readScratchNow(maxLength: Int) throws -> Int? {
+        guard !isClosed.load(ordering: .acquiring) else {
+            throw TransportError.closed
+        }
+        do {
+            return try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
                 if buffer.count < maxLength {
                     buffer = [UInt8](repeating: 0, count: maxLength)  // sized once, then reused
                 }
@@ -169,32 +193,45 @@ public final class SwiftSystemConnection: TransportConnection {
                     )
                 }
             }
-            once.resume(returning: bytesRead)  // 0 == EOF
         }
         catch is WouldBlock {
-            eventLoop.waitReadable(descriptor.rawValue) { [self] in
-                readIntoScratch(maxLength: maxLength, into: once)
-            }
-        }
-        catch {
-            once.resume(throwing: error)
+            return nil
         }
     }
 
-    private func readAvailable(maxLength: Int, into once: OnceResumer<[UInt8]?>) {
-        do {
-            let bytes = try POSIXSocket.readBuffer(maxLength: maxLength) { raw in
-                try Self.readOnce(descriptor, raw)
+    /// Parks until the socket is readable and resumes with the next read's outcome, under a
+    /// cancellation handler that closes the connection — the only way to abandon an in-flight read on
+    /// a byte stream without losing its framing (the ``TransportConnection`` receive contract).
+    private func parkForScratchRead(maxLength: Int) async throws -> Int {
+        try await withTaskCancellationHandler {
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Int, any Error>) in
+                readResumer.reset(continuation)
+                armScratchRead(maxLength: maxLength, into: readResumer)
             }
-            once.resume(returning: bytes)  // nil == EOF
+        } onCancel: {
+            self.cancel()
         }
-        catch is WouldBlock {
-            eventLoop.waitReadable(descriptor.rawValue) { [self] in
-                readAvailable(maxLength: maxLength, into: once)
+    }
+
+    /// Registers read interest whose callback completes `once` with the next read — re-arming on a
+    /// spurious `EAGAIN` wakeup — and fails `once` without touching the descriptor when the
+    /// registration itself is refused (the descriptor was closed by a concurrent cancel).
+    private func armScratchRead(maxLength: Int, into once: OnceResumer<Int>) {
+        let registered = eventLoop.waitReadable(descriptor.rawValue) { [self] in
+            do {
+                guard let bytesRead = try readScratchNow(maxLength: maxLength) else {
+                    armScratchRead(maxLength: maxLength, into: once)  // spurious wakeup — re-arm
+                    return
+                }
+                once.resume(returning: bytesRead)  // 0 == EOF
+            }
+            catch {
+                once.resume(throwing: error)
             }
         }
-        catch {
-            once.resume(throwing: error)
+        if !registered {
+            once.resume(throwing: TransportError.closed)
         }
     }
 
@@ -250,8 +287,13 @@ public final class SwiftSystemConnection: TransportConnection {
             case .failed(let error):
                 once.resume(throwing: error)
             case .wouldBlock(let remaining):
-                eventLoop.waitWritable(descriptor.rawValue) { [self] in
+                let registered = eventLoop.waitWritable(descriptor.rawValue) { [self] in
                     writeRemaining(bytes: bytes, offset: remaining, once: once)
+                }
+                if !registered {
+                    // The descriptor died under us (a concurrent close/cancel raced this re-arm):
+                    // fail the waiter rather than park behind a registration that can never fire.
+                    once.resume(throwing: TransportError.closed)
                 }
         }
     }
@@ -316,8 +358,12 @@ public final class SwiftSystemConnection: TransportConnection {
             case .failed(let error):
                 once.resume(throwing: error)
             case .wouldBlock(let remaining):
-                eventLoop.waitWritable(descriptor.rawValue) { [self] in
+                let registered = eventLoop.waitWritable(descriptor.rawValue) { [self] in
                     writevRemaining(head: head, body: body, offset: remaining, once: once)
+                }
+                if !registered {
+                    // See ``writeRemaining``: never park behind a refused registration.
+                    once.resume(throwing: TransportError.closed)
                 }
         }
     }

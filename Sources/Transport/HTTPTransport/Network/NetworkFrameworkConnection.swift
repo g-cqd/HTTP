@@ -56,29 +56,50 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
 
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
     ///
-    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
-    /// (audit CC4); cancelling the serve task cancels the `NWConnection`, which fires this receive's
-    /// completion with an error so the continuation resumes instead of leaking.
+    /// Honors per-call task cancellation (the ``TransportConnection`` receive contract): a per-read
+    /// handler cancels the `NWConnection`, which fires this receive's completion with an error, and
+    /// the lapse surfaces as `CancellationError`. Every receive on this backbone rides a framework
+    /// callback anyway, so — unlike the loop-pinned backbones (audit CC4) — there is no handler-free
+    /// hot path to preserve.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
-        try await withUnsafeThrowingContinuation { continuation in
-            connection.receive(
-                minimumIncompleteLength: 1,
-                maximumLength: max(1, maxLength)
-            ) { data, _, isComplete, error in
-                if let error {
-                    continuation.resume(throwing: error)
+        let bytes: [UInt8]?
+        do {
+            bytes = try await withTaskCancellationHandler {
+                try await withUnsafeThrowingContinuation { continuation in
+                    connection.receive(
+                        minimumIncompleteLength: 1,
+                        maximumLength: max(1, maxLength)
+                    ) { data, _, isComplete, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        }
+                        else if let data, !data.isEmpty {
+                            continuation.resume(returning: [UInt8](data))
+                        }
+                        else if isComplete {
+                            continuation.resume(returning: nil)  // peer half-closed
+                        }
+                        else {
+                            continuation.resume(returning: [])
+                        }
+                    }
                 }
-                else if let data, !data.isEmpty {
-                    continuation.resume(returning: [UInt8](data))
-                }
-                else if isComplete {
-                    continuation.resume(returning: nil)  // peer half-closed
-                }
-                else {
-                    continuation.resume(returning: [])
-                }
+            } onCancel: {
+                self.cancelUnderlying()
             }
         }
+        catch _ where Task.isCancelled {
+            // The receive failed because this task's cancellation tore the connection down — report
+            // the standard cancellation signal instead of the framework error.
+            throw CancellationError()
+        }
+        // A cancelled `NWConnection` can also complete the pending receive as a clean end-of-stream
+        // (no error); when this task's own cancellation manufactured that EOF, report the standard
+        // signal rather than a fake peer half-close.
+        if bytes == nil {
+            try Task.checkCancellation()
+        }
+        return bytes
     }
 
     /// Receives up to `maxLength` inbound bytes, **appending** them to `buffer`, and returns the count
@@ -87,35 +108,47 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
     /// The allocation-lean read path (audit #7): Network.framework hands back its own `Data`, so this
     /// copies those bytes straight into the caller's `buffer` via `Data.withUnsafeBytes` — one copy,
     /// dropping the intermediate `[UInt8]` chunk the protocol default builds before appending it. The
-    /// branch semantics mirror ``receive(maxLength:)`` (error / data / EOF / spurious empty wakeup).
-    ///
-    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
-    /// (audit CC4); cancelling the serve task cancels the `NWConnection`, which fires this receive's
-    /// completion with an error so the continuation resumes instead of leaking.
+    /// branch semantics mirror ``receive(maxLength:)`` (error / data / EOF / spurious empty wakeup),
+    /// as does the per-call cancellation handling (the ``TransportConnection`` receive contract).
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-        let received: Data? = try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Data?, any Error>) in
-            connection.receive(
-                minimumIncompleteLength: 1,
-                maximumLength: max(1, maxLength)
-            ) { data, _, isComplete, error in
-                if let error {
-                    continuation.resume(throwing: error)
+        let received: Data?
+        do {
+            received = try await withTaskCancellationHandler {
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Data?, any Error>) in
+                    connection.receive(
+                        minimumIncompleteLength: 1,
+                        maximumLength: max(1, maxLength)
+                    ) { data, _, isComplete, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        }
+                        else if let data, !data.isEmpty {
+                            continuation.resume(returning: data)
+                        }
+                        else if isComplete {
+                            continuation.resume(returning: nil)  // peer half-closed
+                        }
+                        else {
+                            continuation.resume(returning: Data())
+                        }
+                    }
                 }
-                else if let data, !data.isEmpty {
-                    continuation.resume(returning: data)
-                }
-                else if isComplete {
-                    continuation.resume(returning: nil)  // peer half-closed
-                }
-                else {
-                    continuation.resume(returning: Data())
-                }
+            } onCancel: {
+                self.cancelUnderlying()
             }
         }
+        catch _ where Task.isCancelled {
+            // See ``receive(maxLength:)`` — a cancel-torn receive reports the standard signal.
+            throw CancellationError()
+        }
         // Append the received bytes in place — no intermediate `[UInt8]`; `nil` (EOF) and an empty
-        // payload both append nothing and report `0`, matching the protocol-default behaviour.
+        // payload both append nothing and report `0`, matching the protocol-default behaviour. A
+        // cancel-manufactured EOF reports the standard signal instead (see ``receive(maxLength:)``).
         guard let received, !received.isEmpty else {
+            if received == nil {
+                try Task.checkCancellation()
+            }
             return 0
         }
         received.withUnsafeBytes { buffer.append(contentsOf: $0) }

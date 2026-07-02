@@ -76,9 +76,10 @@ struct BackboneConformanceTests {
         var iterator = stream.makeAsyncIterator()
         let connection = try #require(await iterator.next())
 
-        // The server hoists cancellation to one handler per connection (audit CC4): cancelling the serve
-        // task closes the fd via `connection.cancel()`, which unblocks a stalled receive. The receive no
-        // longer carries its own handler, so this exercises the same contract — `cancel()` on cancellation.
+        // The server hoists one connection-wide handler onto the serve task (audit CC4): cancelling it
+        // closes the fd via `connection.cancel()`, which unblocks a stalled receive. This test drives
+        // that server-level path explicitly; the bare child-task contract (the transport's own
+        // per-park handler) is covered separately below.
         let receiveTask = Task {
             try await withTaskCancellationHandler {
                 try await connection.receive(maxLength: 64)
@@ -96,6 +97,87 @@ struct BackboneConformanceTests {
         let unblocked = AsyncEventProbe<Void>()
         let joiner = Task {
             _ = try? await receiveTask.value
+            unblocked.record(())
+        }
+        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        await joiner.value
+
+        await connection.close()
+        client.cancel()
+        await transport.shutdown()
+    }
+
+    @Test(
+        "a BARE child-task cancel unblocks a parked receive (the receive contract, S1 regression)",
+        .timeLimit(.minutes(1)), arguments: socketBackbones)
+    func childTaskCancelUnblocksParkedReceive(_ backbone: TransportBackbone) async throws {
+        let transport = makeTransport(backbone)
+        let stream = try await transport.start()
+
+        // A client that connects but never sends, so the server's read parks indefinitely.
+        let endpointPort = try #require(NWEndpoint.Port(rawValue: transport.boundPort))
+        let client = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
+        client.start(queue: .global())
+
+        var iterator = stream.makeAsyncIterator()
+        let connection = try #require(await iterator.next())
+
+        // NO manual cancellation handler: exactly the shape of the server's idle watchdog, which
+        // cancels the serve-loop CHILD task — the serve-task-level `cancel()` handler never fires, so
+        // the transport itself must honor the cancel (the documented TransportConnection contract).
+        // Before the per-park handlers landed, the real-socket backbones parked here forever.
+        let receiveTask = Task {
+            try await connection.receive(maxLength: 64)
+        }
+        // Give the receive a moment to actually park before cancelling — there is no portable hook
+        // for "the continuation is now parked". The detection below is probe-driven, not a timed race.
+        try await Task.sleep(for: .milliseconds(200))
+        receiveTask.cancel()
+
+        let unblocked = AsyncEventProbe<Void>()
+        let joiner = Task {
+            // The contract: a cancel-torn receive surfaces the standard cancellation signal.
+            await #expect(throws: CancellationError.self) {
+                try await receiveTask.value
+            }
+            unblocked.record(())
+        }
+        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        await joiner.value
+
+        await connection.close()
+        client.cancel()
+        await transport.shutdown()
+    }
+
+    @Test(
+        "a BARE child-task cancel also unblocks the parked scratch receive(into:) path",
+        .timeLimit(.minutes(1)), arguments: socketBackbones)
+    func childTaskCancelUnblocksParkedScratchReceive(_ backbone: TransportBackbone) async throws {
+        let transport = makeTransport(backbone)
+        let stream = try await transport.start()
+
+        let endpointPort = try #require(NWEndpoint.Port(rawValue: transport.boundPort))
+        let client = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
+        client.start(queue: .global())
+
+        var iterator = stream.makeAsyncIterator()
+        let connection = try #require(await iterator.next())
+
+        // The scratch overload is the server's hot read path (audit P1) — its parked phase must honor
+        // a bare child-task cancel exactly like `receive(maxLength:)` (the S1 regression shape).
+        let receiveTask = Task { () -> Int in
+            var buffer: [UInt8] = []
+            return try await connection.receive(into: &buffer, maxLength: 64)
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        receiveTask.cancel()
+
+        let unblocked = AsyncEventProbe<Void>()
+        let joiner = Task {
+            await #expect(throws: CancellationError.self) {
+                try await receiveTask.value
+            }
             unblocked.record(())
         }
         _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))

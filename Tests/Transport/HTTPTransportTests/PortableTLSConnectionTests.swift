@@ -117,6 +117,87 @@
             #expect(connection.isSecure)
             await connection.close()
         }
+
+        @Test(
+            "a BARE child-task cancel unblocks a parked TLS receive (the receive contract)",
+            .timeLimit(.minutes(1)))
+        func childTaskCancelUnblocksParkedReceive() async throws {
+            let identity = try DevTLSIdentity.selfSigned()
+            let serverContext = try OpenSSLTLS.serverContext(identity)
+            defer { CHTTPBoringSSL_SSL_CTX_free(serverContext) }
+
+            var descriptors = [Int32](repeating: 0, count: 2)
+            let paired = descriptors.withUnsafeMutableBufferPointer { buffer in
+                #if canImport(Darwin)
+                    socketpair(AF_UNIX, SOCK_STREAM, 0, buffer.baseAddress)
+                #else
+                    socketpair(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0, buffer.baseAddress)
+                #endif
+            }
+            #expect(paired == 0)
+            let serverDescriptor = descriptors[0]
+            let clientDescriptor = descriptors[1]
+
+            POSIXSocket.setNonBlocking(serverDescriptor)
+            let serverSSL = try #require(CHTTPBoringSSL_SSL_new(serverContext))
+            let readBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
+            let writeBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
+            CHTTPBoringSSL_SSL_set_bio(serverSSL, readBIO, writeBIO)
+            let loop = try TLSEventLoop()
+            loop.start()
+            defer { loop.stop() }
+            let connection = PortableTLSConnection(
+                id: TransportConnectionID(1),
+                peer: TransportAddress(host: "127.0.0.1", port: 0),
+                ssl: serverSSL,
+                readBIO: readBIO,
+                writeBIO: writeBIO,
+                descriptor: serverDescriptor,
+                eventLoop: loop,
+                clientAuth: .none,
+                verifyPeer: nil
+            )
+
+            // Client side: handshake, then go silent — the server's next receive parks indefinitely.
+            let clientContext = try #require(
+                CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method()))
+            CHTTPBoringSSL_SSL_CTX_set_verify(clientContext, SSL_VERIFY_NONE, nil)
+            #expect(CHTTPBoringSSLShims_set_client_alpn(clientContext) == 0)
+            // `SSL` access is confined to the single background closure below (see the echo test).
+            nonisolated(unsafe) let clientSSL = try #require(CHTTPBoringSSL_SSL_new(clientContext))
+            CHTTPBoringSSL_SSL_set_fd(clientSSL, clientDescriptor)
+            DispatchQueue.global()
+                .async {
+                    _ = CHTTPBoringSSL_SSL_connect(clientSSL)
+                    // Say nothing: the point is a receive parked behind an idle peer.
+                }
+            defer {
+                CHTTPBoringSSL_SSL_free(clientSSL)
+                CHTTPBoringSSL_SSL_CTX_free(clientContext)
+                _ = close(clientDescriptor)
+            }
+
+            try await connection.performHandshake()
+
+            // NO manual cancellation handler — the idle-watchdog shape (a cancelled CHILD task): the
+            // transport itself must honor the cancel per the TransportConnection receive contract.
+            let receiveTask = Task {
+                try await connection.receive(maxLength: 64)
+            }
+            try await Task.sleep(for: .milliseconds(200))
+            receiveTask.cancel()
+
+            let unblocked = AsyncEventProbe<Void>()
+            let joiner = Task {
+                await #expect(throws: CancellationError.self) {
+                    try await receiveTask.value
+                }
+                unblocked.record(())
+            }
+            _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+            await joiner.value
+            await connection.close()
+        }
     }
 
 #endif

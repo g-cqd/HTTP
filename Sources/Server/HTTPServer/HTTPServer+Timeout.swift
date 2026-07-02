@@ -51,9 +51,11 @@ extension HTTPServer {
     ///
     /// `body` (the whole serve loop) and the watchdog race in one task group; whichever finishes first
     /// cancels the other. `body` arms/disarms the ``IdleDeadline`` around each receive; when the
-    /// deadline lapses the watchdog returns, and cancelling `body` unblocks its parked receive through
-    /// the connection's cancellation handler — exactly the mechanism the per-read `withTimeout` used,
-    /// but with one task group + one timer per *connection* instead of per *read*.
+    /// deadline lapses the watchdog returns, and cancelling `body` — a **child task**, so the
+    /// serve-task-level `cancel()` handler never fires — unblocks its parked receive through the
+    /// transport's own per-call cancellation handling (the `TransportConnection` receive contract: a
+    /// cancelled receive tears the connection down and resumes promptly). One task group + one timer
+    /// per *connection* instead of per *read*.
     func withIdleWatchdog(
         _: any TransportConnection,
         _ body: @escaping @Sendable (IdleDeadline<C.Instant>) async -> Void

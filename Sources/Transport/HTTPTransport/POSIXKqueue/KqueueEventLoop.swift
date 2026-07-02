@@ -101,15 +101,34 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     // MARK: - Readiness registration
 
     /// Registers one-shot interest in `fd` becoming readable; `handler` runs once when it does.
-    func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) {
+    ///
+    /// Returns `false` — with `handler` dropped, not retained — when the kernel refuses the
+    /// registration (`EBADF`: `fd` was already closed by a concurrent ``closeDescriptor(_:)``, e.g. a
+    /// cancelled receive that raced this park). The caller must then fail its parked waiter itself:
+    /// parking behind a registration that can never fire would leak the continuation, and probing the
+    /// fd instead could touch a descriptor *number* the kernel has since reused.
+    @discardableResult
+    func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
         registry.withLock { $0.readHandlers[fd] = handler }
-        register(fd: fd, filter: EVFILT_READ)
+        guard register(fd: fd, filter: EVFILT_READ) else {
+            registry.withLock { _ = $0.readHandlers.removeValue(forKey: fd) }
+            return false
+        }
+        return true
     }
 
     /// Registers one-shot interest in `fd` becoming writable; `handler` runs once when it does.
-    func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) {
+    ///
+    /// Returns `false` with `handler` dropped when the registration is refused — see
+    /// ``waitReadable(_:_:)``.
+    @discardableResult
+    func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
         registry.withLock { $0.writeHandlers[fd] = handler }
-        register(fd: fd, filter: EVFILT_WRITE)
+        guard register(fd: fd, filter: EVFILT_WRITE) else {
+            registry.withLock { _ = $0.writeHandlers.removeValue(forKey: fd) }
+            return false
+        }
+        return true
     }
 
     /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races an
@@ -196,7 +215,12 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         handler?()
     }
 
-    private func register(fd: Int32, filter: Int32) {
+    /// Adds a one-shot `EV_ADD` registration, reporting whether the kernel accepted it.
+    ///
+    /// `false` (`EBADF` after a concurrent close is the practical case) means no readiness event will
+    /// ever fire for this registration — the caller unwinds the waiter it parked (see
+    /// ``waitReadable(_:_:)``).
+    private func register(fd: Int32, filter: Int32) -> Bool {
         var event = KEvent(
             ident: UInt(fd),
             filter: Int16(filter),
@@ -205,10 +229,11 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             data: 0,
             udata: nil
         )
-        _ = kevent(kq, &event, 1, nil, 0, nil)
+        let accepted = kevent(kq, &event, 1, nil, 0, nil) >= 0
         // If the registration came from off-loop while the loop is parked in `kevent`, wake it so the
         // new interest is honored this turn. From the loop thread itself this is a cheap no-op trigger.
         triggerWakeup()
+        return accepted
     }
 
     /// Adds the `EVFILT_USER` wakeup source once, at loop start (`EV_CLEAR` = auto-reset each delivery).

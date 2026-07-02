@@ -3,10 +3,12 @@
 //  HTTPTransport
 //
 //  A TransportConnection driven entirely by a hand-rolled kqueue event loop over a non-blocking
-//  socket: reads wait for EVFILT_READ then read() what is available; writes loop until drained,
-//  re-arming on EVFILT_WRITE whenever the socket buffer fills. The write re-arm is event-driven
-//  (each step runs on a fresh kqueue callback) — it is NOT stack recursion, so hostile peers cannot
-//  grow the stack.
+//  socket: reads try one non-blocking read() and park on EVFILT_READ only when nothing is buffered;
+//  writes loop until drained, re-arming on EVFILT_WRITE whenever the socket buffer fills. The write
+//  re-arm is event-driven (each step runs on a fresh kqueue callback) — it is NOT stack recursion, so
+//  hostile peers cannot grow the stack. A PARKED read honors its own task's cancellation (a per-park
+//  handler tears the connection down — the TransportConnection receive contract); the data-ready hot
+//  path carries no cancellation bookkeeping (audit CC4).
 //
 //  Standards: read()/write()/close() per POSIX.1-2017 (IEEE Std 1003.1-2017); TCP (RFC 9293) over
 //  IPv4 (RFC 791). Readiness via BSD kqueue.
@@ -39,7 +41,7 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// the event-loop thread while the copy-out runs on the awaiting task; reads on one connection are
     /// serial (the server awaits each before the next), so the lock is always uncontended.
     private let scratch = Mutex<[UInt8]>([])
-    /// Cached resumer for the hot read path (``receive(into:)``).
+    /// Cached resumer for the shared scratch read core (both `receive` overloads).
     ///
     /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
     /// Sound because reads on one connection are serialized — the prior continuation is always taken
@@ -79,34 +81,21 @@ public final class POSIXKqueueConnection: TransportConnection {
 
     /// Reads up to `maxLength` bytes once the socket is readable, or `nil` at end of stream.
     ///
-    /// No per-op cancellation handler: the server registers one ``cancel()`` for the whole connection
-    /// (audit CC4); cancelling the serve task closes the fd, which fires the parked readiness handler
-    /// against the closed descriptor so this continuation resumes with an error instead of leaking.
+    /// Shares the reused-scratch read core with ``receive(into:maxLength:)`` (audit P1) — the returned
+    /// chunk is the only per-read allocation — and honors per-call task cancellation (the
+    /// ``TransportConnection`` receive contract).
     public func receive(maxLength: Int) async throws -> [UInt8]? {
-        let descriptor = self.descriptor
-        let eventLoop = self.eventLoop
-        return try await withUnsafeThrowingContinuation { continuation in
-            let once = OnceResumer(continuation)
-            eventLoop.waitReadable(descriptor) {
-                Self.readAvailable(
-                    descriptor: descriptor,
-                    maxLength: maxLength,
-                    eventLoop: eventLoop,
-                    into: once
-                )
-            }
+        let count = try await readIntoScratch(maxLength: maxLength)
+        guard count > 0 else {
+            return nil  // 0 == EOF (a zero-length read)
         }
+        return scratch.withLock { Array($0[..<count]) }
     }
 
     /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
-    /// count appended (`0` at EOF) — the allocation-free read path (audit P1). `read(2)` fills the scratch
-    /// in the readiness callback; the awaiting task then copies just the received bytes into `buffer`.
+    /// count appended (`0` at EOF) — the allocation-free read path (audit P1).
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-        let count = try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Int, any Error>) in
-            readResumer.reset(continuation)
-            readIntoScratch(maxLength: maxLength, into: readResumer)
-        }
+        let count = try await readIntoScratch(maxLength: maxLength)
         // The scratch holds the bytes `read(2)` produced (reads are serial, so it is undisturbed until
         // this copy); take just those into the caller's accumulator. `Mutex` borrows in place — no copy.
         if count > 0 {
@@ -115,14 +104,39 @@ public final class POSIXKqueueConnection: TransportConnection {
         return count
     }
 
-    /// Fills the reused scratch from `read(2)` once readable and resumes `once` with the byte count
-    /// (`0` at EOF), re-arming on a spurious `EAGAIN` wakeup.
+    /// The shared scratch read core: one opportunistic non-blocking `read(2)`, then — only when the
+    /// socket has nothing buffered — the parked phase under a per-park cancellation handler.
     ///
-    /// Instance method so it can borrow the non-copyable `scratch` `Mutex`; `self` is captured only for
-    /// the one-shot re-arm.
-    private func readIntoScratch(maxLength: Int, into once: OnceResumer<Int>) {
+    /// The two-phase split keeps the data-ready hot path free of cancellation bookkeeping (audit CC4)
+    /// while a *parked* receive honors its own task's cancellation per the ``TransportConnection``
+    /// contract: cancellation tears the connection down (``cancel()``), the loop's close sweep resumes
+    /// the waiter, and the lapse surfaces here as `CancellationError`.
+    private func readIntoScratch(maxLength: Int) async throws -> Int {
         do {
-            let bytesRead = try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
+            if let immediate = try readScratchNow(maxLength: maxLength) {
+                return immediate
+            }
+            return try await parkForScratchRead(maxLength: maxLength)
+        }
+        catch _ where Task.isCancelled {
+            // The teardown above — or a pre-cancelled task finding the descriptor already closed —
+            // surfaces as a transport error; report the standard cancellation signal instead.
+            throw CancellationError()
+        }
+    }
+
+    /// One non-blocking `read(2)` into the scratch: the byte count (`0` == EOF), or `nil` when the
+    /// socket has nothing buffered yet (EAGAIN — the caller parks).
+    ///
+    /// The close-flag guard runs first so a callback firing after ``cancel()`` — the loop's close
+    /// sweep — never touches the descriptor *number*, which the kernel may already have reused for
+    /// another connection.
+    private func readScratchNow(maxLength: Int) throws -> Int? {
+        guard !isClosed.load(ordering: .acquiring) else {
+            throw TransportError.closed
+        }
+        do {
+            return try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
                 if buffer.count < maxLength {
                     // Sized once on first use, then reused for the connection's lifetime.
                     buffer = [UInt8](repeating: 0, count: maxLength)
@@ -139,15 +153,45 @@ public final class POSIXKqueueConnection: TransportConnection {
                     }
                 }
             }
-            once.resume(returning: bytesRead)  // 0 == EOF (a zero-length read)
         }
         catch is WouldBlockOnRead {
-            eventLoop.waitReadable(descriptor) { [self] in
-                readIntoScratch(maxLength: maxLength, into: once)
+            return nil
+        }
+    }
+
+    /// Parks until the socket is readable and resumes with the next read's outcome, under a
+    /// cancellation handler that closes the connection — the only way to abandon an in-flight read on
+    /// a byte stream without losing its framing (the ``TransportConnection`` receive contract).
+    private func parkForScratchRead(maxLength: Int) async throws -> Int {
+        try await withTaskCancellationHandler {
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Int, any Error>) in
+                readResumer.reset(continuation)
+                armScratchRead(maxLength: maxLength, into: readResumer)
+            }
+        } onCancel: {
+            self.cancel()
+        }
+    }
+
+    /// Registers read interest whose callback completes `once` with the next read — re-arming on a
+    /// spurious `EAGAIN` wakeup — and fails `once` without touching the descriptor when the
+    /// registration itself is refused (the descriptor was closed by a concurrent cancel).
+    private func armScratchRead(maxLength: Int, into once: OnceResumer<Int>) {
+        let registered = eventLoop.waitReadable(descriptor) { [self] in
+            do {
+                guard let bytesRead = try readScratchNow(maxLength: maxLength) else {
+                    armScratchRead(maxLength: maxLength, into: once)  // spurious wakeup — re-arm
+                    return
+                }
+                once.resume(returning: bytesRead)  // 0 == EOF (a zero-length read)
+            }
+            catch {
+                once.resume(throwing: error)
             }
         }
-        catch {
-            once.resume(throwing: error)
+        if !registered {
+            once.resume(throwing: TransportError.closed)
         }
     }
 
@@ -214,43 +258,6 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// A non-blocking `read` reported it would block — re-arm readability rather than fail (audit T-F3).
     private struct WouldBlockOnRead: Error {}
 
-    private static func readAvailable(
-        descriptor: Int32,
-        maxLength: Int,
-        eventLoop: KqueueEventLoop,
-        into once: OnceResumer<[UInt8]?>
-    ) {
-        do {
-            let bytes = try POSIXSocket.readBuffer(maxLength: maxLength) { raw -> Int in
-                while true {
-                    let count = read(descriptor, raw.baseAddress, raw.count)
-                    if count >= 0 {
-                        return count
-                    }
-                    // EINTR: interrupted by a signal before any data — retry the read. EAGAIN: a
-                    // spurious EVFILT_READ wakeup (data consumed elsewhere) — re-arm, don't fail.
-                    if errno == EINTR { continue }
-                    if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlockOnRead() }
-                    throw TransportError.ioFailed("read errno \(errno)")
-                }
-            }
-            once.resume(returning: bytes)  // nil == EOF (a zero-length read)
-        }
-        catch is WouldBlockOnRead {
-            eventLoop.waitReadable(descriptor) {
-                readAvailable(
-                    descriptor: descriptor,
-                    maxLength: maxLength,
-                    eventLoop: eventLoop,
-                    into: once
-                )
-            }
-        }
-        catch {
-            once.resume(throwing: error)
-        }
-    }
-
     private static func writeRemaining(
         bytes: [UInt8],
         offset: Int,
@@ -287,7 +294,7 @@ public final class POSIXKqueueConnection: TransportConnection {
             case .failed(let code):
                 once.resume(throwing: TransportError.ioFailed("write errno \(code)"))
             case .wouldBlock(let remaining):
-                eventLoop.waitWritable(descriptor) {
+                let registered = eventLoop.waitWritable(descriptor) {
                     writeRemaining(
                         bytes: bytes,
                         offset: remaining,
@@ -295,6 +302,11 @@ public final class POSIXKqueueConnection: TransportConnection {
                         eventLoop: eventLoop,
                         once: once
                     )
+                }
+                if !registered {
+                    // The descriptor died under us (a concurrent close/cancel raced this re-arm):
+                    // fail the waiter rather than park behind a registration that can never fire.
+                    once.resume(throwing: TransportError.closed)
                 }
         }
     }
@@ -357,7 +369,7 @@ public final class POSIXKqueueConnection: TransportConnection {
             case .failed(let code):
                 once.resume(throwing: TransportError.ioFailed("writev errno \(code)"))
             case .wouldBlock(let remaining):
-                eventLoop.waitWritable(descriptor) {
+                let registered = eventLoop.waitWritable(descriptor) {
                     writevRemaining(
                         head: head,
                         body: body,
@@ -366,6 +378,10 @@ public final class POSIXKqueueConnection: TransportConnection {
                         eventLoop: eventLoop,
                         once: once
                     )
+                }
+                if !registered {
+                    // See ``writeRemaining``: never park behind a refused registration.
+                    once.resume(throwing: TransportError.closed)
                 }
         }
     }
