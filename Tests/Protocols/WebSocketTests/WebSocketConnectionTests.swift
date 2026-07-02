@@ -32,6 +32,40 @@ struct WebSocketConnectionTests {
         #expect(events == [.message(opcode: .text, payload: Array("Hello!".utf8))])
     }
 
+    @Test("a SINGLE over-cap frame is rejected with Close 1009 — not just a fragmented one (§5.4)")
+    func unfragmentedMessageOverCapRejected() throws {
+        // maxMessageSize bounds every message; a peer must not bypass it by simply not fragmenting
+        // (the frame cap is the only other bound, and it is intentionally larger; CWE-400/770).
+        var connection = WebSocketConnection(maxMessageSize: 4)
+        var thrown: WebSocketError?
+        do {
+            _ = try connection.receive(clientFrame(.binary, Array("hello".utf8)))
+        }
+        catch {
+            thrown = error
+        }
+        #expect(thrown == .messageTooLarge)
+        let code = try closeCode(connection.outboundBytes())
+        #expect(code == .messageTooBig)  // 1009 (RFC 6455 §7.4.1)
+    }
+
+    @Test("a fragmented message over the cap is rejected with Close 1009 (§5.4)")
+    func fragmentedMessageOverCapRejected() throws {
+        var connection = WebSocketConnection(maxMessageSize: 4)
+        var thrown: WebSocketError?
+        do {
+            var wire = clientFrame(.binary, Array("hel".utf8), fin: false)
+            wire += clientFrame(.continuation, Array("lo!".utf8), fin: true)
+            _ = try connection.receive(wire)
+        }
+        catch {
+            thrown = error
+        }
+        #expect(thrown == .messageTooLarge)
+        let code = try closeCode(connection.outboundBytes())
+        #expect(code == .messageTooBig)  // 1009 (RFC 6455 §7.4.1)
+    }
+
     // MARK: Control frames
 
     @Test("answers a Ping with a Pong carrying the same payload (RFC 6455 §5.5.2)")

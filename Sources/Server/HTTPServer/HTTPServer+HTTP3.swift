@@ -404,9 +404,8 @@ extension HTTPServer {
             stream.reset(errorCode: HTTP3ErrorCode.h3InternalError.rawValue)
             return nil
         }
-        let socket = WebSocketConnection(
-            maxMessageSize: limits.maxBodySize, permessageDeflate: permessageDeflate
-        )
+        let cap = limits.effectiveWebSocketMessageSize
+        let socket = WebSocketConnection(maxMessageSize: cap, permessageDeflate: permessageDeflate)
         return (socket, handler)
     }
 

@@ -4,9 +4,11 @@
 //
 //  Per-route request-body limit on HTTP/1.1 (Phase 1.2, RFC 9110 §15.5.14): a route declared with
 //  `bodyLimited(to:)` rejects an over-limit `Content-Length` with `413` *before* the body is buffered
-//  (the handler never runs), and caps a chunked body incrementally. A route with no limit, or a
-//  responder that is not a router, falls back to the global ``HTTPLimits/maxBodySize``. Driven through
-//  the real `serve` pipeline over a `FakeConnection`.
+//  (the handler never runs), and caps a chunked body incrementally. The route cap REPLACES the global
+//  ``HTTPLimits/maxBodySize`` — it may raise it as well as tighten it (the S2 ordering fix: the size
+//  policy runs after route resolution, not at parse time). A route with no limit, or a responder that
+//  is not a router, falls back to the global bound. Driven through the real `serve` pipeline over a
+//  `FakeConnection`.
 //
 
 import HTTPCore
@@ -32,9 +34,11 @@ struct BodyLimitRouteTests {
         }
     }
 
-    private func serve(_ request: String, responder: any HTTPResponder) async -> String {
+    private func serve(
+        _ request: String, responder: any HTTPResponder, limits: HTTPLimits = .default
+    ) async -> String {
         let connection = FakeConnection(id: TransportConnectionID(1), inbound: Array(request.utf8))
-        let server = HTTPServer(transport: FakeTransport(), responder: responder)
+        let server = HTTPServer(transport: FakeTransport(), responder: responder, limits: limits)
         await server.serve(connection)
         return String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
     }
@@ -110,5 +114,58 @@ struct BodyLimitRouteTests {
         let wire = await serve(request, responder: responder)
         #expect(wire.contains(" 200 "))
         #expect(wire.hasSuffix("got 20"))
+    }
+
+    @Test("a route limit ABOVE the global admits a Content-Length the global would reject (raise)")
+    func contentLengthRaisedAboveGlobal() async {
+        let router = Router {
+            Route.post("/upload") { _, body, _ in
+                .text("got \(await body.collect().count)")
+            }
+            .bodyLimited(to: 64)
+        }
+        let body = String(repeating: "x", count: 20)
+        let request = "POST /upload HTTP/1.1\r\nHost: x\r\nContent-Length: 20\r\n\r\n\(body)"
+        // Global cap 8 < body 20 < route cap 64: the route's raise must win (the S2 ordering fix —
+        // before it, the parse-time global check fired before the resolver could raise the bound).
+        let wire = await serve(request, responder: router, limits: HTTPLimits(maxBodySize: 8))
+        #expect(wire.contains(" 200 "))
+        #expect(wire.hasSuffix("got 20"))
+    }
+
+    @Test("a route limit ABOVE the global admits a chunked body the global would reject (raise)")
+    func chunkedRaisedAboveGlobal() async {
+        let router = Router {
+            Route.post("/upload") { _, body, _ in
+                .text("got \(await body.collect().count)")
+            }
+            .bodyLimited(to: 64)
+        }
+        // One 20-octet chunk: over the 8-octet global, under the 64-octet route cap (RFC 9112 §7.1).
+        let chunk = String(repeating: "y", count: 20)
+        let request =
+            "POST /upload HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n"
+            + "14\r\n\(chunk)\r\n0\r\n\r\n"
+        let wire = await serve(request, responder: router, limits: HTTPLimits(maxBodySize: 8))
+        #expect(wire.contains(" 200 "))
+        #expect(wire.hasSuffix("got 20"))
+    }
+
+    @Test("without a route limit the global still rejects with 413 (the fallback keeps its teeth)")
+    func globalFallbackStillRejects() async {
+        let invocation = Invocation()
+        let router = Router {
+            Route.post("/upload") { _, _, _ in
+                invocation.mark()
+                return .text("ok")
+            }
+        }
+        let body = String(repeating: "x", count: 20)
+        let request = "POST /upload HTTP/1.1\r\nHost: x\r\nContent-Length: 20\r\n\r\n\(body)"
+        // The parser no longer enforces the size policy at parse time; the reader must still fail
+        // closed at the global bound when no route raises it (RFC 9110 §15.5.14).
+        let wire = await serve(request, responder: router, limits: HTTPLimits(maxBodySize: 8))
+        #expect(wire.contains(" 413 "))
+        #expect(invocation.didRun == false)
     }
 }

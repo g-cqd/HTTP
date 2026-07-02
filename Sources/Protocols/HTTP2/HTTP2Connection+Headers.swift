@@ -116,11 +116,11 @@ extension HTTP2Connection {
         // this stream's DATA ahead of less-urgent streams (HTTP2Connection+FlowControl.flushAll). An
         // absent or unparseable `Priority` field falls back to the default urgency (§4.1).
         record.urgency = request.priority?.urgency ?? HTTPPriority.defaultUrgency
-        // Cap this stream's buffered body to the matched route's limit, resolved from the head before any
-        // DATA is accepted (Phase 1.2) — tighter than the global maxBodySize when the route declares one.
-        record.effectiveBodyLimit = min(
-            limits.maxBodySize, resolveBodyLimit(request) ?? limits.maxBodySize
-        )
+        // Cap this stream's body to the matched route's limit, resolved from the head before any DATA
+        // is accepted (Phase 1.2). The route cap REPLACES the global maxBodySize — it may raise as
+        // well as tighten it (the connection-level aggregate bound stretches with it, see
+        // HTTP2Connection+FlowControl); no route (nil) falls back to the global bound.
+        record.effectiveBodyLimit = resolveBodyLimit(request) ?? limits.maxBodySize
         // Whether this route consumes its body as a stream (Phase 1.4): surface it incrementally rather
         // than buffering one `request`. A tunnel (below) is never a streaming-body request.
         record.isStreaming = resolveStreamsBody(request)

@@ -55,9 +55,11 @@ public struct WebSocketConnection {
 
     /// Creates a server connection, requiring masked client frames (RFC 6455 §5.1).
     ///
-    /// Bounds a single frame to `maxFrameSize` and a reassembled message to `maxMessageSize`
-    /// (resource-exhaustion guards); pass the negotiated `permessageDeflate` parameters to enable that
-    /// extension (RFC 7692 §5.1), or nil for an uncompressed connection.
+    /// Bounds a single frame to `maxFrameSize` and a message — single-frame, reassembled from
+    /// fragments, or decompressed — to `maxMessageSize` (resource-exhaustion guards, RFC 6455 §5.4;
+    /// the server wires `maxMessageSize` from ``HTTPLimits``' WebSocket knob). Pass the negotiated
+    /// `permessageDeflate` parameters to enable that extension (RFC 7692 §5.1), or nil for an
+    /// uncompressed connection.
     public init(
         maxFrameSize: Int = 1 << 20,
         maxMessageSize: Int = 16 << 20,
@@ -263,11 +265,16 @@ public struct WebSocketConnection {
     }
 
     /// Emits an unfragmented (single-frame) message, validating a text payload as UTF-8 (RFC 6455 §8.1).
+    ///
+    /// A single-frame message is still a message (RFC 6455 §5.4), so `maxMessageSize` bounds it exactly
+    /// as it bounds a reassembled one — without this, a peer could bypass the message cap simply by not
+    /// fragmenting (bounded only by the larger frame cap; CWE-400/770).
     private func emitUnfragmented(
         opcode: WebSocketOpcode,
         payload: [UInt8],
         into events: inout [Event]
     ) throws(WebSocketError) {
+        guard payload.count <= maxMessageSize else { throw .messageTooLarge }
         guard opcode != .text || Self.isValidUTF8(payload) else { throw .invalidTextEncoding }
         events.append(.message(opcode: opcode, payload: payload))
     }

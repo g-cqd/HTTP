@@ -71,7 +71,10 @@ extension HTTP2Connection {
         // END_STREAM dispatches them — a memory-exhaustion vector. The current stream's record was
         // removed above, so `totalBufferedBody` is exactly the rest; add this stream's running +
         // incoming bytes (RFC 9113 §6.9). O(1) — the table maintains the sum (see ``HTTP2StreamTable``).
-        guard streams.totalBufferedBody + record.body.count + body.count <= limits.maxBodySize
+        // The bound stretches to this stream's route cap when a route RAISED it above the global
+        // (Phase 1.2) — total memory stays bounded by the largest declared route limit.
+        let aggregateLimit = max(limits.maxBodySize, record.effectiveBodyLimit)
+        guard streams.totalBufferedBody + record.body.count + body.count <= aggregateLimit
         else {
             throw .stream(
                 streamID,

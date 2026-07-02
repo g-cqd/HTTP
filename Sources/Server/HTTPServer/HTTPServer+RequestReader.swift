@@ -364,15 +364,20 @@ extension HTTPServer where C.Duration == Duration {
                     // Resolve the matched route at the head (Phase 1.2/1.4): reject an over-limit
                     // Content-Length before buffering, cap a chunked body to the route limit during
                     // framing, and hand a streaming route's body off incrementally (`.streamingHead`).
+                    // The size policy runs HERE — after resolution, matching h2/h3's resolveBodyLimit
+                    // flow — so a route cap REPLACES the global bound (it may raise as well as
+                    // tighten); the parser resolves framing with no size policy of its own. `nil`
+                    // (no router / no per-route cap) falls back to the global maxBodySize.
                     let resolved = currentResolver?
                         .resolve(
                             method: parsed.head.request.method, path: parsed.head.request.path
                         )
-                    if let limit = resolved?.bodyLimit {
-                        bodyLimit = limit
-                        if case .contentLength(let length) = parsed.head.framing, length > limit {
-                            return .failed(.bodyTooLarge)
-                        }
+                    bodyLimit = resolved?.bodyLimit
+                    let effectiveLimit = resolved?.bodyLimit ?? limits.maxBodySize
+                    if case .contentLength(let length) = parsed.head.framing,
+                        length > effectiveLimit
+                    {
+                        return .failed(.bodyTooLarge)
                     }
                     if resolved?.streamsBody == true {
                         return .streamingHead(parsed)

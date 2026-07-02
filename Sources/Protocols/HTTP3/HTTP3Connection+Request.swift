@@ -157,11 +157,11 @@ extension HTTP3Connection {
     ) throws(HTTP3Error) {
         state.sawHeaders = true
         state.request = request
-        // Cap this stream's buffered body to the matched route's limit (Phase 1.2), resolved from the
-        // head before any DATA is accepted.
-        state.effectiveBodyLimit = min(
-            limits.maxBodySize, resolveBodyLimit(request) ?? limits.maxBodySize
-        )
+        // Cap this stream's body to the matched route's limit (Phase 1.2), resolved from the head
+        // before any DATA is accepted. The route cap REPLACES the global maxBodySize — it may raise as
+        // well as tighten it (the connection-level aggregate bound stretches with it, see
+        // ``receiveRequestData``); no route (nil) falls back to the global bound.
+        state.effectiveBodyLimit = resolveBodyLimit(request) ?? limits.maxBodySize
         // Whether this route consumes its body as a stream (Phase 1.4): surface it incrementally rather
         // than buffering one `request`. A tunnel (below) is never a streaming-body request.
         state.isStreaming = resolveStreamsBody(request)
@@ -214,9 +214,12 @@ extension HTTP3Connection {
         // just per-stream: as in HTTP/2, the engine would otherwise buffer up to the concurrent-stream
         // count × maxBodySize before any stream's FIN dispatches it — a memory-exhaustion vector. The
         // table's running total still counts this stream's pre-append bytes, so net them out to get the
-        // other streams' total in O(1) (RFC 9114 §4.1; CWE-400/770; see ``HTTP3StreamTable``).
+        // other streams' total in O(1) (RFC 9114 §4.1; CWE-400/770; see ``HTTP3StreamTable``). The
+        // bound stretches to this stream's route cap when a route RAISED it above the global
+        // (Phase 1.2) — total memory stays bounded by the largest declared route limit.
         let otherStreamsBuffered = streams.totalBufferedBody - bufferedBeforeAppend
-        guard otherStreamsBuffered + state.body.count <= limits.maxBodySize else {
+        let aggregateLimit = max(limits.maxBodySize, state.effectiveBodyLimit)
+        guard otherStreamsBuffered + state.body.count <= aggregateLimit else {
             throw .stream(
                 streamID,
                 .h3ExcessiveLoad,

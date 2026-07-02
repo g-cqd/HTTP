@@ -92,7 +92,7 @@ extension HTTPServer {
         permessageDeflate: PermessageDeflateParameters?
     ) async {
         var engine = WebSocketConnection(
-            maxMessageSize: limits.maxBodySize,
+            maxMessageSize: limits.effectiveWebSocketMessageSize,
             permessageDeflate: permessageDeflate
         )
         let (wakeups, continuation) = AsyncStream.makeStream(
@@ -197,7 +197,7 @@ extension HTTPServer {
                 )
                 webSockets[streamID] = HTTP2WebSocketTunnel(
                     socket: WebSocketConnection(
-                        maxMessageSize: limits.maxBodySize,
+                        maxMessageSize: limits.effectiveWebSocketMessageSize,
                         permessageDeflate: permessageDeflate
                     ),
                     handler: handler

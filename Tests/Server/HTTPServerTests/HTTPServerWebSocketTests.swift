@@ -185,6 +185,51 @@ struct HTTPServerWebSocketTests {
         #expect(containsSubsequence(sent, [0x81, 0x02, 0x68, 0x69]))  // echoed unmasked "hi"
     }
 
+    @Test("maxWebSocketMessageSize decouples the WS cap from maxBodySize (independent raise)")
+    func webSocketCapIndependentOfBodyLimit() async {
+        let echo = ClosureWebSocketHandler { event in
+            guard case .message(let opcode, let payload) = event, opcode == .text else {
+                return []
+            }
+            return [.sendText(String(decoding: payload, as: Unicode.UTF8.self))]
+        }
+        // 100 octets: over the 16-octet HTTP body cap, under the 200-octet WebSocket message cap —
+        // before the knob, the message cap silently followed maxBodySize and this echo failed (1009).
+        let message = String(repeating: "m", count: 100)
+        var wire = upgradeRequest()
+        wire += maskedTextFrame(message)
+        let connection = FakeConnection(id: TransportConnectionID(12), inbound: wire)
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: echo) },
+            limits: HTTPLimits(maxBodySize: 16, maxWebSocketMessageSize: 200)
+        )
+        await server.serve(connection)
+        let sent = await connection.sentBytes()
+        #expect(String(decoding: sent, as: Unicode.UTF8.self).hasPrefix("HTTP/1.1 101 "))
+        // The echoed server frame: unmasked text, single-byte length 100, then the payload.
+        #expect(containsSubsequence(sent, [0x81, 0x64] + Array(message.utf8)))
+    }
+
+    @Test("an over-cap message closes 1009 under a small WS cap alone (RFC 6455 §7.4.1)")
+    func webSocketCapEnforcedIndependently() async {
+        let echo = ClosureWebSocketHandler { _ in [] }
+        var wire = upgradeRequest()
+        // 7 octets > the 4-octet WS cap; maxBodySize stays untouched.
+        wire += maskedTextFrame("too big")
+        let connection = FakeConnection(id: TransportConnectionID(13), inbound: wire)
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: Router { Route.webSocket("/chat", handler: echo) },
+            limits: HTTPLimits(maxWebSocketMessageSize: 4)
+        )
+        await server.serve(connection)
+        let sent = await connection.sentBytes()
+        #expect(String(decoding: sent, as: Unicode.UTF8.self).hasPrefix("HTTP/1.1 101 "))
+        // Close frame, code 1009 (message too big): FIN|Close, length 2, 0x03F1.
+        #expect(containsSubsequence(sent, [0x88, 0x02, 0x03, 0xF1]))
+    }
+
     @Test("a hub-backed WebSocket route upgrades (the connection is hub-driven) (Phase 2.7)")
     func hubBackedRouteUpgrades() async {
         let hub = WebSocketHub()

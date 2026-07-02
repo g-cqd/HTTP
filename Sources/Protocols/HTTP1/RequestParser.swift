@@ -15,11 +15,19 @@ public enum RequestParser {
 
     /// Parses request-line, header section, and body from `reader`, returning the assembled
     /// ``ParsedRequest`` — or throws the specific ``HTTP1ParseError``.
+    ///
+    /// This one-shot form enforces the global ``HTTPLimits/maxBodySize`` on a declared
+    /// `Content-Length` before decoding (RFC 9110 §15.5.14). The incremental server path enforces the
+    /// *route-resolved* limit instead — resolution needs the parsed head, so the policy runs after
+    /// ``parseHead(_:limits:)``, not inside it (Phase 1.2: a route cap replaces the global bound).
     public static func parse(
         _ reader: inout ByteReader,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> ParsedRequest {
         let head = try parseHead(&reader, limits: limits)
+        if case .contentLength(let length) = head.framing, length > limits.maxBodySize {
+            throw .bodyTooLarge
+        }
         let body = try decodeBody(&reader, framing: head.framing, limits: limits)
         return ParsedRequest(request: head.request, body: body, version: head.version)
     }
@@ -54,10 +62,15 @@ public enum RequestParser {
     /// Resolves the body framing without decoding (RFC 9112 §6): Transfer-Encoding takes precedence
     /// over Content-Length, the two together are a smuggling error, and the only supported coding is
     /// the final `chunked`.
+    ///
+    /// Framing resolution carries **no size policy**: a syntactically valid `Content-Length` of any
+    /// magnitude resolves to ``BodyFraming/contentLength(_:)``, and the caller enforces its limit —
+    /// global or route-resolved (Phase 1.2) — before buffering a byte. The declared length is only a
+    /// number; nothing is allocated from it here.
     public static func resolveFraming(
         _ headerFields: HTTPFields,
         version: HTTPVersion,
-        limits: HTTPLimits
+        limits _: HTTPLimits
     ) throws(HTTP1ParseError) -> BodyFraming {
         if headerFields.contains(.transferEncoding) {
             // Chunked is an HTTP/1.1 feature (RFC 9112 §6.1); a Transfer-Encoding on a nominal
@@ -78,7 +91,6 @@ public enum RequestParser {
             case .invalid:
                 throw .invalidContentLength
             case .length(let length):
-                guard length <= limits.maxBodySize else { throw .bodyTooLarge }
                 return .contentLength(length)
         }
     }

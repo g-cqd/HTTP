@@ -35,7 +35,21 @@ public struct HTTPLimits: Sendable, Equatable {
     public var maxFieldCount: Int
 
     /// Maximum request body size before responding `413` (RFC 9110 §15.5.14).
+    ///
+    /// The global bound; a route's `bodyLimited(to:)` cap **replaces** it for requests matched to that
+    /// route (Phase 1.2) — it may tighten or raise it.
     public var maxBodySize: Int
+
+    /// Maximum reassembled WebSocket message size in octets (RFC 6455 §5.4 — fragments buffer until
+    /// the final frame), or `nil` to follow ``maxBodySize``.
+    ///
+    /// A dedicated knob because a WebSocket message cap and an HTTP request-body cap guard different
+    /// traffic: raising one should not silently raise the other (message-reassembly memory
+    /// exhaustion). `nil` (the default) preserves the historical coupling to ``maxBodySize``.
+    public var maxWebSocketMessageSize: Int?
+
+    /// The enforced WebSocket message cap: ``maxWebSocketMessageSize`` when set, else ``maxBodySize``.
+    public var effectiveWebSocketMessageSize: Int { maxWebSocketMessageSize ?? maxBodySize }
 
     /// Maximum size of an inbound decompressed body (gzip/brotli decompression bombs; CWE-409).
     ///
@@ -117,6 +131,7 @@ public struct HTTPLimits: Sendable, Equatable {
         maxHeaderListSize: Int = 64 * 1_024,
         maxFieldCount: Int = 100,
         maxBodySize: Int = 1 << 30,  // 1 GiB
+        maxWebSocketMessageSize: Int? = nil,  // follow maxBodySize
         maxDecompressedBodySize: Int = 1 << 30,
         maxDecompressionRatio: Int = 10,
         maxConcurrentStreams: Int = 128,
@@ -137,6 +152,7 @@ public struct HTTPLimits: Sendable, Equatable {
         self.maxHeaderListSize = maxHeaderListSize
         self.maxFieldCount = maxFieldCount
         self.maxBodySize = maxBodySize
+        self.maxWebSocketMessageSize = maxWebSocketMessageSize
         self.maxDecompressedBodySize = maxDecompressedBodySize
         self.maxDecompressionRatio = maxDecompressionRatio
         self.maxConcurrentStreams = maxConcurrentStreams
