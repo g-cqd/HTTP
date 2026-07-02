@@ -177,7 +177,7 @@ Today a cert rotation or route change needs a restart. Make both hot.
 
 ## W3 — Linux deployability (the big one)
 
-### [x] G0 — Linux support · Effort XL · Risk ▲ — *Linux fully supported 2026-06-28 (h1/h2/WS, opt-in TLS, gzip/zstd/br, CI); follow-ups: portable-TLS `.optional` hang on Linux, sendfile*
+### [x] G0 — Linux support · Effort XL · Risk ▲ — *Linux fully supported (h1/h2/WS, opt-in TLS, gzip/zstd/br, CI); 2026-07-02: `.optional` hang resolved as stale, sendfile shipped, full portable suite green on Linux*
 The single biggest gap: servers run on Linux; we're Apple-only. The sans-I/O engines are already pure and
 portable — the lift is the I/O floor and a non-Network.framework TLS path. **Decision required first — see
 [Decisions needed](#decisions-needed) D1 (TLS backend).**
@@ -221,11 +221,13 @@ portable — the lift is the I/O floor and a non-Network.framework TLS path. **D
       from the Linux build graph and the `TransportFactory` cases are `#if canImport(Network)`-guarded, so
       Linux h1/h2/WS do not depend on it. A Linux QUIC story (quiche/lsquic shim, or a portable Swift QUIC)
       stays a separate XL follow-up (D3).
-- [ ] **Linux content codings:** gzip via the already-linked zlib + Brotli via `libbrotli` so Linux emits
-      gzip/br out (and the inbound decoders), not only zstd.
-- [ ] **CI:** GitHub Actions `ubuntu-latest` job — build + full suite + ASan; publish the cross-platform
-      support matrix in the README. *(The library + example already build and serve HTTP/1.1 on Linux; the
-      full `swift test` suite has not yet been run there — see the POSIXEpoll item's remaining work.)*
+- [x] **Linux content codings** — ✓ shipped (2026-07-02 reconciliation; landed with Phase 3.3
+      `b46be83`): gzip via the linked zlib, Brotli via `libbrotli`, zstd — each `ContentEncoder` hides
+      its Darwin-vs-Linux backend behind the pluggable seam; `GzipLinuxTests`/`InflateLinuxTests` cover
+      the Linux legs. See §"G0 — Linux support" header ("gzip/zstd/br" shipped) above.
+- [x] **CI** — ✓ shipped (2026-07-02 reconciliation): `.github/workflows/ci.yml` carries the
+      `ubuntu-latest` job (build + suite) alongside the macOS jobs, sanitizers, trap-lint and
+      rfc-citations gates; the README publishes the cross-platform support matrix.
 - _Gate:_ full test suite green on Linux (h1/h2/WS; h3 skipped-with-note), the bench harness runs on Linux,
       ASan clean, no regression on Darwin. Land incrementally: **(a)** epoll backbone + cleartext path on
       Linux — ✓ **done 2026-06-28** (builds + serves HTTP/1.1 end-to-end; gating the Darwin-only test files
@@ -564,7 +566,17 @@ in the project docs.)
   - Alongside, the **perf/memory/zero-copy audit (P1–P13)** landed in scoped commits (receive-into hot
     path, `HTTPCore.Base64` consolidation, zero-copy structured fields, O(1) HPACK/QPACK dynamic table,
     lazy route params, HTTP/2 file split).
-  - **Open follow-ups:** **G5 sendfile/zero-copy** (transport-phase work, in progress); the portable-TLS
-    **`.optional`-with-an-admitted-client-cert hang on Linux** (gated Darwin-only — the same hazard the
-    macOS Network backbone showed); **G6** h3spec/h3load + Autobahn-first-green promotion; **G3** full
-    SAN/chain request context.
+  - **Open follow-ups:** **G6** h3spec/h3load + Autobahn-first-green promotion. *(2026-07-02
+    reconciliation — the rest closed on the t7 branch:)* **G5 sendfile/zero-copy** — ✓ shipped
+    (`TransportConnection.sendFile`, kernel `sendfile(2)` on kqueue/swift-system/epoll, h1 raw-body
+    wiring, measured ~1.8× throughput / ~48% less CPU; h2/h3 keep the copying pump by design — their
+    framing wraps every body byte). **G3 full SAN/chain request context** — ✓ shipped
+    (`TLSPeerIdentity` + PEM intake + `chainValidator(roots:)`). The portable-TLS
+    **`.optional`-with-an-admitted-client-cert "hang" on Linux** — ✓ **resolved as stale**: it belonged
+    to the earlier *blocking* `SSL_set_fd` model; on the event-driven memory-BIO backbone (audit R4)
+    the case passes (re-validated 2026-07-02, swiftlang/swift:nightly-noble aarch64, all seven
+    portable mutual-TLS cases + the FULL Linux suite with `HTTP_PORTABLE_TLS=1` green — 12 bundles,
+    1069 tests). Re-validation had been blocked by two Linux-only compile breaks fixed en route
+    (`DateCache` pthread-destructor optionality; `PortableTLSConnection` `Glibc.send` shadowing) plus
+    the `EpollEventLoop` `eventfd` modulemap gap (now via the `CEpoll` shim); the Darwin-only test
+    gate is removed.

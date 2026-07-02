@@ -6,12 +6,16 @@ platforms **and Linux**, written in Swift 6.4. On Apple platforms it builds dire
 (vendored-BoringSSL) TLS path — HTTP/3 stays Apple-only (see [Platform support](#platform-support)).
 It is designed to be a small, reusable **API package** that other projects embed.
 
-> **Status:** Work in progress (TDD, milestone-by-milestone). `HTTPCore`, the HTTP/1.1 engine,
-> HPACK, the four transport backbones, and an HTTP/1.1 server runtime are in place. The HTTP/2
-> sans-I/O connection engine receives requests end-to-end (preface, SETTINGS, HEADERS/CONTINUATION
-> with the flood guard, HPACK, DATA, and the §5.1 stream state machine); response encoding, inbound
-> flow control, the Rapid Reset defense, and transport/ALPN wiring are in active development. The
-> routing DSL is not built yet. See the milestone list below for implemented vs planned.
+> **Status:** All milestones (M0–M8) shipped. HTTP/1.1, HTTP/2 (HPACK, flow control, Rapid Reset
+> and CONTINUATION-flood defenses, RFC 9218 priorities), and HTTP/3 (QPACK, WebSocket-over-h3 /
+> RFC 9220) serve end-to-end behind one server runtime: routing result-builder DSL, ~25 middleware
+> (compression in/out, caching, sessions, CORS, rate limiting, problem+json, timeouts …),
+> route-scoped WebSocket with a broadcast hub, streaming request/response bodies, per-route body
+> limits, mutual TLS with the full peer identity as request context, static files with
+> `sendfile(2)` zero-copy on the POSIX backbones, hot certificate/responder reload, and an
+> observability module. Remaining tails are tracked in
+> `Docs/Documentation/roadmap/` (conformance-CI promotion, gated perf items, staged h2
+> back-pressure refinement).
 
 ## Why
 
@@ -36,13 +40,14 @@ It is designed to be a small, reusable **API package** that other projects embed
 
 ## Standards
 
-**Implemented:** HTTP Semantics (RFC 9110), HTTP/1.1 (RFC 9112) with request-smuggling defenses,
-and HPACK (RFC 7541). The HTTP/2 (RFC 9113) frame layer, SETTINGS, flow-control window, and request
-mapping exist as sans-I/O primitives; the connection/stream engine that drives them is in progress.
-
-**Planned:** HTTP/2 connection engine, Caching (9111), HTTP/3 (9114) + QPACK (9204) over QUIC
-(Network.framework, RFC 9000/9001/9002), Structured Fields (8941), Cookies (6265bis), Priorities
-(9218), Alt-Svc (7838), WebSocket (6455 / 9220).
+**Implemented:** HTTP Semantics (RFC 9110), Caching (RFC 9111), HTTP/1.1 (RFC 9112) with
+request-smuggling defenses, HPACK (RFC 7541) + HTTP/2 (RFC 9113) with the Rapid Reset and
+CONTINUATION-flood defenses, QPACK (RFC 9204) + HTTP/3 (RFC 9114) over QUIC (Network.framework,
+RFC 9000/9001/9002), WebSocket (RFC 6455) over h1 and h2/h3 (RFC 8441 / RFC 9220) with
+permessage-deflate (RFC 7692), Structured Fields (RFC 8941), Cookies (RFC 6265), Priorities
+(RFC 9218), Alt-Svc (RFC 7838), TLS 1.3 (RFC 8446) with ALPN (RFC 7301), mutual TLS with X.509
+peer identity (RFC 5280) and PEM intake (RFC 7468), problem+json (RFC 9457), multipart forms
+(RFC 7578), JWT verification (RFC 7519), and HKDF (RFC 5869).
 
 Security hardening is traced to its RFC §/CVE in `Docs/Documentation/Security.md` (e.g. HTTP/2 Rapid
 Reset CVE-2023-44487, CONTINUATION flood CVE-2024-27316, request smuggling, decompression bombs).
@@ -84,15 +89,17 @@ swiftlint lint --strict
 
 ## Milestones
 
+All shipped (see `Docs/Documentation/roadmap/` for the post-milestone production roadmaps):
+
 - **M0** — Package scaffold & tooling ✅
 - **M1** — `HTTPCore` (RFC 9110 semantics, byte primitives, limits, Huffman) ✅
 - **M2** — HTTP/1.1 engine (RFC 9112) + smuggling defenses ✅
-- **M3** — `HTTPTransport` (four backbones: Network.framework + POSIX kqueue/Dispatch/swift-system) ✅; TLS+ALPN, dev certs 🚧
-- **M4** — HTTP/1.1 server ✅; routing result-builder DSL 🚧
-- **M5** — HPACK (7541) ✅ + HTTP/2 (9113): frame primitives ✅, sans-I/O connection/stream engine (request path) ✅; response encoding · flow control · Rapid Reset · ALPN wiring 🚧
-- **M6** — Middleware (compression, caching, cookies, CORS) + WebSocket — planned
-- **M7** — QPACK (9204) + HTTP/3 (9114) over QUIC — planned
-- **M8** — Hardening, benchmarks, example server (example ✅; benchmarks 🚧)
+- **M3** — `HTTPTransport` (Network.framework + POSIX kqueue/Dispatch/swift-system + Linux epoll + portable BoringSSL TLS), TLS + ALPN, mTLS, SNI multi-cert, hot reload, dev certs ✅
+- **M4** — HTTP/1.1 server, routing result-builder DSL, request seam (context/body), streaming bodies ✅
+- **M5** — HPACK (7541) + HTTP/2 (9113): full sans-I/O connection/stream engine, response encoding, flow control, Rapid Reset + CONTINUATION-flood defenses, RFC 9218 priorities, ALPN wiring ✅
+- **M6** — Middleware (~25: compression in/out, caching, cookies, CORS, sessions, rate limiting, timeouts, problem+json, …) + WebSocket (route-scoped, hub, permessage-deflate) ✅
+- **M7** — QPACK (9204) + HTTP/3 (9114) over QUIC, WebSocket-over-h3 (9220) ✅
+- **M8** — Hardening (fuzz + conformance suites, sanitizers, trap-free request path), benchmarks, example server ✅
 
 ## License
 

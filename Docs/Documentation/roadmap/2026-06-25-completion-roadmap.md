@@ -117,9 +117,12 @@ Plan of record: `~/.claude/plans/wise-discovering-minsky.md`. Baseline: `main@ca
       _Gate (per feature):_ QPACK/h3 conformance + fuzz; a priority-order test; a pmd round-trip + bomb
       cap; h2spec still green.
 
-- [ ] **P9 — Observability bridges.** New `Sources/Observability/` module(s): swift-log access/structured
-      sink + swift-distributed-tracing span-per-request over `HTTPMetrics`. Deps isolated to the bridge.
-      _Gate:_ bridge tests; core targets' dep list unchanged.
+- [x] **P9 — Observability bridges.** **Superseded by G1 / the shipped `HTTPObservability` module**
+      (gap-closing roadmap, 2026-07-02 reconciliation): the access-log / structured-sink and
+      span-per-request needs landed there over `HTTPMetrics`, dependency-isolated exactly as this phase
+      intended (`Sources/HTTPObservability/`, core targets' dep list unchanged). A separate swift-log /
+      swift-distributed-tracing bridge module is no longer planned — a downstream layers one on the same
+      seams. Kept for the record.
 
 - [ ] **P10 — Conformance & tooling.** Autobahn (WS) CI job (Docker-gated), h3spec/QUIC interop, h3
       load-client for the bench matrix; flip low-noise benchmark baseline gates. _Gate:_ CI green or
