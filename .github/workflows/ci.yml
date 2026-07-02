@@ -41,6 +41,8 @@ jobs:
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Toolchain
         run: swift --version
       - name: Build (warnings as errors)
@@ -71,6 +73,8 @@ jobs:
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Toolchain
         run: swift --version
       - name: Test (release)
@@ -83,6 +87,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Assert no SwiftNIO transitive dependency
         run: |
           deps="$(swift package show-dependencies --format flatlist 2>/dev/null || true)"
@@ -149,6 +155,8 @@ jobs:
         sanitizer: [address, thread]
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Test under ${{ matrix.sanitizer }} sanitizer
         run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
 
@@ -167,6 +175,8 @@ jobs:
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Toolchain
         run: swift --version
       - name: Build — portable libssl TLS (HTTP_PORTABLE_TLS)
@@ -253,6 +263,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Toolchain
         run: swift --version
       - name: Benchmark smoke (build + run)
@@ -268,6 +280,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Install h2spec
         run: brew list h2spec >/dev/null 2>&1 || brew install h2spec
       - name: Build example server (release)
