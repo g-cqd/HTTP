@@ -79,23 +79,23 @@
             #expect(sawLeaf)
         }
 
-        // Darwin-only: on Linux the portable backbone's `.optional` client-auth with an ADMITTED client
-        // certificate hangs the handshake (the `.optional` reject + no-cert paths and the `.required`
-        // admit path all pass on Linux) — the same `.optional`-with-presented-cert hazard the macOS
-        // Network backbone showed (roadmap G3). Tracked as a Linux portable-TLS follow-up; the Darwin
-        // gated suite covers this case.
-        #if canImport(Darwin)
-            @Test(
-                "optional client-auth surfaces a presented client certificate subject",
-                .timeLimit(.minutes(1)))
-            func optionalSurfacesSubject() async throws {
-                // RFC 8446 §4.4.2.4 — see `requiredSurfacesSubject`: validation is the `verifyPeer` hook's
-                // job here, so a surfacing test supplies it; a nil hook conformantly rejects a presented cert.
-                try await Self.expectSubject(
-                    clientAuth: .optional, commonName: "portable-optional-client"
-                ) { _ in true }
-            }
-        #endif
+        // Runs on every platform. A historical Linux gate excluded this case ("`.optional` with an
+        // ADMITTED client certificate hangs the handshake") — that hang belonged to the earlier
+        // *blocking* `SSL_set_fd`-on-a-queue model and does not reproduce on the event-driven
+        // memory-BIO backbone (audit R4): re-validated 2026-07-02 on swiftlang/swift:nightly-noble
+        // (aarch64) via `Scripts/linux-test.sh`, all seven suite cases green. (The re-validation had
+        // been blocked by two Linux-only compile breaks fixed alongside: `DateCache`'s pthread
+        // destructor optionality and this file's neighbor `Glibc.send` shadowing.)
+        @Test(
+            "optional client-auth surfaces a presented client certificate subject",
+            .timeLimit(.minutes(1)))
+        func optionalSurfacesSubject() async throws {
+            // RFC 8446 §4.4.2.4 — see `requiredSurfacesSubject`: validation is the `verifyPeer` hook's
+            // job here, so a surfacing test supplies it; a nil hook conformantly rejects a presented cert.
+            try await Self.expectSubject(
+                clientAuth: .optional, commonName: "portable-optional-client"
+            ) { _ in true }
+        }
 
         @Test(
             "optional client-auth admits a client that presents no certificate",

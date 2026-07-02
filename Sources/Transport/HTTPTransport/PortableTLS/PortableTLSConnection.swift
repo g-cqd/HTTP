@@ -392,10 +392,12 @@
                 let base = buffer.baseAddress
                 let count = buffer.count
                 // SO_NOSIGPIPE (Darwin) / MSG_NOSIGNAL (Linux) suppress SIGPIPE on a peer RST.
+                // `Glibc.send` qualified: the unqualified name resolves to the connection's `send(_:)`
+                // instance method (and errors) even in this static context.
                 #if canImport(Darwin)
                     let written = write(descriptor, base, count)
                 #else
-                    let written = send(descriptor, base, count, Int32(MSG_NOSIGNAL))
+                    let written = Glibc.send(descriptor, base, count, Int32(MSG_NOSIGNAL))
                 #endif
                 if written >= 0 {
                     return written

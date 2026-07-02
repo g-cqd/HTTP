@@ -42,10 +42,21 @@ final class DateCache: Sendable {
     /// is harmless (and there is normally a single instance anyway).
     private static let key: pthread_key_t = {
         var key = pthread_key_t()
-        pthread_key_create(&key) { raw in
-            // `raw` is an exiting thread's retained ThreadCache pointer — release the +1 it holds.
-            Unmanaged<ThreadCache>.fromOpaque(raw).release()
-        }
+        // The destructor releases the +1 an exiting thread's slot holds. Darwin imports the destructor
+        // parameter as a NON-optional pointer; Glibc imports it as optional (POSIX only guarantees it
+        // is invoked with a non-NULL value, IEEE Std 1003.1-2017 pthread_key_create) — hence the split.
+        #if canImport(Darwin)
+            pthread_key_create(&key) { raw in
+                Unmanaged<ThreadCache>.fromOpaque(raw).release()
+            }
+        #else
+            pthread_key_create(&key) { raw in
+                guard let raw else {
+                    return
+                }
+                Unmanaged<ThreadCache>.fromOpaque(raw).release()
+            }
+        #endif
         return key
     }()
 
