@@ -14,6 +14,12 @@ internal import HTTP1
 internal import HTTPCore
 internal import HTTPTransport
 
+#if canImport(Darwin)
+    internal import Darwin
+#elseif canImport(Glibc)
+    internal import Glibc
+#endif
+
 extension HTTPServer {
     /// Streams a response over HTTP/1.1.
     ///
@@ -81,6 +87,27 @@ extension HTTPServer {
             frame.append(contentsOf: chunk)
             frame.append(contentsOf: [0x0D, 0x0A])
             try await connection.send(frame)
+        }
+
+        /// Hands an unframed file region to the transport's `sendfile(2)` path (G5).
+        ///
+        /// Only the raw (known `Content-Length`) body qualifies: its octets go on the wire unframed,
+        /// so the kernel can copy file pages straight to the socket. A chunked body interleaves
+        /// size-line framing per chunk (RFC 9112 §7.1), so it keeps the copying chunk pump — as do
+        /// the backbones without a raw socket (the ``TransportConnection`` default).
+        func writeFile(atPath path: String, offset: Int, length: Int) async throws {
+            guard !chunked, length > 0 else {
+                try await FileRegionStreamer.stream(
+                    atPath: path, offset: offset, length: length, to: self
+                )
+                return
+            }
+            let file = open(path, O_RDONLY)
+            guard file >= 0 else {
+                throw FileRegionStreamer.FileError.unreadable
+            }
+            defer { close(file) }
+            try await connection.sendFile(descriptor: file, offset: offset, length: length)
         }
     }
 }

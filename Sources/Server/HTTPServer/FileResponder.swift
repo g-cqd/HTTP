@@ -51,14 +51,6 @@ public struct FileResponder: HTTPResponder {
         case missing
     }
 
-    /// A file became unreadable, or shorter than its advertised length, between ``classify(_:)`` and the
-    /// read — surfaced so the response fails closed (`500` / stream error) instead of under-delivering the
-    /// `Content-Length` already on the wire (audit F1).
-    private enum ReadError: Error {
-        case unreadable
-        case truncated
-    }
-
     /// Resolves the request path to a file under the root and serves it, or `403`/`404`/`405`.
     public func respond(
         to request: HTTPRequest,
@@ -185,7 +177,10 @@ public struct FileResponder: HTTPResponder {
         }
         let offset = low  // an immutable copy the @Sendable producer can capture
         let stream = ResponseStream(contentLength: length) { writer in
-            try await Self.streamRange(path, offset: offset, length: length, to: writer)
+            // The file-region form (G5): the h1 raw-body writer hands the region to the transport's
+            // sendfile(2) (kernel copy, no userspace round-trip); every other engine/framing streams
+            // it through the bounded copying pump — byte-identical either way.
+            try await writer.writeFile(atPath: path, offset: offset, length: length)
         }
         return ServerResponse(head, stream: stream)
     }
@@ -298,35 +293,6 @@ public struct FileResponder: HTTPResponder {
         }
         catch {
             return nil
-        }
-    }
-
-    /// Streams `length` octets at `offset` from `path` to `writer` in chunks (the large-file path).
-    private static func streamRange(
-        _ path: String,
-        offset: Int,
-        length: Int,
-        to writer: any ResponseBodyWriter
-    ) async throws {
-        guard length > 0 else {
-            return
-        }
-        guard let handle = FileHandle(forReadingAtPath: path) else {
-            // The header section (incl. Content-Length) is already committed — fail the stream rather than
-            // under-deliver and desync the connection (audit F1).
-            throw ReadError.unreadable
-        }
-        defer { try? handle.close() }
-        try handle.seek(toOffset: UInt64(offset))
-        var remaining = length
-        while remaining > 0 {
-            guard let data = try handle.read(upToCount: min(64 * 1_024, remaining)), !data.isEmpty
-            else {
-                // EOF before the advertised length — never stop silently short.
-                throw ReadError.truncated
-            }
-            try await writer.write([UInt8](data))
-            remaining -= data.count
         }
     }
 }

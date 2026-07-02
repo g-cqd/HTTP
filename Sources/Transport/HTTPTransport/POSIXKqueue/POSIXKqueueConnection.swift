@@ -237,6 +237,32 @@ public final class POSIXKqueueConnection: TransportConnection {
         }
     }
 
+    /// Sends `length` octets of the open file `file` starting at `offset` via Darwin `sendfile(2)` —
+    /// the kernel moves file pages straight to the socket, no userspace copy (G5).
+    ///
+    /// Event-driven like ``send(_:)``: a partial send (`EAGAIN`, the socket buffer filled) re-arms on
+    /// writability and resumes from the advanced offset — iterative, not recursive. The caller owns
+    /// `file` (never closed here) and has already framed exactly `length` octets.
+    public func sendFile(descriptor file: Int32, offset: Int, length: Int) async throws {
+        guard length > 0 else {
+            return
+        }
+        let socket = self.descriptor
+        let eventLoop = self.eventLoop
+        try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Void, any Error>) in
+            writeResumer.reset(continuation)
+            Self.sendFileRemaining(
+                file: file,
+                offset: offset,
+                remaining: length,
+                socket: socket,
+                eventLoop: eventLoop,
+                once: writeResumer
+            )
+        }
+    }
+
     /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
     public func close() async {
         closeDescriptor()
@@ -257,6 +283,56 @@ public final class POSIXKqueueConnection: TransportConnection {
 
     /// A non-blocking `read` reported it would block — re-arm readability rather than fail (audit T-F3).
     private struct WouldBlockOnRead: Error {}
+
+    /// One event-driven `sendfile(2)` pump step: send as much of the remaining span as the socket
+    /// buffer takes, re-arming on writability for the rest (Darwin semantics: `-1`/`EAGAIN` with the
+    /// partial count in `len`; `EINTR` likewise reports the progress made).
+    private static func sendFileRemaining(
+        file: Int32,
+        offset: Int,
+        remaining: Int,
+        socket: Int32,
+        eventLoop: KqueueEventLoop,
+        once: OnceResumer<Void>
+    ) {
+        var offset = offset
+        var remaining = remaining
+        while remaining > 0 {
+            var span = off_t(remaining)
+            let result = sendfile(file, socket, off_t(offset), &span, nil, 0)
+            offset += Int(span)
+            remaining -= Int(span)
+            if result == 0 {
+                continue  // the whole requested span was sent; the loop condition exits
+            }
+            if errno == EINTR {
+                continue  // interrupted after `span` octets — retry the rest (audit T-F3)
+            }
+            if errno == EAGAIN || errno == EWOULDBLOCK {
+                // Immutable copies for the @Sendable re-arm closure.
+                let nextOffset = offset
+                let nextRemaining = remaining
+                let registered = eventLoop.waitWritable(socket) {
+                    sendFileRemaining(
+                        file: file,
+                        offset: nextOffset,
+                        remaining: nextRemaining,
+                        socket: socket,
+                        eventLoop: eventLoop,
+                        once: once
+                    )
+                }
+                if !registered {
+                    // See ``writeRemaining``: never park behind a refused registration.
+                    once.resume(throwing: TransportError.closed)
+                }
+                return
+            }
+            once.resume(throwing: TransportError.ioFailed("sendfile errno \(errno)"))
+            return
+        }
+        once.resume(returning: ())
+    }
 
     private static func writeRemaining(
         bytes: [UInt8],

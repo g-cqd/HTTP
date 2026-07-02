@@ -77,6 +77,19 @@ public protocol TransportConnection: Sendable {
     /// no coalesce copy (audit #4 / L4).
     func send(_ head: [UInt8], _ body: [UInt8]) async throws
 
+    /// Sends `length` octets of the open file `descriptor`, starting at byte `offset`, to the peer
+    /// (G5 zero-copy static serving).
+    ///
+    /// A raw-socket backbone overrides it with `sendfile(2)` — the kernel moves file pages straight
+    /// to the socket, no userspace copy; the default preads into a bounded scratch and ``send(_:)``s,
+    /// byte-identical but with the two extra copies. Backbones that cannot reach a raw socket keep
+    /// the default: Network.framework exposes no file-send on `NWConnection`, and the portable TLS
+    /// backbone must pass every byte through `SSL_write` (kernel TLS is out of scope). The caller
+    /// owns `descriptor` (the transport never closes it) and applies its own protocol framing —
+    /// only an UNFRAMED body span (HTTP/1.1 with a known `Content-Length`) is eligible; h2/h3 wrap
+    /// body bytes in frames, so a raw file-to-socket copy is inapplicable there by design.
+    func sendFile(descriptor: Int32, offset: Int, length: Int) async throws
+
     /// Closes the connection gracefully, flushing any pending output.
     func close() async
 

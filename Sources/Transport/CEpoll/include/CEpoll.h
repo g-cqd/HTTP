@@ -34,6 +34,18 @@ static inline int CEpoll_eventfd_wakeup_flags(void) {
 static inline int CEpoll_eventfd(unsigned int initval, int flags) {
     return eventfd(initval, flags);
 }
+
+#include <sys/sendfile.h>
+
+/// Linux `sendfile(2)` under a shim-stable name (<sys/sendfile.h> is likewise absent from Glibc's
+/// modulemap): sends up to `count` octets of `in_fd` starting at `offset` to the socket `out_fd`,
+/// returning the octets sent, or `-1` with `errno` (`EAGAIN` on a full non-blocking socket buffer) —
+/// the G5 zero-copy static-serving primitive.
+static inline long CEpoll_sendfile(int out_fd, int in_fd, long offset, unsigned long count) {
+    off_t position = (off_t)offset;
+    ssize_t sent = sendfile(out_fd, in_fd, &position, (size_t)count);
+    return (long)sent;
+}
 #endif
 
 #endif

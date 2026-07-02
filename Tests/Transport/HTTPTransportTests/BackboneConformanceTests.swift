@@ -9,6 +9,8 @@
 //  separate `QUICServerTransport` protocol) keep their own suites.
 //
 
+internal import Darwin
+internal import Foundation
 import HTTPTestSupport
 internal import Network
 import Testing
@@ -185,6 +187,36 @@ struct BackboneConformanceTests {
 
         await connection.close()
         client.cancel()
+        await transport.shutdown()
+    }
+
+    @Test(
+        "sendFile delivers a file region byte-exact over loopback (G5 — sendfile or fallback)",
+        .timeLimit(.minutes(1)), arguments: socketBackbones)
+    func sendFileDeliversFileRegion(_ backbone: TransportBackbone) async throws {
+        // kqueue + swiftSystem take the kernel sendfile(2) path; dispatch + Network.framework take
+        // the copying pread default — the bytes on the wire must be identical either way. The
+        // 200 KB pattern exceeds the 64 KiB fallback chunk and any single sendfile burst.
+        let payload = (0 ..< 200_000).map { UInt8(truncatingIfNeeded: $0 &* 31 &+ ($0 >> 8)) }
+        let directory = FileManager.default.temporaryDirectory
+        let name = "sendfile-\(backbone.rawValue)-\(UInt32.random(in: 0 ... .max))"
+        let url = directory.appendingPathComponent(name)
+        try Data(payload).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let file = open(url.path, O_RDONLY)
+        #expect(file >= 0)
+        defer { close(file) }
+
+        let transport = try makeTransport(backbone)
+        let stream = try await transport.start()
+        // A sub-range (offset 128) proves the offset plumbing, not just whole-file delivery.
+        try await assertLoopbackSendFile(
+            stream: stream,
+            port: transport.boundPort,
+            file: file,
+            offset: 128,
+            expected: Array(payload[128...])
+        )
         await transport.shutdown()
     }
 

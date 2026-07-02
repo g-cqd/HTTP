@@ -132,6 +132,65 @@ public final class SwiftSystemConnection: TransportConnection {
         }
     }
 
+    /// Sends `length` octets of the open file `file` starting at `offset` via Darwin `sendfile(2)` —
+    /// the kernel moves file pages straight to the socket, no userspace copy (G5).
+    ///
+    /// Event-driven like ``send(_:)``: a partial send (`EAGAIN`, the socket buffer filled) re-arms on
+    /// writability and resumes from the advanced offset — iterative, not recursive. The caller owns
+    /// `file` (never closed here) and has already framed exactly `length` octets. swift-system has no
+    /// typed `sendfile`, so the raw syscall takes the descriptor's `rawValue` (as `writev` does).
+    public func sendFile(descriptor file: Int32, offset: Int, length: Int) async throws {
+        guard length > 0 else {
+            return
+        }
+        try await withUnsafeThrowingContinuation {
+            (continuation: UnsafeContinuation<Void, any Error>) in
+            writeResumer.reset(continuation)
+            sendFileRemaining(file: file, offset: offset, remaining: length, once: writeResumer)
+        }
+    }
+
+    /// One event-driven `sendfile(2)` pump step, on the loop thread.
+    ///
+    /// Darwin semantics: `-1`/`EAGAIN` with the partial count in `len`; `EINTR` likewise reports
+    /// the progress made.
+    private func sendFileRemaining(
+        file: Int32, offset: Int, remaining: Int, once: OnceResumer<Void>
+    ) {
+        var offset = offset
+        var remaining = remaining
+        while remaining > 0 {
+            var span = off_t(remaining)
+            let result = sendfile(file, descriptor.rawValue, off_t(offset), &span, nil, 0)
+            offset += Int(span)
+            remaining -= Int(span)
+            if result == 0 {
+                continue  // the whole requested span was sent; the loop condition exits
+            }
+            if errno == EINTR {
+                continue  // interrupted after `span` octets — retry the rest (audit T-F3)
+            }
+            if errno == EAGAIN || errno == EWOULDBLOCK {
+                // Immutable copies for the @Sendable re-arm closure.
+                let nextOffset = offset
+                let nextRemaining = remaining
+                let registered = eventLoop.waitWritable(descriptor.rawValue) { [self] in
+                    sendFileRemaining(
+                        file: file, offset: nextOffset, remaining: nextRemaining, once: once
+                    )
+                }
+                if !registered {
+                    // See ``writeRemaining``: never park behind a refused registration.
+                    once.resume(throwing: TransportError.closed)
+                }
+                return
+            }
+            once.resume(throwing: TransportError.ioFailed("sendfile errno \(errno)"))
+            return
+        }
+        once.resume(returning: ())
+    }
+
     /// Closes the descriptor (idempotent, serialized on the loop to avoid an fd-reuse race).
     public func close() async {
         closeDescriptor()

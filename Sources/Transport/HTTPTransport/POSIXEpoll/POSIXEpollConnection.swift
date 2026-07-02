@@ -20,6 +20,7 @@
 
 #if canImport(Glibc)
 
+    internal import CEpoll
     internal import Glibc
     internal import Synchronization
 
@@ -241,6 +242,91 @@
                     once: writeResumer
                 )
             }
+        }
+
+        /// Sends `length` octets of the open file `file` starting at `offset` via Linux
+        /// `sendfile(2)` (through the ``CEpoll`` shim — `<sys/sendfile.h>` is absent from Glibc's
+        /// modulemap) — the kernel moves file pages straight to the socket, no userspace copy (G5).
+        ///
+        /// Event-driven like ``send(_:)``: a full socket buffer (`EAGAIN`) re-arms on writability
+        /// and resumes from the advanced offset — iterative, not recursive. The caller owns `file`
+        /// (never closed here) and has already framed exactly `length` octets.
+        public func sendFile(descriptor file: Int32, offset: Int, length: Int) async throws {
+            guard length > 0 else {
+                return
+            }
+            let socket = self.descriptor
+            let eventLoop = self.eventLoop
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                writeResumer.reset(continuation)
+                Self.sendFileRemaining(
+                    file: file,
+                    offset: offset,
+                    remaining: length,
+                    socket: socket,
+                    eventLoop: eventLoop,
+                    once: writeResumer
+                )
+            }
+        }
+
+        /// One event-driven `sendfile(2)` pump step — Linux semantics: a positive return is the
+        /// (possibly partial) count sent, `0` means the file ended early, `-1`/`EAGAIN` means the
+        /// socket buffer is full with nothing sent.
+        private static func sendFileRemaining(
+            file: Int32,
+            offset: Int,
+            remaining: Int,
+            socket: Int32,
+            eventLoop: EpollEventLoop,
+            once: OnceResumer<Void>
+        ) {
+            var offset = offset
+            var remaining = remaining
+            while remaining > 0 {
+                let sent = CEpoll_sendfile(socket, file, CLong(offset), CUnsignedLong(remaining))
+                if sent > 0 {
+                    offset += Int(sent)
+                    remaining -= Int(sent)
+                    continue
+                }
+                if sent == 0 {
+                    // EOF before the framed length — never stop silently short (audit F1).
+                    once.resume(
+                        throwing: TransportError.ioFailed(
+                            "sendFile: file ended \(remaining) octet(s) short of the framed length"
+                        )
+                    )
+                    return
+                }
+                if errno == EINTR {
+                    continue  // interrupted before any byte — retry (audit T-F3)
+                }
+                if errno == EAGAIN || errno == EWOULDBLOCK {
+                    // Immutable copies for the @Sendable re-arm closure.
+                    let nextOffset = offset
+                    let nextRemaining = remaining
+                    let registered = eventLoop.waitWritable(socket) {
+                        sendFileRemaining(
+                            file: file,
+                            offset: nextOffset,
+                            remaining: nextRemaining,
+                            socket: socket,
+                            eventLoop: eventLoop,
+                            once: once
+                        )
+                    }
+                    if !registered {
+                        // See ``writeRemaining``: never park behind a refused registration.
+                        once.resume(throwing: TransportError.closed)
+                    }
+                    return
+                }
+                once.resume(throwing: TransportError.ioFailed("sendfile errno \(errno)"))
+                return
+            }
+            once.resume(returning: ())
         }
 
         /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
