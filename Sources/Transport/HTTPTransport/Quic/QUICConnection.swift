@@ -19,10 +19,15 @@ public protocol QUICConnection: Sendable {
 
     /// The subject of the verified TLS client certificate (mutual TLS, RFC 9001), or `nil` if the peer
     /// presented none — the QUIC peer of ``TransportConnection/tlsPeerSubject``. The HTTP/3 runtime
-    /// stamps it onto the request as the server-asserted `X-Client-Cert-Subject` (zero-trust), stripping
-    /// any inbound value so a handler only ever sees a subject the server verified. Defaults to `nil`
-    /// until a backbone captures it at handshake.
+    /// asserts it into the request context (zero-trust), so a handler only ever sees a subject the
+    /// server verified. Defaults to `nil` until a backbone captures it at handshake.
     var tlsPeerSubject: String? { get }
+
+    /// The peer's full verified client-certificate identity (mutual TLS, RFC 9001) — DER chain, leaf
+    /// subject, and leaf Subject Alternative Names — or `nil` if the peer presented none; the QUIC
+    /// peer of ``TransportConnection/tlsPeerIdentity`` (G3). Defaults to `nil` until a backbone
+    /// captures it at handshake.
+    var tlsPeerIdentity: TLSPeerIdentity? { get }
 
     /// A stream of inbound, peer-initiated QUIC streams, finishing when the connection closes.
     func inboundStreams() -> AsyncStream<any QUICStream>
@@ -37,4 +42,7 @@ public protocol QUICConnection: Sendable {
 extension QUICConnection {
     /// No verified client-certificate subject unless a backbone captures one at handshake.
     public var tlsPeerSubject: String? { nil }
+
+    /// No verified client-certificate identity unless a backbone captures one at handshake (G3).
+    public var tlsPeerIdentity: TLSPeerIdentity? { nil }
 }

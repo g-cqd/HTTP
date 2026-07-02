@@ -103,4 +103,38 @@ void CHTTPBoringSSLShims_add_sni_context(SSL_CTX *default_ctx, const char *name,
 /// `SSL_set_tlsext_host_name` macro.
 void CHTTPBoringSSLShims_set_sni(SSL *ssl, const char *name);
 
+/// Loads a PEM identity (RFC 7468) into `ctx`: `certificate_pem` holds the certificate chain — the
+/// leaf's `CERTIFICATE` block first, any issuer blocks after it — and `key_pem` an unencrypted
+/// `PRIVATE KEY` / `EC PRIVATE KEY` / `RSA PRIVATE KEY` block. Returns 1 on success (including the
+/// key ↔ certificate consistency check), 0 on any failure. The G3 PEM intake: no PKCS#12 round-trip.
+int CHTTPBoringSSLShims_use_pem(
+    SSL_CTX *ctx,
+    const uint8_t *certificate_pem, int certificate_length,
+    const uint8_t *key_pem, int key_length);
+
+/// Creates an empty X.509 trust store (an `X509_STORE`) for chain validation (RFC 5280 §6), or NULL
+/// on allocation failure. Free with ``CHTTPBoringSSLShims_trust_store_free``.
+void *CHTTPBoringSSLShims_trust_store_create(void);
+
+/// Adds one DER-encoded root CA certificate to `store`. Returns 1 on success.
+int CHTTPBoringSSLShims_trust_store_add_root(void *store, const uint8_t *der, int length);
+
+/// Frees a trust store created by ``CHTTPBoringSSLShims_trust_store_create``.
+void CHTTPBoringSSLShims_trust_store_free(void *store);
+
+/// Creates an empty presented-chain accumulator (a `STACK_OF(X509)`), or NULL on allocation failure.
+/// Free with ``CHTTPBoringSSLShims_chain_free``.
+void *CHTTPBoringSSLShims_chain_create(void);
+
+/// Appends one DER-encoded certificate to `chain` (leaf first). Returns 1 on success.
+int CHTTPBoringSSLShims_chain_append(void *chain, const uint8_t *der, int length);
+
+/// Frees a chain created by ``CHTTPBoringSSLShims_chain_create`` (and its certificates).
+void CHTTPBoringSSLShims_chain_free(void *chain);
+
+/// Validates `chain` (its first certificate as the leaf, the rest as untrusted intermediates)
+/// against the roots in `store` — X.509 path validation per RFC 5280 §6 (`X509_verify_cert`).
+/// Returns 1 iff the path validates to a store root.
+int CHTTPBoringSSLShims_trust_store_validate(void *store, void *chain);
+
 #endif

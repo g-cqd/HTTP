@@ -212,7 +212,7 @@ void CHTTPBoringSSLShims_peer_der_chain(
     }
     STACK_OF(X509) *chain = SSL_get_peer_cert_chain(ssl);
     if (chain != NULL) {
-        int count = sk_X509_num(chain);
+        int count = (int)sk_X509_num(chain);
         for (int i = 0; i < count; i++) {
             X509 *certificate = sk_X509_value(chain, i);
             if (leaf != NULL && X509_cmp(certificate, leaf) == 0) {
@@ -318,4 +318,109 @@ void CHTTPBoringSSLShims_add_sni_context(SSL_CTX *default_ctx, const char *name,
 
 void CHTTPBoringSSLShims_set_sni(SSL *ssl, const char *name) {
     SSL_set_tlsext_host_name(ssl, name);
+}
+
+int CHTTPBoringSSLShims_use_pem(
+    SSL_CTX *ctx,
+    const uint8_t *certificate_pem, int certificate_length,
+    const uint8_t *key_pem, int key_length) {
+    // Chain: the leaf's CERTIFICATE block first (RFC 7468), issuer blocks after it (RFC 5280 order).
+    BIO *certificates = BIO_new_mem_buf(certificate_pem, certificate_length);
+    if (certificates == NULL) {
+        return 0;
+    }
+    X509 *leaf = PEM_read_bio_X509(certificates, NULL, NULL, NULL);
+    if (leaf == NULL) {
+        BIO_free(certificates);
+        return 0;
+    }
+    int loaded = SSL_CTX_use_certificate(ctx, leaf) == 1;
+    X509_free(leaf);
+    while (loaded) {
+        X509 *link = PEM_read_bio_X509(certificates, NULL, NULL, NULL);
+        if (link == NULL) {
+            ERR_clear_error();  // end of the PEM text, not a failure
+            break;
+        }
+        loaded = SSL_CTX_add1_chain_cert(ctx, link) == 1;
+        X509_free(link);
+    }
+    BIO_free(certificates);
+    if (!loaded) {
+        return 0;
+    }
+    // Key: PKCS#8 "PRIVATE KEY" (RFC 5958), SEC1 "EC PRIVATE KEY" (RFC 5915), or PKCS#1
+    // "RSA PRIVATE KEY" (RFC 8017) — PEM_read_bio_PrivateKey handles all three, unencrypted.
+    BIO *key_source = BIO_new_mem_buf(key_pem, key_length);
+    if (key_source == NULL) {
+        return 0;
+    }
+    EVP_PKEY *key = PEM_read_bio_PrivateKey(key_source, NULL, NULL, NULL);
+    BIO_free(key_source);
+    if (key == NULL) {
+        return 0;
+    }
+    int usable = SSL_CTX_use_PrivateKey(ctx, key) == 1 && SSL_CTX_check_private_key(ctx) == 1;
+    EVP_PKEY_free(key);
+    return usable;
+}
+
+void *CHTTPBoringSSLShims_trust_store_create(void) {
+    return X509_STORE_new();
+}
+
+int CHTTPBoringSSLShims_trust_store_add_root(void *store, const uint8_t *der, int length) {
+    const uint8_t *cursor = der;
+    X509 *root = d2i_X509(NULL, &cursor, length);
+    if (root == NULL) {
+        return 0;
+    }
+    int added = X509_STORE_add_cert((X509_STORE *)store, root) == 1;
+    X509_free(root);  // the store took its own reference
+    return added;
+}
+
+void CHTTPBoringSSLShims_trust_store_free(void *store) {
+    X509_STORE_free((X509_STORE *)store);
+}
+
+void *CHTTPBoringSSLShims_chain_create(void) {
+    return sk_X509_new_null();
+}
+
+int CHTTPBoringSSLShims_chain_append(void *chain, const uint8_t *der, int length) {
+    const uint8_t *cursor = der;
+    X509 *certificate = d2i_X509(NULL, &cursor, length);
+    if (certificate == NULL) {
+        return 0;
+    }
+    if (sk_X509_push((STACK_OF(X509) *)chain, certificate) == 0) {
+        X509_free(certificate);
+        return 0;
+    }
+    return 1;  // the stack owns the reference; chain_free releases it
+}
+
+void CHTTPBoringSSLShims_chain_free(void *chain) {
+    sk_X509_pop_free((STACK_OF(X509) *)chain, X509_free);
+}
+
+int CHTTPBoringSSLShims_trust_store_validate(void *store, void *chain) {
+    STACK_OF(X509) *presented = (STACK_OF(X509) *)chain;
+    X509 *leaf = sk_X509_value(presented, 0);
+    if (leaf == NULL) {
+        return 0;
+    }
+    X509_STORE_CTX *context = X509_STORE_CTX_new();
+    if (context == NULL) {
+        return 0;
+    }
+    // The whole presented stack rides as "untrusted" helpers; the leaf's own presence there is
+    // harmless (path building starts from the explicit leaf) — RFC 5280 §6 via X509_verify_cert.
+    int validated = 0;
+    if (X509_STORE_CTX_init(context, (X509_STORE *)store, leaf, presented) == 1) {
+        validated = X509_verify_cert(context) == 1;
+    }
+    X509_STORE_CTX_free(context);
+    return validated;
 }

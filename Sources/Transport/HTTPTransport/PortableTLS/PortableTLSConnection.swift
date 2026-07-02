@@ -48,7 +48,8 @@
         let isSecure = true
 
         var negotiatedApplicationProtocol: String? { negotiated.withLock(\.self) }
-        var tlsPeerSubject: String? { subject.withLock(\.self) }
+        var tlsPeerSubject: String? { tlsPeerIdentity?.subject }
+        var tlsPeerIdentity: TLSPeerIdentity? { peerIdentity.withLock(\.self) }
 
         /// The loop is a `TaskExecutor`; pinning the serve task to it runs decrypt → handler → encrypt
         /// inline on the loop thread (audit R4).
@@ -67,7 +68,8 @@
         /// `true` once the `SSL` (and its BIOs) have been freed — once-only across ``deinit`` paths.
         private let freed = Mutex<Bool>(false)
         private let negotiated = Mutex<String?>(nil)
-        private let subject = Mutex<String?>(nil)
+        /// The verified client-certificate identity (G3), captured once at handshake completion.
+        private let peerIdentity = Mutex<TLSPeerIdentity?>(nil)
         /// Reused plaintext receive buffer (`SSL_read` decrypts into it) — audit P1.
         private let scratch = Mutex<[UInt8]>([])
         /// Reused ciphertext pump buffer (raw socket ↔ BIO), sized once.
@@ -152,7 +154,14 @@
                     "the client certificate was rejected by verifyPeer"
                 )
             }
-            subject.withLock { $0 = OpenSSLTLS.peerSubject(of: ssl) }
+            if !chain.isEmpty {
+                // The full verified identity (G3): DER chain + leaf subject + leaf SANs, captured
+                // once here — off the byte path — and surfaced as request-scoped context.
+                let identity = TLSPeerIdentity(
+                    chainDER: chain, subject: OpenSSLTLS.peerSubject(of: ssl)
+                )
+                peerIdentity.withLock { $0 = identity }
+            }
         }
 
         // MARK: - Receive

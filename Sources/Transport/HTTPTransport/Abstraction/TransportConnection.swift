@@ -36,11 +36,16 @@ public protocol TransportConnection: Sendable {
     /// The subject summary of the peer's verified client certificate (mutual TLS), or `nil` when no
     /// client certificate was presented — cleartext, one-way TLS, or before the handshake settles.
     ///
-    /// Populated only by a TLS backbone configured for ``TransportTLS/ClientAuth/required``, captured
-    /// once the handshake reaches `.ready`. The server asserts it onto the request as the
-    /// server-controlled `X-Client-Cert-Subject` field for handlers and middleware (zero-trust /
-    /// service-to-service identity).
+    /// Populated only by a TLS backbone configured for ``TransportTLS/ClientAuth/required`` (or
+    /// ``TransportTLS/ClientAuth/optional`` with a certificate presented), captured once the
+    /// handshake settles. The server asserts it into the request context (zero-trust /
+    /// service-to-service identity). The shorthand for ``tlsPeerIdentity``'s subject.
     var tlsPeerSubject: String? { get }
+
+    /// The peer's full verified client-certificate identity (mutual TLS) — the DER chain, leaf
+    /// subject, and leaf Subject Alternative Names — or `nil` when no client certificate was
+    /// presented (G3: the richer form of ``tlsPeerSubject``).
+    var tlsPeerIdentity: TLSPeerIdentity? { get }
 
     /// Receives up to `maxLength` inbound bytes, or `nil` once the peer half-closes (EOF).
     ///
@@ -107,6 +112,10 @@ extension TransportConnection {
     /// No client certificate by default; a TLS backbone doing mutual TLS overrides this once the
     /// handshake settles.
     public var tlsPeerSubject: String? { nil }
+
+    /// No client certificate by default; a TLS backbone doing mutual TLS overrides this with the
+    /// full verified identity once the handshake settles (G3).
+    public var tlsPeerIdentity: TLSPeerIdentity? { nil }
 
     /// No executor preference by default — the serve task runs on the global cooperative pool.
     ///

@@ -220,6 +220,16 @@ public final class NetworkFrameworkTransport: ServerTransport {
         tcp.noDelay = true
         let parameters: NWParameters
         if let tls {
+            // PEM identities need the portable backbone: Security offers no public in-memory
+            // certificate + key → SecIdentity constructor (SecIdentityRef comes only from
+            // SecPKCS12Import or a keychain query, and a keychain import breaks headless daemons) —
+            // fail closed at start() rather than mis-load an empty PKCS#12.
+            guard tls.pemIdentity == nil else {
+                throw TransportError.tlsConfigurationFailed(
+                    "PEM identities require the portable TLS backbone (HTTP_PORTABLE_TLS); "
+                        + "Network.framework loads identities from PKCS#12 only"
+                )
+            }
             let identity = try NetworkFrameworkTLS.identity(
                 pkcs12: tls.pkcs12,
                 passphrase: tls.passphrase
@@ -260,17 +270,18 @@ public final class NetworkFrameworkTransport: ServerTransport {
                 case .ready:
                     nwConnection.stateUpdateHandler = nil
                     let alpn = NetworkFrameworkTLS.negotiatedApplicationProtocol(of: nwConnection)
-                    // Capture the verified client-cert subject (mutual TLS) on the NW queue, where the
-                    // handshake metadata is settled — nil unless this is a `.required` client-auth
-                    // listener and the peer presented an accepted certificate.
-                    let peerSubject = NetworkFrameworkTLS.peerSubject(of: nwConnection)
+                    // Capture the verified client-cert identity (mutual TLS, G3: DER chain + subject
+                    // + SANs) on the NW queue, where the handshake metadata is settled — nil unless
+                    // this is a `.required` client-auth listener and the peer presented an accepted
+                    // certificate.
+                    let peerIdentity = NetworkFrameworkTLS.peerIdentity(of: nwConnection)
                     continuation.yield(
                         NetworkFrameworkConnection(
                             id: id,
                             connection: nwConnection,
                             negotiatedApplicationProtocol: alpn,
                             isSecure: isSecure,
-                            tlsPeerSubject: peerSubject
+                            tlsPeerIdentity: peerIdentity
                         )
                     )
                 case .failed, .cancelled:

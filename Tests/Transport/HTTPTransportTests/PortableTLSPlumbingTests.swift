@@ -79,6 +79,73 @@
             #expect(Self.negotiatedALPN(of: clientSSL) == "h2")
         }
 
+        @Test("a PEM identity (cert + key texts) handshakes end-to-end — the G3 intake, no PKCS#12")
+        func pemIdentityHandshakes() throws {
+            let pem = try DevTLSIdentity.selfSignedPEM()
+            let tls = TransportTLS(
+                pem: TransportTLS.PEMIdentity(
+                    certificateChainPEM: pem.certificatePEM, privateKeyPEM: pem.privateKeyPEM
+                )
+            )
+            // The production entry point: the server context built straight from PEM (RFC 7468).
+            let server = try OpenSSLTLS.serverContext(tls)
+            defer { CHTTPBoringSSL_SSL_CTX_free(server) }
+
+            let client = try #require(
+                CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method()))
+            defer { CHTTPBoringSSL_SSL_CTX_free(client) }
+            CHTTPBoringSSL_SSL_CTX_set_verify(client, SSL_VERIFY_NONE, nil)
+            #expect(CHTTPBoringSSLShims_set_client_alpn(client) == 0)
+
+            let serverSSL = try #require(CHTTPBoringSSL_SSL_new(server))
+            defer { CHTTPBoringSSL_SSL_free(serverSSL) }
+            let clientSSL = try #require(CHTTPBoringSSL_SSL_new(client))
+            defer { CHTTPBoringSSL_SSL_free(clientSSL) }
+            CHTTPBoringSSL_SSL_set_bio(
+                serverSSL,
+                CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()),
+                CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
+            )
+            CHTTPBoringSSL_SSL_set_bio(
+                clientSSL,
+                CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()),
+                CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
+            )
+            CHTTPBoringSSL_SSL_set_accept_state(serverSSL)
+            CHTTPBoringSSL_SSL_set_connect_state(clientSSL)
+
+            #expect(CHTTPBoringSSLShims_handshake(serverSSL, clientSSL) == 1)
+            #expect(String(cString: CHTTPBoringSSL_SSL_get_version(serverSSL)) == "TLSv1.3")
+        }
+
+        @Test("a malformed PEM identity fails closed at context build")
+        func malformedPEMFailsClosed() {
+            let tls = TransportTLS(
+                pem: TransportTLS.PEMIdentity(
+                    certificateChainPEM: "not a certificate", privateKeyPEM: "not a key"
+                )
+            )
+            #expect(throws: TransportError.self) {
+                _ = try OpenSSLTLS.serverContext(tls)
+            }
+        }
+
+        @Test("the BoringSSL trust-store validator matches the Security twin's decisions (G3)")
+        func boringSSLChainValidatorValidates() throws {
+            // On Darwin the public factory picks SecTrust, so exercise the BoringSSL implementation
+            // directly — it is the factory's implementation on Linux.
+            let issued = try DevTLSIdentity.issuedChainDER()
+            let validator = BoringSSLChainValidator.validator(roots: [issued.authority])
+            #expect(validator([issued.leaf]))
+            let strangerPEM = try DevTLSIdentity.selfSignedPEM(commonName: "stranger")
+            let stranger = try #require(
+                PEMDocument.parse(strangerPEM.certificatePEM)
+                    .first { $0.label == "CERTIFICATE" }
+            )
+            #expect(!validator([stranger.der]))
+            #expect(!validator([]))
+        }
+
         /// The ALPN protocol the handshake settled on (RFC 7301), or `nil` if none was negotiated.
         private static func negotiatedALPN(of ssl: OpaquePointer) -> String? {
             var data: UnsafePointer<UInt8>?

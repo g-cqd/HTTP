@@ -96,4 +96,37 @@ struct ClientCertSubjectTests {
         #expect(wire.hasPrefix("HTTP/1.1 200"))
         #expect(wire.hasSuffix("\r\n\r\nevil\r\nX-Injected: pwned"))
     }
+
+    @Test("the full peer identity (chain + SANs) reaches handlers through the context (G3)")
+    func deliversFullPeerIdentity() async {
+        // A synthetic identity: the handler must see the exact chain, the derived subject, and the
+        // SANs — the richer form of the subject string (chain pinning / SAN matching downstream).
+        let identity = TLSPeerIdentity(
+            chainDER: [[0x30, 0x01, 0x00], [0x30, 0x02, 0x01, 0x01]],
+            subject: "svc-b",
+            subjectAlternativeNames: [.dns("svc-b.internal"), .ip("10.0.0.7")]
+        )
+        let connection = FakeConnection(
+            id: TransportConnectionID(2),
+            negotiatedApplicationProtocol: "http/1.1",
+            isSecure: true,
+            tlsPeerIdentity: identity,
+            inbound: Array("GET / HTTP/1.1\r\nHost: x\r\n\r\n".utf8)
+        )
+        let responder = ClosureResponder { _, _, context in
+            let peer = context.connection.tlsPeerIdentity
+            let hasDNS = peer?.subjectAlternativeNames.contains(.dns("svc-b.internal")) == true
+            let parts = [
+                context.connection.tlsPeerSubject ?? "<none>",  // derives from the identity
+                peer.map { "\($0.chainDER.count)" } ?? "0",
+                hasDNS ? "dns-ok" : "dns-missing"
+            ]
+            let summary = parts.joined(separator: "|")
+            return ServerResponse(HTTPResponse(status: .ok), body: Array(summary.utf8))
+        }
+        let server = HTTPServer(transport: FakeTransport(), responder: responder)
+        await server.serve(connection)
+        let wire = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
+        #expect(wire.hasSuffix("\r\n\r\nsvc-b|2|dns-ok"))
+    }
 }

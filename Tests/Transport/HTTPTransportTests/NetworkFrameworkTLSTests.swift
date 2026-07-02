@@ -26,6 +26,25 @@ struct NetworkFrameworkTLSTests {
         _ = try NetworkFrameworkTLS.identity(pkcs12: tls.pkcs12, passphrase: tls.passphrase)
     }
 
+    @Test("a PEM identity is rejected at start() with the documented Security limitation (G3)")
+    func pemIdentityIsRejectedWithGuidance() async throws {
+        // Security offers no public in-memory certificate + key → SecIdentity constructor, so the
+        // Network backbone must fail closed at start() — with guidance — rather than mis-load an
+        // empty PKCS#12 (the portable backbone consumes PEM natively).
+        let pem = try DevTLSIdentity.selfSignedPEM()
+        let tls = TransportTLS(
+            pem: TransportTLS.PEMIdentity(
+                certificateChainPEM: pem.certificatePEM, privateKeyPEM: pem.privateKeyPEM
+            )
+        )
+        let transport = NetworkFrameworkTransport(
+            configuration: TransportConfiguration(port: 0, backbone: .networkFramework, tls: tls)
+        )
+        await #expect(throws: TransportError.self) {
+            _ = try await transport.start()
+        }
+    }
+
     @Test("concurrent PKCS#12 imports all succeed — SecPKCS12Import is serialized, not raced")
     func concurrentImportsAreSerialized() async throws {
         let tls = try SharedDevTLSIdentity.value()

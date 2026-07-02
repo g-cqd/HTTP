@@ -33,14 +33,14 @@ struct NetworkFrameworkMutualTLSTests {
         let connections = try await transport.start()
         let port = try #require(NWEndpoint.Port(rawValue: transport.boundPort))
 
-        // The accepted connection is surfaced only after `.ready`, so its peer subject is settled.
-        let accepted = Task { () -> String? in
+        // The accepted connection is surfaced only after `.ready`, so its peer identity is settled.
+        let accepted = Task { () -> TLSPeerIdentity? in
             var iterator = connections.makeAsyncIterator()
             guard let connection = await iterator.next() else {
                 return nil
             }
             defer { Task { await connection.close() } }
-            return connection.tlsPeerSubject
+            return connection.tlsPeerIdentity
         }
 
         let client = NWConnection(
@@ -49,7 +49,15 @@ struct NetworkFrameworkMutualTLSTests {
         client.start(queue: .global())
         defer { client.cancel() }
 
-        #expect(await accepted.value == clientCN)
+        // The full G3 identity: the subject, a non-empty DER chain (the leaf is a real certificate),
+        // and the leaf's SANs (DevTLSIdentity mints DNS:localhost + IP:127.0.0.1 — RFC 5280 §4.2.1.6).
+        let identity = await accepted.value
+        #expect(identity?.subject == clientCN)
+        let leafBytes = identity?.leafDER ?? []
+        #expect(!leafBytes.isEmpty)
+        let names = identity?.subjectAlternativeNames ?? []
+        #expect(names.contains(.dns("localhost")))
+        #expect(names.contains(.ip("127.0.0.1")))
         await transport.shutdown()
     }
 

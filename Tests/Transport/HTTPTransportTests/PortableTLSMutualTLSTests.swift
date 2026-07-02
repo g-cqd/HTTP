@@ -148,7 +148,8 @@
         }
 
         /// Starts a transport, connects a client presenting a `commonName` identity, and asserts the
-        /// surfaced connection's `tlsPeerSubject` is that common name.
+        /// surfaced connection's `tlsPeerSubject` is that common name — and that the full G3 identity
+        /// (DER chain + SANs) rides along.
         private static func expectSubject(
             clientAuth: TransportTLS.ClientAuth,
             commonName: String,
@@ -159,17 +160,24 @@
             let connections = try await transport.start()
             let port = transport.boundPort
 
-            let accepted = Task { () -> String? in
+            let accepted = Task { () -> TLSPeerIdentity? in
                 var iterator = connections.makeAsyncIterator()
                 guard let connection = await iterator.next() else {
                     return nil
                 }
                 defer { Task { await connection.close() } }
-                return connection.tlsPeerSubject
+                return connection.tlsPeerIdentity
             }
 
             connect(port: port, identity: clientIdentity)
-            #expect(await accepted.value == commonName)
+            let identity = await accepted.value
+            #expect(identity?.subject == commonName)
+            let leafBytes = identity?.leafDER ?? []
+            #expect(!leafBytes.isEmpty)
+            // DevTLSIdentity mints DNS:localhost + IP:127.0.0.1 SANs (RFC 5280 §4.2.1.6).
+            let names = identity?.subjectAlternativeNames ?? []
+            #expect(names.contains(.dns("localhost")))
+            #expect(names.contains(.ip("127.0.0.1")))
             await transport.shutdown()
         }
 

@@ -28,7 +28,7 @@
         /// The caller owns the returned (default) context and must `CHTTPBoringSSL_SSL_CTX_free` it once no live `SSL`
         /// references it; freeing it also releases the SNI registry and its per-name contexts.
         static func serverContext(_ tls: TransportTLS) throws -> OpaquePointer {
-            let context = try makeContext(pkcs12: tls.pkcs12, passphrase: tls.passphrase, tls: tls)
+            let context = try makeContext(identity: .from(tls), tls: tls)
             guard !tls.sniIdentities.isEmpty else {
                 return context
             }
@@ -36,7 +36,8 @@
                 CHTTPBoringSSLShims_enable_sni(context)
                 for (name, identity) in tls.sniIdentities {
                     let perName = try makeContext(
-                        pkcs12: identity.pkcs12, passphrase: identity.passphrase, tls: tls
+                        identity: .pkcs12(identity.pkcs12, passphrase: identity.passphrase),
+                        tls: tls
                     )
                     name.withCString { CHTTPBoringSSLShims_add_sni_context(context, $0, perName) }
                     CHTTPBoringSSL_SSL_CTX_free(perName)  // the registry retains its own reference
@@ -49,13 +50,28 @@
             }
         }
 
+        /// The identity source a context is built from: a PKCS#12 blob (RFC 7292) or PEM texts
+        /// (RFC 7468, the G3 intake).
+        enum IdentitySource {
+            case pkcs12([UInt8], passphrase: String)
+            case pem(TransportTLS.PEMIdentity)
+
+            /// The configuration's default identity: PEM when supplied, else the PKCS#12 blob.
+            static func from(_ tls: TransportTLS) -> Self {
+                if let pem = tls.pemIdentity {
+                    return .pem(pem)
+                }
+                return .pkcs12(tls.pkcs12, passphrase: tls.passphrase)
+            }
+        }
+
         /// Builds and configures one server `SSL_CTX` (version, identity, ALPN, client-auth).
         ///
-        /// Pins the version range (RFC 8446 / RFC 9325), loads the PKCS#12 identity, installs the ALPN
-        /// policy (RFC 7301), and sets the client-auth mode (RFC 8446 §4.4.2). The `verifyPeer` trust
-        /// hook is applied post-handshake by the connection.
+        /// Pins the version range (RFC 8446 / RFC 9325), loads the identity (PKCS#12 or PEM),
+        /// installs the ALPN policy (RFC 7301), and sets the client-auth mode (RFC 8446 §4.4.2). The
+        /// `verifyPeer` trust hook is applied post-handshake by the connection.
         private static func makeContext(
-            pkcs12: [UInt8], passphrase: String, tls: TransportTLS
+            identity: IdentitySource, tls: TransportTLS
         ) throws -> OpaquePointer {
             guard let context = CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_server_method())
             else {
@@ -74,16 +90,7 @@
                         "failed to pin the TLS version range"
                     )
                 }
-                let loaded = pkcs12.withUnsafeBufferPointer { buffer in
-                    CHTTPBoringSSLShims_use_pkcs12(
-                        context, buffer.baseAddress, Int32(buffer.count), passphrase
-                    )
-                }
-                guard loaded == 1 else {
-                    throw TransportError.tlsConfigurationFailed(
-                        "failed to load the PKCS#12 identity"
-                    )
-                }
+                try load(identity, into: context)
                 CHTTPBoringSSLShims_set_alpn_select_h2(context)
                 CHTTPBoringSSLShims_set_client_auth(context, clientAuthMode(tls.clientAuth))
                 return context
@@ -91,6 +98,44 @@
             catch {
                 CHTTPBoringSSL_SSL_CTX_free(context)
                 throw error
+            }
+        }
+
+        /// Loads `identity` into `context` — `PKCS12_parse` for a blob, `PEM_read_bio_*` for PEM.
+        private static func load(
+            _ identity: IdentitySource, into context: OpaquePointer
+        ) throws {
+            switch identity {
+                case .pkcs12(let blob, let passphrase):
+                    let loaded = blob.withUnsafeBufferPointer { buffer in
+                        CHTTPBoringSSLShims_use_pkcs12(
+                            context, buffer.baseAddress, Int32(buffer.count), passphrase
+                        )
+                    }
+                    guard loaded == 1 else {
+                        throw TransportError.tlsConfigurationFailed(
+                            "failed to load the PKCS#12 identity"
+                        )
+                    }
+                case .pem(let pem):
+                    let chain = Array(pem.certificateChainPEM.utf8)
+                    let key = Array(pem.privateKeyPEM.utf8)
+                    let loaded = chain.withUnsafeBufferPointer { chainBuffer in
+                        key.withUnsafeBufferPointer { keyBuffer in
+                            CHTTPBoringSSLShims_use_pem(
+                                context,
+                                chainBuffer.baseAddress,
+                                Int32(chainBuffer.count),
+                                keyBuffer.baseAddress,
+                                Int32(keyBuffer.count)
+                            )
+                        }
+                    }
+                    guard loaded == 1 else {
+                        throw TransportError.tlsConfigurationFailed(
+                            "failed to load the PEM identity (chain + unencrypted key, RFC 7468)"
+                        )
+                    }
             }
         }
 

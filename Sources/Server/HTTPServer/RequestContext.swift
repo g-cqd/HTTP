@@ -34,8 +34,16 @@ public struct RequestContext: Sendable {
         ///
         /// Server-asserted: captured from the verified TLS handshake, never from a client-supplied
         /// header, so a peer cannot spoof it (the canonical replacement for the former
-        /// `X-Client-Cert-Subject` request-header stamp).
+        /// `X-Client-Cert-Subject` request-header stamp). The shorthand for ``tlsPeerIdentity``'s
+        /// leaf subject.
         public var tlsPeerSubject: String?
+
+        /// The peer's full verified client-certificate identity (mutual TLS) — the DER chain (leaf
+        /// first), the leaf subject, and the leaf's Subject Alternative Names (RFC 5280 §4.2.1.6) —
+        /// or `nil` when none was presented (G3: the richer form of ``tlsPeerSubject``, for
+        /// authorization on more than the subject string: pin the exact leaf, walk the chain, or
+        /// match a SAN).
+        public var tlsPeerIdentity: TLSPeerIdentity?
 
         /// Whether transport-level encryption (TLS / QUIC) is active on this connection.
         public var isSecure: Bool
@@ -50,15 +58,19 @@ public struct RequestContext: Sendable {
 
         /// Creates connection metadata — all defaulted to the cleartext/unknown case for synthetic
         /// contexts.
+        ///
+        /// When only `tlsPeerIdentity` is supplied, `tlsPeerSubject` derives from its leaf subject.
         public init(
             peer: TransportAddress? = nil,
             tlsPeerSubject: String? = nil,
+            tlsPeerIdentity: TLSPeerIdentity? = nil,
             isSecure: Bool = false,
             negotiatedApplicationProtocol: String? = nil,
             id: TransportConnectionID? = nil
         ) {
             self.peer = peer
-            self.tlsPeerSubject = tlsPeerSubject
+            self.tlsPeerSubject = tlsPeerSubject ?? tlsPeerIdentity?.subject
+            self.tlsPeerIdentity = tlsPeerIdentity
             self.isSecure = isSecure
             self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
             self.id = id
@@ -117,6 +129,7 @@ public struct RequestContext: Sendable {
             connection: Connection(
                 peer: connection.peer,
                 tlsPeerSubject: connection.tlsPeerSubject,
+                tlsPeerIdentity: connection.tlsPeerIdentity,
                 isSecure: connection.isSecure,
                 negotiatedApplicationProtocol: connection.negotiatedApplicationProtocol,
                 id: connection.id
@@ -133,6 +146,7 @@ public struct RequestContext: Sendable {
             connection: Connection(
                 peer: quic.peer,
                 tlsPeerSubject: quic.tlsPeerSubject,
+                tlsPeerIdentity: quic.tlsPeerIdentity,
                 isSecure: true,
                 negotiatedApplicationProtocol: quic.negotiatedApplicationProtocol ?? "h3"
             ),

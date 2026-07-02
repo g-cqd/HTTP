@@ -21,27 +21,36 @@ public actor FakeConnection: TransportConnection {
     nonisolated public let isSecure: Bool
 
     /// The verified mutual-TLS client-certificate subject to report, injected for client-cert
-    /// (G3) stamping tests; `nil` (the default) models a connection with no client certificate.
+    /// (G3) context tests; `nil` (the default) models a connection with no client certificate.
     nonisolated public let tlsPeerSubject: String?
+
+    /// The full verified client-certificate identity to report (G3), injected for context tests;
+    /// `nil` (the default) models a connection with no client certificate.
+    nonisolated public let tlsPeerIdentity: TLSPeerIdentity?
 
     private var inbound: ArraySlice<UInt8>
     private var output: [UInt8] = []
     private var closed = false
 
     /// Creates a fake connection seeded with the `inbound` bytes the peer has "sent".
+    ///
+    /// When only `tlsPeerIdentity` is supplied, `tlsPeerSubject` derives from its leaf subject —
+    /// matching the real TLS backbones.
     public init(
         id: TransportConnectionID,
         peer: TransportAddress = TransportAddress(host: "fake", port: 0),
         negotiatedApplicationProtocol: String? = nil,
         isSecure: Bool = false,
         tlsPeerSubject: String? = nil,
+        tlsPeerIdentity: TLSPeerIdentity? = nil,
         inbound: [UInt8] = []
     ) {
         self.id = id
         self.peer = peer
         self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
         self.isSecure = isSecure
-        self.tlsPeerSubject = tlsPeerSubject
+        self.tlsPeerSubject = tlsPeerSubject ?? tlsPeerIdentity?.subject
+        self.tlsPeerIdentity = tlsPeerIdentity
         self.inbound = inbound[...]
     }
 

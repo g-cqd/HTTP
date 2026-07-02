@@ -35,6 +35,96 @@ public enum DevTLSIdentity {
         )
     }
 
+    /// A self-signed identity as PEM texts (RFC 7468) for the PEM intake (G3) and SAN/DER fixtures.
+    ///
+    /// Returns the certificate and its unencrypted private key. Dev/test only, like everything here.
+    /// The certificate carries `DNS:localhost` and `IP:127.0.0.1` SANs (RFC 5280 §4.2.1.6).
+    public static func selfSignedPEM(
+        commonName: String = "localhost"
+    ) throws -> (certificatePEM: String, privateKeyPEM: String) {
+        try withScratchDirectory { directory in
+            let key = directory.appendingPathComponent("key.pem").path
+            let certificate = directory.appendingPathComponent("cert.pem").path
+            try run([
+                "req", "-x509", "-newkey", "rsa:2048", "-sha256", "-nodes",
+                "-keyout", key, "-out", certificate, "-days", "365",
+                "-subj", "/CN=\(commonName)",
+                "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"
+            ])
+            return (
+                certificatePEM: try text(atPath: certificate),
+                privateKeyPEM: try text(atPath: key)
+            )
+        }
+    }
+
+    /// A dev certificate authority plus a leaf certificate it issued, both as DER.
+    ///
+    /// The fixture for chain-validation (trust-roots, RFC 5280 §6) tests: `[leaf]` must validate to
+    /// `[authority]`. Dev/test only.
+    public static func issuedChainDER(
+        leafCommonName: String = "client"
+    ) throws -> (authority: [UInt8], leaf: [UInt8]) {
+        try withScratchDirectory { directory in
+            let authorityKey = directory.appendingPathComponent("ca-key.pem").path
+            let authorityCertificate = directory.appendingPathComponent("ca-cert.pem").path
+            let leafKey = directory.appendingPathComponent("leaf-key.pem").path
+            let request = directory.appendingPathComponent("leaf.csr").path
+            let leafCertificate = directory.appendingPathComponent("leaf-cert.pem").path
+            try run([
+                "req", "-x509", "-newkey", "rsa:2048", "-sha256", "-nodes",
+                "-keyout", authorityKey, "-out", authorityCertificate, "-days", "365",
+                "-subj", "/CN=Dev HTTP CA",
+                "-addext", "basicConstraints=critical,CA:TRUE"
+            ])
+            try run([
+                "req", "-new", "-newkey", "rsa:2048", "-sha256", "-nodes",
+                "-keyout", leafKey, "-out", request, "-subj", "/CN=\(leafCommonName)"
+            ])
+            try run([
+                "x509", "-req", "-in", request, "-CA", authorityCertificate,
+                "-CAkey", authorityKey, "-CAcreateserial", "-sha256",
+                "-out", leafCertificate, "-days", "365"
+            ])
+            return (
+                authority: try derCertificate(atPath: authorityCertificate),
+                leaf: try derCertificate(atPath: leafCertificate)
+            )
+        }
+    }
+
+    /// Runs `body` with a fresh scratch directory, removing it afterwards.
+    private static func withScratchDirectory<T>(
+        _ body: (URL) throws -> T
+    ) throws -> T {
+        let manager = FileManager.default
+        let directory = manager.temporaryDirectory.appendingPathComponent(
+            "http-dev-tls-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: directory) }
+        return try body(directory)
+    }
+
+    /// The UTF-8 contents of the file at `path`, or a typed error.
+    private static func text(atPath path: String) throws -> String {
+        guard let data = FileManager.default.contents(atPath: path) else {
+            throw TransportError.tlsConfigurationFailed("openssl produced no output at \(path)")
+        }
+        return String(decoding: data, as: Unicode.UTF8.self)
+    }
+
+    /// The DER bytes of the first CERTIFICATE block in the PEM file at `path` (RFC 7468).
+    private static func derCertificate(atPath path: String) throws -> [UInt8] {
+        let pem = try text(atPath: path)
+        let block = PEMDocument.parse(pem).first { $0.label == "CERTIFICATE" }
+        guard let block else {
+            throw TransportError.tlsConfigurationFailed("no CERTIFICATE block at \(path)")
+        }
+        return block.der
+    }
+
     private static func makePKCS12(commonName: String, passphrase: String) throws -> Data {
         let manager = FileManager.default
         let directory = manager.temporaryDirectory.appendingPathComponent(

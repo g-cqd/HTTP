@@ -34,10 +34,23 @@ public struct TransportTLS: Sendable {
     }
 
     /// A PKCS#12 (RFC 7292) blob holding the server certificate chain and its private key.
+    ///
+    /// Empty when the identity was supplied as PEM instead (``pemIdentity``).
     public var pkcs12: [UInt8]
 
     /// The passphrase protecting ``pkcs12`` (empty if the blob is unencrypted).
     public var passphrase: String
+
+    /// A PEM-encoded identity (RFC 7468) — the certificate chain and private key as PEM text — used
+    /// instead of ``pkcs12`` when set (G3 intake: no more shelling out to `openssl pkcs12`).
+    ///
+    /// Honored by the **portable TLS backbone** (``TransportBackbone/portableTLS``,
+    /// `HTTP_PORTABLE_TLS`), whose libssl reads PEM natively. The Network.framework backbone rejects
+    /// it with ``TransportError/tlsConfigurationFailed(_:)``: the Security framework exposes no
+    /// public in-memory certificate + key → `SecIdentity` constructor (`SecIdentityRef` comes only
+    /// from `SecPKCS12Import` or a keychain query, and importing a server key into a keychain breaks
+    /// headless daemons) — supply ``pkcs12`` there.
+    public var pemIdentity: PEMIdentity?
 
     /// ALPN protocols to offer, most-preferred first (RFC 7301) — e.g. `["h2", "http/1.1"]`.
     public var applicationProtocols: [String]
@@ -93,6 +106,25 @@ public struct TransportTLS: Sendable {
         }
     }
 
+    /// A PEM-encoded server identity (RFC 7468): the certificate chain and its private key as text.
+    public struct PEMIdentity: Sendable {
+        /// The PEM certificate chain, leaf first — one or more `CERTIFICATE` blocks.
+        public var certificateChainPEM: String
+
+        /// The PEM private key.
+        ///
+        /// A `PRIVATE KEY` (PKCS#8, RFC 5958), `EC PRIVATE KEY` (RFC 5915), or `RSA PRIVATE KEY`
+        /// (PKCS#1, RFC 8017) block. Unencrypted (a passphrase-protected PEM key is not supported;
+        /// decrypt it once at deployment instead).
+        public var privateKeyPEM: String
+
+        /// Creates a PEM identity from the chain and key texts.
+        public init(certificateChainPEM: String, privateKeyPEM: String) {
+            self.certificateChainPEM = certificateChainPEM
+            self.privateKeyPEM = privateKeyPEM
+        }
+    }
+
     /// Creates a TLS configuration from a PKCS#12 identity, the ALPN protocols to advertise, the TLS
     /// version range (default: TLS 1.3-only), the client-certificate policy (default: none), and an
     /// optional SNI multi-cert identity map (default: none).
@@ -108,6 +140,29 @@ public struct TransportTLS: Sendable {
     ) {
         self.pkcs12 = pkcs12
         self.passphrase = passphrase
+        self.pemIdentity = nil
+        self.applicationProtocols = applicationProtocols
+        self.minVersion = minVersion
+        self.maxVersion = maxVersion
+        self.clientAuth = clientAuth
+        self.verifyPeer = verifyPeer
+        self.sniIdentities = sniIdentities
+    }
+
+    /// Creates a TLS configuration from a PEM identity (RFC 7468) — supported by the portable TLS
+    /// backbone; see ``pemIdentity`` for the Network.framework limitation.
+    public init(
+        pem: PEMIdentity,
+        applicationProtocols: [String] = ["h2", "http/1.1"],
+        minVersion: TLSVersion = .tlsV13,
+        maxVersion: TLSVersion = .tlsV13,
+        clientAuth: ClientAuth = .none,
+        verifyPeer: (@Sendable ([[UInt8]]) -> Bool)? = nil,
+        sniIdentities: [String: SNIIdentity] = [:]
+    ) {
+        self.pkcs12 = []
+        self.passphrase = ""
+        self.pemIdentity = pem
         self.applicationProtocols = applicationProtocols
         self.minVersion = minVersion
         self.maxVersion = maxVersion

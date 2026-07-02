@@ -205,21 +205,27 @@ enum NetworkFrameworkTLS {
         return String(cString: raw)
     }
 
-    /// The subject summary of the peer's leaf client certificate (mutual TLS) on a ready `connection`,
-    /// or `nil` when no client certificate was presented (cleartext / one-way TLS / no peer cert).
+    /// The peer's full verified client-certificate identity (mutual TLS) on a ready `connection`, or
+    /// `nil` when no client certificate was presented (cleartext / one-way TLS / no peer cert).
     ///
     /// The chain is leaf-first, so `.first` is the end-entity certificate whose
-    /// `SecCertificateCopySubjectSummary` (e.g. the CN) identifies the client.
-    static func peerSubject(of connection: NWConnection) -> String? {
+    /// `SecCertificateCopySubjectSummary` (e.g. the CN) identifies the client; the DER chain and the
+    /// leaf's Subject Alternative Names (RFC 5280 §4.2.1.6) ride along as the G3 request-scoped
+    /// context. Runs once at `.ready`, never on the byte path.
+    static func peerIdentity(of connection: NWConnection) -> TLSPeerIdentity? {
         guard
             let metadata = connection.metadata(definition: NWProtocolTLS.definition)
-                as? NWProtocolTLS.Metadata,
-            let leaf = peerCertificates(in: metadata.securityProtocolMetadata).first,
-            let summary = SecCertificateCopySubjectSummary(leaf)
+                as? NWProtocolTLS.Metadata
         else {
             return nil
         }
-        return summary as String
+        let certificates = peerCertificates(in: metadata.securityProtocolMetadata)
+        guard let leaf = certificates.first else {
+            return nil
+        }
+        let chain = certificates.map { [UInt8](SecCertificateCopyData($0) as Data) }
+        let subject = SecCertificateCopySubjectSummary(leaf).map { $0 as String }
+        return TLSPeerIdentity(chainDER: chain, subject: subject)
     }
 
     /// The peer's certificate chain (leaf-first) as `SecCertificate`s, from TLS handshake `metadata`.
