@@ -83,9 +83,10 @@ private func makeSocketTransport(
         case .swiftSystem:
             let transport = SwiftSystemTransport(configuration: configuration)
             return (transport, { transport.boundPort })
-        case .portableTLS, .posixEpoll, .fake:
+        case .portableTLS, .posixEpoll, .unixDomainSocket, .fake:
             // Not exercised by the cleartext loopback echo: .portableTLS needs a TLS identity,
-            // .posixEpoll is Linux-only, and .fake binds no socket. Skipped here.
+            // .posixEpoll is Linux-only, .unixDomainSocket binds a filesystem path (no TCP
+            // port for the loopback client), and .fake binds no socket. Skipped here.
             return nil
     }
 }
