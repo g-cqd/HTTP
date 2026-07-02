@@ -96,4 +96,4 @@ swiftlint lint --strict
 
 ## License
 
-TBD.
+MIT — see [LICENSE](LICENSE).
