@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # On-demand full run; with `update_baseline` it also captures a runner-class benchmark
+  # baseline (uploaded as an artifact to commit under Benchmarking/Benchmarks/.benchmarkBaselines/),
+  # which is what activates the low-noise benchmark regression gate in the `benchmarks` job.
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: "Capture the benchmark baseline on this runner class and upload it as an artifact"
+        type: boolean
+        default: false
 
 # Cancel superseded runs on the same ref.
 concurrency:
@@ -254,21 +263,49 @@ jobs:
         run: swift test --scratch-path "$SCRATCH" --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
 
   # ---------------------------------------------------------------------------
-  # Benchmark smoke run (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). Non-gating: it guards
-  # against the harness failing to build or a benchmark crashing — not perf drift (runner noise is
-  # too high to gate on). Promote to a `benchmark baseline check` once a runner baseline is captured.
+  # Benchmarks (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). REQUIRED for
+  # harness health — the P10 "flip low-noise gates" item: the suite must build and every benchmark
+  # must run, which is deterministic (the advisory era silently masked BOTH a missing 6.4-toolchain
+  # install and a TransportBackbone switch bitrot). Perf-DRIFT gating uses the LOW-NOISE pair the
+  # suite pins in code (Benchmarks.swift: .mallocCountTotal absolute zero-delta, .instructions
+  # ±5%; wall/CPU/throughput deliberately carry no thresholds — runner noise): `baseline check`
+  # activates automatically once a runner-class baseline is committed under
+  # Benchmarking/Benchmarks/.benchmarkBaselines/. Capture one via workflow_dispatch with
+  # update_baseline=true, download the artifact, and commit it.
   # ---------------------------------------------------------------------------
   benchmarks:
     runs-on: macos-26
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
         uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Install jemalloc (package-benchmark malloc metrics)
+        run: brew list jemalloc >/dev/null 2>&1 || brew install jemalloc
       - name: Toolchain
         run: swift --version
-      - name: Benchmark smoke (build + run)
-        run: swift package --package-path Benchmarking/Benchmarks --disable-sandbox benchmark
+      - name: Benchmark run (low-noise gate once a baseline is committed)
+        run: |
+          if ls -d Benchmarking/Benchmarks/.benchmarkBaselines/*/main >/dev/null 2>&1; then
+            # Committed baseline present: run the suite AND gate on the deterministic thresholds.
+            swift package --package-path Benchmarking/Benchmarks --disable-sandbox \
+              benchmark baseline check main
+          else
+            # No baseline yet: the harness-health half of the gate (build + every benchmark runs).
+            swift package --package-path Benchmarking/Benchmarks --disable-sandbox benchmark
+            echo "::notice::no committed benchmark baseline — low-noise drift gate pending capture (dispatch with update_baseline=true)"
+          fi
+      - name: Capture baseline (manual dispatch)
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        run: |
+          swift package --package-path Benchmarking/Benchmarks --disable-sandbox \
+            --allow-writing-to-package-directory benchmark baseline update main
+      - name: Upload baseline artifact (manual dispatch)
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline-main
+          path: Benchmarking/Benchmarks/.benchmarkBaselines/
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # HTTP/2 conformance — h2spec (RFC 9113) against the live httpd-example over h2c. Gates on the
@@ -312,13 +349,13 @@ jobs:
   # ---------------------------------------------------------------------------
   # WebSocket conformance — the Autobahn TestSuite (RFC 6455) fuzzingclient against httpd-example's /ws
   # echo. ubuntu-latest has Docker (the macOS image does not — why this was deferred): the server runs in
-  # the Swift container on the host network, Autobahn runs as its own container against it. Non-gating
-  # (continue-on-error) until observed green on CI, then promote. CI-only — not locally reproducible here
-  # (no Docker on the dev machine). Config + report gate: .github/conformance/autobahn/.
+  # the Swift container on the host network, Autobahn runs as its own container against it. REQUIRED
+  # (P10 promotion, 2026-07-02): observed green across consecutive CI runs, so the report gate now
+  # blocks. CI-only — not locally reproducible here (no Docker on the dev machine). Config + report
+  # gate: .github/conformance/autobahn/.
   # ---------------------------------------------------------------------------
   autobahn:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Start httpd-example (/ws echo) in the Swift container, host network
@@ -346,6 +383,107 @@ jobs:
         if: always()
         run: docker rm -f httpd || true
 
+  # ---------------------------------------------------------------------------
+  # HTTP/3 conformance — h3spec (RFC 9114 / QUIC v1) against httpd-example serving h3 over
+  # Network.framework QUIC. Darwin-only (QUIC is Network.framework here), hence a macOS job; the
+  # `tls` argument mints a throwaway self-signed identity and `-n` skips client-side validation.
+  #
+  # ADVISORY (continue-on-error) — the attempt is documented, per P10's no-silent-omission gate:
+  # validated locally 2026-07-02 on arm64 macOS with h3spec v0.1.13 (h3spec-mac-arm64). The server
+  # comes up (h1/h2 probe 200, QUIC listener + Alt-Svc advertised), but h3spec reports 48/49
+  # failures — every one a QUIC-TRANSPORT-layer expectation (TRANSPORT_PARAMETER_ERROR /
+  # PROTOCOL_VIOLATION / STREAM_STATE_ERROR / FLOW_CONTROL_ERROR …) aimed at the peer's QUIC
+  # stack. That stack is Apple's CLOSED Network.framework implementation, which h3spec's Haskell
+  # quic client cannot drive into those states (it expects the behaviors of its own quic library
+  # as the peer). The RFC 9114/9204 layer this package actually owns is covered by the in-repo
+  # HTTP3 conformance + QPACK suites in `build-test`. Promote this job if h3spec grows a mode that
+  # exercises the h3 layer independently of transport internals, or Apple's QUIC exposes the
+  # needed transport behaviors. The report uploads as an artifact either way.
+  # ---------------------------------------------------------------------------
+  h3spec:
+    runs-on: macos-26
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Download h3spec (pinned release, arm64 mac binary)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.1.13 -R kazu-yamamoto/h3spec -p "h3spec-mac-arm64" -O /tmp/h3spec --clobber
+          chmod +x /tmp/h3spec
+      - name: Build example server (release)
+        run: swift build -c release --product httpd-example --scratch-path "$SCRATCH"
+      - name: h3spec against httpd-example (QUIC + self-signed TLS)
+        run: |
+          BIN="$(swift build -c release --product httpd-example --scratch-path "$SCRATCH" --show-bin-path)/httpd-example"
+          "$BIN" 14433 networkFramework tls quiet >/tmp/httpd-h3.log 2>&1 &
+          PID=$!
+          # Wait for the TLS listener (the h1/h2 side of the same port).
+          for _ in $(seq 1 40); do
+            curl -sk --max-time 1 -o /dev/null https://127.0.0.1:14433/ && break
+            sleep 0.5
+          done
+          set +e
+          /tmp/h3spec 127.0.0.1 14433 -n -t 4000 2>&1 | tee /tmp/h3spec-report.txt
+          rc=$?
+          set -e
+          kill "$PID" 2>/dev/null || true
+          exit $rc
+      - name: Upload h3spec report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3spec-report
+          path: /tmp/h3spec-report.txt
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # h3 load smoke (P10) — an h2load HTTP/3 leg against httpd-example's QUIC listener; non-gating
+  # like the benchmark numbers (shared-runner load figures are noise — this leg guards "the h3
+  # path serves a real load client end-to-end" and surfaces the numbers in the job summary).
+  # Homebrew's nghttp2 h2load only speaks HTTP/3 when built against ngtcp2+nghttp3, so support is
+  # detected at runtime: absent support logs an EXPLICIT skip (P10: no silent omission).
+  # ---------------------------------------------------------------------------
+  bench-h3load:
+    runs-on: macos-26
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Install h2load (nghttp2)
+        run: brew list nghttp2 >/dev/null 2>&1 || brew install nghttp2
+      - name: Build example server (release)
+        run: swift build -c release --product httpd-example --scratch-path "$SCRATCH"
+      - name: h3 load smoke (h2load --alpn-list=h3)
+        run: |
+          if ! h2load --version | grep -qiE "nghttp3|ngtcp2"; then
+            echo "::warning::brew h2load lacks HTTP/3 (built without ngtcp2/nghttp3) — h3 load leg SKIPPED explicitly (P10 no-silent-omission)"
+            h2load --version || true
+            exit 0
+          fi
+          BIN="$(swift build -c release --product httpd-example --scratch-path "$SCRATCH" --show-bin-path)/httpd-example"
+          "$BIN" 14434 networkFramework tls quiet >/tmp/httpd-h3load.log 2>&1 &
+          PID=$!
+          for _ in $(seq 1 40); do
+            curl -sk --max-time 1 -o /dev/null https://127.0.0.1:14434/ && break
+            sleep 0.5
+          done
+          set +e
+          h2load -n 2000 -c 20 --alpn-list=h3 https://127.0.0.1:14434/ | tee /tmp/h3load.txt
+          rc=$?
+          set -e
+          kill "$PID" 2>/dev/null || true
+          {
+            echo "## h3load smoke (h2load --alpn-list=h3, 2000 req / 20 conns)"
+            echo '```text'
+            cat /tmp/h3load.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
 # NOTE: jobs run on the `macos-26` image with the Swift 6.4 development toolchain. If a specific 6.4
 # snapshot is needed beyond the image default, install it as the first step of each job with swiftly
 # (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
@@ -354,8 +492,12 @@ jobs:
 # Tracked follow-ups (each blocked on a specific item, see Docs/Standards/CONFORMANCE.md):
 #   • The streams section (http2/5) is now gated — the 5.1.2 hang and the 5.1.12 closed-stream nuance
 #     are fixed. Only generic/http2-3 stay out, for the invalid-preface GOAWAY (a benign ambiguity).
-#   • Autobahn (WebSocket, RFC 6455) — needs the crossbario/autobahn-testsuite Docker image; the CI
-#     image has no Docker. In-house WebSocket + WebSocketFuzzTests cover framing/masking/close/UTF-8.
-#   • Benchmark baseline gate — capture a runner baseline, then promote the smoke job to a check.
+#   • Autobahn (WebSocket, RFC 6455) — PROMOTED to a required gate (P10, 2026-07-02) after
+#     consecutive green runs; the fuzzingclient report gate blocks on any FAILED case.
+#   • h3spec — job added but ADVISORY: 48/49 failures are transport-layer expectations Apple's
+#     closed Network.framework QUIC cannot be driven into by h3spec's client; see the job comment.
+#   • Benchmark baseline gate — harness health is REQUIRED now; the low-noise drift check
+#     (malloc zero-delta + instructions ±5%) activates when a runner-class baseline is committed
+#     under Benchmarking/Benchmarks/.benchmarkBaselines/ (capture via dispatch update_baseline).
 #   • UBSan (-sanitize=undefined) — the UBSan runtime fails to link the test bundles on the current
 #     6.4 toolchain; revisit when the toolchain ships a linkable UBSan runtime.
