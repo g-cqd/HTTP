@@ -7,13 +7,18 @@
 //  proving the listener mode end to end — plus the fail-closed paths (missing / over-long path).
 //
 
-internal import Darwin
 internal import Dispatch
 internal import Foundation
 import HTTPTestSupport
 import Testing
 
 @testable import HTTPTransport
+
+#if canImport(Darwin)
+    internal import Darwin
+#elseif canImport(Glibc)
+    internal import Glibc
+#endif
 
 @Suite("Transport — UNIX-domain-socket backbone (AF_UNIX)")
 struct UnixSocketTransportTests {
@@ -47,7 +52,12 @@ struct UnixSocketTransportTests {
         let echoed = AsyncEventProbe<[UInt8]>()
         DispatchQueue.global()
             .async {
-                let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+                // Glibc vends SOCK_STREAM as the C enum `__socket_type` while `socket` takes Int32.
+                #if canImport(Glibc)
+                    let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+                #else
+                    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+                #endif
                 guard fd >= 0 else {
                     return
                 }
