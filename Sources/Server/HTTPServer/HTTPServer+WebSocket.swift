@@ -91,7 +91,12 @@ extension HTTPServer {
         carryover: [UInt8],
         permessageDeflate: PermessageDeflateParameters?
     ) async {
+        // The frame cap rides the message cap: a single frame can never legitimately exceed the
+        // message it belongs to, so a smaller standalone frame default would spuriously reject
+        // cap-legal unfragmented messages (RFC 6455 §5.4 — Autobahn 9.1/9.2 send up to 16 MiB in
+        // one frame).
         var engine = WebSocketConnection(
+            maxFrameSize: limits.effectiveWebSocketMessageSize,
             maxMessageSize: limits.effectiveWebSocketMessageSize,
             permessageDeflate: permessageDeflate
         )
@@ -209,6 +214,8 @@ extension HTTPServer {
                 )
                 var tunnel = HTTP2WebSocketTunnel(
                     socket: WebSocketConnection(
+                        // Frame cap = message cap, as on the h1 path (a frame cannot exceed its message).
+                        maxFrameSize: limits.effectiveWebSocketMessageSize,
                         maxMessageSize: limits.effectiveWebSocketMessageSize,
                         permessageDeflate: permessageDeflate
                     ),

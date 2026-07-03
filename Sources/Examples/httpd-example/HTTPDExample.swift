@@ -46,8 +46,13 @@ enum HTTPDExample {
         let port = parsePort()
         let backbone = parseBackbone()
         let tls = makeTLS()
+        // HTTPD_HOST overrides the loopback default (e.g. 0.0.0.0 when the example serves a
+        // container/VM whose peers are not on the same network namespace — the local Autobahn
+        // verification and any non-host-network docker run need it). Loopback stays the default so
+        // a bare local run never exposes a listener.
+        let host = ProcessInfo.processInfo.environment["HTTPD_HOST"] ?? "127.0.0.1"
         let configuration = TransportConfiguration(
-            host: "127.0.0.1",
+            host: host,
             port: port,
             backbone: backbone,
             tls: tls,
@@ -236,6 +241,12 @@ enum HTTPDExample {
         if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = Int(raw) {
             limits.maxConnectionsPerClient = value
             limits.maxConnections = value
+        }
+        // WebSocket message ceiling (bytes). The Autobahn conformance job raises it to cover the
+        // suite's 16 MiB section-9 messages without changing the shipped default for real loads.
+        let wsMessage = ProcessInfo.processInfo.environment["HTTPD_WS_MAX_MESSAGE"]
+        if let raw = wsMessage, let value = Int(raw) {
+            limits.maxWebSocketMessageSize = value
         }
         return limits
     }
