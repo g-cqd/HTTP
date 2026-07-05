@@ -106,6 +106,16 @@ let strictSwiftSettings: [SwiftSetting] = [
     let appleCompressionTestSources: [String] = []
 #endif
 
+// ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
+// UTF-8 validator uses the ASCII-run skip. Resolved from a local checkout when `ADFOUNDATION_PATH` is
+// set (in-repo development), else from git main. This is the one first-party dependency HTTP takes.
+func adFoundationDependency() -> Package.Dependency {
+    if let path = Context.environment["ADFOUNDATION_PATH"], !path.isEmpty {
+        return .package(path: path)
+    }
+    return .package(url: "https://github.com/g-cqd/ADFoundation.git", branch: "main")
+}
+
 let package = Package(
     name: "HTTP",
     platforms: [
@@ -150,14 +160,19 @@ let package = Package(
         // HS256 via `Crypto`'s HMAC, ES256 via P256, RS256 via `_CryptoExtras`' `_RSA`. Confined to
         // `HTTPAuth`, so a bare-server consumer never resolves it (`_CryptoExtras` pulls a BoringSSL
         // graph). apple/* — allowed by CLAUDE.md.
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0")
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
+        // The one first-party dependency: shared SIMD byte kernels (see `adFoundationDependency`).
+        adFoundationDependency()
     ],
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
         // Zero external dependencies, no I/O — the self-contained substrate every engine builds on.
         .target(
             name: "HTTPCore",
-            dependencies: ["CCRC32"],
+            dependencies: [
+                "CCRC32", .product(name: "ADFKernels", package: "ADFoundation"),
+                .product(name: "ADFCore", package: "ADFoundation")
+            ],
             path: "Sources/Core/HTTPCore"
         ),
         .testTarget(
@@ -305,7 +320,9 @@ let package = Package(
         // §4 opening handshake over the HTTP/1.1 Upgrade (and RFC 9220 over HTTP/2). No sockets.
         .target(
             name: "WebSocket",
-            dependencies: ["HTTPCore", "CWSDeflate"],
+            dependencies: [
+                "HTTPCore", "CWSDeflate", .product(name: "ADFKernels", package: "ADFoundation")
+            ],
             path: "Sources/Protocols/WebSocket"
         ),
         .testTarget(

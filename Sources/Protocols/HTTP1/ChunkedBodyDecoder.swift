@@ -39,6 +39,12 @@ public enum ChunkedBodyDecoder {
         fileprivate var extBytes = 0
         // swiftlint:disable:next strict_fileprivate - read and written by ChunkedBodyDecoder in-file
         fileprivate var trailerBytes = 0
+        /// Bytes of the CURRENT (not-yet-terminated) line already scanned for CR, relative to the reader
+        /// position — so a byte-dripped chunk-size/ext/trailer line is scanned once across feeds, not
+        /// re-scanned from its start each feed (which was O(line²) per line). Reset to 0 when a line
+        /// completes; the data path was already resumable (audit F-CHUNKBUF residual).
+        // swiftlint:disable:next strict_fileprivate - read and written by ChunkedBodyDecoder in-file
+        fileprivate var scanOffset = 0
 
         /// Creates a decoder positioned before the first chunk-size line.
         public init() {
@@ -110,7 +116,8 @@ public enum ChunkedBodyDecoder {
         // A chunk-size line (size + optional chunk-ext) is bounded by `maxFieldSize`; the cumulative
         // chunk-ext budget is enforced separately in `beginChunk` once the whole line is in hand.
         switch try readLine(
-            &reader, maxLength: limits.maxFieldSize, ifTooLong: .chunkExtensionTooLarge
+            &reader, scanOffset: &state.scanOffset, maxLength: limits.maxFieldSize,
+            ifTooLong: .chunkExtensionTooLarge
         ) {
             case .needMore:
                 return false
@@ -154,9 +161,12 @@ public enum ChunkedBodyDecoder {
     /// CRLF-less chunk-size / chunk-ext / trailer line cannot grow the inbound buffer without limit
     /// (audit F-CHUNKBUF; CWE-400/CWE-770).
     private static func readLine(
-        _ reader: inout ByteReader, maxLength: Int, ifTooLong error: HTTP1ParseError
+        _ reader: inout ByteReader, scanOffset: inout Int, maxLength: Int, ifTooLong error: HTTP1ParseError
     ) throws(HTTP1ParseError) -> LineStep {
-        guard let crIndex = reader.firstIndex(of: cr) else {
+        // Resume the CR scan past the bytes already examined on a prior feed (`scanOffset`), so a
+        // byte-dripped line is scanned once end-to-end rather than re-scanned from its start each feed.
+        guard let crIndex = reader.firstIndex(of: cr, from: reader.position + scanOffset) else {
+            scanOffset = reader.remaining  // whole buffer scanned, no CR — resume past it next feed
             guard reader.remaining <= maxLength else { throw error }
             return .needMore
         }
@@ -168,11 +178,13 @@ public enum ChunkedBodyDecoder {
         guard crIndex - reader.position <= maxLength else { throw error }
         let lfIndex = crIndex + 1
         guard lfIndex < reader.count else {
+            scanOffset = crIndex - reader.position  // CR present, LF not yet — resume at the CR next feed
             return .needMore
-        }  // CR present, LF not yet
+        }
         guard reader.peek(ahead: lfIndex - reader.position) == lf else { throw .malformedChunk }
         let range = reader.position ..< crIndex
         reader.advance(by: lfIndex + 1 - reader.position)
+        scanOffset = 0  // line consumed; the next line starts a fresh scan
         return .line(range)
     }
 
@@ -254,7 +266,8 @@ public enum ChunkedBodyDecoder {
         // A single trailer field-line is bounded by `maxFieldSize`; the cumulative trailer-section size
         // is enforced separately below once each whole line is in hand.
         switch try readLine(
-            &reader, maxLength: limits.maxFieldSize, ifTooLong: .headerSectionTooLarge
+            &reader, scanOffset: &state.scanOffset, maxLength: limits.maxFieldSize,
+            ifTooLong: .headerSectionTooLarge
         ) {
             case .needMore:
                 return .needMore

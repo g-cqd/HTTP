@@ -25,11 +25,20 @@ extension HTTPServer {
     ///
     /// The head goes out chunked (or with Content-Length when the producer declared one), then each body
     /// chunk as it is produced; a chunked stream is terminated. Returns false on a transport fault.
+    ///
+    /// Every write is bounded by the idle deadline (FIX #1): the head send, each chunk send, and the
+    /// terminator each (re-)arm `deadline` to `now + idleTimeout`, so a legit slow-but-**progressing**
+    /// transfer is never reaped — each chunk resets the deadline — while a stalled chunk send (a
+    /// slow-reading peer that has filled the socket send buffer) or a wedged inline producer (no chunk
+    /// for a full window) IS reaped: the watchdog cancels this serve child task, unblocking the parked
+    /// send through the transport's per-call cancellation. `deadline` is disarmed on every exit so the
+    /// next exchange's read is not timed against a stale target.
     func sendStreamedResponse(
         _ head: HTTPResponse,
         stream: ResponseStream,
         omitBody: Bool,
-        on connection: any TransportConnection
+        on connection: any TransportConnection,
+        deadline: IdleDeadline<C.Instant>
     ) async -> Bool {
         var head = head
         let chunked = stream.contentLength == nil
@@ -39,13 +48,26 @@ extension HTTPServer {
         else {
             _ = head.headerFields.setValue("chunked", for: .transferEncoding)
         }
+        defer { deadline.disarm() }
         do {
+            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
             try await connection.send(ResponseSerializer.serialize(head, body: [], omitBody: false))
             guard !omitBody else {
                 return true  // HEAD: the header section only (RFC 9112 §6.3)
             }
-            try await stream.produce(H1StreamWriter(connection: connection, chunked: chunked))
+            // The writer re-arms the deadline before each chunk send; the deadline stays armed between
+            // writes so a wedged producer (no chunk for a window) is reaped too.
+            try await stream.produce(
+                H1StreamWriter(
+                    connection: connection,
+                    chunked: chunked,
+                    deadline: deadline,
+                    clock: clock,
+                    idleTimeout: limits.idleTimeout
+                )
+            )
             if chunked {
+                deadline.arm(clock.now.advanced(by: limits.idleTimeout))
                 try await connection.send(Array("0\r\n\r\n".utf8))  // last-chunk (RFC 9112 §7.1)
             }
             return true
@@ -74,11 +96,20 @@ extension HTTPServer {
     private struct H1StreamWriter: ResponseBodyWriter {
         let connection: any TransportConnection
         let chunked: Bool
+        /// The per-connection idle deadline, re-armed before each chunk send so progress resets it
+        /// (FIX #1). Shared with the serve loop + its watchdog.
+        let deadline: IdleDeadline<C.Instant>
+        let clock: C
+        let idleTimeout: Duration
 
         func write(_ chunk: [UInt8]) async throws {
             guard !chunk.isEmpty else {
                 return
             }
+            // Progress-based reset: a chunk about to go on the wire pushes the deadline to
+            // now + idleTimeout, so a slow-but-progressing transfer is not reaped while a stalled send
+            // (a slow-reading peer) is (FIX #1).
+            deadline.arm(clock.now.advanced(by: idleTimeout))
             guard chunked else {
                 try await connection.send(chunk)
                 return

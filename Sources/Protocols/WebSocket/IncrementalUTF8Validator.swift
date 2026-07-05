@@ -9,6 +9,8 @@
 //  Allocation-free; a single forward pass; no recursion.
 //
 
+import ADFKernels
+
 /// An incremental UTF-8 validator (RFC 3629): feed bytes across calls, then check ``isComplete``.
 struct IncrementalUTF8Validator {
     /// Continuation octets still expected to finish the current scalar (0 when between scalars).
@@ -26,6 +28,50 @@ struct IncrementalUTF8Validator {
     /// A `false` is terminal: the message is malformed. A `true` only means "well-formed so far" — the
     /// caller must still check ``isComplete`` once the message ends, to reject a trailing partial scalar.
     mutating func consume(_ bytes: some Sequence<UInt8>) -> Bool {
+        // Contiguous input takes the SIMD ASCII-skip fast path; anything else uses the scalar loop.
+        // Both carry the same cross-call state (`pending`/`nextLow`/`nextHigh`) and are result-identical.
+        if let result = bytes.withContiguousStorageIfAvailable({ buffer in consumeContiguous(buffer) }) {
+            return result
+        }
+        return consumeScalar(bytes)
+    }
+
+    /// Contiguous fast path: while between scalars, a runtime-dispatched SIMD scan skips the ASCII run
+    /// to the first non-ASCII byte (long text frames are mostly ASCII, RFC 6455 §5.6), then each
+    /// multi-byte scalar is range-checked per octet exactly as ``consumeScalar(_:)`` does.
+    private mutating func consumeContiguous(_ buffer: UnsafeBufferPointer<UInt8>) -> Bool {
+        guard let base = buffer.baseAddress else { return true }
+        let count = buffer.count
+        var index = 0
+        while index < count {
+            if pending == 0 {
+                if buffer[index] < 0x80 {
+                    index += ADFKernels.firstNonASCII(base: base + index, count: count - index)
+                    if index >= count { break }
+                }
+                guard let sequence = Self.sequence(forLead: buffer[index]) else {
+                    return false
+                }
+                pending = sequence.length - 1
+                nextLow = sequence.secondLow
+                nextHigh = sequence.secondHigh
+                index += 1
+            } else {
+                let byte = buffer[index]
+                guard byte >= nextLow, byte <= nextHigh else {
+                    return false
+                }
+                pending -= 1
+                nextLow = 0x80  // subsequent continuation octets take the full range
+                nextHigh = 0xBF
+                index += 1
+            }
+        }
+        return true
+    }
+
+    /// Scalar fallback for non-contiguous sequences (the reference behavior).
+    private mutating func consumeScalar(_ bytes: some Sequence<UInt8>) -> Bool {
         for byte in bytes {
             if pending == 0 {
                 if byte < 0x80 {

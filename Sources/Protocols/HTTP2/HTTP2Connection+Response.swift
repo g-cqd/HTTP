@@ -138,15 +138,32 @@ extension HTTP2Connection {
     ///
     /// Used when the body producer fails partway, so the peer sees an incomplete response rather than a
     /// truncated-but-clean one. A no-op for an unknown stream.
+    ///
+    /// A server-*emitted* RST_STREAM counts against the reset budget too — otherwise an attacker
+    /// provokes unbounded resets the client never sends, bypassing the Rapid-Reset defense: MadeYouReset
+    /// (CVE-2025-8671) — matching the receive-path convention (``process(_:into:)``'s server-emitted-
+    /// reset charge). Unlike that path, this call is not wrapped by ``receive(_:)``'s GOAWAY-queuing
+    /// catch (it is driven directly by the response side, not by feeding inbound octets), so on budget
+    /// overflow this queues the GOAWAY itself before rethrowing — the caller only needs to flush
+    /// whatever ``outboundBytes()`` now holds and close.
     public mutating func abortResponse(
         to streamID: HTTP2StreamID,
         code: HTTP2ErrorCode = .internalError
-    ) {
+    ) throws(HTTP2Error) {
         guard streams.removeValue(forKey: streamID) != nil else {
             return
         }
         writer.writeRstStream(streamID, code: code)
         markStreamClosed(streamID, reason: .reset)
+        do {
+            try chargeStreamReset()
+        }
+        catch {
+            if error.isConnectionError {
+                writer.writeGoAway(lastStreamID: lastPeerStreamID, code: error.code)
+            }
+            throw error
+        }
     }
 
     /// Encodes the response field section as an HPACK header block, `:status` first (RFC 9113 §8.3.2).

@@ -57,6 +57,13 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         /// Out-of-band control work (close/cancel) that must run on the loop thread, serialized against
         /// the readiness handlers so a close never races an in-flight read/write on the same fd.
         var control: [@Sendable () -> Void] = []
+        /// True while the loop thread is running handlers/jobs — i.e. NOT parked in `kevent`. An
+        /// off-loop caller wakes the loop only when this is `false`; an on-loop caller (the pinned
+        /// serve task itself — the R4 no-hop hot path) skips the `kevent` wakeup syscall entirely,
+        /// because the loop re-drains the inbox and re-checks the readiness set before it parks again
+        /// (audit — per-request wakeup elimination). Guarded by the inbox `Mutex` so the block-decision
+        /// (`onLoop = false` + `isEmpty`) and an off-loop enqueue serialize: no lost wakeup.
+        var onLoop = false
         var isEmpty: Bool { jobs.isEmpty && control.isEmpty }
     }
 
@@ -91,11 +98,17 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
 
     // MARK: - TaskExecutor
 
-    /// Enqueues a pinned task's job to run on the loop thread next turn, then wakes the loop.
+    /// Enqueues a pinned task's job to run on the loop thread next turn, waking the loop only when the
+    /// enqueue came from off-loop (an on-loop resume is drained by the current turn — no wakeup needed).
     func enqueue(_ job: consuming ExecutorJob) {
         let unowned = UnownedJob(job)
-        inbox.withLock { $0.jobs.append(unowned) }
-        triggerWakeup()
+        let offLoop = inbox.withLock { inbox -> Bool in
+            inbox.jobs.append(unowned)
+            return !inbox.onLoop
+        }
+        if offLoop {
+            triggerWakeup()
+        }
     }
 
     // MARK: - Readiness registration
@@ -134,8 +147,8 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races an
     /// in-flight handler and the fd number cannot be reused under one.
     func closeDescriptor(_ fd: Int32) {
-        inbox.withLock {
-            $0.control.append { [self] in
+        let offLoop = inbox.withLock { inbox -> Bool in
+            inbox.control.append { [self] in
                 let (readHandler, writeHandler) = registry.withLock {
                     (
                         $0.readHandlers.removeValue(forKey: fd),
@@ -150,8 +163,11 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
                 readHandler?()
                 writeHandler?()
             }
+            return !inbox.onLoop
         }
-        triggerWakeup()
+        if offLoop {
+            triggerWakeup()
+        }
     }
 
     // MARK: - The run loop
@@ -161,12 +177,20 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         while registry.withLock(\.isRunning) {
             // Wait for readiness, but return at once (timeout 0) when work is already queued so pinned
             // continuations are not delayed behind the idle poll. The idle timeout (50 ms) only bounds
-            // shutdown latency on a quiet loop; a wakeup pre-empts it.
-            let idle = inbox.withLock(\.isEmpty)
+            // shutdown latency on a quiet loop; a wakeup pre-empts it. Clearing `onLoop` and reading
+            // `isEmpty` under one lock is the block-decision: it serializes with an off-loop enqueue so
+            // work added the instant before we park still wakes us (no lost wakeup).
+            let idle = inbox.withLock { inbox -> Bool in
+                inbox.onLoop = false
+                return inbox.isEmpty
+            }
             var timeout = timespec(tv_sec: 0, tv_nsec: idle ? 50_000_000 : 0)
             let count = events.withUnsafeMutableBufferPointer { buffer in
                 kevent(kq, nil, 0, buffer.baseAddress, Int32(buffer.count), &timeout)
             }
+            // Back on the loop thread's processing region: on-loop callers (the pinned serve task)
+            // now skip the wakeup, because this turn re-drains the inbox before parking again.
+            inbox.withLock { $0.onLoop = true }
             if count > 0 {
                 for index in 0 ..< Int(count) {
                     let event = events[index]
@@ -182,6 +206,17 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             while !inbox.withLock(\.isEmpty), registry.withLock(\.isRunning) {
                 drainInbox()
             }
+        }
+        // `isRunning` just went false (a concurrent `stop()`). The inner drain above is gated on
+        // `isRunning` too, so a `closeDescriptor`/`enqueue` control-closure that raced the flip — landing
+        // in the inbox in the instant between the outer loop's readiness check and this point — could be
+        // skipped by that gate and left stranded, permanently parking whatever continuation it would have
+        // resumed (the teardown-drain race behind the intermittent `GracefulDrainTests` hang: a live
+        // connection's close never runs, so its `serve` task, and the server's whole shutdown task group,
+        // never returns). One final UNCONDITIONAL drain closes that window: anything enqueued up to this
+        // point is guaranteed to run — fd closed, continuation resumed — before the loop thread exits.
+        while !inbox.withLock(\.isEmpty) {
+            drainInbox()
         }
         close(kq)
     }
@@ -231,8 +266,12 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         )
         let accepted = kevent(kq, &event, 1, nil, 0, nil) >= 0
         // If the registration came from off-loop while the loop is parked in `kevent`, wake it so the
-        // new interest is honored this turn. From the loop thread itself this is a cheap no-op trigger.
-        triggerWakeup()
+        // new interest is honored this turn. From the loop thread itself (the pinned serve task parking
+        // on a read) the wakeup is pure overhead — the loop re-checks the readiness set before parking
+        // again — so it is skipped (audit — per-request wakeup elimination).
+        if inbox.withLock(\.onLoop) == false {
+            triggerWakeup()
+        }
         return accepted
     }
 

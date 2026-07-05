@@ -211,12 +211,13 @@ extension StructuredFields {
             guard let first = current, Self.isLCAlpha(first) || first == Self.star else {
                 throw .invalidKey
             }
-            var key: [UInt8] = []
+            // Record the start and materialize the run once (`reader.string(in:)`) instead of appending
+            // to a growing throwaway `[UInt8]` per byte — the parse stays zero-copy until this one String.
+            let start = reader.position
             while let character = current, Self.isKeyByte(character) {
-                key.append(character)
                 advance()
             }
-            return String(decoding: key, as: Unicode.UTF8.self)
+            return reader.string(in: start ..< reader.position)
         }
 
         // MARK: Bare items
@@ -308,12 +309,12 @@ extension StructuredFields {
         }
 
         private mutating func parseToken() -> String {
-            var token: [UInt8] = []
+            // Slice the run once instead of a per-byte accumulator (see parseKey).
+            let start = reader.position
             while let character = current, Self.isTokenByte(character) {
-                token.append(character)
                 advance()
             }
-            return String(decoding: token, as: Unicode.UTF8.self)
+            return reader.string(in: start ..< reader.position)
         }
 
         private mutating func parseByteSequence() throws(ParseError) -> BareItem {

@@ -53,6 +53,12 @@ extension Huffman {
         0x07ffffee, 0x07ffffef, 0x07fffff0, 0x03ffffee, 0x3fffffff
     ]
 
+    /// `codes` and `lengths` merged into one entry per symbol — `(length << 32) | code` — so the encoder
+    /// gathers a SINGLE array (one bounds check, one cache line) per byte instead of two, and
+    /// `encodedByteLength` reads the length field from the same packed entry.
+    @usableFromInline
+    static let packedCodes: [UInt64] = zip(codes, lengths).map { (UInt64($0.1) << 32) | UInt64($0.0) }
+
     /// RFC 7541 Appendix B — the bit length of each symbol's code (`5...30`).
     @usableFromInline
     static let lengths: [UInt8] = [

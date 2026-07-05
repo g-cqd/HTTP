@@ -164,9 +164,11 @@ extension HTTPServer {
             await engine.attachRoleStream(role, stream)  // so QPACK decoder-stream sends reach it
             streams.append(stream)
         }
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(1))  // keep the control/QPACK streams alive
-        }
+        // Hold the control/QPACK streams open until this connection's serving is cancelled — a single
+        // suspension resumed only by cancellation, with ZERO periodic wakeups (FIX #8, replacing a 1 Hz
+        // keep-alive poll that existed solely to retain these stream refs). Same lifetime, no per-second
+        // task wakeup per HTTP/3 connection.
+        await holdUntilCancelled()
         _ = streams
     }
 
@@ -452,5 +454,47 @@ extension HTTPServer {
                     break  // openUniStream is handled at startup; other-id sends do not occur here
             }
         }
+    }
+}
+
+/// The parked state of ``holdUntilCancelled()``: a single continuation, plus whether cancellation has
+/// already fired, guarded by a `Mutex` so the park and the cancel resolve exactly once between them.
+private struct CancellationPark {
+    var cancelled = false
+    var continuation: CheckedContinuation<Void, Never>?
+}
+
+/// Suspends the current task until it is cancelled — with **zero** periodic wakeups (FIX #8).
+///
+/// A single `withCheckedContinuation` resumed only by the cancellation handler, replacing a poll loop
+/// that slept-and-rechecked once a second purely to retain some references for the task's lifetime. The
+/// pre-park cancellation check (resume immediately when the state already shows `cancelled`) closes the
+/// already-cancelled and cancel-before-park races, so the continuation is resumed exactly once and never
+/// leaks. Resumes happen outside the lock, matching the loop/gate primitives elsewhere in the stack.
+///
+/// `internal` (not `private`) only so the concurrency property has a direct deterministic test; it is
+/// never part of the public API.
+func holdUntilCancelled() async {
+    let state = Mutex(CancellationPark())
+    await withTaskCancellationHandler {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumeNow = state.withLock { park -> Bool in
+                if park.cancelled {
+                    return true  // onCancel already fired (or the task was cancelled before we parked)
+                }
+                park.continuation = continuation
+                return false
+            }
+            if resumeNow {
+                continuation.resume()
+            }
+        }
+    } onCancel: {
+        let continuation = state.withLock { park -> CheckedContinuation<Void, Never>? in
+            park.cancelled = true
+            defer { park.continuation = nil }
+            return park.continuation
+        }
+        continuation?.resume()
     }
 }

@@ -25,6 +25,14 @@ public struct HTTPFields: Sendable, Equatable {
         storage = fields
     }
 
+    /// Reserves storage for at least `minimumCapacity` field lines. A parser that appends a known-ish
+    /// number of headers reserves once up front to avoid the geometric buffer re-grows (each copying
+    /// every `HTTPField` struct) — cutting per-request allocator traffic and the growth-spike tail.
+    @inlinable
+    public mutating func reserveCapacity(_ minimumCapacity: Int) {
+        storage.reserveCapacity(minimumCapacity)
+    }
+
     /// The combined value of every field line named `name`, or `nil` if none are present.
     ///
     /// Per RFC 9110 §5.3, repeated field lines sharing a name are combined into one value by

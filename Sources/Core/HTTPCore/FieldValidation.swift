@@ -7,6 +7,8 @@
 //  smuggling, so they are intentionally strict and allocation-free.
 //
 
+import ADFKernels
+
 /// Validators for the low-level grammar shared by all HTTP versions (RFC 9110).
 ///
 /// All routines iterate a byte sequence exactly once (`O(n)` time, `O(1)` space) and never
@@ -92,6 +94,10 @@ public enum FieldValidation {
 
     /// SWAR validation of a contiguous field-value buffer: eight octets per word, then a scalar tail.
     ///
+    /// Minimum length for the SIMD validator to beat the inlined SWAR (below it the C-call overhead
+    /// dominates and SWAR is already flat on short values). Conservative; tune from the HTTP benchmark.
+    @usableFromInline static let kernelValidateMinBytes = 64
+
     /// A field-value octet is invalid iff it is a control below SP other than HTAB (`< 0x20 && != 0x09`)
     /// or DEL (`0x7F`); obs-text (`0x80–0xFF`) is valid. The three sub-tests are the classic "bytes < n"
     /// and "bytes == n" high-bit tricks (Hacker's Delight / Bit Twiddling Hacks), combined per octet as
@@ -107,6 +113,13 @@ public enum FieldValidation {
             return true
         }
         let count = buffer.count
+        // Long values (the adversary-influenced tail — Authorization/Cookie/User-Agent) take the SIMD
+        // kernel; short values keep the inlined SWAR below (measured flat at 24 B). Same predicate:
+        // illegal iff `(< 0x20 && != 0x09) || == 0x7F`, obs-text legal.
+        if count >= FieldValidation.kernelValidateMinBytes {
+            return ADFKernels.firstDisallowedText(
+                base: base, count: count, minAllowed: 0x20, allowTab: true) == count
+        }
         let ones: UInt64 = 0x0101_0101_0101_0101
         let highs: UInt64 = 0x8080_8080_8080_8080
         let belowSpace = ones &* 0x20
@@ -188,6 +201,12 @@ public enum FieldValidation {
             return true
         }
         let count = buffer.count
+        // Long targets (URLs + query strings to several KB) take the SIMD kernel; short ones keep the
+        // inlined SWAR. Same predicate: illegal iff `<= 0x20 || == 0x7F`, obs-text legal.
+        if count >= FieldValidation.kernelValidateMinBytes {
+            return ADFKernels.firstDisallowedText(
+                base: base, count: count, minAllowed: 0x21, allowTab: false) == count
+        }
         let ones: UInt64 = 0x0101_0101_0101_0101
         let highs: UInt64 = 0x8080_8080_8080_8080
         let controlOrSpace = ones &* 0x21  // detect octet < 0x21, i.e. a control or SP (<= 0x20)

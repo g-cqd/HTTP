@@ -93,4 +93,36 @@ extension HTTPServer {
             }
         }
     }
+
+    /// A second watchdog shape for a caller-owned ``IdleDeadline`` that is not the one/serve-loop pair
+    /// ``withIdleWatchdog(_:_:)`` already manages — the HTTP/2 merged-mailbox serve loop
+    /// (HTTPServer+HTTP2.swift) needs one of these per independently-armed deadline: the consumer's own
+    /// sends (now on a task separate from the reader, so they cannot keep sharing the reader's
+    /// `IdleDeadline` — see that file's comment), and each native-streaming relay's producer pull.
+    ///
+    /// Identical lapse detection to ``runIdleWatchdog(_:)`` above, but reports the lapse through
+    /// `onLapse` instead of `return`ing to an outer `withTaskGroup` that is watching for "one of two
+    /// children finished": this watchdog is instead one of several children sharing a single
+    /// `withDiscardingTaskGroup`, and a child task's closure cannot capture that group's `inout`
+    /// parameter (Swift forbids capturing an `inout` parameter in an escaping closure) to call
+    /// `cancelAll()` on it directly. `onLapse` is synchronous — a mailbox `yield` — so it never blocks.
+    func runLocalIdleWatchdog(
+        _ deadline: IdleDeadline<C.Instant>,
+        onLapse: @Sendable () -> Void
+    ) async {
+        while !Task.isCancelled {
+            if let target = deadline.target {
+                if clock.now >= target {
+                    deadline.markLapsed()
+                    onLapse()
+                    return
+                }
+                try? await clock.sleep(until: target, tolerance: nil)
+            }
+            else {
+                let nap = min(limits.headerReadTimeout, limits.idleTimeout, limits.keepAliveTimeout)
+                try? await clock.sleep(for: nap, tolerance: nil)
+            }
+        }
+    }
 }

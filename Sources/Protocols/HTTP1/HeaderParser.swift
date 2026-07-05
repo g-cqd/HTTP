@@ -25,6 +25,9 @@ public enum HeaderParser {
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> HTTPFields {
         var fields = HTTPFields()
+        // Real header sections carry ~10–20 lines; reserve once so the append loop below never pays the
+        // geometric [HTTPField] re-grows (each copying every field). See HTTPFields.reserveCapacity.
+        fields.reserveCapacity(16)
         var totalSize = 0
         while true {
             guard let first = reader.peek() else { throw .incompleteHeaders }

@@ -62,6 +62,12 @@ actor AsyncHandoff {
     }
 
     /// Consumer: take the next item — a buffered chunk, then the terminal state once the producer ends.
+    ///
+    /// Cancellation-aware (FIX #1): if the consuming serve task is cancelled while parked here — the
+    /// idle watchdog reaping the connection because the producer wedged and offered no chunk within a
+    /// deadline window — this resumes `.failed` instead of staying parked forever, so the pump unwinds
+    /// and the connection actually closes. The pre-park cancellation re-check plus the nil-out on resume
+    /// keep the continuation resumed exactly once whether the producer, `close`, or the cancel wins.
     func next() async -> Item {
         if let chunk = pending {
             pending = nil
@@ -74,7 +80,33 @@ actor AsyncHandoff {
         if let closed {
             return closed
         }
-        return await withCheckedContinuation { consumerWaiter = $0 }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Item, Never>) in
+                if let closed {
+                    continuation.resume(returning: closed)  // producer ended between the check and here
+                }
+                else if Task.isCancelled {
+                    continuation.resume(returning: .failed)  // already cancelled before we parked
+                }
+                else {
+                    consumerWaiter = continuation
+                }
+            }
+        } onCancel: {
+            Task { await self.resumeConsumerOnCancel() }
+        }
+    }
+
+    /// Resumes a consumer parked in ``next()`` with `.failed` when its task is cancelled (FIX #1).
+    ///
+    /// A no-op once the producer or ``close(_:)`` has already taken the waiter — actor isolation
+    /// serializes this against them, and the nil-out guarantees a single resume.
+    private func resumeConsumerOnCancel() {
+        guard closed == nil, let consumer = consumerWaiter else {
+            return
+        }
+        consumerWaiter = nil
+        consumer.resume(returning: .failed)
     }
 
     /// Terminates the handoff, resuming both parked parties so no continuation leaks (RFC-agnostic).

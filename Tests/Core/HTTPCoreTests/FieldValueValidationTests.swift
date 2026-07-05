@@ -82,4 +82,34 @@ struct FieldValueValidationTests {
             }
         }
     }
+
+    /// The SIMD kernel path (values ≥ 64 B) must match the per-octet classifier for every byte at
+    /// every lane/chunk offset across the 16/32-byte SIMD bodies and the scalar tail.
+    @Test("Kernel field-value validation matches the classifier for long values")
+    func kernelFieldValueMatchesClassifier() {
+        let filler: UInt8 = 0x61  // 'a'
+        for value in UInt8.min ... UInt8.max {
+            for offset in [0, 1, 15, 16, 17, 31, 32, 33, 47, 63, 64, 71] {  // 72-byte buffer ⇒ kernel
+                var bytes = [UInt8](repeating: filler, count: 72)
+                bytes[offset] = value
+                #expect(
+                    FieldValidation.isValidFieldValue(bytes)
+                        == FieldValidation.isFieldValueByte(value))
+            }
+        }
+    }
+
+    @Test("Kernel request-target validation matches the classifier for long values")
+    func kernelRequestTargetMatchesClassifier() {
+        let filler: UInt8 = 0x61
+        for value in UInt8.min ... UInt8.max {
+            for offset in [0, 1, 16, 32, 33, 48, 63, 64, 71] {  // 72-byte buffer ⇒ kernel
+                var bytes = [UInt8](repeating: filler, count: 72)
+                bytes[offset] = value
+                #expect(
+                    FieldValidation.isRequestTargetValue(bytes)
+                        == FieldValidation.isRequestTargetByte(value))
+            }
+        }
+    }
 }

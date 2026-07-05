@@ -49,6 +49,63 @@ struct BackboneConformanceTests {
     }
 
     @Test(
+        "many on-loop park→resume round-trips stay correct with the per-request wakeup elided (FIX #7)",
+        .timeLimit(.minutes(1)))
+    func onLoopRoundTripsElideWakeup() async throws {
+        // The kqueue backbone pins the serve task to its event loop, so each server receive parks via
+        // the loop's on-loop `waitReadable` and each resume runs as an on-loop `enqueue` — exactly the
+        // path where FIX #7 skips the `kevent` wakeup (the loop re-drains before parking). Twenty
+        // sequential round-trips on one connection stress it: a lost wakeup would hang a round-trip and
+        // elapse the time limit rather than silently pass.
+        let transport = try makeTransport(.posixKqueue)
+        let stream = try await transport.start()
+        let port = transport.boundPort
+        #expect(port != 0)
+
+        let server = Task {
+            var iterator = stream.makeAsyncIterator()
+            guard let connection = await iterator.next() else {
+                return
+            }
+            // Pin the echo loop to the connection's own loop — the on-loop hot path (audit R4).
+            await withTaskExecutorPreference(connection.preferredTaskExecutor) {
+                while let chunk = try? await connection.receive(maxLength: 64), !chunk.isEmpty {
+                    try? await connection.send(chunk)
+                }
+            }
+            await connection.close()
+        }
+
+        let endpointPort = try #require(NWEndpoint.Port(rawValue: port))
+        let client = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
+        let bridged = NetworkFrameworkConnection(
+            id: TransportConnectionID(0),
+            connection: client,
+            negotiatedApplicationProtocol: nil,
+            isSecure: false
+        )
+        client.start(queue: .global())
+
+        for index in 0 ..< 20 {
+            let payload = Array("ping-\(index)".utf8)
+            try await bridged.send(payload)
+            // Loopback may split/coalesce — accumulate to the expected length before comparing.
+            var echo: [UInt8] = []
+            while echo.count < payload.count {
+                guard let chunk = try await bridged.receive(maxLength: 64), !chunk.isEmpty else {
+                    break
+                }
+                echo.append(contentsOf: chunk)
+            }
+            #expect(echo == payload)
+        }
+
+        await bridged.close()
+        _ = await server.result
+        await transport.shutdown()
+    }
+
+    @Test(
         "scatter-gather send(head, body) delivers head then body intact (writev path)",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func scatterGatherRoundTrip(_ backbone: TransportBackbone) async throws {

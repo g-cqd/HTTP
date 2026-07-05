@@ -159,20 +159,37 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
     }
 
     /// Sends `bytes` to the peer, completing once Network.framework has accepted them.
+    ///
+    /// Honors per-call task cancellation (FIX #6): a reaped write — the idle watchdog cancelling the
+    /// serve loop's child task when a slow-reading peer has filled the socket send buffer past the idle
+    /// deadline — cancels the `NWConnection`, which fires this send's completion with an error, so the
+    /// call unblocks instead of pinning the serve task forever. Without this, only the POSIX backbones
+    /// (which cancel their send syscall) honored the reap; `NWConnection.send` did not.
     public func send(_ bytes: [UInt8]) async throws {
-        try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Void, any Error>) in
-            connection.send(
-                content: Data(bytes),
-                completion: .contentProcessed { error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    }
-                    else {
-                        continuation.resume()
-                    }
+        do {
+            try await withTaskCancellationHandler {
+                try await withUnsafeThrowingContinuation {
+                    (continuation: UnsafeContinuation<Void, any Error>) in
+                    connection.send(
+                        content: Data(bytes),
+                        completion: .contentProcessed { error in
+                            if let error {
+                                continuation.resume(throwing: error)
+                            }
+                            else {
+                                continuation.resume()
+                            }
+                        }
+                    )
                 }
-            )
+            } onCancel: {
+                self.cancelUnderlying()
+            }
+        }
+        catch _ where Task.isCancelled {
+            // The send failed because this task's cancellation tore the connection down — report the
+            // standard cancellation signal, matching the receive contract on this backbone.
+            throw CancellationError()
         }
     }
 

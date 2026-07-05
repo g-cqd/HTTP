@@ -189,9 +189,12 @@ extension HTTP2Connection {
             markStreamClosed(streamID, reason: .endStream)
             return
         }
-        // Drop the octets already sent so a long-lived tunnel's queue stays bounded (RFC 8441 §5); a
-        // one-shot response simply flushes to empty here.
-        if record.pendingOffset > 0 {
+        // Reclaim the already-sent prefix, but only once it reaches half the buffer — so the amortized
+        // shifting cost is O(n), not O(n²). A large response drained over many WINDOW_UPDATEs previously
+        // `removeFirst`-shifted its whole remaining tail on EVERY partial flush (≈ n× the response size in
+        // memmoves). The `pendingOffset` cursor already skips the sent prefix on each write; this reclaim
+        // only bounds a long-lived tunnel's queue (RFC 8441 §5), so doing it lazily is safe.
+        if record.pendingOffset > 0, record.pendingOffset * 2 >= record.pending.count {
             record.pending.removeFirst(record.pendingOffset)
             record.pendingOffset = 0
         }
@@ -206,13 +209,21 @@ extension HTTP2Connection {
     /// drained — so a congested connection serves a more urgent response ahead of a less urgent one
     /// competing for the same window. (HTTP/3 needs no equivalent: its streams are independent tasks
     /// with per-stream transport backpressure, so there is no shared flush to order.)
-    mutating func flushAll() {
-        let ordered = streams.map { (id: $0.key, urgency: $0.value.urgency) }
-            .sorted { $0.urgency != $1.urgency ? $0.urgency < $1.urgency : $0.id < $1.id }
-        for entry in ordered {
+    @discardableResult
+    mutating func flushAll() -> Bool {
+        // Collect only streams with pending DATA, so a WINDOW_UPDATE that unblocks nothing (e.g. an
+        // idle-stream flood) doesn't allocate + sort the ENTIRE stream map. Returns whether any stream was
+        // ready — the caller charges a no-op connection WINDOW_UPDATE against the control-frame budget.
+        var ready = streams.compactMap {
+            $0.value.pendingOffset < $0.value.pending.count ? (id: $0.key, urgency: $0.value.urgency) : nil
+        }
+        guard !ready.isEmpty else { return false }
+        ready.sort { $0.urgency != $1.urgency ? $0.urgency < $1.urgency : $0.id < $1.id }
+        for entry in ready {
             guard var record = streams.removeValue(forKey: entry.id) else { continue }
             flushStream(entry.id, &record)
         }
+        return true
     }
 
     /// Applies a received WINDOW_UPDATE, replenishing the connection or a stream's send window and
@@ -229,7 +240,9 @@ extension HTTP2Connection {
         guard frame.header.streamID != .connection else {
             switch connectionSendWindow.increase(by: increment) {
                 case .applied:
-                    flushAll()
+                    // Charge a connection WINDOW_UPDATE that unblocked no pending DATA: a flood of them is
+                    // cheap for a peer to send and otherwise escapes the control-frame budget.
+                    if !flushAll() { try chargeControlFrame() }
                 case .zeroIncrement:
                     throw .connection(.protocolError, "WINDOW_UPDATE increment must be non-zero")
                 case .overflow:

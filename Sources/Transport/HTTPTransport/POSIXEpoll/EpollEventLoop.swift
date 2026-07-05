@@ -59,6 +59,13 @@
             var jobs: [UnownedJob] = []
             /// Out-of-band control work (close/cancel) serialized against the readiness handlers.
             var control: [@Sendable () -> Void] = []
+            /// True while the loop thread is running handlers/jobs — i.e. NOT parked in `epoll_wait`.
+            /// An off-loop caller writes the `eventfd` only when this is `false`; an on-loop caller (the
+            /// pinned serve task — the R4 no-hop hot path) skips the `write`+`read` wakeup pair, because
+            /// the loop re-drains the inbox and re-checks the readiness set before it parks again (audit
+            /// — per-request wakeup elimination). Guarded by the inbox `Mutex` so the block-decision
+            /// (`onLoop = false` + `isEmpty`) and an off-loop enqueue serialize: no lost wakeup.
+            var onLoop = false
             var isEmpty: Bool { jobs.isEmpty && control.isEmpty }
         }
 
@@ -105,11 +112,17 @@
 
         // MARK: - TaskExecutor
 
-        /// Enqueues a pinned task's job to run on the loop thread next turn, then wakes the loop.
+        /// Enqueues a pinned task's job to run on the loop thread next turn, waking the loop only when
+        /// the enqueue came from off-loop (an on-loop resume is drained by the current turn).
         func enqueue(_ job: consuming ExecutorJob) {
             let unowned = UnownedJob(job)
-            inbox.withLock { $0.jobs.append(unowned) }
-            triggerWakeup()
+            let offLoop = inbox.withLock { inbox -> Bool in
+                inbox.jobs.append(unowned)
+                return !inbox.onLoop
+            }
+            if offLoop {
+                triggerWakeup()
+            }
         }
 
         // MARK: - Readiness registration
@@ -129,7 +142,7 @@
                 registry.withLock { _ = $0.readHandlers.removeValue(forKey: fd) }
                 return false
             }
-            triggerWakeup()
+            wakeIfOffLoop()
             return true
         }
 
@@ -144,15 +157,15 @@
                 registry.withLock { _ = $0.writeHandlers.removeValue(forKey: fd) }
                 return false
             }
-            triggerWakeup()
+            wakeIfOffLoop()
             return true
         }
 
         /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races
         /// an in-flight handler and the fd number cannot be reused under one.
         func closeDescriptor(_ fd: Int32) {
-            inbox.withLock {
-                $0.control.append { [self] in
+            let offLoop = inbox.withLock { inbox -> Bool in
+                inbox.control.append { [self] in
                     let (readHandler, writeHandler) = registry.withLock { registry in
                         registry.registered.remove(fd)
                         return (
@@ -168,8 +181,11 @@
                     readHandler?()
                     writeHandler?()
                 }
+                return !inbox.onLoop
             }
-            triggerWakeup()
+            if offLoop {
+                triggerWakeup()
+            }
         }
 
         // MARK: - The run loop
@@ -178,14 +194,23 @@
             var events = [epoll_event](repeating: epoll_event(), count: 256)
             while registry.withLock(\.isRunning) {
                 // Return at once (timeout 0) when work is queued so pinned continuations are not delayed
-                // behind the idle poll; the 50 ms idle timeout only bounds shutdown latency on a quiet loop.
-                let idle = inbox.withLock(\.isEmpty)
+                // behind the idle poll; the 50 ms idle timeout only bounds shutdown latency on a quiet
+                // loop. Clearing `onLoop` and reading `isEmpty` under one lock is the block-decision: it
+                // serializes with an off-loop enqueue so work added the instant before we park still
+                // wakes us (no lost wakeup).
+                let idle = inbox.withLock { inbox -> Bool in
+                    inbox.onLoop = false
+                    return inbox.isEmpty
+                }
                 let count = events.withUnsafeMutableBufferPointer { buffer -> Int32 in
                     guard let base = buffer.baseAddress else {
                         return 0
                     }
                     return epoll_wait(epfd, base, Int32(buffer.count), idle ? 50 : 0)
                 }
+                // Back in the processing region: on-loop callers (the pinned serve task) now skip the
+                // wakeup, because this turn re-drains the inbox before parking again.
+                inbox.withLock { $0.onLoop = true }
                 if count > 0 {
                     for index in 0 ..< Int(count) {
                         let event = events[index]
@@ -199,6 +224,16 @@
                 while !inbox.withLock(\.isEmpty), registry.withLock(\.isRunning) {
                     drainInbox()
                 }
+            }
+            // `isRunning` just went false (a concurrent `stop()`). The inner drain above is gated on
+            // `isRunning` too, so a `closeDescriptor`/`enqueue` control-closure that raced the flip could
+            // be skipped by that gate and left stranded, permanently parking whatever continuation it
+            // would have resumed (the teardown-drain race behind the intermittent `GracefulDrainTests`
+            // hang — mirrors the identical fix in `KqueueEventLoop.runLoop()`). One final UNCONDITIONAL
+            // drain closes that window: anything enqueued up to this point is guaranteed to run — fd
+            // closed, continuation resumed — before the loop thread exits.
+            while !inbox.withLock(\.isEmpty) {
+                drainInbox()
             }
             close(wakeFD)
             close(epfd)
@@ -289,6 +324,15 @@
         private func triggerWakeup() {
             var one: UInt64 = 1
             _ = withUnsafeBytes(of: &one) { write(wakeFD, $0.baseAddress, 8) }
+        }
+
+        /// Wakes the loop only when called from off the loop thread; on-loop callers (the pinned serve
+        /// task parking on a read/write) skip it — the loop re-checks the readiness set before parking
+        /// again (audit — per-request wakeup elimination).
+        private func wakeIfOffLoop() {
+            if inbox.withLock(\.onLoop) == false {
+                triggerWakeup()
+            }
         }
     }
 

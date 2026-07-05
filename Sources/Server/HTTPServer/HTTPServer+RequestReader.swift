@@ -110,7 +110,11 @@ extension HTTPServer where C.Duration == Duration {
         // body (RFC 9112 §6.3).
         if let stream = response.stream {
             let sent = await sendStreamedResponse(
-                head, stream: stream, omitBody: request.method == .head, on: connection
+                head,
+                stream: stream,
+                omitBody: request.method == .head,
+                on: connection,
+                deadline: deadline
             )
             guard sent, !draining else {
                 return false
@@ -128,6 +132,12 @@ extension HTTPServer where C.Duration == Duration {
             omitBody: request.method == .head,
             into: &responseBuffer
         )
+        // Bound the response send by the idle deadline (FIX #1): a slow-reading peer that fills the
+        // socket send buffer would otherwise pin the serve task + connection slot forever (a Slowloris
+        // slow-read). The buffered body is size-bounded (maxBody), so one idle-timeout window is the
+        // right bound; a stalled send is reaped (the watchdog cancels this child task, unblocking the
+        // send via the transport's per-call cancellation).
+        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
         do {
             if sendsBody {
                 try await connection.send(responseBuffer, response.body)
@@ -137,8 +147,10 @@ extension HTTPServer where C.Duration == Duration {
             }
         }
         catch {
+            deadline.disarm()
             return false
         }
+        deadline.disarm()
         if draining {
             return false  // finished this exchange while draining — close the connection
         }
@@ -196,7 +208,11 @@ extension HTTPServer where C.Duration == Duration {
         let draining = applyHTTP1Drain(to: &head)
         if let stream = response.stream {
             let sent = await sendStreamedResponse(
-                head, stream: stream, omitBody: request.method == .head, on: connection
+                head,
+                stream: stream,
+                omitBody: request.method == .head,
+                on: connection,
+                deadline: deadline
             )
             guard sent, !draining else {
                 return false
@@ -211,6 +227,8 @@ extension HTTPServer where C.Duration == Duration {
             omitBody: request.method == .head,
             into: &responseBuffer
         )
+        // Bound the buffered response send by the idle deadline (FIX #1) — see ``serveOne``.
+        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
         do {
             if sendsBody {
                 try await connection.send(responseBuffer, response.body)
@@ -220,8 +238,10 @@ extension HTTPServer where C.Duration == Duration {
             }
         }
         catch {
+            deadline.disarm()
             return false
         }
+        deadline.disarm()
         if draining {
             return false
         }

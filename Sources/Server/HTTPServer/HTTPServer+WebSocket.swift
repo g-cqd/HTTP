@@ -183,13 +183,28 @@ extension HTTPServer {
     // MARK: WebSocket over HTTP/2 (RFC 8441 / RFC 9220)
 
     /// Dispatches a tunnel event from the HTTP/2 engine for a WebSocket-over-HTTP/2 stream: accept an
-    /// Extended CONNECT (RFC 8441 §4), pump tunnel DATA through that stream's WebSocket engine, and
-    /// tear the stream down on close or reset.
+    /// Extended CONNECT (RFC 8441 §4) and spin up this tunnel's dedicated pump task, relay tunnel DATA to
+    /// it, or tell it the peer ended the tunnel.
+    ///
+    /// Every ENGINE mutation (`acceptTunnel` here; `sendTunnelData` / `closeTunnel` later, when the
+    /// consumer processes this tunnel's `.tunnelOutbound` / `.tunnelEnded` wakeup) stays on the consumer.
+    /// The pump task — spun up below — only ever touches its OWN per-tunnel WebSocket engine and the
+    /// route handler, reporting back through `continuation`, so a slow WebSocket-over-h2 handler no
+    /// longer head-of-line-blocks any other stream multiplexed on this connection (this path was not
+    /// covered by the existing FIX #3, which only dispatched buffered-request handlers).
+    ///
+    /// `pendingTunnels` counts dispatched-but-not-yet-`.tunnelEnded` pump tasks, incremented here on
+    /// dispatch — the consumer's EOF drain check (``HTTPServer/serveHTTP2(_:deadline:initialBytes:)``'s
+    /// `.closed` case) reads it to know whether a tunnel might still have in-flight work worth letting
+    /// finish before the connection actually closes.
     func handleHTTP2Tunnel(
         _ event: HTTP2Connection.Event,
         engine: inout HTTP2Connection,
-        webSockets: inout [HTTP2StreamID: HTTP2WebSocketTunnel]
-    ) async {
+        group: inout DiscardingTaskGroup,
+        webSockets: inout [HTTP2StreamID: HTTP2WebSocketTunnel],
+        pendingTunnels: inout Int,
+        into continuation: AsyncStream<HTTP2Wakeup>.Continuation
+    ) {
         switch event {
             case .extendedConnect(let streamID, let request, let proto):
                 // Resolve the WebSocket route for this stream's path; an Extended CONNECT to a path the
@@ -212,65 +227,90 @@ extension HTTPServer {
                     streamID,
                     secWebSocketExtensions: permessageDeflate?.headerValue
                 )
-                var tunnel = HTTP2WebSocketTunnel(
-                    socket: WebSocketConnection(
-                        // Frame cap = message cap, as on the h1 path (a frame cannot exceed its message).
-                        maxFrameSize: limits.effectiveWebSocketMessageSize,
-                        maxMessageSize: limits.effectiveWebSocketMessageSize,
-                        permessageDeflate: permessageDeflate
-                    ),
-                    handler: handler
+                let (signals, mailbox) = AsyncStream.makeStream(
+                    of: HTTP2TunnelSignal.self, bufferingPolicy: .unbounded
                 )
-                // Lifecycle hook: the tunnel is open — let the handler speak first.
-                for action in await handler.onOpen() { tunnel.socket.apply(action) }
-                let greeting = tunnel.socket.outboundBytes()
-                if !greeting.isEmpty { engine.sendTunnelData(streamID, greeting) }
-                webSockets[streamID] = tunnel
+                webSockets[streamID] = HTTP2WebSocketTunnel(mailbox: mailbox)
+                pendingTunnels += 1
+                group.addTask { [self] in
+                    await runHTTP2Tunnel(
+                        streamID: streamID,
+                        handler: handler,
+                        permessageDeflate: permessageDeflate,
+                        signals: signals,
+                        into: continuation
+                    )
+                }
             case .tunnelData(let streamID, let bytes):
-                guard var tunnel = webSockets[streamID] else {
-                    return
-                }
-                await driveTunnel(
-                    &tunnel.socket,
-                    bytes: bytes,
-                    streamID: streamID,
-                    engine: &engine,
-                    handler: tunnel.handler
-                )
-                if tunnel.socket.isClosing {
-                    try? engine.closeTunnel(streamID)
-                    webSockets[streamID] = nil
-                    await tunnel.handler.onClose()  // lifecycle hook — the session is over
-                }
-                else {
-                    webSockets[streamID] = tunnel
-                }
+                webSockets[streamID]?.mailbox.yield(.bytes(bytes))
             case .tunnelClosed(let streamID), .streamReset(let streamID, _):
-                // Exactly-once: only a tunnel still in the map gets its close hook (an isClosing
-                // removal above already fired it).
-                if let closed = webSockets.removeValue(forKey: streamID) {
-                    await closed.handler.onClose()
+                // Exactly-once: only a tunnel still tracked gets the peer-ended signal (a self-closed
+                // removal — see `.tunnelEnded` in HTTPServer+HTTP2.swift — has already removed it). The
+                // pump task still reports back via `.tunnelEnded` once it processes this signal, so
+                // `pendingTunnels` (not this map) is what the EOF drain check waits on.
+                if let tunnel = webSockets.removeValue(forKey: streamID) {
+                    tunnel.mailbox.yield(.peerEnded)
+                    tunnel.mailbox.finish()
                 }
             default:
                 break
         }
     }
 
-    /// Feeds tunnel `bytes` to the stream's WebSocket engine and writes the frames it produces back as
-    /// tunnel DATA (RFC 8441 §5 over RFC 6455 §6); a violation leaves a queued Close to flush.
-    private func driveTunnel(
-        _ socket: inout WebSocketConnection,
-        bytes: [UInt8],
+    /// Pumps one WebSocket-over-HTTP/2 tunnel's whole lifetime (RFC 8441 §5 / RFC 6455 §6): its own
+    /// sans-I/O ``WebSocketConnection`` and the route's ``WebSocketHandler`` live ONLY here, in this task,
+    /// for as long as the tunnel is open — never touched by the consumer — so this tunnel's traffic never
+    /// races another stream's, and a permessage-deflate context-takeover window is never corrupted by
+    /// out-of-order completion (the hazard of instead dispatching each tunnel DATA event to its own
+    /// throwaway task: two such tasks could apply their handler's actions — and so their compressor /
+    /// decompressor state — out of arrival order).
+    ///
+    /// Exactly-once lifecycle hooks (RFC 6455 §7): `onOpen` before the first byte is processed; `onClose`
+    /// exactly once, right here, as this function returns — for every ending, whether the local engine
+    /// decided to close, the peer ended the tunnel (`.peerEnded`), or the connection is tearing down
+    /// (cancellation unblocks the `for await` below exactly like a normal completion — `AsyncStream`
+    /// iteration is cancellation-aware on this runtime). `.tunnelEnded` is likewise yielded UNCONDITIONALLY
+    /// on every exit — including a cancelled one — so the consumer's `pendingTunnels` count (the EOF drain
+    /// check) always reaches zero and the connection is never held open waiting on a pump task that has
+    /// actually already finished.
+    private func runHTTP2Tunnel(
         streamID: HTTP2StreamID,
-        engine: inout HTTP2Connection,
-        handler: any WebSocketHandler
+        handler: any WebSocketHandler,
+        permessageDeflate: PermessageDeflateParameters?,
+        signals: AsyncStream<HTTP2TunnelSignal>,
+        into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
-        // A violation leaves a queued Close and sets `isClosing`; flush it below.
-        let events = (try? socket.receive(bytes)) ?? []
-        for event in events {
-            for action in await handler.handle(event) { socket.apply(action) }
+        var socket = WebSocketConnection(
+            // Frame cap = message cap, as on the h1 path (a frame cannot exceed its message).
+            maxFrameSize: limits.effectiveWebSocketMessageSize,
+            maxMessageSize: limits.effectiveWebSocketMessageSize,
+            permessageDeflate: permessageDeflate
+        )
+        // Lifecycle hook: the tunnel is open — let the handler speak first.
+        for action in await handler.onOpen() { socket.apply(action) }
+        let greeting = socket.outboundBytes()
+        if !greeting.isEmpty { continuation.yield(.tunnelOutbound(streamID, greeting)) }
+
+        var selfClosed = false
+        signalLoop: for await signal in signals {
+            switch signal {
+                case .bytes(let bytes):
+                    // A violation leaves a queued Close and sets `isClosing`; handled below.
+                    let events = (try? socket.receive(bytes)) ?? []
+                    for event in events {
+                        for action in await handler.handle(event) { socket.apply(action) }
+                    }
+                    let outbound = socket.outboundBytes()
+                    if !outbound.isEmpty { continuation.yield(.tunnelOutbound(streamID, outbound)) }
+                    if socket.isClosing {
+                        selfClosed = true
+                        break signalLoop
+                    }
+                case .peerEnded:
+                    break signalLoop
+            }
         }
-        let outbound = socket.outboundBytes()
-        if !outbound.isEmpty { engine.sendTunnelData(streamID, outbound) }
+        await handler.onClose()  // lifecycle hook — the session is over, exactly once
+        continuation.yield(.tunnelEnded(streamID, selfClosed: selfClosed))
     }
 }

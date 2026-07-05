@@ -124,7 +124,15 @@ public struct ByteReader: ~Escapable {
     /// lesson as the rejected lookup table in ``FieldValidation/isTokenByte(_:)``.
     @inlinable
     public func firstIndex(of byte: UInt8) -> Int? {
-        var index = offset
+        firstIndex(of: byte, from: offset)
+    }
+
+    /// `firstIndex(of:)` resuming from an absolute index `start` (clamped to the cursor). Lets a resumable
+    /// line scanner skip bytes it already examined on a prior feed, so a delimiter-less line arriving
+    /// byte-by-byte is scanned once end-to-end instead of re-scanned from its start each feed (O(line²)).
+    @inlinable
+    public func firstIndex(of byte: UInt8, from start: Int) -> Int? {
+        var index = Swift.max(offset, start)
         while index < bytes.byteCount {
             if loadByte(at: index) == byte {
                 return index
