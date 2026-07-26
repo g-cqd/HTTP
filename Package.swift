@@ -107,13 +107,9 @@ let strictSwiftSettings: [SwiftSetting] = [
 #endif
 
 // ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
-// UTF-8 validator uses the ASCII-run skip. Resolved from a local checkout when `ADFOUNDATION_PATH` is
-// set (in-repo development), else from git main. This is the one first-party dependency HTTP takes.
+// UTF-8 validator uses the ASCII-run skip. This is the one first-party dependency HTTP takes.
 func adFoundationDependency() -> Package.Dependency {
-    if let path = Context.environment["ADFOUNDATION_PATH"], !path.isEmpty {
-        return .package(path: path)
-    }
-    return .package(url: "https://github.com/g-cqd/ADFoundation.git", branch: "main")
+    .package(url: "https://github.com/g-cqd/ADFoundation.git", branch: "main")
 }
 
 let package = Package(

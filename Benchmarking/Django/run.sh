@@ -52,10 +52,10 @@ OURS_SCRATCH="${OURS_SCRATCH:-/tmp/swiftpm-build/ours-bench}"
 OURS_BIN="$OURS_SCRATCH/release/ours-bench"
 mkdir -p "$RESULTS_DIR"
 
-# ADJSON (OURS_JSON=adjson) resolves its ADFoundation sibling from a LOCAL checkout via this env var,
-# keeping the investigation "locally only" (no git fetch of the AD-family). Default: the sibling beside
-# the HTTP repo (…/g-cqd/ADFoundation). Export ADFOUNDATION_PATH yourself to point elsewhere.
-export ADFOUNDATION_PATH="${ADFOUNDATION_PATH:-$(cd "$SCRIPT_DIR/../../../ADFoundation" 2>/dev/null && pwd)}"
+# ADJSON (OURS_JSON=adjson) resolves its ADFoundation sibling from github.com/g-cqd@main, like every
+# other first-party dependency in the family — the `*_PATH` local-checkout overrides were removed.
+# Note this harness's `ours/Package.swift` still uses relative `.package(path:)` for HTTP and ADJSON
+# themselves, so it only runs from inside a full workspace checkout.
 
 # --- preflight --------------------------------------------------------------------------------------
 command -v oha >/dev/null || { echo "error: 'oha' not found — brew install oha" >&2; exit 1; }

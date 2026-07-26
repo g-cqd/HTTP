@@ -65,7 +65,7 @@ ADJSON:      {"message":"Hello, World!","numbers":[1,2,3,4,5],"flag":true,"neste
 - `ours/Package.swift` adds `.package(path: "../../../../ADJSON")` and depends on the **Foundation-free
   `ADJSONCore`** product only (tape parse + `JSONValue` + cursor `encodedBytes`). The umbrella's
   Codable/Schema/macros are not pulled into the build.
-- ADJSON resolves its own **ADFoundation** sibling from a local checkout via `ADFOUNDATION_PATH`
+- ADJSON resolves its own **ADFoundation** sibling from `github.com/g-cqd@main`
   (run.sh sets it to `…/g-cqd/ADFoundation` automatically) — **no git fetch of the AD-family**.
 - The hot paths (`ours/Sources/ours-bench/main.swift`):
   ```swift
