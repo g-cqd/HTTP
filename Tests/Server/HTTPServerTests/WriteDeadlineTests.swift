@@ -22,9 +22,11 @@ import Testing
 
 @Suite("FIX #1/#6 — progress-based write deadlines (Slowloris slow-read)")
 struct WriteDeadlineTests {
-    /// (a) A peer that never reads: the response send blocks, and the idle watchdog must reap it at
-    /// ~idleTimeout — closing the connection. WITHOUT the write-side deadline this hangs forever (the
-    /// deadline was disarmed during sends), so this test would time out.
+    /// (a) A peer that never reads has its blocked response send reaped by the idle watchdog.
+    ///
+    /// The send blocks, and the watchdog must reap it at ~idleTimeout — closing the
+    /// connection. WITHOUT the write-side deadline this hangs forever (the deadline
+    /// was disarmed during sends), so this test would time out.
     @Test(
         "a peer that reads zero bytes has its stalled response send reaped at the idle timeout",
         .timeLimit(.minutes(1)))
@@ -51,7 +53,7 @@ struct WriteDeadlineTests {
                     clock.advance(by: .milliseconds(500))
                 }
             }
-            await group.next()  // serve() returned — the stalled send was reaped and the connection closed
+            await group.next()  // serve() returned — stalled send reaped, connection closed
             group.cancelAll()
         }
         #expect(await connection.isClosed())
@@ -59,10 +61,12 @@ struct WriteDeadlineTests {
         #expect(await connection.sentBytes().isEmpty)
     }
 
-    /// (b) A peer that drains SLOWLY but keeps making progress: each chunk send completes (the peer
-    /// reads it) before its deadline, resetting the deadline. The cumulative transfer time far exceeds
-    /// one idle window, yet the connection is NOT reaped — proving the deadline is progress-based, not a
-    /// single wall-clock cap on the whole response.
+    /// (b) A peer that drains SLOWLY but keeps making progress is NOT reaped.
+    ///
+    /// Each chunk send completes (the peer reads it) before its deadline, resetting the
+    /// deadline. The cumulative transfer time far exceeds one idle window, yet the
+    /// connection survives — proving the deadline is progress-based, not a single
+    /// wall-clock cap on the whole response.
     @Test(
         "a slow-but-progressing streamed response is NOT reaped — each chunk resets the deadline",
         .timeLimit(.minutes(1)))
@@ -92,8 +96,9 @@ struct WriteDeadlineTests {
         // if the deadline were a single cap the connection would be reaped mid-stream.
         let pump = Task {
             while !Task.isCancelled {
-                try? await connection.waitForSendParked()
-                clock.advance(by: idle / 2)  // strictly less than idleTimeout — deadline never lapses
+                await connection.waitForSendParked()
+                // Strictly less than idleTimeout — the deadline never lapses.
+                clock.advance(by: idle / 2)
                 await connection.drainOneSend()
             }
         }
@@ -106,67 +111,5 @@ struct WriteDeadlineTests {
         #expect(wire.contains("bravo"))
         #expect(wire.contains("gamma"))
         #expect(wire.hasSuffix("0\r\n\r\n"))  // the last-chunk terminator (RFC 9112 §7.1)
-    }
-}
-
-/// A ``TransportConnection`` that models a slow / non-reading peer: it delivers one staged request, then
-/// every `send` blocks until the test drains it (``drainOneSend()``) or the serve task is cancelled — in
-/// which case the parked send throws `CancellationError`, exactly as a real POSIX / Network.framework
-/// send does when the socket send buffer is full and the write is reaped.
-actor SlowReaderConnection: TransportConnection {
-    nonisolated let id: TransportConnectionID
-    nonisolated let peer = TransportAddress(host: "slow-reader", port: 0)
-    nonisolated let negotiatedApplicationProtocol: String? = nil  // cleartext HTTP/1.1 (sniffed)
-    nonisolated let isSecure = false
-
-    private var inbound: [UInt8]
-    private var deliveredRequest = false
-    private var sent: [UInt8] = []
-    private var closed = false
-    /// Each `send` parks here until the test grants one permit; one waiter at a time (the serve loop
-    /// sends sequentially). Cancellation-aware, so a reaped send unblocks with `CancellationError`.
-    private let sendGate = AsyncGate()
-
-    init(request: [UInt8], id: TransportConnectionID = TransportConnectionID(1)) {
-        self.id = id
-        self.inbound = request
-    }
-
-    // MARK: TransportConnection
-
-    func receive(maxLength: Int) async throws -> [UInt8]? {
-        // The peer sends exactly one request, then only reads: deliver it once, then EOF.
-        guard !deliveredRequest else {
-            return nil
-        }
-        deliveredRequest = true
-        let count = min(maxLength, inbound.count)
-        defer { inbound.removeFirst(count) }
-        return Array(inbound.prefix(count))
-    }
-
-    func send(_ bytes: [UInt8]) async throws {
-        // Block until the peer drains this write, or the reap cancels this task (throws).
-        try await sendGate.waitUntilOpen()
-        sent.append(contentsOf: bytes)
-    }
-
-    func close() async {
-        closed = true
-    }
-
-    // MARK: Test controls
-
-    func isClosed() -> Bool { closed }
-    func sentBytes() -> [UInt8] { sent }
-
-    /// Suspends until a `send` is parked (its write deadline is armed at that point).
-    func waitForSendParked() async throws {
-        try await sendGate.waitForWaiters(atLeast: 1)
-    }
-
-    /// Lets the currently-parked `send` complete — the peer drained one chunk.
-    func drainOneSend() {
-        sendGate.open()
     }
 }

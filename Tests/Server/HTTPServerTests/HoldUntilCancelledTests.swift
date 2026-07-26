@@ -29,7 +29,7 @@ struct HoldUntilCancelledTests {
         for _ in 0 ..< 100 {
             await Task.yield()
         }
-        #expect(finished.count == 0)  // no spurious / periodic wakeup
+        #expect(finished.isEmpty)  // no spurious / periodic wakeup
 
         task.cancel()
         // Must resume on cancellation, not hang (the .timeLimit fails a hang).

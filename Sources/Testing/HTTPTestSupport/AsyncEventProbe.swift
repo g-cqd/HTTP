@@ -46,6 +46,9 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
     /// The number of events recorded so far.
     public var count: Int { state.withLock(\.events.count) }
 
+    /// Whether no events have been recorded yet.
+    public var isEmpty: Bool { state.withLock(\.events.isEmpty) }
+
     /// Records an event, waking every waiter whose threshold is now met (with a snapshot of the
     /// events at that moment).
     ///
