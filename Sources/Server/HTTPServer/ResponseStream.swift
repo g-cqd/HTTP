@@ -4,8 +4,9 @@
 //
 //  An incremental response body: a producer the serving engine drives, pushing chunks to a
 //  ``ResponseBodyWriter`` as they are ready (chunked downloads, Server-Sent Events, generated bodies).
-//  HTTP/1.1 streams it natively (chunked transfer-coding, or a fixed Content-Length when known); engines
-//  without native streaming yet collapse a finite stream into one buffer (``collect(maxBytes:)``).
+//  All three versions stream it natively: HTTP/1.1 with chunked transfer-coding (or a fixed
+//  Content-Length when known), HTTP/2 over the engine's incremental DATA API, HTTP/3 straight to the
+//  QUIC stream. ``collect(maxBytes:)`` remains for callers that genuinely want the whole body at once.
 //
 
 internal import Synchronization

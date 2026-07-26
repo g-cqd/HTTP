@@ -2,12 +2,14 @@
 //  HTTPServer+Streaming.swift
 //  HTTPServer
 //
-//  Response-body streaming. HTTP/1.1 streams natively (``sendStreamedResponse(_:stream:omitBody:on:)``):
-//  the head goes out with chunked transfer-coding (RFC 9112 §7.1), or a fixed Content-Length when the
-//  producer declared one, then each chunk is written as it is produced. Engines without native streaming
-//  yet (HTTP/2, HTTP/3) collapse a *finite* stream to one buffer (``bufferedResponse(_:)``) and fail with
-//  500 rather than buffer an unbounded one — so Server-Sent Events is HTTP/1.1-only until those engines
-//  stream natively. Streaming assumes HTTP/1.1 framing (chunked is not valid for an HTTP/1.0 peer).
+//  Response-body streaming over HTTP/1.1 (``sendStreamedResponse(_:stream:omitBody:on:)``): the head goes
+//  out with chunked transfer-coding (RFC 9112 §7.1), or a fixed Content-Length when the producer declared
+//  one, then each chunk is written as it is produced. This file assumes HTTP/1.1 framing (chunked is not
+//  valid for an HTTP/1.0 peer).
+//
+//  HTTP/2 and HTTP/3 stream natively on their own paths — `HTTPServer+HTTP2Streaming.swift` (RFC 9113
+//  §8.1, over the engine's incremental DATA API) and `streamHTTP3Response` in `HTTPServer+HTTP3.swift`
+//  (straight to the QUIC stream). Server-Sent Events therefore works on all three versions.
 //
 
 internal import HTTP1
@@ -77,27 +79,13 @@ extension HTTPServer {
         }
     }
 
-    /// Collapses a streamed response to a buffered one for engines without native streaming yet (h2/h3).
-    ///
-    /// Runs the producer into a capped buffer, or returns a `500` if it would exceed the cap, so an
-    /// unbounded stream fails rather than being silently truncated. A non-streamed response is returned
-    /// unchanged.
-    func bufferedResponse(_ response: ServerResponse) async -> ServerResponse {
-        guard let stream = response.stream else {
-            return response
-        }
-        guard let body = await stream.collect(maxBytes: limits.maxBodySize) else {
-            return ServerResponse(HTTPResponse(status: .internalServerError))
-        }
-        return ServerResponse(response.head, body: body)
-    }
-
     /// Writes HTTP/1.1 body chunks: chunked transfer-coding (RFC 9112 §7.1), or raw when length is known.
     private struct H1StreamWriter: ResponseBodyWriter {
         let connection: any TransportConnection
         let chunked: Bool
-        /// The per-connection idle deadline, re-armed before each chunk send so progress resets it
-        /// (FIX #1). Shared with the serve loop + its watchdog.
+        /// The per-connection idle deadline, re-armed before each chunk send so progress resets it.
+        ///
+        /// FIX #1. Shared with the serve loop + its watchdog.
         let deadline: IdleDeadline<C.Instant>
         let clock: C
         let idleTimeout: Duration
