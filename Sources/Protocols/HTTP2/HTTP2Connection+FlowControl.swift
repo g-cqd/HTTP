@@ -215,9 +215,12 @@ extension HTTP2Connection {
         // idle-stream flood) doesn't allocate + sort the ENTIRE stream map. Returns whether any stream was
         // ready — the caller charges a no-op connection WINDOW_UPDATE against the control-frame budget.
         var ready = streams.compactMap {
-            $0.value.pendingOffset < $0.value.pending.count ? (id: $0.key, urgency: $0.value.urgency) : nil
+            $0.value.pendingOffset < $0.value.pending.count
+                ? (id: $0.key, urgency: $0.value.urgency) : nil
         }
-        guard !ready.isEmpty else { return false }
+        guard !ready.isEmpty else {
+            return false
+        }
         ready.sort { $0.urgency != $1.urgency ? $0.urgency < $1.urgency : $0.id < $1.id }
         for entry in ready {
             guard var record = streams.removeValue(forKey: entry.id) else { continue }

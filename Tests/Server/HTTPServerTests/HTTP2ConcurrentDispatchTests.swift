@@ -24,7 +24,7 @@ struct HTTP2ConcurrentDispatchTests {
     @Test(
         "a slow handler on one stream does not stall a sibling stream's response (TTFB ≈ 0)",
         .timeLimit(.minutes(1)))
-    func slowHandlerDoesNotStallSibling() async throws {
+    func slowHandlerDoesNotStallSibling() async {
         let slowGate = AsyncGate()  // /slow blocks here until the test releases it
         let router = Router {
             Route.get("/slow") { _, _, _ in
@@ -69,7 +69,7 @@ struct HTTP2ConcurrentDispatchTests {
     // proves concurrency WITHIN one batch; this proves it ACROSS batches, which the old design did not
     // have: two requests arriving in separate TCP reads still serialized at the batch boundary.
     @Test(
-        "a request in a SEPARATE later TCP read is not stalled behind an earlier read's slow handler (cross-batch dispatch)",
+        "a request in a SEPARATE later TCP read is not stalled behind a slow handler in an earlier read (cross-batch)",
         .timeLimit(.minutes(1)))
     func slowHandlerInEarlierBatchDoesNotStallLaterBatch() async throws {
         let slowGate = AsyncGate()  // /slow blocks here until the test releases it
@@ -86,7 +86,8 @@ struct HTTP2ConcurrentDispatchTests {
 
         // Batch 1 — its own `connection.feed`, i.e. its own `connection.receive()` return on the server
         // side: preface + SETTINGS + HEADERS(stream 1 → /slow).
-        await connection.feed(Self.preface + Self.settings() + Self.headers(streamID: 1, path: "/slow"))
+        await connection.feed(
+            Self.preface + Self.settings() + Self.headers(streamID: 1, path: "/slow"))
         // Deterministically wait until /slow's handler is provably parked on the gate — the point at
         // which the OLD loop's per-batch `withTaskGroup` could not have returned, so it could never have
         // reached the `connection.receive()` call that reads batch 2 below — before feeding batch 2.
@@ -163,10 +164,13 @@ struct HTTP2ConcurrentDispatchTests {
         // actually pulled+flushed it), so also poll for chunk1 to physically reach the wire before
         // treating /a's side as settled; both waits are deterministic checkpoints, not a timing guess.
         try await gateA.waitForWaiters(atLeast: 1)
-        while !Self.streamFinished(onStream: 3, in: await connection.sentBytes()), !Task.isCancelled {
+        while !Self.streamFinished(onStream: 3, in: await connection.sentBytes()), !Task.isCancelled
+        {
             await Task.yield()
         }
-        while Self.streamBody(onStream: 1, in: await connection.sentBytes()).isEmpty, !Task.isCancelled {
+        while Self.streamBody(onStream: 1, in: await connection.sentBytes()).isEmpty,
+            !Task.isCancelled
+        {
             await Task.yield()
         }
         let midway = await connection.sentBytes()

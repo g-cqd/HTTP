@@ -96,13 +96,17 @@ public enum FieldValidation {
     ///
     /// Minimum length for the SIMD validator to beat the inlined SWAR (below it the C-call overhead
     /// dominates and SWAR is already flat on short values). Conservative; tune from the HTTP benchmark.
-    @usableFromInline static let kernelValidateMinBytes = 64
+    @usableFromInline
+    static let kernelValidateMinBytes = 64
 
-    /// A field-value octet is invalid iff it is a control below SP other than HTAB (`< 0x20 && != 0x09`)
-    /// or DEL (`0x7F`); obs-text (`0x80–0xFF`) is valid. The three sub-tests are the classic "bytes < n"
-    /// and "bytes == n" high-bit tricks (Hacker's Delight / Bit Twiddling Hacks), combined per octet as
-    /// `(< 0x20 & != 0x09) | == 0x7F`. Unlike a delimiter scan this always reads *every* octet, so the
-    /// 8×-per-word saving compounds — the access pattern SWAR is built for.
+    /// A field-value octet is invalid iff it is a control below SP other than HTAB
+    /// (`< 0x20 && != 0x09`) or DEL (`0x7F`); obs-text (`0x80–0xFF`) is valid.
+    ///
+    /// The three sub-tests are the classic "bytes < n" and "bytes == n" high-bit
+    /// tricks (Hacker's Delight / Bit Twiddling Hacks), combined per octet as
+    /// `(< 0x20 & != 0x09) | == 0x7F`. Unlike a delimiter scan this always reads
+    /// *every* octet, so the 8×-per-word saving compounds — the access pattern
+    /// SWAR is built for.
     ///
     /// Measured (release, cool M3, median of 3): `core/FieldValidation/isValidFieldValue-long` (198 B)
     /// 500 → 417 ns (**−17%**); the 24 B short value stayed flat (417 → 416 ns). Adopted. (Contrast the
@@ -116,9 +120,10 @@ public enum FieldValidation {
         // Long values (the adversary-influenced tail — Authorization/Cookie/User-Agent) take the SIMD
         // kernel; short values keep the inlined SWAR below (measured flat at 24 B). Same predicate:
         // illegal iff `(< 0x20 && != 0x09) || == 0x7F`, obs-text legal.
-        if count >= FieldValidation.kernelValidateMinBytes {
+        if count >= Self.kernelValidateMinBytes {
             return ADFKernels.firstDisallowedText(
-                base: base, count: count, minAllowed: 0x20, allowTab: true) == count
+                base: base, count: count, minAllowed: 0x20, allowTab: true
+            ) == count
         }
         let ones: UInt64 = 0x0101_0101_0101_0101
         let highs: UInt64 = 0x8080_8080_8080_8080
@@ -203,9 +208,10 @@ public enum FieldValidation {
         let count = buffer.count
         // Long targets (URLs + query strings to several KB) take the SIMD kernel; short ones keep the
         // inlined SWAR. Same predicate: illegal iff `<= 0x20 || == 0x7F`, obs-text legal.
-        if count >= FieldValidation.kernelValidateMinBytes {
+        if count >= Self.kernelValidateMinBytes {
             return ADFKernels.firstDisallowedText(
-                base: base, count: count, minAllowed: 0x21, allowTab: false) == count
+                base: base, count: count, minAllowed: 0x21, allowTab: false
+            ) == count
         }
         let ones: UInt64 = 0x0101_0101_0101_0101
         let highs: UInt64 = 0x8080_8080_8080_8080

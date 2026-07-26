@@ -44,11 +44,16 @@ extension StructuredFields.Parser {
             || byte == star
     }
 
-    /// A token octet: ALPHA / DIGIT / the tchar punctuation (RFC 9110) plus `:` and `/` (§4.2.6). The
-    /// punctuation is an inlined `switch` (a jump table) rather than a `Set` — the sibling
-    /// `FieldValidation.isTokenByte` measured a `Set`/lazy-`static let` form 2–3× slower per byte.
+    /// A token octet: ALPHA / DIGIT / the tchar punctuation (RFC 9110) plus `:` and
+    /// `/` (§4.2.6).
+    ///
+    /// The punctuation is an inlined `switch` (a jump table) rather than a `Set` —
+    /// the sibling `FieldValidation.isTokenByte` measured a `Set`/lazy-`static let`
+    /// form 2–3× slower per byte.
     static func isTokenByte(_ byte: UInt8) -> Bool {
-        if isAlpha(byte) || isDigit(byte) { return true }
+        if isAlpha(byte) || isDigit(byte) {
+            return true
+        }
         switch byte {
             case 0x21, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2A, 0x2B, 0x2D, 0x2E, 0x2F, 0x3A, 0x5E, 0x5F,
                 0x60, 0x7C, 0x7E:  // ! # $ % & ' * + - . / : ^ _ ` | ~

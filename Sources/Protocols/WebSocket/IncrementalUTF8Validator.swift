@@ -30,7 +30,9 @@ struct IncrementalUTF8Validator {
     mutating func consume(_ bytes: some Sequence<UInt8>) -> Bool {
         // Contiguous input takes the SIMD ASCII-skip fast path; anything else uses the scalar loop.
         // Both carry the same cross-call state (`pending`/`nextLow`/`nextHigh`) and are result-identical.
-        if let result = bytes.withContiguousStorageIfAvailable({ buffer in consumeContiguous(buffer) }) {
+        if let result = bytes.withContiguousStorageIfAvailable({
+            buffer in consumeContiguous(buffer)
+        }) {
             return result
         }
         return consumeScalar(bytes)
@@ -40,7 +42,9 @@ struct IncrementalUTF8Validator {
     /// to the first non-ASCII byte (long text frames are mostly ASCII, RFC 6455 §5.6), then each
     /// multi-byte scalar is range-checked per octet exactly as ``consumeScalar(_:)`` does.
     private mutating func consumeContiguous(_ buffer: UnsafeBufferPointer<UInt8>) -> Bool {
-        guard let base = buffer.baseAddress else { return true }
+        guard let base = buffer.baseAddress else {
+            return true
+        }
         let count = buffer.count
         var index = 0
         while index < count {
@@ -56,7 +60,8 @@ struct IncrementalUTF8Validator {
                 nextLow = sequence.secondLow
                 nextHigh = sequence.secondHigh
                 index += 1
-            } else {
+            }
+            else {
                 let byte = buffer[index]
                 guard byte >= nextLow, byte <= nextHigh else {
                     return false
