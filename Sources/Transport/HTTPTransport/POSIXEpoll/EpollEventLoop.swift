@@ -60,6 +60,7 @@
             /// Out-of-band control work (close/cancel) serialized against the readiness handlers.
             var control: [@Sendable () -> Void] = []
             /// True while the loop thread is running handlers/jobs — i.e. NOT parked in `epoll_wait`.
+            ///
             /// An off-loop caller writes the `eventfd` only when this is `false`; an on-loop caller (the
             /// pinned serve task — the R4 no-hop hot path) skips the `write`+`read` wakeup pair, because
             /// the loop re-drains the inbox and re-checks the readiness set before it parks again (audit

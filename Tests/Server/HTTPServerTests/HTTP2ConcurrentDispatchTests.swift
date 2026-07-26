@@ -86,8 +86,8 @@ struct HTTP2ConcurrentDispatchTests {
 
         // Batch 1 — its own `connection.feed`, i.e. its own `connection.receive()` return on the server
         // side: preface + SETTINGS + HEADERS(stream 1 → /slow).
-        await connection.feed(
-            Self.preface + Self.settings() + Self.headers(streamID: 1, path: "/slow"))
+        let batch1 = Self.preface + Self.settings() + Self.headers(streamID: 1, path: "/slow")
+        await connection.feed(batch1)
         // Deterministically wait until /slow's handler is provably parked on the gate — the point at
         // which the OLD loop's per-batch `withTaskGroup` could not have returned, so it could never have
         // reached the `connection.receive()` call that reads batch 2 below — before feeding batch 2.
