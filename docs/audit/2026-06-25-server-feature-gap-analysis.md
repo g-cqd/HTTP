@@ -195,7 +195,7 @@ belong — in the proxy in front of us.
   (RFC 9849, Mar 2026) is the new TLS frontier, native only in nginx 1.29.4+ / experimental Caddy.
 - **Our inventory source:** code-level audit of `Sources/**` (protocols, transport, server, routing, 25
   middlewares, `HTTPLimits`, security guards) cross-checked against `README.md`, `CLAUDE.md`,
-  `Docs/Standards/CONFORMANCE.md`, and the completion roadmap.
+  `docs/standards/CONFORMANCE.md`, and the completion roadmap.
 - **Stated design constraints (from docs):** SwiftNIO-free; Apple-platforms-first; Swift 6 strict
   concurrency/memory; sans-I/O engines; standards-first (every parser cites its RFC); near-zero
   dependencies. These constraints explain several scope choices above.

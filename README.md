@@ -14,7 +14,7 @@ It is designed to be a small, reusable **API package** that other projects embed
 > limits, mutual TLS with the full peer identity as request context, static files with
 > `sendfile(2)` zero-copy on the POSIX backbones, hot certificate/responder reload, and an
 > observability module. Remaining tails are tracked in
-> `Docs/Documentation/roadmap/` (conformance-CI promotion, gated perf items, staged h2
+> `docs/roadmap/` (conformance-CI promotion, gated perf items, staged h2
 > back-pressure refinement).
 
 ## Why
@@ -49,7 +49,7 @@ permessage-deflate (RFC 7692), Structured Fields (RFC 8941), Cookies (RFC 6265),
 peer identity (RFC 5280) and PEM intake (RFC 7468), problem+json (RFC 9457), multipart forms
 (RFC 7578), JWT verification (RFC 7519), and HKDF (RFC 5869).
 
-Security hardening is traced to its RFC §/CVE in `Docs/Documentation/Security.md` (e.g. HTTP/2 Rapid
+Security hardening is traced to its RFC §/CVE in `docs/Security.md` (e.g. HTTP/2 Rapid
 Reset CVE-2023-44487, CONTINUATION flood CVE-2024-27316, request smuggling, decompression bombs).
 
 ## Platform support
@@ -68,7 +68,7 @@ follow-up.
 † Opt-in build flags: `HTTP_ZSTD` (zstd) and `HTTP_BROTLI` (Brotli, via system libbrotli) codings, and
 `HTTP_PORTABLE_TLS` (the vendored, symbol-prefixed BoringSSL TLS backbone — the default Apple build uses
 Network.framework's TLS). On Linux gzip is always available (system zlib). See
-[ADR 0004](Docs/Documentation/adr/0004-portable-tls-backbone.md).
+[ADR 0004](docs/adr/0004-portable-tls-backbone.md).
 
 ## Requirements
 
@@ -89,7 +89,7 @@ swiftlint lint --strict
 
 ## Milestones
 
-All shipped (see `Docs/Documentation/roadmap/` for the post-milestone production roadmaps):
+All shipped (see `docs/roadmap/` for the post-milestone production roadmaps):
 
 - **M0** — Package scaffold & tooling ✅
 - **M1** — `HTTPCore` (RFC 9110 semantics, byte primitives, limits, Huffman) ✅

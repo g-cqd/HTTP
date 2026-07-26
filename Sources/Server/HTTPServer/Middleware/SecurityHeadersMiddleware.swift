@@ -15,7 +15,7 @@ public import HTTPCore
 /// This middleware is independent of client authentication — it runs regardless of how, or whether, the
 /// client authenticated. For pairing mutual TLS (`TransportTLS.clientAuth`, which surfaces the verified
 /// client-cert subject as `X-Client-Cert-Subject`) with the `HTTPAuth` middlewares, see *Mutual TLS +
-/// application authentication* in `Docs/Documentation/Security.md`.
+/// application authentication* in `docs/Security.md`.
 public struct SecurityHeadersMiddleware: HTTPMiddleware {
     private let contentTypeOptions: Bool
     private let frameOptions: String?

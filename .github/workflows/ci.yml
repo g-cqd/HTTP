@@ -311,7 +311,7 @@ jobs:
   # HTTP/2 conformance — h2spec (RFC 9113) against the live httpd-example over h2c. Gates on the
   # sections that pass 100% (frame format, streams & multiplexing, frame definitions, GOAWAY, message
   # exchanges, HPACK). Only the invalid-preface case (generic/http2-3, a benign h2c/HTTP-1 ambiguity) is
-  # excluded — see Docs/Standards/CONFORMANCE.md. The hard `timeout` turns any future hang into a failure.
+  # excluded — see docs/standards/CONFORMANCE.md. The hard `timeout` turns any future hang into a failure.
   # ---------------------------------------------------------------------------
   h2spec:
     runs-on: macos-26
@@ -489,7 +489,7 @@ jobs:
 # (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
 # and under the ASan/TSan matrix above — no separate lane needed.
 #
-# Tracked follow-ups (each blocked on a specific item, see Docs/Standards/CONFORMANCE.md):
+# Tracked follow-ups (each blocked on a specific item, see docs/standards/CONFORMANCE.md):
 #   • The streams section (http2/5) is now gated — the 5.1.2 hang and the 5.1.12 closed-stream nuance
 #     are fixed. Only generic/http2-3 stay out, for the invalid-preface GOAWAY (a benign ambiguity).
 #   • Autobahn (WebSocket, RFC 6455) — PROMOTED to a required gate (P10, 2026-07-02) after

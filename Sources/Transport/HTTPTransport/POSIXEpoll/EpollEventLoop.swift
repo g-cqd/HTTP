@@ -19,7 +19,7 @@
 //
 //  Gated `#if canImport(Glibc)` (compiles to nothing off Linux); epoll symbols come from the `CEpoll`
 //  shim. Verified on Linux for the pre-R4 loop; the R4 run-loop rewrite needs a Linux CI pass (the macOS
-//  test suite exercises only the kqueue twin). See Docs/Documentation/audit/2026-06-27-linux-readiness-audit.md
+//  test suite exercises only the kqueue twin). See docs/audit/2026-06-27-linux-readiness-audit.md
 //  and 2026-06-28-tail-latency-variance-audit.md.
 //
 //  Standards: epoll_create1()/epoll_ctl()/epoll_wait()/eventfd() are Linux primitives; the descriptors

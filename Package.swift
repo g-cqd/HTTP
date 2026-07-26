@@ -3,7 +3,7 @@
 //  Package.swift — `HTTP`
 //  A from-scratch, SwiftNIO-free HTTP/1.1 · HTTP/2 · HTTP/3 server library for Apple platforms.
 //
-//  Design north star (see Docs/Documentation/ and the approved plan):
+//  Design north star (see docs/ and the approved plan):
 //    • Sans-I/O protocol engines (pure, allocation-conscious state machines) — testable & fuzzable
 //      without sockets; Network.framework is isolated to the `HTTPTransport` target only.
 //    • Strict concurrency + strict memory; no force-unwrap / force-cast; no recursion in parsers.

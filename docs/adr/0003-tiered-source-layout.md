@@ -51,7 +51,7 @@ downstream consumers — are byte-for-byte identical to before.
   main-package dependency, `Benchmarking/Bench/run.sh`'s `REPO_ROOT` derivation, the CI
   `--package-path Benchmarking/Benchmarks` invocation, the coverage-ignore regex, the **`trap-lint`
   module list** (a flat-path list that would otherwise silently match nothing), and the living-doc
-  source-path references (`Docs/Standards/README.md`, `Docs/Documentation/Security.md`).
+  source-path references (`docs/standards/README.md`, `docs/Security.md`).
 - Dated audit documents keep their original flat paths — they are point-in-time snapshots describing
   the layout as it was on their date.
 - `git mv` preserved history; `git log --follow <path>` traces a file across the move.

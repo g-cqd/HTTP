@@ -132,7 +132,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// On HTTP/1.1 the reader streams the body off the wire directly; on HTTP/2 / HTTP/3 the sans-I/O
     /// engine has already received the whole body (bounded by the per-route limit), so a streaming route
     /// is served those bytes wrapped as a one-shot stream — the handler API is uniform across protocols,
-    /// and truly incremental h2/h3 delivery is a follow-up (see `Docs/Documentation/adr/0006-…`).
+    /// and truly incremental h2/h3 delivery is a follow-up (see `docs/adr/0006-…`).
     func requestBody(_ body: [UInt8], for request: HTTPRequest) -> RequestBody {
         let resolved = currentResolver?.resolve(method: request.method, path: request.path)
         return resolved?.streamsBody == true
