@@ -438,7 +438,7 @@ let package = Package(
         .testTarget(
             name: "HTTPAuthTests",
             dependencies: [
-                "HTTPAuth", "HTTPServer", "HTTPCore",
+                "HTTPAuth", "HTTPServer", "HTTPCore", "HTTPTestSupport",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "_CryptoExtras", package: "swift-crypto")
             ],

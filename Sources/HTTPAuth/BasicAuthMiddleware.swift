@@ -6,8 +6,10 @@
 //  verified by an injected closure; a missing or rejected credential gets a `401` with a
 //  `WWW-Authenticate: Basic realm="…"` challenge, and the verified username is asserted on `.xAuthSubject`
 //  for the handler. Credentials are never logged. The bundled fixed-credential initializer compares in
-//  constant time (double-HMAC under an ephemeral key), so a wrong username and a wrong password are
-//  indistinguishable by timing.
+//  constant time (double-HMAC under a per-instance ephemeral key), so a wrong username and a wrong
+//  password are indistinguishable by timing (CWE-208). The blinding key and both expected tags are
+//  built once, at init: a request costs two HMACs over the candidate strings, not two 256-bit key
+//  generations plus four HMACs.
 //
 
 internal import Crypto
@@ -31,11 +33,43 @@ public struct BasicAuthMiddleware: HTTPMiddleware {
 
     /// Creates the middleware accepting one fixed credential, compared in constant time.
     public init(realm: String = "Restricted", username: String, password: String) {
-        self.init(realm: realm) { candidateUser, candidatePassword in
-            let userOK = Self.constantTimeEquals(candidateUser, username)
-            let passwordOK = Self.constantTimeEquals(candidatePassword, password)
+        self.init(realm: realm, verify: Self.fixedCredentialVerifier(username, password))
+    }
+
+    /// A constant-time verifier for the one fixed credential `username`/`password`.
+    ///
+    /// The blinding key and both expected tags are computed here, once per middleware instance, so a
+    /// request costs exactly two HMACs over the candidate strings — not two key generations plus four
+    /// HMACs. Both comparisons always run: `&&` short-circuits the branch, not the two `let`s above
+    /// it, so a wrong username and a wrong password stay timing-indistinguishable (CWE-208).
+    static func fixedCredentialVerifier(
+        _ username: String,
+        _ password: String
+    ) -> @Sendable (String, String) -> Bool {
+        // A per-instance ephemeral key blinds the comparison: the tags reveal nothing about the
+        // credential, and comparing 32-octet tags is length-independent (a direct string compare would
+        // leak the credential's length through its running time).
+        let key = SymmetricKey(size: .bits256)
+        let expectedUser = Self.tag(username, key)
+        let expectedPassword = Self.tag(password, key)
+        return { candidateUser, candidatePassword in
+            let userOK = Self.matches(expectedUser, candidateUser, key)
+            let passwordOK = Self.matches(expectedPassword, candidatePassword, key)
             return userOK && passwordOK
         }
+    }
+
+    /// The blinded tag of `value` under `key`.
+    private static func tag(_ value: String, _ key: SymmetricKey) -> [UInt8] {
+        Array(HMAC<Crypto.SHA256>.authenticationCode(for: Data(value.utf8), using: key))
+    }
+
+    /// Whether `value` has the precomputed `expected` tag, compared in constant time.
+    private static func matches(_ expected: [UInt8], _ value: String, _ key: SymmetricKey) -> Bool {
+        HMAC<Crypto.SHA256>
+            .isValidAuthenticationCode(
+                expected, authenticating: Data(value.utf8), using: key
+            )
     }
 
     /// Verifies the credential, asserts the username for the handler, else challenges with `401`.
@@ -77,15 +111,5 @@ public struct BasicAuthMiddleware: HTTPMiddleware {
             return nil
         }
         return (String(decoded[..<colon]), String(decoded[decoded.index(after: colon)...]))
-    }
-
-    /// Constant-time string equality via double-HMAC under an ephemeral key (length-independent).
-    private static func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
-        let key = SymmetricKey(size: .bits256)
-        let left = HMAC<Crypto.SHA256>.authenticationCode(for: Data(lhs.utf8), using: key)
-        return HMAC<Crypto.SHA256>
-            .isValidAuthenticationCode(
-                left, authenticating: Data(rhs.utf8), using: key
-            )
     }
 }
