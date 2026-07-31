@@ -78,6 +78,21 @@ enum POSIXFile {
         #endif
     }
 
+    /// The sub-second part of the modification time of `status`, in nanoseconds.
+    ///
+    /// Zero on a filesystem that keeps no sub-second timestamp. POSIX.1-2017 defines the field as a
+    /// `struct timespec`, so it always exists, but its resolution belongs to the *filesystem*: APFS
+    /// and ext4 with large inodes record nanoseconds, while HFS+, ext3, FAT (two-second granularity),
+    /// and many NFS/SMB mounts leave it zero. A caller must treat it as extra entropy, never as a
+    /// promise that two writes are distinguishable.
+    static func modificationNanoseconds(of status: stat) -> Int {
+        #if canImport(Darwin)
+            return Int(status.st_mtimespec.tv_nsec)
+        #else
+            return Int(status.st_mtim.tv_nsec)
+        #endif
+    }
+
     /// Whether `name` is one safe path component: non-empty, not `.`/`..`, no NUL, within `NAME_MAX`.
     ///
     /// Pre-validation, not a substitute for `O_NOFOLLOW`: it bounds the syscalls a crafted path can force

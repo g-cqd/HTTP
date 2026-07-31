@@ -4,8 +4,9 @@
 //
 //  Static file serving (RFC 9110). An ``HTTPResponder`` that maps a request path to a file under a root
 //  directory and serves it with a content type (via the system `UTType` registry), `Last-Modified` /
-//  `ETag` validators (from the file's mtime + size), conditional-request short-circuiting (`If-None-Match`
-//  / `If-Modified-Since` → 304), and byte ranges (`206` / `416`, reusing the ``RangeMiddleware`` parser).
+//  `ETag` validators (``FileValidator`` — weak, from the descriptor's own `fstat(2)`),
+//  conditional-request short-circuiting (`If-None-Match` / `If-Modified-Since` → 304), and byte ranges
+//  (`206` / `416`, reusing the ``RangeMiddleware`` parser).
 //
 //  Path resolution is descriptor-anchored (``RootDirectory``): the root is opened once and every request
 //  component is an `openat(2)` hop with `O_NOFOLLOW` from it, so containment is structural rather than a
@@ -131,9 +132,7 @@ public struct FileResponder: HTTPResponder {
             precompressed
             ? precompressedChoice(file, named: name, in: directory, request: request) : nil
         let served = choice?.file ?? file
-        let etag = Self.entityTag(
-            size: served.size, modified: served.modifiedAt, encoding: choice?.encoding
-        )
+        let etag = FileValidator.entityTag(for: served, encoding: choice?.encoding)
         let lastModified = HTTPDate.imfFixdate(served.modifiedAt)
         if Self.isNotModified(request, etag: etag, modified: served.modifiedAt) {
             var head = HTTPResponse(status: .notModified)
@@ -227,16 +226,6 @@ public struct FileResponder: HTTPResponder {
             return nil
         }
         return components
-    }
-
-    /// A strong entity-tag from the file's size and mtime (and content coding, when precompressed):
-    /// `"<hex size>-<hex mtime>[-<coding>]"` (RFC 9110 §8.8.3).
-    static func entityTag(size: Int, modified: Int, encoding: String?) -> String {
-        let base = "\(String(size, radix: 16))-\(String(modified, radix: 16))"
-        guard let encoding else {
-            return "\"\(base)\""
-        }
-        return "\"\(base)-\(encoding)\""
     }
 
     /// Whether `If-None-Match` matches (weak) or `If-Modified-Since` is unmet — a `304` (RFC 9110 §13).
