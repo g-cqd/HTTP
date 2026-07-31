@@ -116,6 +116,35 @@ public struct HTTPLimits: Sendable, Equatable {
     /// and the connection is closed with `1008` (RFC 6455 §7.4.1) rather than pretending it delivered.
     public var maxQueuedBroadcasts: Int
 
+    // MARK: HTTP/2 consumption-gated receive windows (backpressure)
+
+    /// The advertised `SETTINGS_INITIAL_WINDOW_SIZE` — unconsumed octets one HTTP/2 stream may hold.
+    ///
+    /// On a consumption-gated stream (a streaming route or an RFC 8441 tunnel) the window is debited as
+    /// the peer sends and credited back only as the *handler* takes each chunk, so this **is** the
+    /// per-stream memory watermark — no parallel accounting (RFC 9113 §6.9, ADR 0006).
+    public var streamReceiveWindow: Int
+
+    /// The connection-level receive window — unconsumed octets one HTTP/2 connection may hold, across
+    /// every stream.
+    ///
+    /// The hard bound consumption gating buys: at most this many un-taken application octets exist per
+    /// connection regardless of stream count, route body limit, or handler behavior. RFC 9113 §6.9.2
+    /// fixes the initial value at 65,535 and SETTINGS cannot change it, so the engine raises it with a
+    /// stream-0 `WINDOW_UPDATE` in its preface.
+    ///
+    /// Throughput cost: a window of `W` at round-trip time `T` ceilings one connection's *upload* at
+    /// `W / T` — 1 MiB at 50 ms is ≈ 20 MB/s. ``highThroughput`` raises it 8×.
+    public var connectionReceiveWindow: Int
+
+    /// How long a gated HTTP/2 stream may hold receive credit without the handler consuming any of it.
+    ///
+    /// Consumption gating means one non-consuming handler holds the *shared* connection window and so
+    /// stalls every sibling stream — that is HTTP/2's semantics, not a bug, but it must not be
+    /// unbounded. A stream that makes no consumption progress across two sweeps of half this duration
+    /// is reset with `ENHANCE_YOUR_CALM` (RFC 9113 §7) and its siblings continue.
+    public var bodyConsumptionTimeout: Duration
+
     // MARK: Timeouts (Slowloris / slow-read defenses)
 
     /// Maximum time to receive a complete header section (Slowloris; → `408`).
@@ -165,6 +194,9 @@ public struct HTTPLimits: Sendable, Equatable {
         maxQueuedInboundBytes: Int = 256 * 1_024,
         maxQueuedInboundChunks: Int = 64,
         maxQueuedBroadcasts: Int = 64,
+        streamReceiveWindow: Int = 256 * 1_024,
+        connectionReceiveWindow: Int = 1 << 20,  // 1 MiB
+        bodyConsumptionTimeout: Duration = .seconds(60),
         headerReadTimeout: Duration = .seconds(10),
         idleTimeout: Duration = .seconds(60),
         keepAliveTimeout: Duration = .seconds(15),
@@ -189,6 +221,9 @@ public struct HTTPLimits: Sendable, Equatable {
         self.maxQueuedInboundBytes = maxQueuedInboundBytes
         self.maxQueuedInboundChunks = maxQueuedInboundChunks
         self.maxQueuedBroadcasts = maxQueuedBroadcasts
+        self.streamReceiveWindow = streamReceiveWindow
+        self.connectionReceiveWindow = connectionReceiveWindow
+        self.bodyConsumptionTimeout = bodyConsumptionTimeout
         self.headerReadTimeout = headerReadTimeout
         self.idleTimeout = idleTimeout
         self.keepAliveTimeout = keepAliveTimeout
@@ -211,6 +246,8 @@ public struct HTTPLimits: Sendable, Equatable {
         maxQueuedInboundBytes: 1 << 20,
         maxQueuedInboundChunks: 256,
         maxQueuedBroadcasts: 256,
+        streamReceiveWindow: 1 << 20,  // 1 MiB
+        connectionReceiveWindow: 8 << 20,  // 8 MiB — ≈ 160 MB/s per connection at 50 ms RTT
         maxConnectionsPerClient: 1_048_576,
         maxConnections: 1_048_576
     )
@@ -230,6 +267,9 @@ public struct HTTPLimits: Sendable, Equatable {
         maxQueuedInboundBytes: 64 * 1_024,
         maxQueuedInboundChunks: 32,
         maxQueuedBroadcasts: 16,
+        streamReceiveWindow: 64 * 1_024,
+        connectionReceiveWindow: 256 * 1_024,
+        bodyConsumptionTimeout: .seconds(30),
         headerReadTimeout: .seconds(5),
         idleTimeout: .seconds(30),
         keepAliveTimeout: .seconds(5),

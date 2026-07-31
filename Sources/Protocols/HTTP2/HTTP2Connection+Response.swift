@@ -121,8 +121,7 @@ extension HTTP2Connection {
         // Closed cleanly via the empty END_STREAM: record the close reason so a later frame on this id
         // is scoped per RFC 9113 §5.1 — matching flushStream's clean-close bookkeeping. Without it a
         // HEADERS reuse of this id would read as an idle-stream PROTOCOL_ERROR, not STREAM_CLOSED.
-        streams[streamID] = nil
-        markStreamClosed(streamID, reason: .endStream)
+        retire(streamID, &record, reason: .endStream)
     }
 
     /// The number of response-body octets buffered (window-blocked) for `streamID` — the backpressure
@@ -150,11 +149,13 @@ extension HTTP2Connection {
         to streamID: HTTP2StreamID,
         code: HTTP2ErrorCode = .internalError
     ) throws(HTTP2Error) {
-        guard streams.removeValue(forKey: streamID) != nil else {
+        guard streams[streamID] != nil else {
             return
         }
         writer.writeRstStream(streamID, code: code)
-        markStreamClosed(streamID, reason: .reset)
+        // Returns this stream's unconsumed receive credit to the connection window too (§6.9.1) — the
+        // stall sweeper aborts precisely the streams holding the most of it.
+        retireStream(streamID, reason: .reset)
         do {
             try chargeStreamReset()
         }

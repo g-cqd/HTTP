@@ -2,11 +2,20 @@
 //  HTTP2Connection+FlowControl.swift
 //  HTTP2
 //
-//  RFC 9113 §6.9 — the connection's flow-control half: inbound DATA accounting (debiting the
-//  connection and per-stream receive windows, replenishing each with a WINDOW_UPDATE at the
-//  half-window), the inbound WINDOW_UPDATE that opens the send windows, the INITIAL_WINDOW_SIZE
-//  shift, and the send-side flusher that releases queued response DATA as those windows allow.
-//  Kept beside HTTP2Connection.swift so the core file stays focused on the receive pump.
+//  RFC 9113 §6.9 — the connection's flow-control half: inbound DATA accounting, the inbound
+//  WINDOW_UPDATE that opens the send windows, the INITIAL_WINDOW_SIZE shift, and the send-side flusher
+//  that releases queued response DATA as those windows allow. Kept beside HTTP2Connection.swift so the
+//  core file stays focused on the receive pump.
+//
+//  Receive accounting is split in two (2026-07-31 audit, F2/F4). `debitReceiveWindows` charges the
+//  peer's octets against both windows; `creditReceiveWindows` gives them back with a WINDOW_UPDATE at
+//  the half-window. The BUFFERED path does both at arrival (`consumeReceiveWindows`) because
+//  `streams.totalBufferedBody` already bounds it connection-wide. The GATED paths — an RFC 8441 tunnel
+//  and a Phase 1.4 streaming route, neither of which is covered by that aggregate — debit only, and the
+//  driver credits back through ``HTTP2Connection/replenishReceiveWindow(_:consumed:)`` as the handler
+//  consumes. That makes the windows themselves the memory watermarks: at most
+//  `connectionReceiveWindow` unconsumed application octets exist per connection, whatever the peer,
+//  the stream count, or the route body limit does (ADR 0006).
 //
 
 internal import HTTPCore
@@ -45,10 +54,12 @@ extension HTTP2Connection {
         let body = try Self.dataBody(frame)
         let endStream = frame.header.flags.contains(.endStream)
         try record.stream.receiveData(endStream: endStream)
-        // A tunnel stream's DATA is opaque (RFC 8441 §5): surface it as tunnel bytes — still
-        // flow-controlled, but never buffered as a request body or bounded by the body limit.
+        // A tunnel stream's DATA is opaque (RFC 8441 §5): surface it as tunnel bytes, never buffered as
+        // a request body nor bounded by the body limit — so its window is CONSUMPTION-GATED (audit F2).
+        // Debit only: the peer may run exactly one `streamReceiveWindow` ahead of the tunnel's handler,
+        // and the driver credits it back through `replenishReceiveWindow` as that handler takes bytes.
         if record.isTunnel {
-            consumeReceiveWindows(streamID, &record, by: length, endStream: endStream)
+            debitReceiveWindows(&record, by: length)
             streams[streamID] = record
             if !body.isEmpty { events.append(.tunnelData(streamID: streamID, bytes: Array(body))) }
             if endStream { events.append(.tunnelClosed(streamID: streamID)) }
@@ -91,10 +102,12 @@ extension HTTP2Connection {
     }
 
     /// Delivers a streaming route's DATA chunk incrementally (Phase 1.4): bound the running total against
-    /// the per-route cap, replenish the receive window, surface the chunk, and end the body at END_STREAM.
+    /// the per-route cap, debit the receive window, surface the chunk, and end the body at END_STREAM.
     ///
-    /// The window is replenished normally (`consumeReceiveWindows`), so memory is bounded by the per-route
-    /// limit, not by handler consumption; sub-limit back-pressure is the HTTP/2 follow-up (ADR 0006).
+    /// **Consumption-gated** (audit F4): the window is debited on arrival and credited only as the
+    /// handler takes each chunk, so unconsumed memory is bounded by ``HTTPLimits/streamReceiveWindow``
+    /// per stream and ``HTTPLimits/connectionReceiveWindow`` per connection — not by the per-route body
+    /// cap, which the streaming path never had a connection-level aggregate for (ADR 0006).
     private mutating func receiveStreamingData(
         _ streamID: HTTP2StreamID,
         _ record: inout StreamRecord,
@@ -107,7 +120,7 @@ extension HTTP2Connection {
         guard record.bodyReceivedTotal <= record.effectiveBodyLimit else {
             throw .stream(streamID, .enhanceYourCalm, "request body exceeds the route limit")
         }
-        consumeReceiveWindows(streamID, &record, by: length, endStream: endStream)
+        debitReceiveWindows(&record, by: length)
         streams[streamID] = record
         if !body.isEmpty {
             events.append(.requestBodyChunk(streamID: streamID, bytes: Array(body)))
@@ -130,31 +143,83 @@ extension HTTP2Connection {
         return frame.payload[1 ..< (frame.payload.count - Int(padLength))]
     }
 
-    /// Debits the connection and stream receive windows by `length`, replenishing each with a
-    /// WINDOW_UPDATE once half its window has been consumed so a large upload keeps flowing (§6.9).
+    /// Accounts `length` arriving octets against both receive windows, crediting nothing back (§6.9).
     ///
-    /// Batching at the half-window bounds the number of WINDOW_UPDATE frames. The stream window is not
-    /// replenished after END_STREAM — no further DATA can arrive on it.
+    /// The debit half of the split. On a **consumption-gated** stream this is all that happens on
+    /// arrival: the peer's window shrinks by what it sent and only re-opens once the handler has
+    /// actually taken those octets (``creditReceiveWindows(_:_:by:endStream:)``, driven by
+    /// ``replenishReceiveWindow(_:consumed:)``). The debited-but-not-yet-credited total is the
+    /// connection's *unconsumed application bytes* — which is exactly why the flow-control windows can
+    /// serve as the memory watermarks with no parallel accounting (ADR 0006).
+    mutating func debitReceiveWindows(_ record: inout StreamRecord, by length: Int) {
+        connectionReceiveWindow -= length
+        connectionReceiveOutstanding += length
+        record.receiveWindow -= length
+        record.receiveOutstanding += length
+    }
+
+    /// Credits `consumed` octets back to both receive windows, emitting a WINDOW_UPDATE for each once
+    /// half that window has accrued so a large upload keeps flowing (RFC 9113 §6.9).
+    ///
+    /// Batching at the half-window bounds the WINDOW_UPDATE frame count. The credit is clamped to what
+    /// this stream actually still owes, so a mis-reporting consumer can never manufacture window. The
+    /// stream window is not credited after END_STREAM — no further DATA can arrive on it — but the
+    /// *connection* window always is: it outlives every stream (§6.9.1).
+    mutating func creditReceiveWindows(
+        _ streamID: HTTP2StreamID,
+        _ record: inout StreamRecord,
+        by consumed: Int,
+        endStream: Bool
+    ) {
+        let credit = min(consumed, record.receiveOutstanding)
+        guard credit > 0 else {
+            return
+        }
+        creditConnectionReceiveWindow(by: credit)
+        record.receiveOutstanding -= credit
+        record.receiveConsumed += credit
+        guard !endStream, record.receiveConsumed * 2 >= localSettings.initialWindowSize else {
+            return
+        }
+        writer.writeWindowUpdate(streamID, increment: record.receiveConsumed)
+        record.receiveWindow += record.receiveConsumed
+        record.receiveConsumed = 0
+    }
+
+    /// Credits `consumed` octets back to the connection window alone, emitting a stream-0 WINDOW_UPDATE
+    /// at the half-window (RFC 9113 §6.9.1).
+    ///
+    /// Split out because a retired stream must still return its outstanding credit here — the
+    /// connection window is shared and outlives any single stream, so leaking a reset upload's octets
+    /// would permanently shrink every future stream's headroom.
+    mutating func creditConnectionReceiveWindow(by consumed: Int) {
+        guard consumed > 0 else {
+            return
+        }
+        connectionReceiveOutstanding -= consumed
+        connectionReceiveConsumed += consumed
+        guard connectionReceiveConsumed * 2 >= limits.connectionReceiveWindow else {
+            return
+        }
+        writer.writeWindowUpdate(.connection, increment: connectionReceiveConsumed)
+        connectionReceiveWindow += connectionReceiveConsumed
+        connectionReceiveConsumed = 0
+    }
+
+    /// Debits then immediately credits `length` octets — arrival-replenish, for the **buffered** path.
+    ///
+    /// A buffered request is already bounded connection-wide by `streams.totalBufferedBody`
+    /// (`receiveData` above), so its window may re-open the moment DATA lands: the peer is allowed to
+    /// run ahead of the handler because the aggregate buffer cap, not the window, is what bounds it.
+    /// Only the gated paths (tunnel, streaming route) debit without crediting.
     mutating func consumeReceiveWindows(
         _ streamID: HTTP2StreamID,
         _ record: inout StreamRecord,
         by length: Int,
         endStream: Bool
     ) {
-        connectionReceiveWindow -= length
-        connectionReceiveConsumed += length
-        if connectionReceiveConsumed * 2 >= 65_535 {
-            writer.writeWindowUpdate(.connection, increment: connectionReceiveConsumed)
-            connectionReceiveWindow += connectionReceiveConsumed
-            connectionReceiveConsumed = 0
-        }
-        record.receiveWindow -= length
-        record.receiveConsumed += length
-        if !endStream, record.receiveConsumed * 2 >= localSettings.initialWindowSize {
-            writer.writeWindowUpdate(streamID, increment: record.receiveConsumed)
-            record.receiveWindow += record.receiveConsumed
-            record.receiveConsumed = 0
-        }
+        debitReceiveWindows(&record, by: length)
+        creditReceiveWindows(streamID, &record, by: length, endStream: endStream)
     }
 
     /// Releases as much pending response body as the send windows allow, in frame-sized chunks.
@@ -183,10 +248,10 @@ extension HTTP2Connection {
         }
         let fullyFlushed = record.pendingOffset >= record.pending.count
         guard !(fullyFlushed && record.stream.state == .closed) else {
-            streams[streamID] = nil
             // Closed cleanly via END_STREAM: a late DATA is a survivable STREAM_CLOSED (audit F1), but a
             // HEADERS reusing this id is a connection error — the id cannot reopen (RFC 9113 §5.1).
-            markStreamClosed(streamID, reason: .endStream)
+            // `retire` also hands back any receive credit the handler never consumed (§6.9.1).
+            retire(streamID, &record, reason: .endStream)
             return
         }
         // Reclaim the already-sent prefix, but only once it reaches half the buffer — so the amortized
