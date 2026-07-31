@@ -104,6 +104,56 @@ func costBoundEvicts() {
     #expect(map.value(forKey: 2) == 2)
 }
 
+@Test(
+    "replacing a small entry with a large one never pushes the total past maxCost",
+    arguments: BoundedLRU<Int, Int>.Overflow.allCases
+)
+func replacementRespectsTheCostBound(policy: BoundedLRU<Int, Int>.Overflow) {
+    // `insert` short-circuits to `replace` before it consults the overflow policy at all. The guard
+    // it does pass proves the *entry's own* cost fits under `maxCost`; it says nothing about the
+    // total once the entry it displaces was cheaper. Filling to just under the bound and then
+    // growing one entry in place is the shape that walks past it (CWE-400).
+    var map = BoundedLRU<Int, Int>(capacity: 100, maxCost: 300, overflow: policy)
+    map.insert(0, forKey: 0, cost: 100)
+    map.insert(1, forKey: 1, cost: 100)
+    map.insert(2, forKey: 2, cost: 50)
+    #expect(map.cost == 250)
+    map.insert(3, forKey: 2, cost: 200)  // +150 in place — 400 against a 300 bound
+    #expect(map.cost <= map.maxCost)
+}
+
+@Test("a replacement refused for want of room keeps the entry it could not overwrite")
+func refusedReplacementKeepsTheIncumbent() {
+    // Under `.reject` there is no trim to fall back on, so the replacement itself has to be refused
+    // — and refusing it must mean *keeping* the tracked entry, not dropping it. A rejected write
+    // that deleted the entry would hand any client of a budget table a way to reset its own budget
+    // on demand: the newcomer-displacement hazard `.reject` exists to prevent (CWE-770), through
+    // the key's own front door.
+    var map = BoundedLRU<Int, Int>(capacity: 100, maxCost: 300, overflow: .reject)
+    map.insert(0, forKey: 0, cost: 100)
+    map.insert(1, forKey: 1, cost: 150)
+    #expect(map.insert(2, forKey: 1, cost: 250) == .rejected)
+    #expect(map.value(forKey: 1) == 1, "the refused write must not have dropped the incumbent")
+    #expect(map.cost == 250)
+    // Room the replacement does fit in is still accepted: the refusal is about the bound, not a
+    // latch on the key.
+    #expect(map.insert(3, forKey: 1, cost: 200) == .replaced)
+    #expect(map.cost == 300)
+}
+
+@Test("a replacement that fits evicts only what it has to, and never itself")
+func replacementEvictsOnlyWhatItMust() {
+    var map = BoundedLRU<Int, Int>(capacity: 100, maxCost: 300)
+    map.insert(0, forKey: 0, cost: 100)
+    map.insert(1, forKey: 1, cost: 100)
+    map.insert(2, forKey: 2, cost: 50)
+    map.insert(3, forKey: 2, cost: 200)
+    #expect(map.cost == 300)
+    #expect(map.value(forKey: 2) == 3, "a replacement must never evict the value it just stored")
+    #expect(map.value(forKey: 0) == nil, "the least-recently-used entry pays for the growth")
+    #expect(map.value(forKey: 1) == 1, "and nothing beyond it does")
+}
+
 @Test("an entry whose own cost exceeds maxCost is refused")
 func oversizedEntryIsRefused() {
     var map = BoundedLRU<Int, Int>(capacity: 10, maxCost: 100)

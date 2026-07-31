@@ -52,6 +52,20 @@ or trap.
 | HPACK cumulative decoded-list size; string-length; dynamic-table cap (§4.2/§6.3) | HPACK decompression bomb | COMPRESSION_ERROR |
 | `headerReadTimeout` (cumulative), `idleTimeout`, `keepAliveTimeout` | Slowloris / slow-read | 408 / close |
 
+Every limit is `let`, and every value passes one clamp on the way in (audit CR-F15,
+`HTTPLimitsBounds.swift`): the ranges the type documents — RFC 9113 §4.2's 2¹⁴ … 2²⁴−1 frame size,
+§6.9.1's 2³¹−1 window, a strictly positive timeout, a `0...1` accept-resume ratio — are enforced
+rather than described, and the three cross-field invariants (`maxConnectionsPerClient ≤
+maxConnections`, `streamReceiveWindow ≤ connectionReceiveWindow`, `maxDecompressedBodySize ≥
+maxBodySize`) are re-established on every construction. `HTTPLimits.init(validating:)` refuses instead
+of repairing, for configuration that arrives from outside the program. Current defaults: 16 MiB body,
+4 MiB WebSocket message, 64 MiB decompressed, 16 384 / 64 connections.
+
+Lower defaults narrow the window on a memory-exhaustion bug; they do not close it and are not a
+substitute for backpressure. What bounds what one connection can make the server hold is the bounded
+transport→application handoff (`maxQueuedInboundBytes`/`maxQueuedInboundChunks`) and the
+consumption-gated receive windows.
+
 ### HTTP/2 (RFC 9113) — sans-I/O engine (request path)
 Frame-size cap → FRAME_SIZE_ERROR (`HTTP2FrameDecoder.swift`); SETTINGS per-parameter validation
 (`HTTP2Settings.swift`); HEADERS padding validation (`HTTP2HeadersFrame.swift`); pseudo-header
@@ -82,10 +96,11 @@ a closed stream reported as **STREAM_CLOSED** via a bounded recently-closed-id s
 
 ### Deep hardening (2026-06-25)
 Traced in `Documentation/audit/2026-06-25-deep-hardening-audit.md`:
-- **Secure-by-default limits.** `maxConnections` / `maxConnectionsPerClient` default to 65 536 / 1 024
-  (were 1 048 576, which defanged the global/per-client caps); `maxConcurrentStreams` stays a bounded
-  128. `HTTPLimits.highThroughput` restores the permissive ceilings for trusted/benchmark use;
-  `HTTPLimits.hardened` tightens them further (CWE-770).
+- **Secure-by-default limits.** `maxConnections` / `maxConnectionsPerClient` were dropped to
+  65 536 / 1 024 (from 1 048 576, which defanged the global/per-client caps) and again to 16 384 / 64
+  by CR-F15 below; `maxConcurrentStreams` stays a bounded 128. `HTTPLimits.highThroughput` restores
+  the permissive ceilings for trusted/benchmark use; `HTTPLimits.hardened` tightens them further
+  (CWE-770).
 - **Chunked body-phase buffer bounded.** An endless chunk-size / chunk-ext / trailer line with no CRLF
   is failed closed by a per-line bound (`ChunkedBodyDecoder.readLine`) rather than buffered without
   limit (RFC 9112 §7.1; CWE-400/770).

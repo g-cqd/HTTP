@@ -142,10 +142,10 @@ struct HTTPServerHTTP3AdmissionTests {
     }
 
     private static func limits(total: Int, perHost: Int) -> HTTPLimits {
-        var limits = HTTPLimits.default
-        limits.maxConnections = total
-        limits.maxConnectionsPerClient = perHost
-        return limits
+        HTTPLimits.default.with {
+            $0.maxConnections = total
+            $0.maxConnectionsPerClient = perHost
+        }
     }
 
     /// Polls `condition` on the cooperative pool until it holds or the budget runs out.

@@ -241,18 +241,20 @@ enum HTTPDExample {
     /// The default `maxConnectionsPerClient` (20) is a single-IP DoS guard that a loopback load test
     /// trips; set `HTTPD_MAX_CONN` to raise both the per-client and global caps without recompiling.
     private static func makeLimits() -> HTTPLimits {
-        var limits = HTTPLimits.default
-        if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = Int(raw) {
-            limits.maxConnectionsPerClient = value
-            limits.maxConnections = value
+        let environment = ProcessInfo.processInfo.environment
+        // One `with` transaction rather than a run of field assignments: every override lands, then
+        // every range and cross-field invariant is re-established once (audit CR-F15).
+        return HTTPLimits.default.with { limits in
+            if let raw = environment["HTTPD_MAX_CONN"], let value = Int(raw) {
+                limits.maxConnectionsPerClient = value
+                limits.maxConnections = value
+            }
+            // WebSocket message ceiling (bytes). The Autobahn conformance job raises it to cover the
+            // suite's 16 MiB section-9 messages without changing the shipped default for real loads.
+            if let raw = environment["HTTPD_WS_MAX_MESSAGE"], let value = Int(raw) {
+                limits.maxWebSocketMessageSize = value
+            }
         }
-        // WebSocket message ceiling (bytes). The Autobahn conformance job raises it to cover the
-        // suite's 16 MiB section-9 messages without changing the shipped default for real loads.
-        let wsMessage = ProcessInfo.processInfo.environment["HTTPD_WS_MAX_MESSAGE"]
-        if let raw = wsMessage, let value = Int(raw) {
-            limits.maxWebSocketMessageSize = value
-        }
-        return limits
     }
 
     // MARK: Argument parsing

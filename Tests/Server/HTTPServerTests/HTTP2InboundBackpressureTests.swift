@@ -35,8 +35,8 @@ struct HTTP2InboundBackpressureTests {
         staged += (0 ..< floodChunks).map { Self.pingFrame(UInt64($0)) }
         let connection = BlockingSendConnection(chunks: staged)
 
-        var limits = HTTPLimits.default
-        limits.maxQueuedInboundBytes = 1_024  // ~60 PINGs, far below the 400 staged
+        // ~60 PINGs, far below the 400 staged.
+        let limits = HTTPLimits.default.with { $0.maxQueuedInboundBytes = 1_024 }
         let server = HTTPServer(
             transport: FakeTransport(),
             responder: Router { Route.get("/") { _, _, _ in .text("ok") } },
@@ -62,8 +62,7 @@ struct HTTP2InboundBackpressureTests {
         var staged: [[UInt8]] = [Self.clientPreface + Self.settingsFrame]
         staged += (0 ..< 200).map { Self.pingFrame(UInt64($0)) }
         let connection = BlockingSendConnection(chunks: staged)
-        var limits = HTTPLimits.default
-        limits.maxQueuedInboundBytes = 512
+        let limits = HTTPLimits.default.with { $0.maxQueuedInboundBytes = 512 }
         let server = HTTPServer(
             transport: FakeTransport(),
             responder: Router { Route.get("/") { _, _, _ in .text("ok") } },

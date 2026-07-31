@@ -88,8 +88,7 @@ struct WebSocketBackpressureTests {
             await connection.close()
             return []
         }
-        var limits = HTTPLimits.default
-        limits.maxQueuedBroadcasts = 4
+        let limits = HTTPLimits.default.with { $0.maxQueuedBroadcasts = 4 }
         let server = HTTPServer(
             transport: FakeTransport(),
             responder: Router {

@@ -137,6 +137,53 @@ struct ConnectionAdmissionTests {
         #expect(resumes.value == 1, "resume fires once per suspend/resume cycle")
     }
 
+    @Test(
+        "a non-finite or out-of-range resume ratio still re-arms instead of trapping",
+        arguments: [Double.nan, .infinity, -.infinity, -0.5, 1.5, 0, 1]
+    )
+    func hostileResumeRatioNeverTraps(_ ratio: Double) {
+        // `min`/`max` are `Comparable` operations and NaN compares `false` against everything, so
+        // `min(max(.nan, 0), 1)` is `.nan`: the ratio survived its own clamp and
+        // `Int(Double.nan.rounded(.down))` then trapped the process — on a value reachable straight
+        // from public configuration (`HTTPLimits.acceptResumeRatio`). IEEE 754-2019 §7.2 makes that
+        // conversion an invalid operation; Swift spells "invalid operation" as a trap (CWE-1339).
+        let gate = Self.makeGate(total: 8, resumeRatio: ratio)
+        let resumes = Counter()
+        gate.onResume { resumes.increment() }
+
+        var tickets: [AdmissionTicket] = []
+        for _ in 0 ..< 8 {
+            guard case .admitted(let ticket, _) = gate.admit(host: "10.0.0.1") else {
+                Issue.record("the gate rejected a connection below its 8-slot ceiling")
+                return
+            }
+            tickets.append(ticket)
+        }
+        #expect(gate.isSaturated)
+        // Whatever the ratio degrades to, the watermark lands inside `0...total`, so a fully drained
+        // gate has always crossed it: the accept source re-arms rather than staying suspended for the
+        // life of the process.
+        tickets.removeAll()
+        #expect(gate.counts == (total: 0, hosts: 0))
+        #expect(!gate.isSaturated)
+        #expect(resumes.value == 1, "a drained gate must re-arm exactly once per saturation cycle")
+    }
+
+    @Test("a ceiling too large to survive the round trip through Double does not trap")
+    func unrepresentableCeilingNeverTraps() {
+        // `Double(Int.max)` rounds *up* to 2^63, one past `Int.max`, so scaling it by a ratio of 1
+        // and converting back is another invalid operation. Absurd as a ceiling, but expressible —
+        // and a trap is a trap.
+        let gate = Self.makeGate(total: .max, resumeRatio: 1)
+        guard case .admitted(let ticket, let saturated) = gate.admit(host: "10.0.0.1") else {
+            Issue.record("the gate rejected the first connection under an unbounded ceiling")
+            return
+        }
+        #expect(!saturated)
+        ticket.release()
+        #expect(gate.counts == (total: 0, hosts: 0))
+    }
+
     @Test("a ticket dropped without ever being served releases its slot on deinit")
     func droppedTicketReleasesOnDeinit() {
         // A connection can be yielded into the accept stream and then dropped — stream termination, a
