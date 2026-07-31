@@ -77,7 +77,10 @@ extension HTTPServer {
                     deadlines.disarm(id)  // the read landed; handler time is not a read deadline
                     let (produced, actions) = await engine.receive(id, bytes, fin: fin)
                     await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
-                    let own = produced.filter { Self.owningStream(of: $0) == id }
+                    // Foreign events are routed here too (audit REG-1): this loop used to *filter*
+                    // them out, which is the same silent drop one layer down — a sibling stream's
+                    // QPACK section can unblock while this one is still uploading.
+                    let own = partitionHTTP3Events(produced, owner: id, registry: registry)
                     ended = await absorbHTTP3Body(own, into: handoff) || ended
                     if fin {
                         break feed

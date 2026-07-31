@@ -135,12 +135,12 @@ extension HTTPServer {
     /// never stalls request serving), then serves each inbound stream until the connection closes.
     func serveHTTP3(_ quic: any QUICConnection) async {
         // The per-connection dispatcher (audit addendum P0.3): the registry routes engine output by
-        // stream id, and `routed` carries the events a stream task produced for a *different* stream.
-        // Bounded — the engine only crosses streams when it unblocks a QPACK-blocked section, and it
-        // caps those at `SETTINGS_QPACK_BLOCKED_STREAMS` (RFC 9204 §2.1.2), well under this budget.
+        // stream id and holds the per-stream mailbox the routed events wait in. Its byte budget is the
+        // connection's own buffered-body ceiling, which is what already bounds a single engine hand-off
+        // — so the mailbox bounds *accumulation* on top of it rather than restating it (audit REG-1).
         // It is built FIRST because it is also where each stream's ``DispatchPlan`` is filed, and the
         // resolver below closes over it.
-        let registry = HTTP3StreamRegistry()
+        let registry = HTTP3StreamRegistry(mailboxByteBudget: limits.maxBodySize)
         // Resolve the matched route from each request head, before its DATA is buffered (Phase 1.2 /
         // 1.4), and file the resulting plan against the stream that will dispatch it. `snapshot` is
         // read per head, not per connection: an h3 connection outlives many reloads, so pinning it here
@@ -167,10 +167,11 @@ extension HTTPServer {
             await self.holdServerStreams(from: initialActions, engine: engine, on: quic)
         }
         defer { serverStreams.cancel() }
-        let (routed, continuation) = AsyncStream<HTTP3RoutedEvents>
-            .makeStream(
-                bufferingPolicy: .bufferingOldest(Self.http3RoutedEventBudget)
-            )
+        // The dispatcher's ticket channel: stream ids only, one outstanding per stream, so it needs no
+        // drop policy (audit REG-1). The registry holds the continuation, because deciding between
+        // waking a stream's own task and ticketing this dispatcher is its job, not its callers'.
+        let (tickets, continuation) = AsyncStream<QUICStreamID>.makeStream()
+        registry.attachDispatcher(continuation)
         // Visible to the drain for its whole life: GOAWAY on shutdown, forced close past the deadline
         // (audit addendum P0.5).
         // ONE read-deadline watchdog for all of this connection's request streams (P0.5) — the same
@@ -187,7 +188,7 @@ extension HTTPServer {
         await withDiscardingTaskGroup { group in
             group.addTask {
                 await self.drainRoutedHTTP3(
-                    routed,
+                    tickets,
                     registry: registry,
                     engine: engine,
                     quic: quic,
@@ -204,24 +205,17 @@ extension HTTPServer {
                                 engine: engine,
                                 quic: quic,
                                 registry: registry,
-                                routed: continuation,
                                 deadlines: deadlines
                             )
                         }
                     }
                 }
                 // Every stream task has ended, so nothing can route any more: end the channel and let
-                // the dispatcher finish its in-flight batches.
+                // the dispatcher finish its in-flight streams.
                 continuation.finish()
             }
         }
     }
-
-    /// The most routed event batches a connection may hold before the oldest are dropped.
-    ///
-    /// Sized well above the engine's blocked-stream cap (RFC 9204 §2.1.2) so a conforming peer never
-    /// reaches it; it is a CWE-770 bound, not a working limit.
-    static var http3RoutedEventBudget: Int { 256 }
 
     /// Opens the server's unidirectional streams (writing each §6.2 preamble — the type byte, plus
     /// SETTINGS on the control stream) and holds them open until this connection's serving is cancelled.
@@ -255,7 +249,6 @@ extension HTTPServer {
         engine: Engine,
         quic: any QUICConnection,
         registry: HTTP3StreamRegistry,
-        routed: AsyncStream<HTTP3RoutedEvents>.Continuation,
         deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         var webSocket: WebSocketConnection?
@@ -298,7 +291,7 @@ extension HTTPServer {
                     // (P0.3). The mailbox carries back the ones another task routed *to* us.
                     own =
                         registry.takeMailbox(stream.id)
-                        + partitionHTTP3Events(produced, owner: stream.id, routed: routed)
+                        + partitionHTTP3Events(produced, owner: stream.id, registry: registry)
             }
             let handedOff = await applyHTTP3StreamEvents(
                 own,
