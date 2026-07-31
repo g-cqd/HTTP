@@ -42,37 +42,52 @@ struct MultipartParser {
     private static let space: UInt8 = 0x20
     private static let tab: UInt8 = 0x09
 
+    /// The length of the `CRLF CRLF` that separates a part's header section from its payload.
+    private static let blankLineCount = 4
+
     private let body: [UInt8]
     private let boundary: MultipartBoundary
+    private let limits: MultipartLimits
 
     /// The offset the next delimiter search resumes from.
     ///
     /// It only ever moves forward, which is what keeps the whole parse a single pass over the body.
     private var cursor: Int
 
-    /// Creates a parser over `body`, splitting it on `boundary`.
-    init(body: [UInt8], boundary: MultipartBoundary) {
+    /// Bytes the parts built so far will retain, charged against ``MultipartLimits/maxRetainedBytes``.
+    private var retained: Int
+
+    /// Creates a parser over `body`, splitting it on `boundary` under `limits`.
+    init(body: [UInt8], boundary: MultipartBoundary, limits: MultipartLimits) {
         self.body = body
         self.boundary = boundary
+        self.limits = limits
         self.cursor = 0
+        self.retained = 0
     }
 
-    /// Parses the body into its parts in order, or nil when the delimiter structure is malformed.
+    /// Parses the body into its parts in order, or nil when it is malformed or breaches ``limits``.
     ///
     /// Malformed means: no opening delimiter, or no close-delimiter after the last part. A part that
     /// declares no `Content-Disposition` `name` is skipped rather than failing the whole body, which is
-    /// the lenient behaviour RFC 7578 §4.2 implies for unrecognized parts.
+    /// the lenient behaviour RFC 7578 §4.2 implies for unrecognized parts — but a *limit* breach fails
+    /// the whole body, because a form parsed from a body the server refused to bound is not a result.
     mutating func parse() -> MultipartFormData? {
         guard var delimiter = openingDelimiter() else {
             return nil
         }
         var parts: [MultipartFormData.Part] = []
+        var encountered = 0
         while !delimiter.isClosing {
             guard let next = nextDelimiter() else {
                 return nil  // a part was opened but never closed
             }
-            if let part = part(in: delimiter.contentStart ..< next.start) {
-                parts.append(part)
+            encountered += 1
+            guard encountered <= limits.maxParts else {
+                return nil
+            }
+            guard append(delimiter.contentStart ..< next.start, to: &parts) else {
+                return nil
             }
             delimiter = next
         }
@@ -146,12 +161,62 @@ struct MultipartParser {
         return Delimiter(start: start, contentStart: index, isClosing: true)
     }
 
-    /// Parses one part's `header-section CRLF CRLF body` (RFC 7578 §4.2) from `range`.
+    /// Parses `range` as one part's `header-section CRLF CRLF body` (RFC 7578 §4.2) and appends it.
     ///
-    /// Returns nil when the part carries no blank line (so no header section at all) or declares no
-    /// `Content-Disposition` `name`; the caller skips it.
-    private func part(in range: Range<Int>) -> MultipartFormData.Part? {
-        MultipartFormData.parsePart(Array(body[range]))
+    /// Returns false to reject the whole body — a per-part header section or an aggregate retained
+    /// total over ``limits``. A part with no blank line (so no header section) or no
+    /// `Content-Disposition` `name` is skipped, and returns true: that is leniency, not a breach.
+    private mutating func append(
+        _ range: Range<Int>,
+        to parts: inout [MultipartFormData.Part]
+    ) -> Bool {
+        guard let blankLine = firstIndex(ofBlankLineIn: range) else {
+            return true
+        }
+        let headerRange = range.lowerBound ..< blankLine
+        guard headerRange.count <= limits.maxPartHeaderBytes else {
+            return false
+        }
+        let fields = MultipartFormData.parseHeaders(Array(body[headerRange]))
+        guard let disposition = fields["content-disposition"],
+            let name = MultipartParameters.value(of: "name", in: disposition)
+        else {
+            return true
+        }
+        let filename = MultipartParameters.value(of: "filename", in: disposition)
+        let contentType = fields["content-type"]
+        let payload = (blankLine + Self.blankLineCount) ..< range.upperBound
+        let charge =
+            payload.count + name.utf8.count + (filename?.utf8.count ?? 0)
+            + (contentType?.utf8.count ?? 0)
+        guard retained + charge <= limits.maxRetainedBytes else {
+            return false
+        }
+        retained += charge
+        parts.append(
+            MultipartFormData.Part(
+                name: name,
+                filename: filename,
+                contentType: contentType,
+                body: Array(body[payload])
+            )
+        )
+        return true
+    }
+
+    /// The offset of the `CRLF CRLF` that ends a part's header section within `range`, or nil.
+    private func firstIndex(ofBlankLineIn range: Range<Int>) -> Int? {
+        var index = range.lowerBound
+        let last = range.upperBound - Self.blankLineCount
+        while index <= last {
+            if body[index] == Self.cr, body[index + 1] == Self.lf, body[index + 2] == Self.cr,
+                body[index + 3] == Self.lf
+            {
+                return index
+            }
+            index += 1
+        }
+        return nil
     }
 
     /// The offset of the first `CRLF "--" boundary` occurrence at or after `start`, or nil.

@@ -53,14 +53,19 @@ public struct MultipartFormData: Sendable, Equatable {
 
     /// Parses a `multipart/form-data` body delimited by `boundary` (RFC 7578 §4 / RFC 2046 §5.1).
     ///
-    /// Returns `nil` if `boundary` is outside the RFC 2046 §5.1.1 grammar, or if the body has no valid
-    /// opening or closing delimiter; a part missing a `Content-Disposition` `name` is skipped. Lenient
-    /// and trap-free — a malformed or hostile body returns `nil` rather than trapping.
-    public static func parse(_ body: [UInt8], boundary: String) -> Self? {
+    /// Returns `nil` if `boundary` is outside the RFC 2046 §5.1.1 grammar, if the body has no valid
+    /// opening or closing delimiter, or if it breaches `limits`; a part missing a
+    /// `Content-Disposition` `name` is skipped. Lenient and trap-free — a malformed or hostile body
+    /// returns `nil` rather than trapping.
+    public static func parse(
+        _ body: [UInt8],
+        boundary: String,
+        limits: MultipartLimits = .default
+    ) -> Self? {
         guard let validated = MultipartBoundary(boundary) else {
             return nil
         }
-        var parser = MultipartParser(body: body, boundary: validated)
+        var parser = MultipartParser(body: body, boundary: validated, limits: limits)
         return parser.parse()
     }
 
@@ -77,29 +82,8 @@ public struct MultipartFormData: Sendable, Equatable {
         return candidate
     }
 
-    /// Parses one part's `header section CRLF CRLF body` into a ``Part`` (RFC 7578 §4.2); nil if it has
-    /// no `Content-Disposition` `name`.
-    static func parsePart(_ content: [UInt8]) -> Part? {
-        let blankLine: [UInt8] = [0x0D, 0x0A, 0x0D, 0x0A]
-        guard let headerEnd = firstRange(of: blankLine, in: content, from: 0) else {
-            return nil
-        }
-        let headers = parseHeaders(Array(content[0 ..< headerEnd.lowerBound]))
-        guard let disposition = headers["content-disposition"],
-            let name = parameter("name", in: disposition)
-        else {
-            return nil
-        }
-        return Part(
-            name: name,
-            filename: parameter("filename", in: disposition),
-            contentType: headers["content-type"],
-            body: Array(content[headerEnd.upperBound...])
-        )
-    }
-
     /// Parses a part's header lines (`Name: value`, CRLF-separated) into lowercase-keyed pairs.
-    private static func parseHeaders(_ bytes: [UInt8]) -> [String: String] {
+    static func parseHeaders(_ bytes: [UInt8]) -> [String: String] {
         var headers: [String: String] = [:]
         // Split on the LF byte (then drop a trailing CR) rather than `String.split(separator:)`, which is
         // ambiguous for a "\n" literal and was silently not splitting CRLF-joined header lines.
@@ -135,27 +119,5 @@ public struct MultipartFormData: Sendable, Equatable {
             end = prior
         }
         return String(leading[..<end])
-    }
-
-    /// The first range of `needle` in `haystack` at or after `start`, or nil (a small substring search).
-    private static func firstRange(
-        of needle: [UInt8], in haystack: [UInt8], from start: Int
-    ) -> Range<Int>? {
-        guard !needle.isEmpty, haystack.count - start >= needle.count else {
-            return nil
-        }
-        let last = haystack.count - needle.count
-        var index = start
-        while index <= last {
-            var matched = 0
-            while matched < needle.count, haystack[index + matched] == needle[matched] {
-                matched += 1
-            }
-            if matched == needle.count {
-                return index ..< (index + needle.count)
-            }
-            index += 1
-        }
-        return nil
     }
 }
