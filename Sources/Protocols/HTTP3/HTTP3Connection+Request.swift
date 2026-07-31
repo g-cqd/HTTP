@@ -22,9 +22,11 @@ extension HTTP3Connection {
         _ streamID: QUICStreamID,
         into events: inout [Event]
     ) throws(HTTP3Error) {
-        for frame in try drainFrames(streamID) {
-            try handleRequestFrame(streamID, frame)
-        }
+        // The frames are handled inside the walk, while each payload is still borrowed from the
+        // stream's receive buffer (audit CR-F18). `events` is threaded through only because the walk
+        // is shared with the control stream, whose handlers surface events; the request handlers
+        // record onto the stream's state and let `surfaceStream` decide what is owed.
+        try walkFrames(streamID, sink: .request, into: &events)
         try surfaceStream(streamID, into: &events)
     }
 
@@ -79,9 +81,9 @@ extension HTTP3Connection {
     }
 
     /// Validates one request-stream frame against the §4.1 sequence and routes HEADERS / DATA.
-    private mutating func handleRequestFrame(
+    mutating func handleRequestFrame(
         _ streamID: QUICStreamID,
-        _ frame: HTTP3FrameDecoder.Frame
+        _ frame: HTTP3FrameView
     ) throws(HTTP3Error) {
         if frame.type.isReservedHTTP2Frame {
             throw .connection(
@@ -103,7 +105,7 @@ extension HTTP3Connection {
     /// Handles a HEADERS frame: the first is the request, a second is trailers (RFC 9114 §4.1).
     private mutating func handleRequestHeaders(
         _ streamID: QUICStreamID,
-        _ payload: [UInt8]
+        _ payload: RawSpan
     ) throws(HTTP3Error) {
         guard var state = streams[streamID] else {
             return
@@ -183,7 +185,7 @@ extension HTTP3Connection {
     /// Handles a DATA frame: appends to the body after HEADERS and before trailers (RFC 9114 §4.1).
     private mutating func handleRequestData(
         _ streamID: QUICStreamID,
-        _ payload: [UInt8]
+        _ payload: RawSpan
     ) throws(HTTP3Error) {
         guard var state = streams[streamID] else {
             return
@@ -199,7 +201,7 @@ extension HTTP3Connection {
         // This stream's bytes are still counted in the table's running total (its record is unchanged
         // until the write-back below), so capture them now to net them out of the cross-stream sum.
         let bufferedBeforeAppend = state.body.count
-        state.body.append(contentsOf: payload)
+        payload.withUnsafeBytes { state.body.append(contentsOf: $0) }
         // A tunnel stream's DATA is opaque WebSocket bytes (RFC 9220), drained each receive batch as
         // `tunnelData` rather than a request body, so the request-body / content-length bounds do not
         // apply here (the WebSocket engine's own `maxMessageSize` governs message size downstream).
@@ -209,7 +211,7 @@ extension HTTP3Connection {
         }
         // The running total (not `body.count`, which a streaming stream drains after each chunk) bounds
         // the whole upload against the matched route's cap (Phase 1.2, RFC 9110 §15.5.14).
-        state.bodyReceivedTotal += payload.count
+        state.bodyReceivedTotal += payload.byteCount
         guard state.bodyReceivedTotal <= state.effectiveBodyLimit else {
             throw .stream(streamID, .h3RequestRejected, "request body exceeds the route limit")
         }
@@ -241,7 +243,7 @@ extension HTTP3Connection {
             return
         }
         // A non-empty buffer at FIN is a frame whose Length ran past the stream end (RFC 9114 §7.1).
-        guard state.buffer.isEmpty else {
+        guard state.pendingOctets == 0 else {
             throw .connection(.h3FrameError, "a frame extends past the end of the stream")
         }
         // A stream still blocked on not-yet-received inserts holds its FIN: the request surfaces once the
@@ -294,7 +296,7 @@ extension HTTP3Connection {
             return
         }
         // A non-empty buffer at FIN is a frame whose Length ran past the stream end (RFC 9114 §7.1).
-        guard state.buffer.isEmpty else {
+        guard state.pendingOctets == 0 else {
             throw .connection(.h3FrameError, "a frame extends past the end of the stream")
         }
         try validateContentLength(request, bodyCount: state.bodyReceivedTotal, streamID: streamID)
@@ -326,9 +328,10 @@ extension HTTP3Connection {
     /// The Required Insert Count a field section's prefix encodes (RFC 9204 §4.5.1), mapping a fault to
     /// the connection-level QPACK_DECOMPRESSION_FAILED — used to decide whether the section is owed a
     /// Section Acknowledgment.
-    private func requiredInsertCount(of payload: [UInt8]) throws(HTTP3Error) -> Int {
-        let result: Result<Int, QPACKError> = payload.withUnsafeBytes { raw in
-            Result { () throws(QPACKError) in try decoder.requiredInsertCount(of: raw.bytes) }
+    private func requiredInsertCount(of payload: RawSpan) throws(HTTP3Error) -> Int {
+        // Read in place: `QPACKDecoder.requiredInsertCount` already takes a `RawSpan` (RFC 9204
+        // §4.5.1), so the field section never needed to be an `[UInt8]` to be inspected.
+        let result = Result { () throws(QPACKError) in try decoder.requiredInsertCount(of: payload)
         }
         switch result {
             case .success(let value):
@@ -340,10 +343,8 @@ extension HTTP3Connection {
 
     /// QPACK-decodes a request field section, mapping a fault to the connection-level
     /// QPACK_DECOMPRESSION_FAILED (RFC 9204 §2.2).
-    private func decodeFieldSection(_ payload: [UInt8]) throws(HTTP3Error) -> [HeaderField] {
-        let result: Result<[HeaderField], QPACKError> = payload.withUnsafeBytes { raw in
-            Result { () throws(QPACKError) in try decoder.decode(raw.bytes) }
-        }
+    private func decodeFieldSection(_ payload: RawSpan) throws(HTTP3Error) -> [HeaderField] {
+        let result = Result { () throws(QPACKError) in try decoder.decode(payload) }
         switch result {
             case .success(let fields):
                 return fields
@@ -373,7 +374,7 @@ extension HTTP3Connection {
     /// connection error — the peer encoder broke its own bound.
     private mutating func bufferBlockedSection(
         _ streamID: QUICStreamID,
-        payload: [UInt8],
+        payload: RawSpan,
         requiredInsertCount: Int,
         _ state: inout StreamState
     ) throws(HTTP3Error) {
@@ -384,7 +385,9 @@ extension HTTP3Connection {
                 qpack: .decompressionFailed, "more blocked streams than the limit permits"
             )
         }
-        state.blockedSection = (payload, requiredInsertCount)
+        // The ONE copy on this path that has to exist: a blocked section outlives the borrow by
+        // definition — it is held until the encoder stream delivers the inserts it references.
+        state.blockedSection = (payload.withUnsafeBytes { Array($0) }, requiredInsertCount)
         streams[streamID] = state
     }
 
@@ -426,7 +429,10 @@ extension HTTP3Connection {
         guard var state = streams[streamID], let blocked = state.blockedSection else {
             return
         }
-        let fields = try decodeFieldSection(blocked.payload)
+        let decoded: Result<[HeaderField], HTTP3Error> = blocked.payload.withUnsafeBytes { raw in
+            Result { () throws(HTTP3Error) in try decodeFieldSection(raw.bytes) }
+        }
+        let fields = try decoded.get()
         acknowledgeSection(streamID)  // a blocked section always referenced the dynamic table
         let (request, connectProtocol) = try HTTP3RequestMapper.makeRequest(
             from: fields, streamID: streamID
