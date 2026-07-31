@@ -7,15 +7,55 @@
 //  request header, and the byte cap evicts the least-recently-used entry. A cache hit is detected by the
 //  presence of the Age header (only a served-from-cache response carries it).
 //
+//  Also the audit finding 14 regressions: the store must release every entry when the cache itself is
+//  dropped (CWE-401 — the `class`-node recency list this replaced could not), and it must never exceed
+//  its advertised byte cap.
+//
 
 import HTTPCore
 import HTTPTestSupport
+import Synchronization
 import Testing
 
 @testable import HTTPServer
 
 @Suite("Middleware — shared response cache (RFC 9111)")
 struct CacheMiddlewareTests {
+    /// A per-test deallocation tally, so the leak probe needs no process-wide (racy) static counter.
+    private final class DeallocationCounter: Sendable {
+        private let tally = Atomic<Int>(0)
+
+        /// How many ``TrackedPayload`` instances have deallocated.
+        var value: Int { tally.load(ordering: .relaxed) }
+
+        /// Records one deallocation.
+        func record() { tally.wrappingAdd(1, ordering: .relaxed) }
+
+        deinit {
+            // No teardown beyond ARC.
+        }
+    }
+
+    /// A reference-typed payload smuggled into a stored ``ServerResponse`` so its release is observable.
+    ///
+    /// The store holds only value types, so a leak is invisible to a value-level assertion; a class
+    /// captured by the response's ``ResponseStream`` closure makes "the cache still owns this" a
+    /// countable fact.
+    private final class TrackedPayload: Sendable {
+        private let counter: DeallocationCounter
+
+        /// The bytes the captured stream would write — kept empty; only the capture matters.
+        let bytes: [UInt8] = []
+
+        init(_ counter: DeallocationCounter) {
+            self.counter = counter
+        }
+
+        deinit {
+            counter.record()
+        }
+    }
+
     private func responder(
         cacheControl: String?,
         vary: String? = nil,
@@ -156,5 +196,35 @@ struct CacheMiddlewareTests {
         #expect(aSurvives.head.headerFields[.age] != nil)  // promoted earlier, retained
         let bEvicted = await middleware.respond(to: get(path: "/b"), body: [], next: next)
         #expect(bEvicted.head.headerFields[.age] == nil)  // was the LRU, dropped by /c
+    }
+
+    @Test("a dropped cache deallocates every stored response (CWE-401, audit finding 14)")
+    func droppedCacheReleasesEveryEntry() {
+        let counter = DeallocationCounter()
+        let total = 8
+        var cache: ResponseCache? = ResponseCache(maxBytes: 1_024 * 1_024)
+        for index in 0 ..< total {
+            cache?.store("GET x /\(index)", Self.trackedEntry(counter))
+        }
+        #expect(counter.value == 0)  // still stored — nothing released yet
+        cache = nil
+        // The recency list this replaced threaded `class` nodes with strong `prev` AND `next`, so a
+        // two-or-more-entry list was an ARC cycle: dropping the cache released nothing at all.
+        #expect(counter.value == total)
+    }
+
+    /// A storable entry whose response captures a ``TrackedPayload``, so its release is countable.
+    private static func trackedEntry(_ counter: DeallocationCounter) -> ResponseCache.Entry {
+        let payload = TrackedPayload(counter)
+        let stream = ResponseStream { writer in try await writer.write(payload.bytes) }
+        return ResponseCache.Entry(
+            response: ServerResponse(HTTPResponse(status: .ok), stream: stream),
+            storedAt: 0,
+            freshFor: 60,
+            staleWhileRevalidate: nil,
+            varyNames: [],
+            selecting: [],
+            cost: 1_024
+        )
     }
 }
