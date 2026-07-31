@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased — TOCTOU-safe static file serving (2026-07-31)
+
+`FileResponder` resolved a request path by string (`resolvingSymlinksInPath()` + a `hasPrefix`
+containment check) and then opened the result **by name**, repeatedly — `fileExists`,
+`attributesOfItem`, `FileHandle(forReadingAtPath:)`, the streaming pump, the h1 `open()` before
+`sendfile(2)`, and the `.br`/`.gz` sidecar lookup. A writer able to swap a path component between the
+check and any of those opens escaped the root (CWE-367 time-of-check/time-of-use, CWE-59 link
+following).
+
+Resolution is now anchored on a descriptor: the root is opened once, each request component is one
+`openat(2)` hop with `O_NOFOLLOW`, and the descriptor that is verified is the descriptor that is
+stat'd, read, and handed to `sendfile(2)`. Containment is structural, so there is no window at all.
+
+### Breaking
+- **`ResponseBodyWriter.writeFile(atPath:offset:length:)` → `writeFile(_ region: FileRegion)`.** A
+  pathname cannot express the invariant — the writer must not be able to perform a lookup. A conformer
+  that overrode it gets `region.descriptor` / `.offset` / `.length`.
+- **A symlink under the root is now refused (`403`)**, where the prefix check served an in-root one.
+- **A file the process cannot open is `403`**, not `500`: resolution *is* the open, so `EACCES`
+  surfaces where it happens (RFC 9110 §15.5.4).
+- **A `FileResponder(root:)` whose root is not an existing directory answers `500`**, not `404` — that
+  is a misconfiguration, not a missing resource.
+
+### Added
+- `RootDirectory`, `OpenedDirectory`, `OpenedFile`, `FileRegion`, and the `POSIXFile` syscall wrappers.
+  `OpenedFile` exposes the verified `descriptor`, and the `size`/`modifiedAt` from **that
+  descriptor's** `fstat` — so `Content-Length`, `ETag`, and `Last-Modified` cannot describe a file a
+  concurrent rename swapped out.
+
+### Fixed (security)
+- **CWE-367 / CWE-59:** a rename racing static file serving can no longer leak a file outside the root.
+- **A FIFO or device node under the root is refused** rather than opened. `FileManager.fileExists` +
+  `FileHandle(forReadingAtPath:)` would open a FIFO, and `open(2)` on one with no writer blocks — the
+  serve task parked forever. The lookup flags carry `O_NONBLOCK` and the leaf `fstat` requires
+  `S_IFREG`.
+- **The autoindex listing** is read from the verified directory descriptor (`fdopendir` + `fstatat`
+  with `AT_SYMLINK_NOFOLLOW`) and lists only regular files and directories.
+
 ## Unreleased — deep security hardening (2026-06-25)
 
 A second-pass adversarial hardening of the stack; see

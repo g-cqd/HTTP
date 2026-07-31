@@ -16,12 +16,6 @@ internal import HTTP1
 internal import HTTPCore
 internal import HTTPTransport
 
-#if canImport(Darwin)
-    internal import Darwin
-#elseif canImport(Glibc)
-    internal import Glibc
-#endif
-
 extension HTTPServer {
     /// Streams a response over HTTP/1.1.
     ///
@@ -114,19 +108,20 @@ extension HTTPServer {
         /// so the kernel can copy file pages straight to the socket. A chunked body interleaves
         /// size-line framing per chunk (RFC 9112 §7.1), so it keeps the copying chunk pump — as do
         /// the backbones without a raw socket (the ``TransportConnection`` default).
-        func writeFile(atPath path: String, offset: Int, length: Int) async throws {
-            guard !chunked, length > 0 else {
-                try await FileRegionStreamer.stream(
-                    atPath: path, offset: offset, length: length, to: self
-                )
+        ///
+        /// There is no open and no close here: the region already carries the descriptor the responder
+        /// verified, and owns it for the whole response. Re-opening by pathname was the last place the
+        /// bytes sent could differ from the bytes measured for the `Content-Length` (CWE-367).
+        /// ``TransportConnection/sendFile(descriptor:offset:length:)`` documents that it does not close
+        /// the caller's descriptor.
+        func writeFile(_ region: FileRegion) async throws {
+            guard !chunked, region.length > 0 else {
+                try await FileRegionStreamer.stream(region, to: self)
                 return
             }
-            let file = open(path, O_RDONLY)
-            guard file >= 0 else {
-                throw FileRegionStreamer.FileError.unreadable
-            }
-            defer { close(file) }
-            try await connection.sendFile(descriptor: file, offset: offset, length: length)
+            try await connection.sendFile(
+                descriptor: region.descriptor, offset: region.offset, length: region.length
+            )
         }
     }
 }
