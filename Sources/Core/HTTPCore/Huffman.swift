@@ -23,7 +23,8 @@ public enum Huffman {
     /// longer than the literal.
     public static func encodedByteLength(of input: some Sequence<UInt8>) -> Int {
         var bits = 0
-        for byte in input { bits += Int(packedCodes[Int(byte)] >> 32) }  // length is the high 32 bits
+        // The length is the high 32 bits of each packed entry.
+        for byte in input { bits += Int(packedCodes[Int(byte)] >> 32) }
         return (bits + 7) / 8
     }
 
@@ -44,7 +45,8 @@ public enum Huffman {
         var bitBuffer: UInt64 = 0
         var bitCount = 0
         for byte in input {
-            let entry = packedCodes[Int(byte)]  // (length << 32) | code — one gather, one bounds check
+            // (length << 32) | code — one gather, one bounds check.
+            let entry = packedCodes[Int(byte)]
             let length = Int(entry >> 32)
             bitBuffer = (bitBuffer << length) | (entry & 0xFFFF_FFFF)
             bitCount += length

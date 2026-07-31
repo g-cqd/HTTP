@@ -84,10 +84,11 @@ public enum HTTPDate {
         return (month <= 2 ? year + 1 : year, month, day)
     }
 
-    /// Parses an HTTP-date into seconds since the Unix epoch (UTC), or nil if malformed (RFC 9110
-    /// §5.6.7). Delegates to the shared, Foundation-free ``ADFCore/HTTPDateParser`` — the one place the
-    /// AD* family's HTTP-date parsing lives (also used by `ADServeCore`) — accepting the preferred
-    /// IMF-fixdate plus the obsolete rfc850 / asctime forms a recipient must still accept.
+    /// Parses an HTTP-date into seconds since the Unix epoch (UTC), or nil if malformed.
+    ///
+    /// RFC 9110 §5.6.7. Delegates to the shared, Foundation-free ``ADFCore/HTTPDateParser`` — the one
+    /// place the AD* family's HTTP-date parsing lives (also used by `ADServeCore`) — accepting the
+    /// preferred IMF-fixdate plus the obsolete rfc850 / asctime forms a recipient must still accept.
     public static func parse(_ value: String) -> Int? {
         HTTPDateParser.parse(value)
     }

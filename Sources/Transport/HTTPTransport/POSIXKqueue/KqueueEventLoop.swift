@@ -57,8 +57,9 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         /// Out-of-band control work (close/cancel) that must run on the loop thread, serialized against
         /// the readiness handlers so a close never races an in-flight read/write on the same fd.
         var control: [@Sendable () -> Void] = []
-        /// True while the loop thread is running handlers/jobs — i.e. NOT parked in `kevent`. An
-        /// off-loop caller wakes the loop only when this is `false`; an on-loop caller (the pinned
+        /// True while the loop thread is running handlers/jobs — i.e. NOT parked in `kevent`.
+        ///
+        /// An off-loop caller wakes the loop only when this is `false`; an on-loop caller (the pinned
         /// serve task itself — the R4 no-hop hot path) skips the `kevent` wakeup syscall entirely,
         /// because the loop re-drains the inbox and re-checks the readiness set before it parks again
         /// (audit — per-request wakeup elimination). Guarded by the inbox `Mutex` so the block-decision

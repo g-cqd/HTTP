@@ -127,9 +127,11 @@ public struct ByteReader: ~Escapable {
         firstIndex(of: byte, from: offset)
     }
 
-    /// `firstIndex(of:)` resuming from an absolute index `start` (clamped to the cursor). Lets a resumable
-    /// line scanner skip bytes it already examined on a prior feed, so a delimiter-less line arriving
-    /// byte-by-byte is scanned once end-to-end instead of re-scanned from its start each feed (O(line²)).
+    /// `firstIndex(of:)` resuming from an absolute index `start`, clamped to the cursor.
+    ///
+    /// Lets a resumable line scanner skip bytes it already examined on a prior feed, so a delimiter-less
+    /// line arriving byte-by-byte is scanned once end-to-end instead of re-scanned from its start each
+    /// feed (O(line²)).
     @inlinable
     public func firstIndex(of byte: UInt8, from start: Int) -> Int? {
         var index = Swift.max(offset, start)
