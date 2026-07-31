@@ -115,7 +115,10 @@ extension HTTPServer {
             maxQueuedChunks: limits.maxQueuedInboundChunks,
             coalescingBelow: 4 * 1_024
         )
-        let broadcasts = WebSocketBroadcastMailbox(capacity: limits.maxQueuedBroadcasts)
+        let broadcasts = WebSocketBroadcastMailbox(
+            capacity: limits.maxQueuedBroadcasts,
+            maxBytes: limits.maxQueuedBroadcastBytes
+        )
         // Lifecycle hook: the upgrade is complete — let the handler speak first (a greeting/hello),
         // before any peer frame or broadcast is delivered.
         for action in await handler.onOpen() { engine.apply(action) }
