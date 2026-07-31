@@ -41,7 +41,7 @@ extension HTTPServer {
         let handoff = AsyncHandoff()
         // The ingress seam (audit CR-F13) — the sanitized request is what the handler child captures.
         let (request, context) = RequestContext.ingress(inbound, over: quic)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
+        let current = currentSnapshot.responder  // hot-swappable responder, read once (G4a)
         let handler = Task {
             let response = await current.respond(
                 to: request,

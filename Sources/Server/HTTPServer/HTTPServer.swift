@@ -22,13 +22,15 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     let transport: any ServerTransport
     /// An optional QUIC transport run alongside the TCP one to serve HTTP/3 (RFC 9114).
     let quicTransport: (any QUICServerTransport)?
-    /// The responder, hot-swappable at runtime via ``reloadResponder(_:)`` (G4a).
+    /// The current ``ResponderSnapshot``, hot-swappable at runtime via ``reloadResponder(_:)`` (G4a).
     ///
-    /// Behind a `Mutex` — a `Sendable` existential — so a config reload can replace the routing table
-    /// without a restart. Every dispatch reads it exactly once (`responder.withLock { $0 }`) and never
-    /// holds the lock across the `await`, so an in-flight request finishes on the table it read while
-    /// new requests pick up the new one: the graceful old/new split falls out with no drain.
-    let responder: Mutex<any HTTPResponder>
+    /// Behind a `Mutex` so a config reload can replace the routing table without a restart. A request
+    /// reads it exactly once — when its head completes — and carries the resulting snapshot through
+    /// route resolution, body framing and dispatch, never holding the lock across an `await`. So an
+    /// in-flight request finishes on the generation it read while new requests pick up the new one:
+    /// the graceful old/new split falls out with no drain, and no request can straddle two generations
+    /// (audit CR-F12).
+    let snapshot: Mutex<ResponderSnapshot>
     let limits: HTTPLimits
     let clock: C
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
@@ -76,7 +78,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     ) {
         self.transport = transport
         self.quicTransport = quicTransport
-        self.responder = Mutex(responder)
+        self.snapshot = Mutex(ResponderSnapshot(responder, generation: 0))
         self.limits = limits
         self.clock = clock
         self.admission = ConnectionAdmission(
@@ -115,29 +117,24 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// Atomically swaps the responder so subsequent requests are served by `responder` (G4a — a hot
     /// route / handler reload with no restart).
     ///
-    /// A request reads the responder once at dispatch, so this needs no drain: requests already
-    /// in flight finish on the table they read, and every request dispatched after this call uses the
-    /// new one. Safe to call from any task while the server is running.
+    /// A request reads the responder once when its head completes, so this needs no drain: requests
+    /// already in flight finish on the table they read, and every request whose head completes after
+    /// this call uses the new one. Safe to call from any task while the server is running.
     public func reloadResponder(_ responder: any HTTPResponder) {
-        self.responder.withLock { $0 = responder }
+        snapshot.withLock { current in
+            current = ResponderSnapshot(responder, generation: current.generation &+ 1)
+        }
     }
 
-    /// The current responder, read once under the lock (never held across a dispatch's `await`) — the
-    /// single hot-swap read point (G4a).
+    /// The current generation, read once under the lock (never held across an `await`) — the single
+    /// hot-swap read point (G4a).
     ///
-    /// A dispatch reads this exactly once, then awaits the returned responder, so an in-flight request
-    /// finishes on the table it read while a concurrent ``reloadResponder(_:)`` only affects requests
-    /// dispatched afterward. Centralized here so the protocol-engine dispatch files need not import the
-    /// synchronization primitive.
-    var currentResponder: any HTTPResponder { responder.withLock(\.self) }
-
-    /// The current responder viewed as a ``RouteResolver`` when it conforms (a ``Router``, or a chain
-    /// wrapping one), else `nil`.
-    ///
-    /// The head-time seam: the engines query this — before reading the body — to enforce a per-route body
-    /// limit, dispatch a route-scoped WebSocket upgrade, and honor the streaming opt-in. A responder that
-    /// is not a ``RouteResolver`` leaves the server on its global defaults.
-    var currentResolver: (any RouteResolver)? { currentResponder as? (any RouteResolver) }
+    /// A request reads this exactly once, when its head completes, and then carries the returned value
+    /// through route resolution, body framing and dispatch. So an in-flight request finishes on the
+    /// generation it read while a concurrent ``reloadResponder(_:)`` only affects requests whose heads
+    /// complete afterward, and no request can mix two generations (audit CR-F12). Centralized here so
+    /// the protocol-engine dispatch files need not import the synchronization primitive.
+    var currentSnapshot: ResponderSnapshot { snapshot.withLock(\.self) }
 
     /// The ``RequestBody`` to hand a responder for `request`: an incremental ``RequestBody/stream(_:)``
     /// when the matched route opted in (Phase 1.4), else the buffered bytes.
@@ -146,8 +143,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// engine has already received the whole body (bounded by the per-route limit), so a streaming route
     /// is served those bytes wrapped as a one-shot stream — the handler API is uniform across protocols,
     /// and truly incremental h2/h3 delivery is a follow-up (see `docs/adr/0006-…`).
-    func requestBody(_ body: [UInt8], for request: HTTPRequest) -> RequestBody {
-        let resolved = currentResolver?.resolve(method: request.method, path: request.path)
+    func requestBody(
+        _ body: [UInt8],
+        for request: HTTPRequest,
+        in snapshot: ResponderSnapshot
+    ) -> RequestBody {
+        let resolved = snapshot.resolver?.resolve(method: request.method, path: request.path)
         return resolved?.streamsBody == true
             ? .stream(HTTPRequestBodyStream(yielding: body))
             : .collected(body)

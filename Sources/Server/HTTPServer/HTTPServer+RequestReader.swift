@@ -30,10 +30,19 @@ extension HTTPServer where C.Duration == Duration {
         responseBuffer: inout [UInt8]
     ) async -> Bool {
         reclaim(&buffer, start: &start)
+        // ONE read of the hot-swappable table for this whole exchange (G4a / audit CR-F12): route
+        // resolution, the body limit it yields, the WebSocket dispatch and the responder below all come
+        // from this generation, so a `reloadResponder` landing mid-body cannot pair an old body limit
+        // with a new handler.
+        let snapshot = currentSnapshot
         let outcome: ReadOutcome
         do {
             outcome = try await readRequest(
-                from: connection, deadline: deadline, into: &buffer, start: start
+                from: connection,
+                deadline: deadline,
+                into: &buffer,
+                start: start,
+                in: snapshot
             )
         }
         catch let error as HTTP1ParseError {
@@ -52,7 +61,8 @@ extension HTTPServer where C.Duration == Duration {
                 pending: pending,
                 buffer: &buffer,
                 start: &start,
-                responseBuffer: &responseBuffer
+                responseBuffer: &responseBuffer,
+                in: snapshot
             )
         }
         guard case .request(let framed) = outcome else {
@@ -72,7 +82,7 @@ extension HTTPServer where C.Duration == Duration {
         // here. A non-upgrade GET to that path falls through to `respond` → 426 (the route's fallback);
         // a WebSocket path the responder does not declare resolves to `nil` and is served normally.
         if Self.isWebSocketUpgrade(request),
-            let route = currentResolver?.resolveWebSocket(path: request.path),
+            let route = snapshot.resolver?.resolveWebSocket(path: request.path),
             let handler = route.webSocketHandler,
             handler.shouldUpgrade(request)
         {
@@ -87,9 +97,7 @@ extension HTTPServer where C.Duration == Duration {
             )
             return false
         }
-        // Read the hot-swappable responder once (G4a); the lock is never held across the await.
-        let current = currentResponder
-        let response = await current.respond(
+        let response = await snapshot.responder.respond(
             to: request, body: .collected(framed.parsed.body), context: context
         )
         var head = withAltSvc(response.head)
@@ -227,7 +235,8 @@ extension HTTPServer where C.Duration == Duration {
         from connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>,
         into buffer: inout [UInt8],
-        start: Int
+        start: Int,
+        in snapshot: ResponderSnapshot
     ) async throws -> ReadOutcome {
         var headerDeadline: C.Instant?
         // Resumable end-of-headers scan (keeps header framing O(n), not O(n²)); an absolute index into
@@ -247,7 +256,8 @@ extension HTTPServer where C.Duration == Duration {
                 scanOffset: &scanOffset,
                 pending: &pending,
                 chunked: &chunked,
-                bodyLimit: &bodyLimit
+                bodyLimit: &bodyLimit,
+                in: snapshot
             ) {
                 case .request(let framed):
                     return .request(framed)
@@ -313,7 +323,8 @@ extension HTTPServer where C.Duration == Duration {
         scanOffset: inout Int,
         pending: inout PendingRequest?,
         chunked: inout ChunkedProgress,
-        bodyLimit: inout Int?
+        bodyLimit: inout Int?,
+        in snapshot: ResponderSnapshot
     ) -> AssembleStep {
         if pending == nil {
             guard Self.headerSectionEnd(buffer, start: start, from: &scanOffset) != nil else {
@@ -328,7 +339,7 @@ extension HTTPServer where C.Duration == Duration {
                     // flow — so a route cap REPLACES the global bound (it may raise as well as
                     // tighten); the parser resolves framing with no size policy of its own. `nil`
                     // (no router / no per-route cap) falls back to the global maxBodySize.
-                    let resolved = currentResolver?
+                    let resolved = snapshot.resolver?
                         .resolve(
                             method: parsed.head.request.method, path: parsed.head.request.path
                         )

@@ -71,7 +71,7 @@ extension HTTPServer {
     ) async {
         // Advertise Extended CONNECT (RFC 8441 §3) only when the responder declares a WebSocket route.
         var settings = HTTP2Settings()
-        settings.enableConnectProtocol = currentResolver?.hasWebSocketRoutes ?? false
+        settings.enableConnectProtocol = currentSnapshot.hasWebSocketRoutes
         // The per-stream receive window each stream is seeded with (RFC 9113 §6.9.2). On a gated stream
         // this is the unconsumed-bytes watermark, since the engine credits it only as the handler
         // consumes; the connection-level companion is raised by the engine's own preface WINDOW_UPDATE.
@@ -79,13 +79,14 @@ extension HTTPServer {
         // The matched route's body limit, resolved from each request head before its DATA is buffered
         // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
         let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
-            currentResolver?.resolve(method: request.method, path: request.path)?.bodyLimit
+            currentSnapshot.resolver?.resolve(method: request.method, path: request.path)?
+                .bodyLimit
         }
         // Whether the matched route streams its request body (Phase 1.4) — the engine then surfaces the
         // body incrementally (requestHead/requestBodyChunk/requestEnd) instead of one buffered request.
         let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool = { [self] request in
-            currentResolver?.resolve(method: request.method, path: request.path)?.streamsBody
-                ?? false
+            currentSnapshot.resolver?.resolve(method: request.method, path: request.path)?
+                .streamsBody ?? false
         }
         var state = HTTP2ConnectionState(
             engine: HTTP2Connection(

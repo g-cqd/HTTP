@@ -45,14 +45,16 @@ extension HTTPServer {
     ) async {
         switch event {
             case .request(let streamID, let inbound, let body):
-                let responder = currentResponder  // hot-swappable responder, read once (G4a)
+                let responder = currentSnapshot  // the hot-swappable table, read once (G4a)
                 // The ingress seam (audit CR-F13): both halves are bound `let` here so the sanitized
                 // request — never the inbound one — is what the dispatch child captures.
                 let (request, context) = RequestContext.ingress(inbound, over: connection)
                 state.dispatched.insert(streamID)
                 group.addTask { [self] in
-                    let response = await responder.respond(
-                        to: request, body: requestBody(body, for: request), context: context
+                    let response = await responder.responder.respond(
+                        to: request,
+                        body: requestBody(body, for: request, in: responder),
+                        context: context
                     )
                     continuation.yield(.requestReady(streamID, response))
                 }
@@ -170,7 +172,7 @@ extension HTTPServer {
         consumption[streamID] = signal
         // The ingress seam (audit CR-F13) — the sanitized request is what the handler child captures.
         let (request, context) = RequestContext.ingress(inbound, over: connection)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
+        let current = currentSnapshot.responder  // hot-swappable responder, read once (G4a)
         dispatched.insert(streamID)
         group.addTask {
             // The group child still owns the lifetime; the inner `Task` exists only so a peer

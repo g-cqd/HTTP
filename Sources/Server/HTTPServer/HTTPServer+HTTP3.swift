@@ -139,18 +139,19 @@ extension HTTPServer {
         // The matched route's body limit, resolved from each request head before its DATA is buffered
         // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
         let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
-            currentResolver?.resolve(method: request.method, path: request.path)?.bodyLimit
+            currentSnapshot.resolver?.resolve(method: request.method, path: request.path)?
+                .bodyLimit
         }
         // Whether the matched route streams its request body (Phase 1.4) — the engine then surfaces the
         // body incrementally (requestHead/requestBodyChunk/requestEnd) instead of one buffered request.
         let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool = { [self] request in
-            currentResolver?.resolve(method: request.method, path: request.path)?.streamsBody
-                ?? false
+            currentSnapshot.resolver?.resolve(method: request.method, path: request.path)?
+                .streamsBody ?? false
         }
         let engine = Engine(
             limits: limits,
             // Advertise Extended CONNECT (RFC 9220) only when the responder declares a WebSocket route.
-            enableConnectProtocol: currentResolver?.hasWebSocketRoutes ?? false,
+            enableConnectProtocol: currentSnapshot.hasWebSocketRoutes,
             resolveBodyLimit: resolveBodyLimit,
             resolveStreamsBody: resolveStreamsBody
         )
@@ -379,9 +380,9 @@ extension HTTPServer {
         // than a spoofable header (audit P0-1) — the same model the h1/h2 paths use. The same seam
         // strips every client-supplied server-asserted field off the request (audit CR-F13).
         let (request, context) = RequestContext.ingress(inbound, over: quic)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
-        let response = await current.respond(
-            to: request, body: requestBody(body, for: request), context: context
+        let current = currentSnapshot  // the hot-swappable table, read once (G4a)
+        let response = await current.responder.respond(
+            to: request, body: requestBody(body, for: request, in: current), context: context
         )
         await sendHTTP3Response(
             response,
