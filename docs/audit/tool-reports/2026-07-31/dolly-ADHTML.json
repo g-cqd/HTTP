@@ -1,0 +1,2928 @@
+{
+  "analyzedFileCount" : 91,
+  "cacheHits" : 0,
+  "cacheMisses" : 91,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 77,
+      "fingerprint" : "ccca67d01f69fd5",
+      "line" : 43,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:119",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 119,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 55,
+      "fingerprint" : "70d9cb5fe7aed512",
+      "line" : 45,
+      "message" : "2 duplicated regions of ~94 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:61",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 61,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "be53bba077648ac0",
+      "line" : 50,
+      "message" : "8 duplicated regions of ~50 tokens (similarity 0.99)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:53, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:68, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:93, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:96, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:105, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:107, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:153",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 53,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 68,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 56,
+          "line" : 93,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 29,
+          "line" : 96,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 105,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 107,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 33,
+          "line" : 153,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 27,
+      "fingerprint" : "e2fc00b3d19ffd83",
+      "line" : 51,
+      "message" : "6 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:57, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:67, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:94, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:101, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:152",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 48,
+          "line" : 57,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 94,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 101,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 152,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 48,
+      "fingerprint" : "1bedcf7ca08d3390",
+      "line" : 58,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:154",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 27,
+          "line" : 154,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 33,
+      "fingerprint" : "1566354a0400923b",
+      "line" : 69,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:85",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 75,
+          "line" : 85,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "fc7c2034665d4c61",
+      "line" : 74,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:170",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 112,
+          "line" : 170,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "551af5d0bf320577",
+      "line" : 75,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:91",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 91,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "dd75a6e6496c6311",
+      "line" : 77,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:156",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 156,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 67,
+      "fingerprint" : "f6ff92ac6ff9e1d2",
+      "line" : 128,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:174",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 48,
+          "line" : 174,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "2505ebad56bd0c6",
+      "line" : 199,
+      "message" : "4 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift:152, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:176, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:182",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 152,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 176,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 182,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "8c3b835e8d754b0d",
+      "line" : 199,
+      "message" : "5 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Bindings.swift:232, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift:152, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:176, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:182",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 232,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Bindings.swift"
+        },
+        {
+          "column" : 36,
+          "line" : 152,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift"
+        },
+        {
+          "column" : 39,
+          "line" : 176,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        },
+        {
+          "column" : 40,
+          "line" : 182,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "878ee208a5847141",
+      "line" : 200,
+      "message" : "8 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift:201, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Bindings.swift:233, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift:153, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift:154, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:177, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:183, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:184",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 201,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift"
+        },
+        {
+          "column" : 15,
+          "line" : 233,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Bindings.swift"
+        },
+        {
+          "column" : 7,
+          "line" : 153,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 154,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift"
+        },
+        {
+          "column" : 10,
+          "line" : 177,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 183,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 184,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 10,
+      "fingerprint" : "ebf7c43458e7e430",
+      "line" : 30,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:32",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 64,
+          "line" : 32,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "15221a252a91326f",
+      "line" : 48,
+      "message" : "4 duplicated regions of ~73 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:216, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:238, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:250",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 216,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 46,
+          "line" : 238,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 250,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "7fc8c1b7a47e135e",
+      "line" : 50,
+      "message" : "5 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:90, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:218, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:240, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:252",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 48,
+          "line" : 90,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 44,
+          "line" : 218,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 240,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 252,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 89,
+      "fingerprint" : "e73d8b88e038cc51",
+      "line" : 52,
+      "message" : "4 duplicated regions of ~50 tokens (similarity 0.93)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:80, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:252",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 106,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 80,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 112,
+          "line" : 252,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 75,
+      "fingerprint" : "a7cee517f1c2fbdd",
+      "line" : 62,
+      "message" : "2 duplicated regions of ~113 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:82",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 59,
+          "line" : 82,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 93,
+      "fingerprint" : "3818ab66a7eb4487",
+      "line" : 76,
+      "message" : "2 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:86",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 116,
+          "line" : 86,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "4f7902c356f824fc",
+      "line" : 216,
+      "message" : "6 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:230, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:238, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:250, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:272, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:278",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 230,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 238,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 250,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 272,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 278,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "812d532c79ba313e",
+      "line" : 222,
+      "message" : "3 duplicated regions of ~72 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:240, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:252",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 240,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 252,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 46,
+      "fingerprint" : "e573a3e439de31fc",
+      "line" : 238,
+      "message" : "2 duplicated regions of ~73 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:250",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 48,
+          "line" : 250,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "919f890361308e37",
+      "line" : 248,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:268, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:286",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 49,
+          "line" : 268,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 40,
+          "line" : 286,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "c8f7769b21243032",
+      "line" : 258,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:274",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 112,
+          "line" : 274,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "4dfae36c3a29a6ee",
+      "line" : 260,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.95)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:290",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 96,
+          "line" : 290,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "e9786b067a5c75a1",
+      "line" : 263,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.88)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:282, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:294",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 74,
+          "line" : 282,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 66,
+          "line" : 294,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 47,
+      "fingerprint" : "b117706c76d022f2",
+      "line" : 272,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:278",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 278,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "859dc2ed10b2c3f4",
+      "line" : 303,
+      "message" : "6 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:310, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:314, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:330, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:334, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:340",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 310,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 314,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 330,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 334,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 340,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "c03e4fd2cd58c57a",
+      "line" : 304,
+      "message" : "3 duplicated regions of ~79 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:335, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:341",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 53,
+          "line" : 335,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 53,
+          "line" : 341,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "d50397b93797a95c",
+      "line" : 306,
+      "message" : "5 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:311, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:331, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:336, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:341",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 53,
+          "line" : 311,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 50,
+          "line" : 331,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 49,
+          "line" : 336,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 53,
+          "line" : 341,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "468b3d5aec1a560",
+      "line" : 307,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:337, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:342",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 337,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 342,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 96,
+      "fingerprint" : "656a1a734ce293f0",
+      "line" : 308,
+      "message" : "6 duplicated regions of ~50 tokens (similarity 0.90)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:314, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:324, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:328, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:334, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:338",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 314,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 324,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 98,
+          "line" : 328,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 334,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 94,
+          "line" : 338,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "e96e59a90fbbcf06",
+      "line" : 312,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:322, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:332",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 322,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 332,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 47,
+      "fingerprint" : "2872ed8e7e1968bc",
+      "line" : 334,
+      "message" : "2 duplicated regions of ~121 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift:340",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 340,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/AttributeValues.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "3d37298952a4ac32",
+      "line" : 41,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.95)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Attributes+Standard.swift:73",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Attributes+Standard.swift",
+      "related" : [
+        {
+          "column" : 59,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Attributes+Standard.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 96,
+      "fingerprint" : "aa26b5202a2bdab9",
+      "line" : 53,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.86)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Attributes+Standard.swift:66",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Attributes+Standard.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Attributes+Standard.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "b31642170baf018d",
+      "line" : 8,
+      "message" : "23 duplicated regions of ~50 tokens (similarity 0.94)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:40, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:67, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:92, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:117, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:144, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:164, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:172, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:189, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:199, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:216, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:244, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:269, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:294, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:319, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:356, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:378, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:409, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:438, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:463, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:493, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:518, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:545",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 117,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 144,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 2,
+          "line" : 164,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 33,
+          "line" : 172,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 2,
+          "line" : 189,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 33,
+          "line" : 199,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 2,
+          "line" : 216,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 244,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 269,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 294,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 319,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 356,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 378,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 409,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 438,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 463,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 493,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 518,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 545,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "fe977b140ca51b35",
+      "line" : 9,
+      "message" : "7 duplicated regions of ~50 tokens (similarity 0.99)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:165, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:190, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:245, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:270, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:295, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:320",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 10,
+          "line" : 165,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 10,
+          "line" : 190,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 245,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 270,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 295,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 320,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "36f9417a156dd0a",
+      "line" : 13,
+      "message" : "17 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:37, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:64, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:89, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:114, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:141, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:169, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:196, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:224, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:249, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:274, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:299, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:324, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:388, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:490, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:515, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:542",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 47,
+          "line" : 64,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 89,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 114,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 141,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 44,
+          "line" : 169,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 196,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 224,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 40,
+          "line" : 249,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 274,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 299,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 40,
+          "line" : 324,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 44,
+          "line" : 388,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 46,
+          "line" : 490,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 47,
+          "line" : 515,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 47,
+          "line" : 542,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "5842464ebe407fe2",
+      "line" : 16,
+      "message" : "16 duplicated regions of ~50 tokens (similarity 0.99)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:52, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:77, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:102, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:129, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:154, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:227, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:252, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:277, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:302, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:327, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:391, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:448, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:475, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:503, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:528",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 52,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 77,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 102,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 129,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 154,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 227,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 252,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 277,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 302,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 327,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 391,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 448,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 475,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 503,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 528,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 82,
+      "fingerprint" : "e2c970c75ed70a87",
+      "line" : 18,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:329, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:358",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 82,
+          "line" : 329,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 84,
+          "line" : 358,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "eb237b4ccbf23e0c",
+      "line" : 23,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:334",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 27,
+          "line" : 334,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "ca9004513e77d49b",
+      "line" : 29,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.94)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:161, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:339",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 12,
+          "line" : 161,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 339,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "47ae0ebd90459a28",
+      "line" : 32,
+      "message" : "10 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:59, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:84, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:109, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:136, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:398, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:430, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:455, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:510, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:537",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 12,
+          "line" : 59,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 84,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 109,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 136,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 398,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 19,
+          "line" : 430,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 19,
+          "line" : 455,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 510,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 537,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "de404a8f6ca03bea",
+      "line" : 33,
+      "message" : "9 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:60, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:85, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:110, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:137, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:431, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:456, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:511, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:538",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 60,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 85,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 110,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 137,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 431,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 456,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 511,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 538,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 89,
+      "fingerprint" : "416f3ad5b02267c6",
+      "line" : 44,
+      "message" : "14 duplicated regions of ~50 tokens (similarity 0.99)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:69, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:94, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:119, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:146, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:174, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:201, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:229, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:254, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:279, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:304, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:495, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:520, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:547",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 88,
+          "line" : 69,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 84,
+          "line" : 94,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 88,
+          "line" : 119,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 84,
+          "line" : 146,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 174,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 83,
+          "line" : 201,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 229,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 80,
+          "line" : 254,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 279,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 83,
+          "line" : 304,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 88,
+          "line" : 495,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 90,
+          "line" : 520,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 89,
+          "line" : 547,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "aa65e083a3a81f11",
+      "line" : 49,
+      "message" : "10 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:74, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:99, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:126, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:151, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:445, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:472, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:500, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:525, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:554",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 99,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 126,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 151,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 39,
+          "line" : 445,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 472,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 500,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 38,
+          "line" : 525,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 36,
+          "line" : 554,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 70,
+      "fingerprint" : "c713fb1e1a008197",
+      "line" : 54,
+      "message" : "17 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:79, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:104, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:131, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:184, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:211, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:239, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:264, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:289, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:314, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:373, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:393, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:425, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:450, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:477, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:505, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:530",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 67,
+          "line" : 79,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 69,
+          "line" : 104,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 67,
+          "line" : 131,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 67,
+          "line" : 184,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 67,
+          "line" : 211,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 239,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 264,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 66,
+          "line" : 289,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 314,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 68,
+          "line" : 373,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 78,
+          "line" : 393,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 75,
+          "line" : 425,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 69,
+          "line" : 450,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 75,
+          "line" : 477,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 505,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 530,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "eaa2e75dd1a77bdf",
+      "line" : 179,
+      "message" : "7 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:206, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:234, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:259, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:284, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:309, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:368",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 206,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 28,
+          "line" : 234,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 28,
+          "line" : 259,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 284,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 309,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 30,
+          "line" : 368,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "d88e35c6027bdcd9",
+      "line" : 182,
+      "message" : "8 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:209, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:236, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:261, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:286, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:311, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:370, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:400",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 209,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 3,
+          "line" : 236,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 3,
+          "line" : 261,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 3,
+          "line" : 286,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 3,
+          "line" : 311,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 3,
+          "line" : 370,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 400,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 10,
+      "fingerprint" : "d0dbeddc62b840e5",
+      "line" : 217,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.95)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:379",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 379,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "e0b0b89b907c6474",
+      "line" : 342,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:482",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 19,
+          "line" : 482,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "81d5f6a451fb6e9d",
+      "line" : 343,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:483",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 483,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "aab090eeebf6439",
+      "line" : 347,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:487",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 57,
+          "line" : 487,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 44,
+      "fingerprint" : "a64a15116526a3a0",
+      "line" : 350,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.91)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:417",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 417,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 58,
+      "fingerprint" : "b72d97e4e800cd2c",
+      "line" : 405,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:435, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:460",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 58,
+          "line" : 435,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 460,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "255fc48d1e10d427",
+      "line" : 411,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:440, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift:467",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift",
+      "related" : [
+        {
+          "column" : 95,
+          "line" : 440,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        },
+        {
+          "column" : 99,
+          "line" : 467,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Elements.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "af258b8d10f4e087",
+      "line" : 10,
+      "message" : "26 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:37, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:51, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:63, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:75, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:87, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:99, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:113, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:125, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:146, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:158, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:172, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:184, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:197, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:209, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:221, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:233, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:245, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:257, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:269, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:353, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:378, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:390, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:433, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:465, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:479",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 51,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 63,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 75,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 99,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 146,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 158,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 172,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 184,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 197,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 209,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 221,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 233,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 245,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 257,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 269,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 353,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 378,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 390,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 433,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 465,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 479,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "f1cc6e99a269f01a",
+      "line" : 14,
+      "message" : "6 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:330, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:345, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:412, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:441, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:453",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 52,
+          "line" : 330,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 345,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 412,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 441,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 453,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "a62f30052b03f852",
+      "line" : 26,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:320",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 24,
+          "line" : 320,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "ec149c0a90581979",
+      "line" : 30,
+      "message" : "3 duplicated regions of ~89 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:299, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:336",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 299,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 336,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "82b6f94912dc4f",
+      "line" : 50,
+      "message" : "17 duplicated regions of ~50 tokens (similarity 0.93)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:56, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:102, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:105, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:145, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:147, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:187, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:224, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:228, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:230, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:276, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:279, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:296, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:376, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:411, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:452",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 64,
+          "line" : 56,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 102,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 105,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 145,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 147,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 187,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 224,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 228,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 60,
+          "line" : 230,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 276,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 279,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 296,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 376,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 411,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 452,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "c3a7c72d04ac7322",
+      "line" : 79,
+      "message" : "12 duplicated regions of ~50 tokens (similarity 0.91)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:129, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:133, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:201, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:205, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:253, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:359, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:398, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:402, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:437, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:441, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:471",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 55,
+          "line" : 129,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 133,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 201,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 205,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 54,
+          "line" : 253,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 54,
+          "line" : 359,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 398,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 402,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 437,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 441,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 54,
+          "line" : 471,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "68ddddde372fbf8b",
+      "line" : 138,
+      "message" : "4 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:189, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:307, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:370",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 189,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 307,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 370,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "244c8feb8f084bff",
+      "line" : 165,
+      "message" : "2 duplicated regions of ~188 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:460",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 460,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "5ec525d0144d12c9",
+      "line" : 291,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:427",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 427,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e82f18d7ac2a9604",
+      "line" : 293,
+      "message" : "2 duplicated regions of ~84 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:311",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 311,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "7c34d939d2ca843b",
+      "line" : 298,
+      "message" : "2 duplicated regions of ~97 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:335",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 335,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "70cd81fcca1c7a75",
+      "line" : 324,
+      "message" : "2 duplicated regions of ~114 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:447",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 447,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "6ca6c5b19a76b2db",
+      "line" : 326,
+      "message" : "3 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:349, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:449",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 52,
+          "line" : 349,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 449,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "4d7e3ea1b83a7de6",
+      "line" : 405,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift:419",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 419,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/DOM\/Generated\/Tags.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "d63be80adf8f569f",
+      "line" : 67,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.93)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift:69, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift:73",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift",
+      "related" : [
+        {
+          "column" : 19,
+          "line" : 69,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 96,
+      "fingerprint" : "388c6c6732f1d51e",
+      "line" : 75,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift:94",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 94,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Action.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 60,
+      "fingerprint" : "d3b58cf7cecfb5ab",
+      "line" : 80,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Behavior.swift:92",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Behavior.swift",
+      "related" : [
+        {
+          "column" : 72,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Behavior.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "de3411de3fc03121",
+      "line" : 211,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Bindings.swift:219",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Bindings.swift",
+      "related" : [
+        {
+          "column" : 27,
+          "line" : 219,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Bindings.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "5d00a81036649582",
+      "line" : 43,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/CSSScoper.swift:147",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/CSSScoper.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 147,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/CSSScoper.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "551d68ce1194c78f",
+      "line" : 239,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/CSSScoper.swift:249",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/CSSScoper.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 249,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/CSSScoper.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "78515aee31e47dfb",
+      "line" : 13,
+      "message" : "2 duplicated regions of ~95 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Region.swift:44",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Island.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 44,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/Region.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "5a3359ea73802a8b",
+      "line" : 27,
+      "message" : "2 duplicated regions of ~149 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Streaming\/AsyncRenderer.swift:64",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Hydration\/RenderHydratable.swift",
+      "related" : [
+        {
+          "column" : 22,
+          "line" : 64,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Streaming\/AsyncRenderer.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "79fa2eac97a795e",
+      "line" : 152,
+      "message" : "3 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:176, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift:182",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 176,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 182,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTreeBuilder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "711358e987becb33",
+      "line" : 210,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift:227",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 227,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 84,
+      "fingerprint" : "5a18058aec76a8c3",
+      "line" : 227,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift:244",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 244,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "9c5d02ca0e8b6cfd",
+      "line" : 150,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTape.swift:275",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTape.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 275,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTape.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "29078faf3433e34e",
+      "line" : 351,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTape.swift:360",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTape.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 360,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLTape.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 14,
+      "fingerprint" : "3a58b88c09ae9d6b",
+      "line" : 8,
+      "message" : "3 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/NamedCharacterReferences.swift:9, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/NamedCharacterReferences.swift:11",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/NamedCharacterReferences.swift",
+      "related" : [
+        {
+          "column" : 58,
+          "line" : 9,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/NamedCharacterReferences.swift"
+        },
+        {
+          "column" : 64,
+          "line" : 11,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/NamedCharacterReferences.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "4bbc8a2163b352bf",
+      "line" : 6,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Signal.swift:5",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Computed.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 5,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Signal.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "a48b4497120d0343",
+      "line" : 154,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.85)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Expression.swift:166, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Expression.swift:177",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Expression.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 166,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Expression.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 177,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Reactive\/Expression.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "f29d848004492241",
+      "line" : 5,
+      "message" : "2 duplicated regions of ~72 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:69",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 69,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "b40a5f37a967a163",
+      "line" : 6,
+      "message" : "4 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:14, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:22, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:70",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 14,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 22,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 70,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "bc70dee10ecd8d6",
+      "line" : 28,
+      "message" : "2 duplicated regions of ~142 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:72",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 72,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "3ce97003de4ffe6e",
+      "line" : 30,
+      "message" : "3 duplicated regions of ~89 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:74, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:94",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 94,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 62,
+      "fingerprint" : "deada18add4e542a",
+      "line" : 36,
+      "message" : "3 duplicated regions of ~66 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:80, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift:14",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift",
+      "related" : [
+        {
+          "column" : 62,
+          "line" : 80,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 21,
+          "line" : 14,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "ce35b3f6337acb17",
+      "line" : 37,
+      "message" : "6 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:43, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:49, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:81, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift:15",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 43,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 49,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 81,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 15,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "c254d06bfd92ff9f",
+      "line" : 39,
+      "message" : "7 duplicated regions of ~50 tokens (similarity 0.93)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:44, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:49, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:59, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift:82, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift:16",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 44,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 49,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 30,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 33,
+          "line" : 59,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 11,
+          "line" : 82,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Wire\/WireTokens.swift"
+        },
+        {
+          "column" : 7,
+          "line" : 16,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 55,
+      "fingerprint" : "783b507a8e71d29a",
+      "line" : 128,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMacros\/ComponentMacro.swift:54",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMacros\/BoundMacro.swift",
+      "related" : [
+        {
+          "column" : 64,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMacros\/ComponentMacro.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "6a25f31b99f2b65b",
+      "line" : 100,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift:118",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 118,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "994d6a58c0e831e1",
+      "line" : 105,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift:132",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 132,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 90,
+      "fingerprint" : "64eb9326b4617fa7",
+      "line" : 148,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift:179",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift",
+      "related" : [
+        {
+          "column" : 19,
+          "line" : 179,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLMarkdown\/ADHTMLMarkdown.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "7ee7e93d9e02bdee",
+      "line" : 214,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLOracle\/HTMLTokenizer.swift:331",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLOracle\/HTMLTokenizer.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 331,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLOracle\/HTMLTokenizer.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "13c308199141fb6d",
+      "line" : 566,
+      "message" : "2 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLOracle\/HTMLTokenizer.swift:633",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLOracle\/HTMLTokenizer.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 633,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLOracle\/HTMLTokenizer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

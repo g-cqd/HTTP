@@ -1,0 +1,3042 @@
+{
+  "analyzedFileCount" : 65,
+  "cacheHits" : 0,
+  "cacheMisses" : 65,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 79,
+      "fingerprint" : "fbb4f9d161511bea",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Base64.swift:54",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Base64.swift",
+      "related" : [
+        {
+          "column" : 66,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Base64.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "8f0ffa305e8895d0",
+      "line" : 19,
+      "message" : "2 duplicated regions of ~136 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift:50",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 50,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "26096ac76ec02aa3",
+      "line" : 23,
+      "message" : "3 duplicated regions of ~108 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift:71",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift",
+      "related" : [
+        {
+          "column" : 49,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift"
+        },
+        {
+          "column" : 49,
+          "line" : 71,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 42,
+      "fingerprint" : "ad5c877431ee945a",
+      "line" : 26,
+      "message" : "5 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift:42, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift:58, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift:66, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift:74",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift",
+      "related" : [
+        {
+          "column" : 61,
+          "line" : 42,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 58,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift"
+        },
+        {
+          "column" : 39,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift"
+        },
+        {
+          "column" : 39,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ByteReader.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "ac7fd2f607f540aa",
+      "line" : 103,
+      "message" : "2 duplicated regions of ~1315 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:191",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 191,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "6ed6edfb1becba54",
+      "line" : 111,
+      "message" : "9 duplicated regions of ~124 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:194, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:360, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:20, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:34, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:110, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:160, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:373, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:585",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 194,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 360,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 20,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 34,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 110,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 160,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 373,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 585,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "24ae76cb351d198c",
+      "line" : 112,
+      "message" : "436 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:118, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:125, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:131, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:138, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:144, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:151, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:157, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:164, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:170, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:177, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:183, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:190, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:196, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:203, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:209, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:216, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:222, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:229, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:235, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:242, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:248, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:255, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:261, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:268, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:274, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:281, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:287, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:294, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:300, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:307, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:313, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:320, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:326, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:333, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:339, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:346, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:352, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:359, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:365, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:372, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:378, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:385, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:391, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:398, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:404, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:411, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:417, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:424, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:430, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:437, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:443, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift:450, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:195, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:201, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:208, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:214, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:221, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:227, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:234, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:240, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:247, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:253, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:260, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:266, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:273, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:279, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:286, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:292, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:299, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:305, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:312, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:318, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:325, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:331, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:338, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:344, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:351, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:361, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:367, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:374, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:380, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:387, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:393, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:400, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:406, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:413, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:419, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:426, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:432, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:439, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:445, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:452, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:458, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:465, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:471, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:478, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:484, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:491, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift:497, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:21, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:23, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:35, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:37, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:40, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:42, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:45, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:48, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:50, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:53, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:58, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:61, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:63, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:66, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:68, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:71, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:74, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:76, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:79, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:81, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:84, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:87, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:89, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:92, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:94, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:97, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:100, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:102, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:105, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:111, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:113, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:116, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:118, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:121, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:124, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:126, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:129, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:131, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:134, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:137, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:139, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:142, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:144, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:161, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:163, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:166, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:168, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:171, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:174, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:176, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:179, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:181, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:184, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:187, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:189, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:192, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:194, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:197, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:200, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:202, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:205, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:207, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:210, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:213, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:215, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:218, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:220, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:223, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:226, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:228, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:231, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:233, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:236, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:239, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:241, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:244, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:246, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:249, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:252, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:254, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:257, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:259, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:262, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:265, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:267, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:270, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:272, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:275, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:278, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:280, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:283, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:285, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:288, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:291, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:293, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:296, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:298, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:301, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:304, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:306, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:309, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:311, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:314, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:317, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:319, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:322, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:324, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:327, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:330, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:332, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:335, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:337, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:340, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:343, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:345, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:348, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:350, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:353, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:356, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:358, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:361, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:363, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:366, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:374, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:376, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:379, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:381, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:384, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:387, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:389, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:392, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:394, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:397, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:400, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:402, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:405, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:407, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:410, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:413, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:415, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:418, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:420, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:423, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:426, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:428, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:431, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:433, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:436, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:439, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:441, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:444, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:446, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:449, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:452, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:454, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:457, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:459, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:462, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:465, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:467, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:470, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:472, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:475, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:478, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:480, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:483, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:485, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:488, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:491, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:493, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:496, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:498, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:501, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:504, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:506, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:509, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:511, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:514, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:517, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:519, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:522, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:524, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:527, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:530, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:532, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:535, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:537, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:540, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:543, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:545, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:548, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:550, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:553, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:556, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:558, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:561, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:563, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:566, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:569, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:571, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:574, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:576, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:579, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:586, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:588, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:591, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:593, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:596, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:599, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:601, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:604, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:606, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:609, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:612, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:614, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:617, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:619, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:622, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:625, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:627, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:630, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:632, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:635, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:638, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:640, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:643, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:645, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:648, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:651, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:653, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:656, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:658, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:661, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:664, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:666, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:669, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:671, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:674, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:677, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:679, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:682, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:684, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:687, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:690, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:692, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:695, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:697, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:700, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:703, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:705, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:708, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:710, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:713, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:716, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:718, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:721, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:723, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:726, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:729, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:731, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:734, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:736, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:739, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:742, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:744, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:747, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:749, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:752, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:755, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:757, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:760, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:762, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:765, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:768, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:770, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:773, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:775, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:778, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:781, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:783, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:786, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:788, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:791, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:794, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:796, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:799, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:801, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:804, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:807, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:809, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:812, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:814, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:817, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:820, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:822, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:825, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:827, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:830, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:833, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:835, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:838, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:840, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:843, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:846, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:848, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:851, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:853, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:856, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:859, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:861, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:864, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:866, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:869, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:872, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:874, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:877, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:879, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:882, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:885, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:887, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:890, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:892, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:895, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:898, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:900, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:903, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:905, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:908, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:911, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:913, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:916, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:918, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:921, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:924, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:926",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift",
+      "related" : [
+        {
+          "column" : 55,
+          "line" : 118,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 131,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 138,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 144,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 151,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 157,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 164,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 170,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 177,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 183,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 190,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 196,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 203,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 209,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 216,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 222,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 229,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 235,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 242,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 248,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 255,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 261,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 268,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 274,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 281,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 287,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 294,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 300,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 307,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 313,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 320,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 326,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 333,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 339,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 346,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 352,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 359,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 365,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 372,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 378,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 385,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 391,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 398,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 404,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 411,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 417,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 424,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 430,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 437,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 443,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 450,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+EiselLemire.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 195,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 201,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 208,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 214,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 221,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 227,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 234,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 240,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 247,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 253,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 260,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 266,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 273,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 279,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 286,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 292,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 299,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 305,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 312,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 318,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 325,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 331,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 338,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 344,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 351,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 361,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 367,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 374,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 380,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 387,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 393,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 400,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 406,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 413,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 419,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 426,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 432,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 439,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 445,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 452,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 458,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 465,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 471,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 478,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 484,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 491,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 497,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 21,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 23,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 35,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 42,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 45,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 48,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 50,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 53,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 67,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 58,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 61,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 63,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 68,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 71,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 79,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 81,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 84,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 89,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 94,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 100,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 102,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 105,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 111,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 116,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 118,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 121,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 124,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 126,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 129,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 131,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 134,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 137,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 139,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 142,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 144,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 161,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 163,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 21,
+          "line" : 166,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 168,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 171,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 174,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 176,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 179,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 181,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 184,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 187,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 189,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 192,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 194,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 197,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 200,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 202,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 205,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 207,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 210,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 213,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 215,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 218,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 220,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 223,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 226,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 228,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 231,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 233,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 236,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 239,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 241,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 244,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 246,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 249,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 252,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 254,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 257,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 259,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 262,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 265,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 267,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 270,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 272,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 275,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 278,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 280,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 283,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 285,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 288,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 291,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 293,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 296,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 298,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 301,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 304,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 306,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 309,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 311,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 314,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 317,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 319,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 322,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 324,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 327,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 330,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 332,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 335,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 337,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 340,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 343,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 345,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 348,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 350,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 353,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 356,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 358,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 361,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 363,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 366,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 374,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 376,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 21,
+          "line" : 379,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 381,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 33,
+          "line" : 384,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 387,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 389,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 392,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 394,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 397,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 400,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 402,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 405,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 407,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 410,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 413,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 415,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 418,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 420,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 423,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 426,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 428,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 431,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 433,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 436,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 439,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 441,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 444,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 446,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 449,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 452,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 454,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 457,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 459,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 462,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 465,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 467,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 470,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 472,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 475,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 478,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 480,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 483,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 485,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 488,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 491,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 493,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 496,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 498,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 501,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 504,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 506,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 509,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 511,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 514,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 517,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 519,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 522,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 524,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 527,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 530,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 532,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 535,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 537,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 540,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 543,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 545,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 548,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 550,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 553,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 556,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 558,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 561,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 563,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 566,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 569,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 571,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 574,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 576,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 579,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 586,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 588,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 591,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 593,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 596,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 599,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 601,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 604,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 606,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 609,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 612,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 614,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 617,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 619,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 36,
+          "line" : 622,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 625,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 627,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 630,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 632,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 635,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 638,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 640,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 643,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 645,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 648,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 651,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 653,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 656,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 658,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 661,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 664,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 666,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 669,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 671,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 674,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 677,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 679,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 682,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 684,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 687,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 690,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 48,
+          "line" : 692,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 695,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 697,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 700,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 703,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 49,
+          "line" : 705,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 708,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 710,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 713,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 716,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 49,
+          "line" : 718,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 721,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 723,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 36,
+          "line" : 726,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 729,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 731,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 734,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 736,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 739,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 742,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 744,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 747,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 749,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 752,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 755,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 757,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 760,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 762,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 765,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 768,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 770,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 773,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 775,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 778,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 781,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 783,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 786,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 788,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 791,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 794,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 50,
+          "line" : 796,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 799,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 70,
+          "line" : 801,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 804,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 807,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 809,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 812,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 814,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 817,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 820,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 822,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 825,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 827,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 830,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 833,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 835,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 838,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 840,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 843,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 846,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 58,
+          "line" : 848,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 851,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 853,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 856,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 859,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 861,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 864,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 71,
+          "line" : 866,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 869,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 872,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 874,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 877,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 75,
+          "line" : 879,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 882,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 885,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 887,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 890,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 74,
+          "line" : 892,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 895,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 898,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 58,
+          "line" : 900,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 903,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 76,
+          "line" : 905,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 908,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 911,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 58,
+          "line" : 913,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 916,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 918,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 921,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 924,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 59,
+          "line" : 926,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 99,
+      "fingerprint" : "edfa6cffbdb4cfb0",
+      "line" : 351,
+      "message" : "6 duplicated regions of ~81 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:24, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:105, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:147, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:366, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:579",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 24,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 105,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 147,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 70,
+          "line" : 366,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 63,
+          "line" : 579,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e253a51e4979951",
+      "line" : 353,
+      "message" : "6 duplicated regions of ~72 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:24, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:106, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:147, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:367, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:580",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift",
+      "related" : [
+        {
+          "column" : 73,
+          "line" : 24,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 106,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 81,
+          "line" : 147,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 18,
+          "line" : 367,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 580,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1d419b930294a57f",
+      "line" : 358,
+      "message" : "6 duplicated regions of ~785 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:32, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:108, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:155, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:370, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:583",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat+Shortest.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 32,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 108,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 155,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 370,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 583,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "d3f4bb7bbd5d6e77",
+      "line" : 16,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift:367",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/DecimalFloat.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 367,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFUnicode\/GeneratedUnicodeTables.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "7817cb803df40caf",
+      "line" : 7,
+      "message" : "2 duplicated regions of ~202 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift:113",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "5a934523ce4a5194",
+      "line" : 40,
+      "message" : "2 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift:46",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "e0871cabcea09172",
+      "line" : 53,
+      "message" : "2 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift:65",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "related" : [
+        {
+          "column" : 46,
+          "line" : 65,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 42,
+      "fingerprint" : "d747034dd117fe41",
+      "line" : 158,
+      "message" : "2 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift:170",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 170,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "2e779ea93ee65f8d",
+      "line" : 16,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFMacroSupport\/SwiftSource.swift:13",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/HTTPDateParser.swift",
+      "related" : [
+        {
+          "column" : 42,
+          "line" : 13,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFMacroSupport\/SwiftSource.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 83,
+      "fingerprint" : "d072415e927555a2",
+      "line" : 35,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/HTTPDateParser.swift:45",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/HTTPDateParser.swift",
+      "related" : [
+        {
+          "column" : 63,
+          "line" : 45,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/HTTPDateParser.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "dc82f0e27aa90d11",
+      "line" : 50,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/NumberParse.swift:145",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/NumberParse.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 145,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/NumberParse.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "bc3c1cbf00def0ff",
+      "line" : 59,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFIO\/PosixFile.swift:80",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFIO\/PosixFile.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 80,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFIO\/PosixFile.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "51a1f2f735574cca",
+      "line" : 160,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFIO\/PosixFile.swift:175",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFIO\/PosixFile.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 175,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFIO\/PosixFile.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 22,
+      "fingerprint" : "5edf0ef1b4845ac9",
+      "line" : 126,
+      "message" : "4 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:159, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:246, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:310",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 159,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 246,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        },
+        {
+          "column" : 54,
+          "line" : 310,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "129dfacbbd735280",
+      "line" : 159,
+      "message" : "3 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:246, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:310",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 246,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        },
+        {
+          "column" : 40,
+          "line" : 310,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "62c106dace32fb55",
+      "line" : 169,
+      "message" : "2 duplicated regions of ~125 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:207",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 207,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "9a955b5549eeec00",
+      "line" : 176,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:214",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 214,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "bfdff549028824f1",
+      "line" : 242,
+      "message" : "2 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:307",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 307,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "28e330c53768f29b",
+      "line" : 246,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:310",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 310,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "15093db29bb0f96e",
+      "line" : 249,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.88)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift:312",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 312,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernels\/ADFKernels.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "4af59e35c4bb27e0",
+      "line" : 64,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsFuzz\/main.swift:76",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsFuzz\/main.swift",
+      "related" : [
+        {
+          "column" : 51,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsFuzz\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 65,
+      "fingerprint" : "87b079b677c8f6b",
+      "line" : 89,
+      "message" : "2 duplicated regions of ~82 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsFuzz\/main.swift:97",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsFuzz\/main.swift",
+      "related" : [
+        {
+          "column" : 57,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsFuzz\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 60,
+      "fingerprint" : "63915c8e9fa743ac",
+      "line" : 133,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift:156",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 156,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "4a5a85d7680adc17",
+      "line" : 219,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.92)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift:224",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 224,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "35334424de56c443",
+      "line" : 9,
+      "message" : "3 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFMacroSupport\/SwiftSource.swift:10, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFMacroSupport\/SwiftSource.swift:11",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFMacroSupport\/SwiftSource.swift",
+      "related" : [
+        {
+          "column" : 66,
+          "line" : 10,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFMacroSupport\/SwiftSource.swift"
+        },
+        {
+          "column" : 94,
+          "line" : 11,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFMacroSupport\/SwiftSource.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 36,
+      "fingerprint" : "ebcd94bdd72dddb",
+      "line" : 19,
+      "message" : "2 duplicated regions of ~89 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift:42",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 42,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "550c690ccb99ea52",
+      "line" : 21,
+      "message" : "3 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift:44, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift:106",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 44,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 106,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "518fc8f097026997",
+      "line" : 53,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift:112",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 112,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFText\/ADFText.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 83,
+      "fingerprint" : "582da1b6e57848b7",
+      "line" : 112,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift:53",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 56,
+          "line" : 53,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 83,
+      "fingerprint" : "456ac7c86f2b3ff7",
+      "line" : 112,
+      "message" : "3 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift:53, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift:66",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 56,
+          "line" : 53,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift"
+        },
+        {
+          "column" : 58,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "9349f51deb5dce43",
+      "line" : 36,
+      "message" : "2 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift:52",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 74,
+          "line" : 52,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "e7a33f0891c5d138",
+      "line" : 49,
+      "message" : "2 duplicated regions of ~75 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift:62",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 58,
+          "line" : 62,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 10,
+      "fingerprint" : "7918eb0510480fc8",
+      "line" : 61,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Load.swift:134",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Load.swift",
+      "related" : [
+        {
+          "column" : 14,
+          "line" : 134,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Load.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "8e59a4663472067c",
+      "line" : 75,
+      "message" : "2 duplicated regions of ~90 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Oracles.swift:99",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Oracles.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 99,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Oracles.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "4451cd7ef9746ff",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TaskProviderSpy.swift:56",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TaskProviderSpy.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 56,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TaskProviderSpy.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

@@ -1,0 +1,486 @@
+{
+  "analyzedFileCount" : 109,
+  "cacheHits" : 0,
+  "cacheMisses" : 109,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 5,
+      "fingerprint" : "64911a82b07acba3",
+      "line" : 36,
+      "message" : "property 'isASCIIAlphanumeric' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ASCII.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "326b278cd89eaa",
+      "line" : 37,
+      "message" : "property 'isASCIIHexDigit' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ASCII.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "5095facc1a10c45a",
+      "line" : 40,
+      "message" : "property 'isSubDelimiter' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/ASCII.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "5f280819face45b",
+      "line" : 11,
+      "message" : "method 'checkedAdding(_:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/CheckedMath.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "e3c8b81c161043fd",
+      "line" : 18,
+      "message" : "method 'checkedSubtracting(_:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/CheckedMath.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "3338439739ec442e",
+      "line" : 25,
+      "message" : "method 'checkedMultiplied(by:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/CheckedMath.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "fb6eb68d50aae3af",
+      "line" : 51,
+      "message" : "method 'storeLE16(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "ae15270ce9252381",
+      "line" : 55,
+      "message" : "method 'storeLE32(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "81506ab3548a1a1c",
+      "line" : 59,
+      "message" : "method 'storeLE64(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "28cf5f12df802072",
+      "line" : 63,
+      "message" : "method 'storeBE16(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1a1612350cae6af8",
+      "line" : 67,
+      "message" : "method 'storeBE32(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "abd51a80592ccf3c",
+      "line" : 71,
+      "message" : "method 'storeBE64(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "131e77a694871dba",
+      "line" : 89,
+      "message" : "method 'appendLE16(_:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "6b71cdb62e0403f6",
+      "line" : 94,
+      "message" : "method 'appendLE32(_:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1f482bfc9d231eb3",
+      "line" : 156,
+      "message" : "method 'storeLE16(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "a6a393a1dc606b9a",
+      "line" : 160,
+      "message" : "method 'storeLE32(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "ff752267c96b793f",
+      "line" : 164,
+      "message" : "method 'storeLE64(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "5eedc672f882f8e6",
+      "line" : 168,
+      "message" : "method 'storeBE16(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "334ef1f30903cde1",
+      "line" : 172,
+      "message" : "method 'storeBE32(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "5e576a915a155924",
+      "line" : 176,
+      "message" : "method 'storeBE64(_:at:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFCore\/Endian.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "59cfa71269547601",
+      "line" : 71,
+      "message" : "function 'runBench()' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "994b0f1e7d8648ef",
+      "line" : 74,
+      "message" : "property 'unit' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "cb49dae2fe8ee870",
+      "line" : 79,
+      "message" : "property 'foldOut' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "13d607c6e864f818",
+      "line" : 104,
+      "message" : "property 'foldFastest' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "9976f96f92f468eb",
+      "line" : 121,
+      "message" : "property 'checks' is reachable only from test code",
+      "note" : "confidence low — reachable with test roots, unreachable without them; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "330224885b347d92",
+      "line" : 122,
+      "message" : "property 'failures' is reachable only from test code",
+      "note" : "confidence low — reachable with test roots, unreachable without them; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "9284f824dfb6391c",
+      "line" : 127,
+      "message" : "property 'foldInput' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "15ad00a47a7b0eae",
+      "line" : 129,
+      "message" : "property 'foldExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "b5316de38a903342",
+      "line" : 131,
+      "message" : "property 'stopInput' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "7bb3db4b617fc6ec",
+      "line" : 133,
+      "message" : "property 'stopExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "f1f2da93c70251d1",
+      "line" : 153,
+      "message" : "property 'foldExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "d746996171dc751",
+      "line" : 154,
+      "message" : "property 'stopExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "a55f4ad0bbb7d4fd",
+      "line" : 155,
+      "message" : "property 'byteNeedle' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "97010e5f08d1c239",
+      "line" : 156,
+      "message" : "property 'byteExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "b09af104849b60b6",
+      "line" : 168,
+      "message" : "property 'nonAsciiExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "20cc00b5e1b5d11d",
+      "line" : 169,
+      "message" : "property 'anyExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "57a8ab852f91a3f9",
+      "line" : 170,
+      "message" : "property 'controlOrAnyExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "82f7c59e6b0b975a",
+      "line" : 171,
+      "message" : "property 'disallowedExpected' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "c796dd094770ebcf",
+      "line" : 184,
+      "message" : "property 'coa' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "c2daced37173684",
+      "line" : 186,
+      "message" : "property 'dt' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1245a69523602156",
+      "line" : 196,
+      "message" : "property 'unit' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "8a054003cfd0b011",
+      "line" : 201,
+      "message" : "property 'fast' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "72508a39e1ee19ca",
+      "line" : 219,
+      "message" : "property 'fast' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADFKernelsProbe\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "58b622981fe0dfa9",
+      "line" : 9,
+      "message" : "property 'fuzz' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "4d46c2a637390571",
+      "line" : 12,
+      "message" : "property 'parity' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1417b73f963a8d12",
+      "line" : 16,
+      "message" : "property 'soak' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "625608eda7664ac9",
+      "line" : 18,
+      "message" : "property 'concurrency' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    }
+  ],
+  "notes" : [
+
+  ],
+  "suppressed" : [
+
+  ]
+}

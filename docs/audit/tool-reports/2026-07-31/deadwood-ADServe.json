@@ -1,0 +1,56 @@
+{
+  "analyzedFileCount" : 72,
+  "cacheHits" : 0,
+  "cacheMisses" : 72,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 5,
+      "fingerprint" : "f975a5276ec8aca8",
+      "line" : 40,
+      "message" : "method 'broadcast(_:to:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADServe\/Sources\/ADServeCore\/WebSocket.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "9634ba090e9470ad",
+      "line" : 51,
+      "message" : "property 'winningRank' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADServe\/Sources\/ADServeMimeCodegen\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "a87647358019b654",
+      "line" : 56,
+      "message" : "property 'rank' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADServe\/Sources\/ADServeMimeCodegen\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "e84f8a7e9f9783ae",
+      "line" : 134,
+      "message" : "property 'outPath' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADServe\/Sources\/ADServeMimeCodegen\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    }
+  ],
+  "notes" : [
+
+  ],
+  "suppressed" : [
+
+  ]
+}

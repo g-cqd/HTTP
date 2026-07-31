@@ -1,0 +1,317 @@
+{
+  "analyzedFileCount" : 13,
+  "cacheHits" : 0,
+  "cacheMisses" : 13,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 1,
+      "fingerprint" : "b751b7ac6a8e437",
+      "line" : 177,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/AST.swift:294",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/AST.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 294,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/AST.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "c2a58e41a1c4c400",
+      "line" : 53,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser.swift:136",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 136,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 16,
+      "fingerprint" : "ee707467f9e9b86d",
+      "line" : 54,
+      "message" : "8 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:57, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:59, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:61, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:63, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:66, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser.swift:137",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift",
+      "related" : [
+        {
+          "column" : 69,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 30,
+          "line" : 57,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 16,
+          "line" : 59,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 61,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 18,
+          "line" : 63,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 137,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "fa89736a35d6e3cc",
+      "line" : 54,
+      "message" : "16 duplicated regions of ~50 tokens (similarity 0.95)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:56, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:57, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:57, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:58, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:59, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:60, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:61, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:62, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:63, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:65, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:66, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:67, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift:68",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 70,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 56,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 18,
+          "line" : 57,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 71,
+          "line" : 57,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 56,
+          "line" : 58,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 49,
+          "line" : 59,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 34,
+          "line" : 60,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 61,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 62,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 21,
+          "line" : 63,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 29,
+          "line" : 65,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 68,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "5684ef9c456b00f5",
+      "line" : 217,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/ValueCoercion.swift:95",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Lexer.swift",
+      "related" : [
+        {
+          "column" : 22,
+          "line" : 95,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/ValueCoercion.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "51423a0b99d947a6",
+      "line" : 192,
+      "message" : "2 duplicated regions of ~92 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser.swift:162",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+DDL.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 162,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "cc47951c4eb4152b",
+      "line" : 401,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift:244",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+DDL.swift",
+      "related" : [
+        {
+          "column" : 12,
+          "line" : 244,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "5c00c5799599a659",
+      "line" : 236,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.84)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift:242",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 242,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "c29e6ba031732bd8",
+      "line" : 329,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift:338",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 338,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Expr.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "6b45509767a5fa87",
+      "line" : 146,
+      "message" : "2 duplicated regions of ~71 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Statements.swift:170",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Statements.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 170,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQL\/SQL\/Parser+Statements.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "c9e5e79d4c580a9a",
+      "line" : 66,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/Errors.swift:81",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/Errors.swift",
+      "related" : [
+        {
+          "column" : 54,
+          "line" : 81,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/Errors.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 67,
+      "fingerprint" : "7fdfd14e2e668368",
+      "line" : 83,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/Errors.swift:101",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/Errors.swift",
+      "related" : [
+        {
+          "column" : 65,
+          "line" : 101,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADSQL\/Sources\/ADSQLModel\/Errors.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

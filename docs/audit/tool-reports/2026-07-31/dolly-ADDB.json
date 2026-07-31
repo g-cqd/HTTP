@@ -1,0 +1,3568 @@
+{
+  "analyzedFileCount" : 136,
+  "cacheHits" : 0,
+  "cacheMisses" : 136,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 5,
+      "fingerprint" : "cc531e7a06135385",
+      "line" : 143,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBAsync\/AsyncDatabase.swift:183",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBAsync\/AsyncDatabase.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 183,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBAsync\/AsyncDatabase.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "c2d779206a7a7c62",
+      "line" : 43,
+      "message" : "2 duplicated regions of ~78 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift:341",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 341,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "782ae70d79a43bab",
+      "line" : 45,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift:58",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 54,
+          "line" : 58,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 62,
+      "fingerprint" : "17ecb18549a0c2d4",
+      "line" : 53,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift:69",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 91,
+          "line" : 69,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "4e010ee39c69ab0d",
+      "line" : 126,
+      "message" : "2 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift:302",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 302,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "f6683d9517a395ed",
+      "line" : 160,
+      "message" : "2 duplicated regions of ~101 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTreeDelete.swift:46",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTreeDelete.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "c2cc4f55955f8d5",
+      "line" : 231,
+      "message" : "2 duplicated regions of ~113 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTreeDelete.swift:318",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 24,
+          "line" : 318,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTreeDelete.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "6a2a321575d6388e",
+      "line" : 343,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift:60",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 20,
+          "line" : 60,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "1046e728048ca831",
+      "line" : 344,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift:223",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/BTree.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 223,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "aae938008a46a471",
+      "line" : 14,
+      "message" : "2 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/ByteCodec.swift:30",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/ByteCodec.swift",
+      "related" : [
+        {
+          "column" : 14,
+          "line" : 30,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/ByteCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "db99bedbd3d7f14d",
+      "line" : 68,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift:231",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 231,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Cursor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "c782f35820e9b36f",
+      "line" : 469,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/WriterLoop.swift:76",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/WriterLoop.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "5cde3d9c600c853a",
+      "line" : 490,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/WriterLoop.swift:133",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 133,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/WriterLoop.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 45,
+      "fingerprint" : "e98a86e09c8177b1",
+      "line" : 564,
+      "message" : "2 duplicated regions of ~71 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift:702",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 702,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e9a460ed4a6df1c7",
+      "line" : 569,
+      "message" : "2 duplicated regions of ~93 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift:135",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 135,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "5c8e666d3d910abe",
+      "line" : 584,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift:691",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 691,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Database.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 22,
+      "fingerprint" : "483e38733b9ee372",
+      "line" : 78,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift:200",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSIndex+Storage.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 200,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "bb76e5b506e430de",
+      "line" : 161,
+      "message" : "2 duplicated regions of ~72 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSIndex.swift:160",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSIndex+Storage.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 160,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSIndex.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 55,
+      "fingerprint" : "2987e044838ac01b",
+      "line" : 247,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift:296",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSIndex.swift",
+      "related" : [
+        {
+          "column" : 60,
+          "line" : 296,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "1752fae639208da",
+      "line" : 373,
+      "message" : "3 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/ForeignKeys.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift:476",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSIndex.swift",
+      "related" : [
+        {
+          "column" : 27,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/ForeignKeys.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 476,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "8dd61ce1093204b1",
+      "line" : 26,
+      "message" : "2 duplicated regions of ~82 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSStats.swift:67",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSStats.swift",
+      "related" : [
+        {
+          "column" : 59,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/FTSStats.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 76,
+      "fingerprint" : "46b38a8b87fe217",
+      "line" : 152,
+      "message" : "2 duplicated regions of ~89 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift:168",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 168,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "c559fc3f320546b4",
+      "line" : 159,
+      "message" : "4 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift:160, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift:161, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift:173",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift",
+      "related" : [
+        {
+          "column" : 48,
+          "line" : 160,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift"
+        },
+        {
+          "column" : 69,
+          "line" : 161,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 173,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "c3e69b18e3b1c91e",
+      "line" : 162,
+      "message" : "2 duplicated regions of ~102 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift:173",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 173,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "a25212d1dd9bd56",
+      "line" : 184,
+      "message" : "6 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:514, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:520, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:526, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:531, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:536",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift",
+      "related" : [
+        {
+          "column" : 12,
+          "line" : 514,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 520,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 526,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 531,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 536,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 22,
+      "fingerprint" : "6e9499f4af9de9e0",
+      "line" : 184,
+      "message" : "7 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:514, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:520, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:526, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:531, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:536, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLMacros\/SQLMacro.swift:38",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Porter.swift",
+      "related" : [
+        {
+          "column" : 27,
+          "line" : 514,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 520,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 526,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 531,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 536,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 53,
+          "line" : 38,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLMacros\/SQLMacro.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "b3a7760504be907e",
+      "line" : 119,
+      "message" : "2 duplicated regions of ~158 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Postings.swift:184",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Postings.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 184,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Postings.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "85c4d23cb975c75f",
+      "line" : 133,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Postings.swift:196",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Postings.swift",
+      "related" : [
+        {
+          "column" : 46,
+          "line" : 196,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Postings.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e2e5559e69c4669a",
+      "line" : 16,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Unicode61.swift:25",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Trigram.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 25,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Unicode61.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "49f74ed52cc0a8f8",
+      "line" : 29,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Unicode61.swift:39",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Trigram.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 39,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTS\/Unicode61.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "e6e26a1a09679dad",
+      "line" : 31,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSQueryEvaluator.swift:14",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTSEvaluation.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 14,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSQueryEvaluator.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "45f879b479344514",
+      "line" : 40,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSQueryEvaluator.swift:30",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FTSEvaluation.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 30,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSQueryEvaluator.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "9a6cd2ae6ac1b623",
+      "line" : 230,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift:73",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FreeList.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "a73604869184c130",
+      "line" : 57,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Integrity.swift:64",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Integrity.swift",
+      "related" : [
+        {
+          "column" : 24,
+          "line" : 64,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Integrity.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 56,
+      "fingerprint" : "650b03cbd1f4849",
+      "line" : 59,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Integrity.swift:66",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Integrity.swift",
+      "related" : [
+        {
+          "column" : 56,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Integrity.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "f6ec3884cf419c78",
+      "line" : 14,
+      "message" : "3 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift:109, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift:119",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/MetaPage.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 109,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 119,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "c57d0730dcdd7946",
+      "line" : 14,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift:119",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/MetaPage.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 119,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "f7a3c6788a83cf2b",
+      "line" : 51,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift:60",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 60,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "d475db4f3ec2df8a",
+      "line" : 192,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift:260",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 260,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "50f8f2f8504b11be",
+      "line" : 225,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift:281",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 281,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "dc6ea5c2f6571dd1",
+      "line" : 303,
+      "message" : "2 duplicated regions of ~81 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift:315",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 315,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder+Mutation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "bb8c9125bdfd50f9",
+      "line" : 59,
+      "message" : "2 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Overflow.swift:88",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Overflow.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 88,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Overflow.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "7737264fff5fd2e2",
+      "line" : 5,
+      "message" : "3 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+IndexCodec.swift:5, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift:6",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+FTSCodec.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 5,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+IndexCodec.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 6,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "9d721763e882e7bd",
+      "line" : 5,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift:6",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+FTSCodec.swift",
+      "related" : [
+        {
+          "column" : 19,
+          "line" : 6,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e82a9bec0085b004",
+      "line" : 45,
+      "message" : "3 duplicated regions of ~99 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+IndexCodec.swift:27, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift:70",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+FTSCodec.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 27,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+IndexCodec.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 70,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "31cfdaed4896175f",
+      "line" : 74,
+      "message" : "3 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+IndexCodec.swift:52, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift:211",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+FTSCodec.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 52,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+IndexCodec.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 211,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 45,
+      "fingerprint" : "1e0eed42869156a1",
+      "line" : 75,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift:212",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+FTSCodec.swift",
+      "related" : [
+        {
+          "column" : 49,
+          "line" : 212,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 16,
+      "fingerprint" : "f1bfecc093a969ca",
+      "line" : 122,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift:180",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+FTSCodec.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 180,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "202b425a05f5fc36",
+      "line" : 26,
+      "message" : "2 duplicated regions of ~100 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift:69",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+IndexCodec.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 69,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "55597a03f4e65221",
+      "line" : 148,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift:226",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog+TableCodec.swift",
+      "related" : [
+        {
+          "column" : 30,
+          "line" : 226,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "68de9801665a5ecf",
+      "line" : 30,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift:44",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 44,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "2921b3214c59bc03",
+      "line" : 68,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift:151",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 151,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "48bca979aaacd006",
+      "line" : 80,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift:107, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift:114",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 107,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 114,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Catalog.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "3b4250531777ef01",
+      "line" : 22,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift:78",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 78,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "7be30dc52a4be65b",
+      "line" : 30,
+      "message" : "2 duplicated regions of ~226 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift:86",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 86,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 91,
+      "fingerprint" : "1fe63c0703869394",
+      "line" : 228,
+      "message" : "2 duplicated regions of ~143 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift:434",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift",
+      "related" : [
+        {
+          "column" : 72,
+          "line" : 434,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 69,
+      "fingerprint" : "bffef875810c5f62",
+      "line" : 331,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift:348",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift",
+      "related" : [
+        {
+          "column" : 81,
+          "line" : 348,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/DML.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 42,
+      "fingerprint" : "774e3f810f48e313",
+      "line" : 55,
+      "message" : "2 duplicated regions of ~150 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift:477",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/ForeignKeys.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 477,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 14,
+      "fingerprint" : "b593523248041724",
+      "line" : 126,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift:211",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/KeyCodec.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 211,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 88,
+      "fingerprint" : "e18356acb02d72f",
+      "line" : 59,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.96)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift:76",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift",
+      "related" : [
+        {
+          "column" : 87,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "a753ff8c0d9e99d4",
+      "line" : 126,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift:133",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 133,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "2a9ab6c7748ba925",
+      "line" : 176,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift:183",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 183,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RecordCodec.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 46,
+      "fingerprint" : "c61099761a8f49e8",
+      "line" : 33,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift:55",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 46,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "38d47797d5432b9",
+      "line" : 124,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement+Execution.swift:262",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 262,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement+Execution.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "5b62f35836a3a04f",
+      "line" : 135,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement+Execution.swift:275",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 275,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement+Execution.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "fb8815f19734bad1",
+      "line" : 155,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift:265",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 265,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "361f9bd09e5a3b36",
+      "line" : 168,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift:277",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 277,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "c33224091890dd68",
+      "line" : 186,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor+RowSources.swift:248",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 248,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor+RowSources.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "81a1ad24ae7f138",
+      "line" : 186,
+      "message" : "3 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift:288, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor+RowSources.swift:248",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 288,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift"
+        },
+        {
+          "column" : 21,
+          "line" : 248,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor+RowSources.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 80,
+      "fingerprint" : "46bf71df93de4de0",
+      "line" : 190,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift:291",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 291,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/RelTxn.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "5ffaf657df36b98",
+      "line" : 10,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift:35",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 35,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "ee08ac5c0891fe0c",
+      "line" : 85,
+      "message" : "3 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift:118, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+FTS.swift:107",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 118,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 107,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+FTS.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e242ec5d226a829e",
+      "line" : 108,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+FTS.swift:100",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 100,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+FTS.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "e2ae3c7b656dae86",
+      "line" : 173,
+      "message" : "2 duplicated regions of ~131 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift:208",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 208,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation+DDL.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "bf6c4d508673b36",
+      "line" : 167,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.96)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift:177",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 177,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Relation.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "571d30ded76cfa7",
+      "line" : 100,
+      "message" : "2 duplicated regions of ~106 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift:116",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 116,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 90,
+      "fingerprint" : "1effd5da16a3f293",
+      "line" : 266,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift:312",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift",
+      "related" : [
+        {
+          "column" : 83,
+          "line" : 312,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Relation\/Rows.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 6,
+      "fingerprint" : "13ea484d4031b6c4",
+      "line" : 16,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.83)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Signposts.swift:22",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Signposts.swift",
+      "related" : [
+        {
+          "column" : 24,
+          "line" : 22,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Signposts.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 48,
+      "fingerprint" : "e1c4ada15327efce",
+      "line" : 18,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.87)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Signposts.swift:27",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Signposts.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 27,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/Signposts.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 70,
+      "fingerprint" : "d9b9c5b1fb83cadf",
+      "line" : 108,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateAccumulators.swift:156",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateAccumulators.swift",
+      "related" : [
+        {
+          "column" : 54,
+          "line" : 156,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateAccumulators.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 30,
+      "fingerprint" : "829babdbb64df0ab",
+      "line" : 21,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:316",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 24,
+          "line" : 316,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "bcb8c0c01f9c4852",
+      "line" : 29,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:329",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 329,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "c1eb223561edc26d",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:344",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 344,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "951ce5482d7b8bb1",
+      "line" : 48,
+      "message" : "2 duplicated regions of ~101 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift:82",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 42,
+          "line" : 82,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "bb1cc25dfb66b652",
+      "line" : 49,
+      "message" : "3 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift:83, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:348",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 83,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 348,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "9c5381846909635c",
+      "line" : 87,
+      "message" : "4 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:381, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:413, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:438",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 381,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 413,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 438,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "891cdb54812d7842",
+      "line" : 153,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:457",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 457,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "b2201586eae2926b",
+      "line" : 160,
+      "message" : "2 duplicated regions of ~83 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift:328",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 328,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "17f5d066de89a38a",
+      "line" : 163,
+      "message" : "5 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift:287, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift:331, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:467, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/ResultPipeline.swift:57",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 287,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 331,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 467,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 57,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/ResultPipeline.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "bca2f72e08e07e1",
+      "line" : 182,
+      "message" : "2 duplicated regions of ~99 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/ResultPipeline.swift:131",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/AggregateExecutor.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 131,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/ResultPipeline.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "225c9e25e0844c48",
+      "line" : 25,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:129, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:149",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 129,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 149,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "5f090239a8e97ce4",
+      "line" : 88,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:437",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 437,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "d4347347bd53df8e",
+      "line" : 103,
+      "message" : "2 duplicated regions of ~68 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:115",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 115,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "9acfc39396a73566",
+      "line" : 129,
+      "message" : "2 duplicated regions of ~78 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:149",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 149,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 56,
+      "fingerprint" : "5fdd3e470f27de13",
+      "line" : 129,
+      "message" : "3 duplicated regions of ~68 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:149, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:165",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 149,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 165,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "e6613058011728c4",
+      "line" : 141,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:329",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 51,
+          "line" : 329,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 14,
+      "fingerprint" : "c33598f9c7b35872",
+      "line" : 152,
+      "message" : "2 duplicated regions of ~90 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:218",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 14,
+          "line" : 218,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 47,
+      "fingerprint" : "bbd25e7f62b589d3",
+      "line" : 215,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift:231",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 231,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "b05437d952477b47",
+      "line" : 222,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:348",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 42,
+          "line" : 348,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 82,
+      "fingerprint" : "7be97a645e10276e",
+      "line" : 259,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:365",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 67,
+          "line" : 365,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "9809556452f9473c",
+      "line" : 260,
+      "message" : "3 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:366, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:391",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/CompiledEval.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 366,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 391,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "134de21e75cab4c9",
+      "line" : 52,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/Projection.swift:58",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/Projection.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 58,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/Projection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "ccbbd8ea543c667a",
+      "line" : 48,
+      "message" : "2 duplicated regions of ~92 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift:62",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift",
+      "related" : [
+        {
+          "column" : 24,
+          "line" : 62,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "713f9f5e9a18d9aa",
+      "line" : 72,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift:97",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "c6f629d9f0062011",
+      "line" : 132,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift:139",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 139,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/QueryComponents.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "651fc87de1c4216b",
+      "line" : 38,
+      "message" : "3 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift:76, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift:106",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 106,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "74b38812194c6ac9",
+      "line" : 65,
+      "message" : "2 duplicated regions of ~114 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift:97",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 72,
+      "fingerprint" : "1764cfbdd95e6477",
+      "line" : 74,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift:104",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift",
+      "related" : [
+        {
+          "column" : 72,
+          "line" : 104,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/DSL\/WriteDSL.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "cf0b46cc5edce78f",
+      "line" : 54,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Binding.swift:136",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval+Fold.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 136,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Binding.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "5e6ed3d7bc11b48c",
+      "line" : 63,
+      "message" : "3 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift:85, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift:159",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval+Fold.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 85,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 159,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "aeec29663bad5cef",
+      "line" : 79,
+      "message" : "2 duplicated regions of ~82 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:96",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 96,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "b5d2b07bc77f6e69",
+      "line" : 120,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:135",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 135,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 73,
+      "fingerprint" : "e975d6d6086bb29e",
+      "line" : 341,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:373",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 373,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "7454bc716a4b7cad",
+      "line" : 521,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift:524",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 524,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Eval.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "d9225aca95d8d88b",
+      "line" : 71,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBMigrate\/RecreateAndCopy.swift:109",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor+RowSources.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 109,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBMigrate\/RecreateAndCopy.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "c57faaf8ce985283",
+      "line" : 128,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:447",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor+RowSources.swift",
+      "related" : [
+        {
+          "column" : 69,
+          "line" : 447,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "78a3a291c06e5ae7",
+      "line" : 191,
+      "message" : "2 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:503",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor+RowSources.swift",
+      "related" : [
+        {
+          "column" : 51,
+          "line" : 503,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 60,
+      "fingerprint" : "cc9b6a88e70f742c",
+      "line" : 19,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:318",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift",
+      "related" : [
+        {
+          "column" : 97,
+          "line" : 318,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "335dd07fb23cd395",
+      "line" : 31,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift:39",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 39,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e24aa7c94dd60a24",
+      "line" : 54,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:329",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 329,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "bfd251439410834c",
+      "line" : 281,
+      "message" : "2 duplicated regions of ~104 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:461",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Executor.swift",
+      "related" : [
+        {
+          "column" : 24,
+          "line" : 461,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 22,
+      "fingerprint" : "c490e76b0f59e16d",
+      "line" : 204,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:22",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 22,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "f07393b336da0119",
+      "line" : 221,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:40",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 18,
+      "fingerprint" : "1fef9d032f317a0a",
+      "line" : 226,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:52",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift",
+      "related" : [
+        {
+          "column" : 30,
+          "line" : 52,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 36,
+      "fingerprint" : "717f8622c8a44365",
+      "line" : 234,
+      "message" : "2 duplicated regions of ~68 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:64",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 64,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "d881f73adc61d5df",
+      "line" : 266,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.84)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift:279",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 279,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "6444577759c1a8a8",
+      "line" : 282,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift:300",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 300,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Functions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 56,
+      "fingerprint" : "21a226cc372b7607",
+      "line" : 78,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift:135",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift",
+      "related" : [
+        {
+          "column" : 72,
+          "line" : 135,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 51,
+      "fingerprint" : "d63d38cb224ad9e5",
+      "line" : 107,
+      "message" : "2 duplicated regions of ~90 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift:154",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift",
+      "related" : [
+        {
+          "column" : 59,
+          "line" : 154,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "7d0b6a64221755bc",
+      "line" : 150,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:207",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 207,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 11,
+      "fingerprint" : "6ed3ca6fb5654edd",
+      "line" : 157,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:211",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 211,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "4d7da02e9890c934",
+      "line" : 381,
+      "message" : "3 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:413, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:438",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 413,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 438,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "6c6e22df42e5037c",
+      "line" : 382,
+      "message" : "2 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift:439",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 439,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "5514fc886d3fa692",
+      "line" : 234,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/ResultPipeline.swift:239",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/ResultPipeline.swift",
+      "related" : [
+        {
+          "column" : 18,
+          "line" : 239,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/ResultPipeline.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "daa4732638d23e6a",
+      "line" : 127,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/RowSlot.swift:135",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/RowSlot.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 135,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/RowSlot.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "78ddf2dcd113b399",
+      "line" : 143,
+      "message" : "3 duplicated regions of ~73 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift:86, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift:160",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Binding.swift",
+      "related" : [
+        {
+          "column" : 54,
+          "line" : 86,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift"
+        },
+        {
+          "column" : 54,
+          "line" : 160,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 82,
+      "fingerprint" : "e1ea1193f62ccca7",
+      "line" : 236,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Binding.swift:247",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Binding.swift",
+      "related" : [
+        {
+          "column" : 99,
+          "line" : 247,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Binding.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "f758708eb457beb3",
+      "line" : 66,
+      "message" : "2 duplicated regions of ~258 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift:140",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 140,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 72,
+      "fingerprint" : "2929b762ac6321cb",
+      "line" : 255,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift:265",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift",
+      "related" : [
+        {
+          "column" : 87,
+          "line" : 265,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Helpers.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "45566b8b0c497659",
+      "line" : 41,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift:247",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift",
+      "related" : [
+        {
+          "column" : 30,
+          "line" : 247,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e765d6f035dd0bf0",
+      "line" : 68,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift:102",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 102,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 57,
+      "fingerprint" : "4d9e2f48c4417656",
+      "line" : 71,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift:104",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift",
+      "related" : [
+        {
+          "column" : 55,
+          "line" : 104,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Binder+Select.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "4d9ac7f794461193",
+      "line" : 391,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Planner.swift:399",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Planner.swift",
+      "related" : [
+        {
+          "column" : 28,
+          "line" : 399,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLCompile\/Planner.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "42d9b530fece2a45",
+      "line" : 205,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLTriggerEngine.swift:214",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLTriggerEngine.swift",
+      "related" : [
+        {
+          "column" : 20,
+          "line" : 214,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/SQLTriggerEngine.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 71,
+      "fingerprint" : "61291518af74f0da",
+      "line" : 89,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift:249",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement+Execution.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 249,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 61,
+      "fingerprint" : "21b6cdca646a8fa4",
+      "line" : 267,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement.swift:287",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement.swift",
+      "related" : [
+        {
+          "column" : 64,
+          "line" : 287,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Statement.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "a233a87b3040f31e",
+      "line" : 10,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer+FTS.swift:116",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer+FTS.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 116,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer+FTS.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "98d2d0dd8863181",
+      "line" : 63,
+      "message" : "2 duplicated regions of ~96 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift:195",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer+FTS.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 195,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "fb6bac6aecef0ab3",
+      "line" : 49,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift:60",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 60,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "92655e027e16a585",
+      "line" : 68,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.96)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift:78",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 78,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 98,
+      "fingerprint" : "7ad370906b9e4741",
+      "line" : 86,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift:103",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift",
+      "related" : [
+        {
+          "column" : 27,
+          "line" : 103,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "597abbf6340c714",
+      "line" : 131,
+      "message" : "2 duplicated regions of ~97 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift:297",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 297,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 69,
+      "fingerprint" : "6b1605f52ecc3027",
+      "line" : 272,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift:309",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 309,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/Writer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 71,
+      "fingerprint" : "de07d9ae74364d13",
+      "line" : 79,
+      "message" : "2 duplicated regions of ~90 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift:209",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSMatchEval.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 209,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "64010222ca162f0",
+      "line" : 137,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift:340",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSMatchEval.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 340,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 104,
+      "fingerprint" : "af77e3b0fb6bb91f",
+      "line" : 149,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift:354",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSMatchEval.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 354,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "d6c991ae4eeb7efa",
+      "line" : 207,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSMatchEval.swift:229",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSMatchEval.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 229,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSMatchEval.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 36,
+      "fingerprint" : "de2a659b5d336833",
+      "line" : 291,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift:327",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift",
+      "related" : [
+        {
+          "column" : 28,
+          "line" : 327,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/FTSScorer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "d87cc9877c772c06",
+      "line" : 122,
+      "message" : "2 duplicated regions of ~66 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/MatchQuery.swift:152",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/MatchQuery.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 152,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBFTS\/MatchQuery.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "37ea6de682f6a9e8",
+      "line" : 88,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBImport\/Importer.swift:167",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBImport\/Importer.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 167,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBImport\/Importer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "b62548f7b94acb87",
+      "line" : 103,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSON.swift:113",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSON.swift",
+      "related" : [
+        {
+          "column" : 28,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSON.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "e47b4bad6755660c",
+      "line" : 44,
+      "message" : "2 duplicated regions of ~66 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:48",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 48,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "57ac84ad0c8d5ca3",
+      "line" : 70,
+      "message" : "2 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:177",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 177,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "f6741cd84efbfbb1",
+      "line" : 87,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.92)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:194",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift",
+      "related" : [
+        {
+          "column" : 65,
+          "line" : 194,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "6b2d51c740c75fbb",
+      "line" : 91,
+      "message" : "2 duplicated regions of ~81 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:111",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 111,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "957f17dee4e0a9d2",
+      "line" : 98,
+      "message" : "3 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:118, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift:193",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift",
+      "related" : [
+        {
+          "column" : 20,
+          "line" : 118,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        },
+        {
+          "column" : 39,
+          "line" : 193,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBJSON\/JSONFunctions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 16,
+      "fingerprint" : "45babd65162aefe3",
+      "line" : 73,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:20",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 20,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "25c144ab1534169e",
+      "line" : 98,
+      "message" : "2 duplicated regions of ~136 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:38",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 38,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "f6cd932b19ed4e7f",
+      "line" : 100,
+      "message" : "3 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:40, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:33",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 33,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "875d03e3fe046c0",
+      "line" : 124,
+      "message" : "2 duplicated regions of ~124 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:212",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 212,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 34,
+      "fingerprint" : "2386046731eb0c84",
+      "line" : 129,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:250",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 250,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 128,
+      "fingerprint" : "815660d92b1a02b6",
+      "line" : 131,
+      "message" : "3 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:219, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:252",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 132,
+          "line" : 219,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 124,
+          "line" : 252,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "1d1e2d18ec049756",
+      "line" : 152,
+      "message" : "2 duplicated regions of ~99 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:225",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 225,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "2a9fd6c34d151366",
+      "line" : 271,
+      "message" : "2 duplicated regions of ~89 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:153",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 153,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e0fa347457601eea",
+      "line" : 302,
+      "message" : "2 duplicated regions of ~173 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:406",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 406,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "de44ebae816a5542",
+      "line" : 305,
+      "message" : "3 duplicated regions of ~138 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:409, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:462",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 409,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 21,
+          "line" : 462,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 30,
+      "fingerprint" : "52d3f60588fefa3",
+      "line" : 306,
+      "message" : "2 duplicated regions of ~119 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:463",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 463,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e736fe5bcffa074b",
+      "line" : 338,
+      "message" : "2 duplicated regions of ~120 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:425",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 425,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "aa4de9146f1ffe67",
+      "line" : 514,
+      "message" : "5 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:520, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:526, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:531, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:536",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 520,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 526,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 531,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 536,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "9b5bed981b65cfd4",
+      "line" : 516,
+      "message" : "6 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:522, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:527, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:532, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:537, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLMacros\/SQLMacro.swift:40",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 70,
+          "line" : 522,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 40,
+          "line" : 527,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 66,
+          "line" : 532,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 54,
+          "line" : 537,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 15,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLMacros\/SQLMacro.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "852f8f3ddf1f145",
+      "line" : 516,
+      "message" : "3 duplicated regions of ~96 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:523, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:532",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 523,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 68,
+          "line" : 532,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "45e7b5ae9694c321",
+      "line" : 516,
+      "message" : "4 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:523, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:533, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift:542",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 19,
+          "line" : 523,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 533,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 542,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "64c8eb79ba455be7",
+      "line" : 556,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/Stats.swift:12",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 12,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/Stats.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 18,
+      "fingerprint" : "ab4826e41c06e6e9",
+      "line" : 19,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:21",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 20,
+          "line" : 21,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "7ef3be39fd0a4666",
+      "line" : 57,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:65",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 104,
+          "line" : 65,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "fb84563c2abd6b94",
+      "line" : 78,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:202",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 202,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "a62040bba843abf0",
+      "line" : 91,
+      "message" : "2 duplicated regions of ~71 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:224",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 224,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "94d923da88e40876",
+      "line" : 99,
+      "message" : "2 duplicated regions of ~75 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:111",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 46,
+          "line" : 111,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 63,
+      "fingerprint" : "509d7be3dae70f7d",
+      "line" : 127,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:146",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 126,
+          "line" : 146,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "d4b2ff9b4390e2b6",
+      "line" : 177,
+      "message" : "2 duplicated regions of ~92 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:198",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 84,
+          "line" : 198,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "52f11ae688d70fdd",
+      "line" : 194,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:216",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 216,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "99c7f843f494c568",
+      "line" : 199,
+      "message" : "3 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift:221, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:238",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift",
+      "related" : [
+        {
+          "column" : 15,
+          "line" : 221,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/SQLScenario.swift"
+        },
+        {
+          "column" : 15,
+          "line" : 238,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "8b71fb08e89885d6",
+      "line" : 96,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:223",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 223,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "a219b689f94591a3",
+      "line" : 230,
+      "message" : "2 duplicated regions of ~72 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift:247",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift",
+      "related" : [
+        {
+          "column" : 82,
+          "line" : 247,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "c30213cdfe51f653",
+      "line" : 91,
+      "message" : "2 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLMacros\/TableMacro.swift:231",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLMacros\/SQLMacro.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 231,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLMacros\/TableMacro.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

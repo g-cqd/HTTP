@@ -1,0 +1,3607 @@
+{
+  "analyzedFileCount" : 330,
+  "cacheHits" : 0,
+  "cacheMisses" : 330,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 81,
+      "fingerprint" : "67f1c8ed8b38ec53",
+      "line" : 46,
+      "message" : "2 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/AcceptLanguage.swift:32",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Accept.swift",
+      "related" : [
+        {
+          "column" : 62,
+          "line" : 32,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/AcceptLanguage.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "88dbe8b9829f29ec",
+      "line" : 42,
+      "message" : "4 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Cookies.swift:26, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CacheControl.swift:49, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift:237",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/AcceptParsing.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 26,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Cookies.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 49,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CacheControl.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 237,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "addf09a6f38fc7a9",
+      "line" : 119,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Base64.swift:141",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Base64.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 141,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Base64.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "9a00230871c1754",
+      "line" : 23,
+      "message" : "3 duplicated regions of ~79 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CacheControl.swift:46, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift:234",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Cookies.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CacheControl.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 234,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "43f5e847f2222617",
+      "line" : 67,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift:178",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 178,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "3282373d79412471",
+      "line" : 115,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift:204",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 204,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 34,
+      "fingerprint" : "8f550c0de9f6299e",
+      "line" : 130,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift:217",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 217,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/FieldValidation.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "43523ef4b85e1ca0",
+      "line" : 13,
+      "message" : "11 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:23, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:39, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:68, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:81, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:94, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:113, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:133, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:146, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift:161",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 23,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 39,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 68,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 81,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 94,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 133,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 146,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 161,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName+Registered.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "8a129596b4d0cd0b",
+      "line" : 90,
+      "message" : "2 duplicated regions of ~79 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName.swift:125",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPFieldName.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "30807422b76e86f8",
+      "line" : 35,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.90)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPMethod.swift:43",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPMethod.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 43,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPMethod.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 18,
+      "fingerprint" : "e37dfb3932d98df8",
+      "line" : 21,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+DecimalString.swift:23",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+DecimalString.swift",
+      "related" : [
+        {
+          "column" : 54,
+          "line" : 23,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+DecimalString.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 48,
+      "fingerprint" : "94195b4fc13f953b",
+      "line" : 22,
+      "message" : "6 duplicated regions of ~50 tokens (similarity 0.92)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:25, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:26, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:28, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:33, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:34",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 25,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        },
+        {
+          "column" : 72,
+          "line" : 26,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 28,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        },
+        {
+          "column" : 36,
+          "line" : 33,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 34,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "9477760815c4ba01",
+      "line" : 23,
+      "message" : "4 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:26, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:29, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift:32",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift",
+      "related" : [
+        {
+          "column" : 57,
+          "line" : 26,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 29,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        },
+        {
+          "column" : 53,
+          "line" : 32,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+ReasonPhrase.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 46,
+      "fingerprint" : "774dc147db1e8153",
+      "line" : 13,
+      "message" : "5 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift:28, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift:46, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift:58, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift:73",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 28,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift"
+        },
+        {
+          "column" : 51,
+          "line" : 58,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift"
+        },
+        {
+          "column" : 55,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/HTTPStatus+Registered.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "f4dc91f674dbcbc2",
+      "line" : 15,
+      "message" : "2 duplicated regions of ~525 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman+Table.swift:63",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman+Table.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 63,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman+Table.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "473789df1a58e488",
+      "line" : 16,
+      "message" : "3 duplicated regions of ~136 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman+Table.swift:64, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/SHA256.swift:89",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman+Table.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 64,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman+Table.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 89,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/SHA256.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 69,
+      "fingerprint" : "b0bb61b8813cda95",
+      "line" : 131,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman.swift:140",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman.swift",
+      "related" : [
+        {
+          "column" : 67,
+          "line" : 140,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/Huffman.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "723b53fd29bb0e2",
+      "line" : 13,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2StreamID.swift:11",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/QUICStreamID.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 11,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2StreamID.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 51,
+      "fingerprint" : "e04629c7175d3dc3",
+      "line" : 58,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Settings.swift:124",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/QUICVarint.swift",
+      "related" : [
+        {
+          "column" : 48,
+          "line" : 124,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Settings.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "e607193d33d04c4",
+      "line" : 59,
+      "message" : "3 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameWriter.swift:78, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Settings.swift:125",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/QUICVarint.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 78,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameWriter.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Settings.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "c25361faa8f037d6",
+      "line" : 22,
+      "message" : "2 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/SHA1.swift:24",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/SHA256.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 24,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/SHA1.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "22e7ce9cc7546403",
+      "line" : 33,
+      "message" : "2 duplicated regions of ~96 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/SHA1.swift:35",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/SHA256.swift",
+      "related" : [
+        {
+          "column" : 49,
+          "line" : 35,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/SHA1.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "b7c957144e3a56f5",
+      "line" : 104,
+      "message" : "2 duplicated regions of ~66 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/SHA1.swift:87",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/SHA256.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/SHA1.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 34,
+      "fingerprint" : "3160f1a4f8fa9021",
+      "line" : 12,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+ParserBytes.swift:21",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+ParserBytes.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 21,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+ParserBytes.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "b1ebc3e91ed1d1b0",
+      "line" : 15,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+ParserBytes.swift:22",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+ParserBytes.swift",
+      "related" : [
+        {
+          "column" : 41,
+          "line" : 22,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+ParserBytes.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 28,
+      "fingerprint" : "d3ee5cddc3d6a177",
+      "line" : 26,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.84)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+Parsing.swift:43",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+Parsing.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 43,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+Parsing.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "360f0d5e2bfa5902",
+      "line" : 134,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields.swift:65",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+Parsing.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 65,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "6e94996ed71411e0",
+      "line" : 216,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+Parsing.swift:313",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+Parsing.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 313,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Core\/HTTPCore\/StructuredFields+Parsing.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 99,
+      "fingerprint" : "abe83931310ddb34",
+      "line" : 66,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/HTTPAuth\/JWTMiddleware.swift:78",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/HTTPAuth\/BasicAuthMiddleware.swift",
+      "related" : [
+        {
+          "column" : 73,
+          "line" : 78,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/HTTPAuth\/JWTMiddleware.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "8873e2169d7f75a7",
+      "line" : 36,
+      "message" : "3 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CORSMiddleware.swift:44, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SecurityHeadersMiddleware.swift:34",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/HTTPAuth\/JWTMiddleware.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 44,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CORSMiddleware.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 34,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SecurityHeadersMiddleware.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "64b3d0f9787e56cf",
+      "line" : 37,
+      "message" : "4 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CORSMiddleware.swift:45, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SecurityHeadersMiddleware.swift:35, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SessionMiddleware.swift:40",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/HTTPAuth\/JWTMiddleware.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 45,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CORSMiddleware.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 35,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SecurityHeadersMiddleware.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SessionMiddleware.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "907346f38d667c8",
+      "line" : 26,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/MetricsMiddleware.swift:25",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/HTTPObservability\/LoggingMiddleware.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 25,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/MetricsMiddleware.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "cdedbc0e51f3d217",
+      "line" : 23,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKInteger.swift:31",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKInteger.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 31,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKInteger.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "37c49d5f6572cbbd",
+      "line" : 13,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:16",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 16,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "2f119de3c83adc2c",
+      "line" : 19,
+      "message" : "3 duplicated regions of ~110 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:36, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:99",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 36,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 99,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "728dadb4e8620648",
+      "line" : 20,
+      "message" : "13 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:37, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:41, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:51, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:59, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:63, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:67, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:71, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:75, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:80, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:100, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:104",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 36,
+          "line" : 41,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 51,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 59,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 63,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 71,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 75,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 46,
+          "line" : 80,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 100,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 57,
+          "line" : 104,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 33,
+      "fingerprint" : "a96e95ca0c8e4a4f",
+      "line" : 23,
+      "message" : "3 duplicated regions of ~124 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:43, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:86",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 43,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 33,
+          "line" : 86,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "3401140ce8214cd2",
+      "line" : 26,
+      "message" : "4 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:46, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:89, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:93",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 89,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 36,
+          "line" : 93,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "7fa76f10ac533295",
+      "line" : 30,
+      "message" : "2 duplicated regions of ~73 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:96",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 96,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "a4d4bae42a323745",
+      "line" : 34,
+      "message" : "7 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:41, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:48, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:55, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:62, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:69, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:27",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 41,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 48,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 62,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 69,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 27,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 68,
+      "fingerprint" : "f2e744c263647e12",
+      "line" : 34,
+      "message" : "14 duplicated regions of ~50 tokens (similarity 0.94)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:37, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:40, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:46, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:48, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:51, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:59, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:62, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:65, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:71, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift:73, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:28, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:31",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 48,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 51,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 59,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 40,
+          "line" : 62,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 65,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 71,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 38,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift"
+        },
+        {
+          "column" : 28,
+          "line" : 28,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 31,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 33,
+      "fingerprint" : "538ca8fa78d82af9",
+      "line" : 87,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:136",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 136,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "27972baba8d8549d",
+      "line" : 95,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:145",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 145,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "379b3d13694952ea",
+      "line" : 45,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKString.swift:62",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKString.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 62,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HPACK\/HPACKString.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "b60da321f85956a9",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP1\/HTTPVersion.swift:47",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP1\/HTTPVersion.swift",
+      "related" : [
+        {
+          "column" : 15,
+          "line" : 47,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP1\/HTTPVersion.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "cd1072cae45f4b50",
+      "line" : 9,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP1\/RequestLine.swift:8",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP1\/RequestHead.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 8,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP1\/RequestLine.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "f917cd953c3a8583",
+      "line" : 55,
+      "message" : "2 duplicated regions of ~82 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+Response.swift:111",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+Connect.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 111,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+Response.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "da2e88d5de9c5a01",
+      "line" : 51,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+FlowControl.swift:110",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+FlowControl.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 110,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+FlowControl.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "7307e48939675c8e",
+      "line" : 56,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+Response.swift:80",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+Response.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 80,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+Response.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "24ec4eaf7c20bfb4",
+      "line" : 178,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Response.swift:74",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection+Response.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Response.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "42f032f717df4f32",
+      "line" : 21,
+      "message" : "2 duplicated regions of ~101 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection.swift:23",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 23,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 53,
+      "fingerprint" : "c4c0af33273a88bc",
+      "line" : 184,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection.swift:187",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection.swift",
+      "related" : [
+        {
+          "column" : 53,
+          "line" : 187,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "253683024437aa2c",
+      "line" : 273,
+      "message" : "2 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Streams.swift:250",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection.swift",
+      "related" : [
+        {
+          "column" : 19,
+          "line" : 250,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Streams.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 55,
+      "fingerprint" : "38597355ae933577",
+      "line" : 277,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketConnection.swift:350",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 350,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "23ac0c0b7acbbd8d",
+      "line" : 329,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection.swift:350",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 350,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 14,
+      "fingerprint" : "71a0e3855ef134a9",
+      "line" : 446,
+      "message" : "2 duplicated regions of ~73 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Request.swift:340",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Connection.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 340,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Request.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "19612b9696fb5c27",
+      "line" : 12,
+      "message" : "2 duplicated regions of ~102 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Error.swift:19",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Error.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 19,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Error.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "8e840e851ba72499",
+      "line" : 10,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3ErrorCode.swift:12",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2ErrorCode.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 12,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3ErrorCode.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "db35cbd96746732",
+      "line" : 14,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameDecoder.swift:20",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameDecoder.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 20,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "236098daec47c43f",
+      "line" : 10,
+      "message" : "3 duplicated regions of ~82 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameType.swift:12, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift:15",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameFlags.swift",
+      "related" : [
+        {
+          "column" : 41,
+          "line" : 12,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameType.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 15,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "68eb4865322297de",
+      "line" : 10,
+      "message" : "4 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameType.swift:12, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift:15, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketCloseCode.swift:10",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameFlags.swift",
+      "related" : [
+        {
+          "column" : 52,
+          "line" : 12,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameType.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 15,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift"
+        },
+        {
+          "column" : 35,
+          "line" : 10,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketCloseCode.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "b077e1ffb8c274ba",
+      "line" : 12,
+      "message" : "2 duplicated regions of ~111 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift:15",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameType.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 15,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "d0e01ad122c8a2f",
+      "line" : 22,
+      "message" : "4 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift:25, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketCloseCode.swift:20, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketOpcode.swift:20",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2FrameType.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 25,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3FrameType.swift"
+        },
+        {
+          "column" : 44,
+          "line" : 20,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketCloseCode.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 20,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/WebSocketOpcode.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "5a09c29a11cbc751",
+      "line" : 14,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3RequestMapper.swift:14",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2RequestMapper.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 14,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3RequestMapper.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "91c54a279f8252f3",
+      "line" : 85,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Settings.swift:69",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Settings.swift",
+      "related" : [
+        {
+          "column" : 53,
+          "line" : 69,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Settings.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 57,
+      "fingerprint" : "2f86fb103cf64708",
+      "line" : 110,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Settings.swift:86",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Settings.swift",
+      "related" : [
+        {
+          "column" : 49,
+          "line" : 86,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Settings.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "656c59cd938b5ae1",
+      "line" : 124,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift:55",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Settings.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "ea5febc6a85ef067",
+      "line" : 64,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Stream.swift:76",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Stream.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2Stream.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 55,
+      "fingerprint" : "eadb85350de143c7",
+      "line" : 38,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3StreamTable.swift:45",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP2\/HTTP2StreamTable.swift",
+      "related" : [
+        {
+          "column" : 54,
+          "line" : 45,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3StreamTable.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 57,
+      "fingerprint" : "46213f85a2268002",
+      "line" : 195,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Streams.swift:228",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Streams.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 228,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/HTTP3\/HTTP3Connection+Streams.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 44,
+      "fingerprint" : "795142f5618ff14b",
+      "line" : 56,
+      "message" : "3 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift:113, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift:135",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 135,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "93444c5165ac9a2f",
+      "line" : 107,
+      "message" : "2 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift:129",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 129,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder+Dynamic.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "25262f64ff4a04f",
+      "line" : 224,
+      "message" : "2 duplicated regions of ~68 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder.swift:235",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 235,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "8c12dbd7cdfafeda",
+      "line" : 41,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKInstructions.swift:53",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKInstructions.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 53,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKInstructions.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "31ef30af58c3b597",
+      "line" : 25,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:114",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 114,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "7464914ee24c927e",
+      "line" : 35,
+      "message" : "2 duplicated regions of ~158 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:98",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 49,
+          "line" : 98,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 60,
+      "fingerprint" : "b1f134ff7ac4dc4a",
+      "line" : 109,
+      "message" : "2 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift:120",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 120,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/QPACK\/QPACKStaticTable.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "5009f55ff2b62792",
+      "line" : 23,
+      "message" : "3 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route+WebSocket.swift:40, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route+WebSocket.swift:82",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/ClosureWebSocketHandler.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route+WebSocket.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 82,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route+WebSocket.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "76054e9c751e2118",
+      "line" : 85,
+      "message" : "2 duplicated regions of ~101 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/PermessageDeflate.swift:110",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/PermessageDeflate.swift",
+      "related" : [
+        {
+          "column" : 60,
+          "line" : 110,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Protocols\/WebSocket\/PermessageDeflate.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "b69fa610c5f313a5",
+      "line" : 32,
+      "message" : "4 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder+MIMEType.swift:34, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder+MIMEType.swift:37, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder+MIMEType.swift:40",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder+MIMEType.swift",
+      "related" : [
+        {
+          "column" : 91,
+          "line" : 34,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder+MIMEType.swift"
+        },
+        {
+          "column" : 52,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder+MIMEType.swift"
+        },
+        {
+          "column" : 29,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder+MIMEType.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "9400d39f6083418c",
+      "line" : 157,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift:220",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/FileResponder.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 220,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "8fb5c9ad12e6bec4",
+      "line" : 65,
+      "message" : "2 duplicated regions of ~79 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP3.swift:125",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP2.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP3.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "da69c7f78c27c719",
+      "line" : 185,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP2.swift:222",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP2.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 222,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP2.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 67,
+      "fingerprint" : "3cc552f7075ea1c2",
+      "line" : 310,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+WebSocket.swift:126",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP2.swift",
+      "related" : [
+        {
+          "column" : 76,
+          "line" : 126,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+WebSocket.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "9319d2395650cd12",
+      "line" : 85,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+WebSocket.swift:209",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP3Tunnel.swift",
+      "related" : [
+        {
+          "column" : 71,
+          "line" : 209,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+WebSocket.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "44a82822f9d1f573",
+      "line" : 123,
+      "message" : "2 duplicated regions of ~54 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+WebSocket.swift:299",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+HTTP3Tunnel.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 299,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+WebSocket.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "43c12fe584e35c8e",
+      "line" : 105,
+      "message" : "2 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestReader.swift:207",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestReader.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 207,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestReader.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "8a32c593d9836d87",
+      "line" : 123,
+      "message" : "2 duplicated regions of ~119 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestReader.swift:221",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestReader.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 221,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestReader.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "a5d4bd9ea4582cbd",
+      "line" : 20,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestStreaming.swift:83",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestStreaming.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 83,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+RequestStreaming.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "146b5e9f2e5b2e3f",
+      "line" : 82,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+Timeout.swift:117",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+Timeout.swift",
+      "related" : [
+        {
+          "column" : 28,
+          "line" : 117,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+Timeout.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "19195e1150978ec9",
+      "line" : 23,
+      "message" : "2 duplicated regions of ~82 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift:36",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Brotli.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 36,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "6430041b1228e661",
+      "line" : 23,
+      "message" : "2 duplicated regions of ~108 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift:36",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Brotli.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 36,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "c2a7fa26707ac35b",
+      "line" : 24,
+      "message" : "4 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift:37, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipLinux.swift:31, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Zstd.swift:36",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Brotli.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Gzip.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 31,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipLinux.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 36,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Zstd.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "8d794a8c1978cf4",
+      "line" : 10,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipEncoder.swift:10",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliEncoder.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 10,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "668e8e22bd05d8ef",
+      "line" : 20,
+      "message" : "2 duplicated regions of ~139 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipLinux.swift:19",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 19,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipLinux.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "1ccf61cc57f4157",
+      "line" : 31,
+      "message" : "3 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift:55",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "da087ac73847eb92",
+      "line" : 32,
+      "message" : "3 duplicated regions of ~75 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipLinux.swift:32, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Zstd.swift:37",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 32,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipLinux.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 37,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Zstd.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 48,
+      "fingerprint" : "250e023d76711596",
+      "line" : 49,
+      "message" : "2 duplicated regions of ~94 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Inflate.swift:135",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift",
+      "related" : [
+        {
+          "column" : 41,
+          "line" : 135,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Inflate.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 64,
+      "fingerprint" : "d3629815bbfccee",
+      "line" : 49,
+      "message" : "2 duplicated regions of ~79 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift:50",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift",
+      "related" : [
+        {
+          "column" : 79,
+          "line" : 50,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 64,
+      "fingerprint" : "dd7e74295f2d687a",
+      "line" : 49,
+      "message" : "3 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Inflate.swift:137, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift:50",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/BrotliLinux.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 137,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Inflate.swift"
+        },
+        {
+          "column" : 79,
+          "line" : 50,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "174c3d262f2d0e9a",
+      "line" : 43,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SecurityHeadersMiddleware.swift:33",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CORSMiddleware.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 33,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SecurityHeadersMiddleware.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1dbb0a12f56e16b0",
+      "line" : 60,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift:24",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/CompressionMiddleware.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 24,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "3c94cef651c61a10",
+      "line" : 21,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift:22",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/ConditionalRequestMiddleware.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 22,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RangeMiddleware.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "12fad2dcfc0736a9",
+      "line" : 27,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/ServerHeaderMiddleware.swift:19",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/DateHeaderMiddleware.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 19,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/ServerHeaderMiddleware.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "15e3d8cfab5a7374",
+      "line" : 12,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Zstd.swift:13",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/GzipLinux.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 13,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Zstd.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "1e1626544b4d78b7",
+      "line" : 13,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift:17",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/Inflate.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 17,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/InflateLinux.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1741d20f1a49f39e",
+      "line" : 64,
+      "message" : "2 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SessionMiddleware.swift:113",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/RequestIDMiddleware.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Middleware\/SessionMiddleware.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "42804af3bb01a118",
+      "line" : 36,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift:92",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/ResolvedRoute.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 18,
+      "fingerprint" : "597201bafb7c6617",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route+WebSocket.swift:81",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route+WebSocket.swift",
+      "related" : [
+        {
+          "column" : 14,
+          "line" : 81,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route+WebSocket.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 57,
+      "fingerprint" : "f2a50e201aa2dc2d",
+      "line" : 239,
+      "message" : "2 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift:254",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift",
+      "related" : [
+        {
+          "column" : 57,
+          "line" : 254,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "f9e704473647aacd",
+      "line" : 244,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.97)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift:264",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 264,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/Routing\/Route.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 62,
+      "fingerprint" : "fc429d7fee2c2c13",
+      "line" : 123,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift:73",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 62,
+      "fingerprint" : "14257dcbdf175401",
+      "line" : 123,
+      "message" : "5 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift:73, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift:111, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:109, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:149",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 111,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 109,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 149,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "5c697572d9b012ba",
+      "line" : 50,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:87",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "370c052931b58e7f",
+      "line" : 87,
+      "message" : "2 duplicated regions of ~84 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:125",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 33,
+      "fingerprint" : "6ac9dace36b2dffc",
+      "line" : 103,
+      "message" : "2 duplicated regions of ~95 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:141",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 141,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "dcc4ddb9428fac64",
+      "line" : 25,
+      "message" : "2 duplicated regions of ~90 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift:55",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "d4bc36ff4d7c119e",
+      "line" : 55,
+      "message" : "2 duplicated regions of ~90 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Abstraction\/TransportFactory.swift:97",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Abstraction\/TransportFactory.swift",
+      "related" : [
+        {
+          "column" : 20,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Abstraction\/TransportFactory.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 27,
+      "fingerprint" : "f11977be558cf36",
+      "line" : 133,
+      "message" : "2 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Abstraction\/TransportTLS.swift:155",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Abstraction\/TransportTLS.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 155,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Abstraction\/TransportTLS.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "cca9a95594c43e34",
+      "line" : 46,
+      "message" : "3 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift:72, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift:138",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 72,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 138,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 73,
+      "fingerprint" : "ac0e7e20a13e8804",
+      "line" : 47,
+      "message" : "2 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift:139",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift",
+      "related" : [
+        {
+          "column" : 68,
+          "line" : 139,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "95eb019bf78a5043",
+      "line" : 71,
+      "message" : "2 duplicated regions of ~93 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift:137",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 137,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "52efc97f8b3911e4",
+      "line" : 99,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift:128",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift",
+      "related" : [
+        {
+          "column" : 91,
+          "line" : 128,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/DevTLSIdentity.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 73,
+      "fingerprint" : "f8121378b4c8191c",
+      "line" : 71,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkConnection.swift:121",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkConnection.swift",
+      "related" : [
+        {
+          "column" : 74,
+          "line" : 121,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "7c021361d2d7e790",
+      "line" : 13,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXDispatch\/POSIXDispatchTransport.swift:14",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkTransport.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 14,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXDispatch\/POSIXDispatchTransport.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "92f450e56ef65a2f",
+      "line" : 22,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift:47",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkTransport.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 47,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 51,
+      "fingerprint" : "70113cfdb875897a",
+      "line" : 79,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift:55",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkTransport.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 55,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "8da736425d9a7d2a",
+      "line" : 93,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift:64",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkTransport.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 64,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "8c3efa6bd6e1a0f6",
+      "line" : 308,
+      "message" : "2 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift:140",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkTransport.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 140,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 46,
+      "fingerprint" : "54e57c4157f2513a",
+      "line" : 326,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift:158",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Network\/NetworkFrameworkTransport.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 158,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/Quic\/LegacyQUICTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "533932fcc3b1bf24",
+      "line" : 53,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:62",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXDispatch\/POSIXDispatchConnection.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 62,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "7816d573345bd2f7",
+      "line" : 43,
+      "message" : "4 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift:47, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:46, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:46",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXDispatch\/POSIXDispatchTransport.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 47,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 46,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "c4398184828c3797",
+      "line" : 118,
+      "message" : "2 duplicated regions of ~72 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift:211",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXDispatch\/POSIXDispatchTransport.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 211,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "49b8a500dbc5d43f",
+      "line" : 121,
+      "message" : "4 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift:185, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:189, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:169",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXDispatch\/POSIXDispatchTransport.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 185,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 189,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 169,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 50,
+      "fingerprint" : "5e9d352d245086ef",
+      "line" : 121,
+      "message" : "6 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift:185, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:189, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXShared\/POSIXSocket.swift:195, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift:214, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:169",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXDispatch\/POSIXDispatchTransport.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 185,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 189,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 58,
+          "line" : 195,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXShared\/POSIXSocket.swift"
+        },
+        {
+          "column" : 54,
+          "line" : 214,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 169,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 27,
+      "fingerprint" : "28ad26e76e46e7bf",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift:31",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 31,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "3c8951bd5fa716df",
+      "line" : 53,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift:50",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift",
+      "related" : [
+        {
+          "column" : 62,
+          "line" : 50,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "5a1a333eb1a9c7b3",
+      "line" : 103,
+      "message" : "2 duplicated regions of ~113 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift:89",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 89,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "6b420610e925dfbf",
+      "line" : 124,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.86)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift:153",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift",
+      "related" : [
+        {
+          "column" : 10,
+          "line" : 153,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "182932010019fdad",
+      "line" : 178,
+      "message" : "2 duplicated regions of ~81 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift:158",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 158,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "fc857a702625f8b6",
+      "line" : 219,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift:198",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 198,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "e2f28e29fe901c70",
+      "line" : 239,
+      "message" : "2 duplicated regions of ~104 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift:221",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/EpollEventLoop.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 221,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "8be5ae6b762e80f3",
+      "line" : 31,
+      "message" : "3 duplicated regions of ~100 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:24, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:27",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 24,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 27,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "170a095990ec3c76",
+      "line" : 48,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:43",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 43,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e890d21741975935",
+      "line" : 72,
+      "message" : "3 duplicated regions of ~135 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:67, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:73",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 73,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 16,
+      "fingerprint" : "bdaad38c5c4c0df7",
+      "line" : 92,
+      "message" : "4 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:87, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSConnection.swift:170, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:90",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 12,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 170,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSConnection.swift"
+        },
+        {
+          "column" : 12,
+          "line" : 90,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "6efdc7a89d1c3532",
+      "line" : 102,
+      "message" : "2 duplicated regions of ~678 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:97",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "83d46d6d5476f957",
+      "line" : 102,
+      "message" : "3 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:97, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSConnection.swift:180",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 180,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSConnection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "9185f746164a6aaf",
+      "line" : 108,
+      "message" : "3 duplicated regions of ~137 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:105, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:210",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 105,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 210,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "e251439fee79cd90",
+      "line" : 161,
+      "message" : "3 duplicated regions of ~91 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:157, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:256",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 157,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 29,
+          "line" : 256,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 63,
+      "fingerprint" : "b1ac8cb45d94a6bc",
+      "line" : 185,
+      "message" : "3 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:181, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:280",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 59,
+          "line" : 181,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 68,
+          "line" : 280,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "dc5e4d58d18e1034",
+      "line" : 277,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.84)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:290",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 290,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "5b770702380ab6e7",
+      "line" : 302,
+      "message" : "2 duplicated regions of ~111 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:307",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 307,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "6b8c3be6ccc8112",
+      "line" : 320,
+      "message" : "2 duplicated regions of ~98 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:182",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 182,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "8db113563dad6688",
+      "line" : 333,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:267",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 267,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 49,
+      "fingerprint" : "932f4c5733caa799",
+      "line" : 351,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:335",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 335,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "cd2ca05f75cfd077",
+      "line" : 375,
+      "message" : "2 duplicated regions of ~84 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:355",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 355,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 79,
+      "fingerprint" : "9880e91528301b62",
+      "line" : 391,
+      "message" : "2 duplicated regions of ~93 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:371",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 76,
+          "line" : 371,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "58bf64003873688c",
+      "line" : 423,
+      "message" : "3 duplicated regions of ~174 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:397, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:369",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 397,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        },
+        {
+          "column" : 20,
+          "line" : 369,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 33,
+      "fingerprint" : "d12bfa47e8063c16",
+      "line" : 457,
+      "message" : "2 duplicated regions of ~85 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:429",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 429,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 82,
+      "fingerprint" : "60c298ddc70add51",
+      "line" : 474,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift:446",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollConnection.swift",
+      "related" : [
+        {
+          "column" : 77,
+          "line" : 446,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "9f2c8ff5908e7e01",
+      "line" : 29,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:28",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 28,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "198c403e494e4af9",
+      "line" : 34,
+      "message" : "3 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:33, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:33",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 33,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 33,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "7d590a243bddd6a2",
+      "line" : 45,
+      "message" : "2 duplicated regions of ~131 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:44",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 44,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "940386d781cdfa04",
+      "line" : 46,
+      "message" : "3 duplicated regions of ~94 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:45, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:45",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 45,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 45,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 69,
+      "fingerprint" : "5bbfa5a673247fa5",
+      "line" : 78,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:76",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 99,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 46,
+      "fingerprint" : "e48020acf9cbe4b2",
+      "line" : 100,
+      "message" : "2 duplicated regions of ~227 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:96",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 96,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "5012b19c877e920",
+      "line" : 107,
+      "message" : "3 duplicated regions of ~119 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:103, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:87",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 103,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "c2327b0842327b95",
+      "line" : 162,
+      "message" : "3 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:166, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:146",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 166,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 146,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "47b77b40ac0d5d98",
+      "line" : 179,
+      "message" : "3 duplicated regions of ~189 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:183, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:163",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 183,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 163,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "8f9cf071bc8945e0",
+      "line" : 241,
+      "message" : "3 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift:246, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:216",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXEpoll\/POSIXEpollTransport.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 246,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 216,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 22,
+      "fingerprint" : "1ca011ec31b732b0",
+      "line" : 124,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.98)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift:138",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 138,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/KqueueEventLoop.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "9b715948375068b2",
+      "line" : 37,
+      "message" : "2 duplicated regions of ~66 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:40",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "be12efe77b1d18ab",
+      "line" : 64,
+      "message" : "2 duplicated regions of ~143 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:70",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 70,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 47,
+      "fingerprint" : "c57b49189d36d354",
+      "line" : 302,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:164",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift",
+      "related" : [
+        {
+          "column" : 60,
+          "line" : 164,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "72d43aadc226c952",
+      "line" : 425,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:397",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueConnection.swift",
+      "related" : [
+        {
+          "column" : 61,
+          "line" : 397,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "674f9521623b980f",
+      "line" : 93,
+      "message" : "2 duplicated regions of ~68 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:76",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 76,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "a4424ecc4dceceae",
+      "line" : 131,
+      "message" : "2 duplicated regions of ~390 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:115",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 115,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "7c1f4e7de6cbd138",
+      "line" : 231,
+      "message" : "2 duplicated regions of ~123 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift:203",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXKqueue\/POSIXKqueueTransport.swift",
+      "related" : [
+        {
+          "column" : 65,
+          "line" : 203,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemTransport.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "3d0a2b4f1e91094e",
+      "line" : 134,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.86)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXShared\/POSIXSocket.swift:196, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift:215",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXShared\/POSIXSocket.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 196,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/POSIXShared\/POSIXSocket.swift"
+        },
+        {
+          "column" : 47,
+          "line" : 215,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/PortableTLS\/PortableTLSTransport.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "80be068bd8069c32",
+      "line" : 177,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:420",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 420,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "66c7415c818dec5f",
+      "line" : 342,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift:413",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 413,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Transport\/HTTPTransport\/SwiftSystem\/SwiftSystemConnection.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

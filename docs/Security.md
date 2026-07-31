@@ -147,10 +147,14 @@ These are **not yet enforced** — do not rely on them until the referenced mile
 
 | Gap | Attack | Plan |
 |---|---|---|
-| **transport(kqueue)**: a parked read/write continuation leaks when the fd is closed mid-wait | task/memory leak via the Slowloris-timeout path | drain pending resumers in `KqueueEventLoop.closeDescriptor` (T-F7) |
-| **transport(posix)**: accept-error back-off (`EMFILE`/`ENFILE`) `usleep`s on the shared kqueue/dispatch event-loop queue | FD-pressure latency for all connections | timer-based re-arm off the shared queue (T-F8 / F-EMFILE; the synchronous accept loops can't `await`, so the bounded back-off is the interim) |
+| **transport(portableTLS)**: the blocking accept loop still `usleep`s its `EMFILE`/`ENFILE` back-off inline | FD-pressure latency on that backbone only | give it the timer-based re-arm the kqueue/epoll loops already have (`PortableTLSTransport.swift`, the last remaining inline `usleep`) |
 
-> Resolved since the first review (now implemented): per-client **and** global connection caps; the
+> Resolved since the first review (now implemented): the kqueue parked-continuation leak — T-F7,
+> `KqueueEventLoop.closeDescriptor` now drains and invokes both parked handlers after `close`, so a
+> cancelled receive resumes on `EBADF` instead of hanging; the POSIX accept-error back-off — T-F8 /
+> F-EMFILE, `POSIXSocket` now merely *classifies* the error as `.backoff` and the kqueue and epoll
+> transports each re-arm from a dedicated `backoffQueue` via `asyncAfter`, off every I/O-bearing queue;
+> per-client **and** global connection caps; the
 > CONTINUATION flood guard (CVE-2024-27316); the h1 header-accumulation cap; the HTTP/2 Rapid-Reset
 > *counter*, `maxConcurrentStreams`, and inbound flow control; TLS/ALPN with a TLS 1.3 floor **and**
 > pinned ceiling, plus **strict ALPN rejection** over TLS (F-ALPN — refuse a connection that negotiated

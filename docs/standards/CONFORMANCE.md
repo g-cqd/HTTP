@@ -81,22 +81,26 @@ connection error, while an RST-closed id (and any late DATA on either) keeps the
 
 ## WebSocket — Autobahn TestSuite (RFC 6455)
 
-**Wired (non-gating).** The `autobahn` CI job (`.github/workflows/ci.yml`, on `ubuntu-latest` — which,
+**Gating.** The `autobahn` CI job (`.github/workflows/ci.yml`, on `ubuntu-latest` — which,
 unlike the macOS image, has Docker) runs the `crossbario/autobahn-testsuite` `fuzzingclient` against
 `httpd-example`'s `/ws` echo: the server runs in the Swift container on the host network, Autobahn runs as
 its own container against it, and `.github/conformance/autobahn/check.py` fails the run on any `FAILED`
-case (config: `.github/conformance/autobahn/fuzzingclient.json`). It is `continue-on-error` until first
-observed green on CI, then should be promoted to gating. The in-house WebSocket suites + `WebSocketFuzzTests`
+case (config: `.github/conformance/autobahn/fuzzingclient.json`). The in-house WebSocket suites + `WebSocketFuzzTests`
 (framing, masking, fragmentation, close codes, UTF-8) remain the always-on coverage.
 
 ## HTTP/3 / QUIC — h3spec (RFC 9114 / RFC 9000)
 
-**Planned (Darwin-only).** h3 is Network.framework-provided, so an h3spec lane is a macOS job. Two
-prerequisites gate it: (1) `httpd-example` must serve h3 (a QUIC transport + a dev TLS identity — today the
-example serves h1/h2 cleartext), and (2) the `h3spec` tool (Kazu Yamamoto's QUIC/h3 conformance suite) must
-be installed on the runner (a Haskell build — no Homebrew formula yet). Until then, the sans-I/O HTTP/3 +
-QPACK engines are covered by the in-house `HTTP3Tests` / `QPACKTests` (RFC 9114 §4 framing, §6 streams,
-QPACK RFC 9204) and the real-QUIC loopback in `HTTPServerHTTP3Tests`.
+**Wired, advisory (Darwin-only).** The `h3spec` job runs on macOS against `httpd-example` serving h3 over
+the Network.framework QUIC transport, using a pinned prebuilt arm64 binary of Kazu Yamamoto's suite. It is
+`continue-on-error: true` and **must stay that way for now**, for a reason that is not a to-do: h3spec
+reports 48 of 49 cases as failures, and every one of them is a QUIC-TRANSPORT-layer expectation (RFC 9000)
+aimed at the peer's QUIC stack — which here is Apple's closed Network.framework implementation, not code in
+this repository. Promoting the job as-is would gate the build on behavior we neither own nor can change.
+
+Making it a real gate therefore means splitting the suite: assert the HTTP/3-layer subset (RFC 9114) and
+record the transport-layer subset as structurally unreachable rather than merely unfixed. Until that split
+lands, the sans-I/O HTTP/3 + QPACK engines are covered by the in-house `HTTP3Tests` / `QPACKTests`
+(RFC 9114 §4 framing, §6 streams, QPACK RFC 9204) and the real-QUIC loopback in `HTTPServerHTTP3Tests`.
 
 ## HTTP/3 load (h3load)
 
