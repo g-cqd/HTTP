@@ -143,16 +143,11 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// engine has already received the whole body (bounded by the per-route limit), so a streaming route
     /// is served those bytes wrapped as a one-shot stream — the handler API is uniform across protocols,
     /// and truly incremental h2/h3 delivery is a follow-up (see `docs/adr/0006-…`).
-    func requestBody(
-        _ body: [UInt8],
-        for request: HTTPRequest,
-        in snapshot: ResponderSnapshot
-    ) -> RequestBody {
-        let resolved = snapshot.resolver?
-            .match(method: request.method, path: request.path, isUpgrade: false)
-        return resolved?.route.streamsBody == true
-            ? .stream(HTTPRequestBodyStream(yielding: body))
-            : .collected(body)
+    ///
+    /// Reads the opt-in off the plan the head already resolved: it used to re-run the route match, a
+    /// third or fourth walk of the table for the same request (audit CR-F19).
+    func requestBody(_ body: [UInt8], following plan: DispatchPlan) -> RequestBody {
+        plan.streamsBody ? .stream(HTTPRequestBodyStream(yielding: body)) : .collected(body)
     }
 
     /// Takes ownership of the admission slot charged for `connection`, serves it for its lifetime,

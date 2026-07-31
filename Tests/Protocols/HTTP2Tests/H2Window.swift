@@ -38,17 +38,21 @@ enum H2Window {
         streamWindow: Int = streamWindow,
         connectionWindow: Int = 1 << 20,
         localSettings: HTTP2Settings? = nil,
-        streamsBody: @escaping @Sendable (HTTPRequest) -> Bool = { _ in true }
+        streamsBody: Bool = true
     ) throws -> HTTP2Connection {
         var settings = localSettings ?? HTTP2Settings()
         settings.initialWindowSize = streamWindow
+        let policy = RequestBodyPolicy(isStreaming: streamsBody)
+        let resolveRoute: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = { _, _ in
+            policy
+        }
         return try H2Wire.handshaked(
             localSettings: settings,
             limits: HTTPLimits(
                 streamReceiveWindow: streamWindow,
                 connectionReceiveWindow: connectionWindow
             ),
-            resolveStreamsBody: streamsBody
+            resolveRoute: resolveRoute
         )
     }
 

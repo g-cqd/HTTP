@@ -161,10 +161,13 @@ extension HTTP3Connection {
         // before any DATA is accepted. The route cap REPLACES the global maxBodySize — it may raise as
         // well as tighten it (the connection-level aggregate bound stretches with it, see
         // ``receiveRequestData``); no route (nil) falls back to the global bound.
-        state.effectiveBodyLimit = resolveBodyLimit(request) ?? limits.maxBodySize
+        // ONE query for both facts, and the only one this request needs: the driver files the match
+        // it made here against `streamID`, and reuses it at dispatch (audit CR-F19).
+        let policy = resolveRoute(streamID, request)
+        state.effectiveBodyLimit = policy.limit ?? limits.maxBodySize
         // Whether this route consumes its body as a stream (Phase 1.4): surface it incrementally rather
         // than buffering one `request`. A tunnel (below) is never a streaming-body request.
-        state.isStreaming = resolveStreamsBody(request)
+        state.isStreaming = policy.isStreaming
         guard let connectProtocol else {
             return
         }

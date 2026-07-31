@@ -16,6 +16,8 @@
 //  degrade to a full scan, which is the point: a stale plan must be a cache miss, never a mis-dispatch.
 //
 
+public import HTTPCore
+
 /// A route matched from a request head: its metadata, its captured parameters, and a handle back to the
 /// table entry that produced it.
 public struct RouteMatch: Sendable {
@@ -31,12 +33,21 @@ public struct RouteMatch: Sendable {
     /// Which table entry produced this match, or `nil` when no ``Router`` did.
     let handle: Handle?
 
-    /// A back-reference to one entry of one router's table.
-    struct Handle: Sendable, Hashable {
+    /// A back-reference to one entry of one router's table, plus the request it was made for.
+    ///
+    /// The method and path are carried so the router can tell that the request it is about to serve is
+    /// still the one the head resolved: a middleware sitting between the server and the router may
+    /// rewrite either, and the route that matches afterwards is then a different route. Comparing them
+    /// is a pointer check in the common case — the path is the very `String` the match was made from.
+    struct Handle: Sendable {
         /// The table that minted the match — checked before the index is ever used.
         let origin: RouterIdentity
         /// The index of the matching route within that table.
         let index: Int
+        /// The request method the match was made for.
+        let method: HTTPMethod
+        /// The request path the match was made for.
+        let path: String
     }
 
     /// Creates a match from route metadata and the parameters a pattern captured.

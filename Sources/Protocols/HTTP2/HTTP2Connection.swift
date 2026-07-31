@@ -176,17 +176,17 @@ public struct HTTP2Connection {
     let limits: HTTPLimits
     /// The concurrent-stream cap advertised to and enforced against the peer (RFC 9113 §5.1.2).
     let maxConcurrentStreams: Int
-    /// Resolves the matched route's request-body limit from a request head (Phase 1.2): the engine caps
-    /// each stream's buffered body to it before buffering (RFC 9110 §15.5.14), tighter than the global
-    /// ``HTTPLimits/maxBodySize``.
+    /// Decides one stream's ``RequestBodyPolicy`` from its head, at HEADERS time (Phase 1.2 / 1.4):
+    /// the body ceiling to enforce before buffering (RFC 9110 §15.5.14) and whether the body is
+    /// surfaced incrementally.
     ///
-    /// Defaults to "no per-route limit".
-    let resolveBodyLimit: @Sendable (HTTPRequest) -> Int?
-    /// Resolves whether the matched route consumes its request body as a stream (Phase 1.4), from a
-    /// request head at HEADERS time.
+    /// One closure rather than the former separate limit/streaming pair, because both answers come
+    /// from one route match and asking twice walked the routing table twice (audit CR-F19). The stream
+    /// id is passed so the driver can file the match it just made against the stream that will need it
+    /// again at dispatch, rather than resolving it a third time.
     ///
-    /// Defaults to "no streaming route" — the engine buffers and surfaces one `request`.
-    let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool
+    /// Defaults to ``RequestBodyPolicy/unmatched`` — the global bound, buffered.
+    let resolveRoute: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy
 
     /// Creates a connection that advertises `localSettings`, queuing the server SETTINGS preface (§3.4).
     ///
@@ -195,8 +195,9 @@ public struct HTTP2Connection {
     public init(
         localSettings: HTTP2Settings = HTTP2Settings(),
         limits: HTTPLimits = .default,
-        resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
-        resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool = { _ in false },
+        resolveRoute: @escaping @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = {
+            _, _ in .unmatched
+        },
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // A server MUST NOT advertise ENABLE_PUSH with a non-zero value (RFC 9113 §6.5.2).
@@ -209,8 +210,7 @@ public struct HTTP2Connection {
         self.localSettings = advertised
         self.maxConcurrentStreams = advertised.maxConcurrentStreams ?? limits.maxConcurrentStreams
         self.limits = limits
-        self.resolveBodyLimit = resolveBodyLimit
-        self.resolveStreamsBody = resolveStreamsBody
+        self.resolveRoute = resolveRoute
         self.decoder = HPACKDecoder(
             maxDynamicTableSize: advertised.headerTableSize,
             limits: limits

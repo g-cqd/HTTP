@@ -23,7 +23,7 @@ final class CountingRouter: HTTPRouter {
     /// The wrapped table — the real ``Router``, so the counts measure the production path.
     private let router: Router
 
-    /// Table walks so far: every head-time resolution plus every dispatch-time match.
+    /// Table walks so far: every head-time ``match`` plus every dispatch that had to scan.
     private let walks = Mutex(0)
 
     /// Announces each head-time resolution, so a test can act between the head and the dispatch.
@@ -52,7 +52,12 @@ final class CountingRouter: HTTPRouter {
         body: RequestBody,
         context: RequestContext
     ) async -> ServerResponse {
-        walks.withLock { $0 += 1 }
+        // The wrapped router walks its table unless it can adopt the head-time plan the context
+        // carries. Asking `adopted` — the very predicate the dispatch path uses — rather than
+        // restating it here is what keeps this count honest if that predicate ever changes.
+        if router.adopted(context.route, for: request) == nil {
+            walks.withLock { $0 += 1 }
+        }
         return await router.respond(to: request, body: body, context: context)
     }
 

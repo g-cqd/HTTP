@@ -48,6 +48,13 @@ public struct Router: HTTPRouter {
         if request.method == .options, request.path == "*" {
             return Self.allow(status: .noContent, methods: Self.serverMethods(routes))
         }
+        // The server already matched this request's head against a table; if it was *this* table, for
+        // *this* request, run the route it named instead of finding it again (audit CR-F19).
+        if let route = adopted(context.route, for: request) {
+            var context = context
+            context.parameters = context.route?.parameters ?? RouteParameters()
+            return await route.run(request, body, context)
+        }
         let components = Self.pathComponents(of: request.path)
         // HEAD is GET without a body (RFC 9110 §9.3.2): match it against GET routes and let the server
         // strip the body, so a registered GET also answers HEAD instead of a spurious 405.
@@ -68,6 +75,36 @@ public struct Router: HTTPRouter {
             return await route.run(request, body, context)
         }
         return Self.unmatched(method: request.method, pathMethods: pathMethods)
+    }
+
+    /// The route `match` names, but only if this router can vouch for every part of that claim.
+    ///
+    /// Internal rather than private so the regression suite can ask the same question the dispatch path
+    /// asks — "will this request cost a table walk?" — without restating the predicate and letting the
+    /// two drift apart.
+    ///
+    /// Four conditions, and a failure of any one is a cache miss that falls back to a full scan — never
+    /// a mis-dispatch:
+    ///
+    /// - the match carries a handle at all (a custom ``RouteResolver`` mints none, and neither does the
+    ///   public ``RouteMatch`` initializer);
+    /// - it came from *this* table (`origin`), so a hot reload between head and dispatch, or a nested
+    ///   router handed an enclosing router's match, is rejected rather than indexed;
+    /// - the index is still in range, which the identity check already implies but which must not be
+    ///   *assumed*, because the consequence of being wrong is an out-of-bounds trap;
+    /// - the request has not been rewritten underneath the match. A middleware between the server and
+    ///   the router may legitimately change the method or the path, and the route that then matches is
+    ///   not the one the head resolved.
+    func adopted(_ match: RouteMatch?, for request: HTTPRequest) -> Route? {
+        guard let match, let handle = match.handle,
+            handle.origin == identity,
+            handle.index < routes.count,
+            handle.method == request.method,
+            handle.path == request.path
+        else {
+            return nil
+        }
+        return routes[handle.index]
     }
 
     // MARK: Route matching (head-only)
@@ -97,7 +134,9 @@ public struct Router: HTTPRouter {
             return RouteMatch(
                 route: Self.metadata(of: route),
                 parameters: parameters,
-                handle: RouteMatch.Handle(origin: identity, index: index)
+                handle: RouteMatch.Handle(
+                    origin: identity, index: index, method: method, path: path
+                )
             )
         }
         return nil

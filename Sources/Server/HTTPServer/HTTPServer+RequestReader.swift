@@ -34,7 +34,7 @@ extension HTTPServer where C.Duration == Duration {
         // resolution, the body limit it yields, the WebSocket dispatch and the responder below all come
         // from this generation, so a `reloadResponder` landing mid-body cannot pair an old body limit
         // with a new handler.
-        let snapshot = currentSnapshot
+        var plan = DispatchPlan(snapshot: currentSnapshot)
         let outcome: ReadOutcome
         do {
             outcome = try await readRequest(
@@ -42,7 +42,7 @@ extension HTTPServer where C.Duration == Duration {
                 deadline: deadline,
                 into: &buffer,
                 start: start,
-                in: snapshot
+                following: &plan
             )
         }
         catch let error as HTTP1ParseError {
@@ -62,7 +62,7 @@ extension HTTPServer where C.Duration == Duration {
                 buffer: &buffer,
                 start: &start,
                 responseBuffer: &responseBuffer,
-                in: snapshot
+                following: plan
             )
         }
         guard case .request(let framed) = outcome else {
@@ -76,13 +76,19 @@ extension HTTPServer where C.Duration == Duration {
         // handlers via `context.connection.tlsPeerSubject` rather than a header, and the same seam
         // strips every client-supplied server-asserted field off the request (audit CR-F13) — before
         // the WebSocket branch too, so a handshake handler cannot read a spoofed identity either.
-        let (request, context) = RequestContext.ingress(framed.parsed.request, over: connection)
+        let (request, context) = RequestContext.ingress(
+            framed.parsed.request, over: connection, matching: plan.match
+        )
         // A WebSocket Upgrade request (RFC 6455 §4) to a matching `.webSocket` route the app accepts
         // hands the connection to the WebSocket engine for its lifetime; the h1 keep-alive loop ends
         // here. A non-upgrade GET to that path falls through to `respond` → 426 (the route's fallback);
         // a WebSocket path the responder does not declare resolves to `nil` and is served normally.
+        //
+        // This is the one extra table walk a request can still cost, and only an upgrade pays it: the
+        // handshake is method-agnostic (RFC 6455 §4.1) while the plan above was matched under the
+        // request's own method, so the two are genuinely different questions of the same table.
         if Self.isWebSocketUpgrade(request),
-            let matched = snapshot.resolver?
+            let matched = plan.snapshot.resolver?
                 .match(method: request.method, path: request.path, isUpgrade: true),
             let handler = matched.route.webSocketHandler,
             handler.shouldUpgrade(request)
@@ -98,7 +104,7 @@ extension HTTPServer where C.Duration == Duration {
             )
             return false
         }
-        let response = await snapshot.responder.respond(
+        let response = await plan.snapshot.responder.respond(
             to: request, body: .collected(framed.parsed.body), context: context
         )
         var head = withAltSvc(response.head)
@@ -237,7 +243,7 @@ extension HTTPServer where C.Duration == Duration {
         deadline: IdleDeadline<C.Instant>,
         into buffer: inout [UInt8],
         start: Int,
-        in snapshot: ResponderSnapshot
+        following plan: inout DispatchPlan
     ) async throws -> ReadOutcome {
         var headerDeadline: C.Instant?
         // Resumable end-of-headers scan (keeps header framing O(n), not O(n²)); an absolute index into
@@ -247,9 +253,6 @@ extension HTTPServer where C.Duration == Duration {
         // Resumable chunked-body decode kept across reads — O(n), not O(n²) (audit H1-F1).
         var chunked = ChunkedProgress()
         var expectHandled = false  // honor `Expect: 100-continue` once, before the body is read
-        // The matched route's body limit, resolved once when the head is parsed (Phase 1.2); `nil` ⇒ the
-        // global ``HTTPLimits/maxBodySize``.
-        var bodyLimit: Int?
         while true {
             switch assemble(
                 buffer,
@@ -257,8 +260,7 @@ extension HTTPServer where C.Duration == Duration {
                 scanOffset: &scanOffset,
                 pending: &pending,
                 chunked: &chunked,
-                bodyLimit: &bodyLimit,
-                in: snapshot
+                following: &plan
             ) {
                 case .request(let framed):
                     return .request(framed)
@@ -324,8 +326,7 @@ extension HTTPServer where C.Duration == Duration {
         scanOffset: inout Int,
         pending: inout PendingRequest?,
         chunked: inout ChunkedProgress,
-        bodyLimit: inout Int?,
-        in snapshot: ResponderSnapshot
+        following plan: inout DispatchPlan
     ) -> AssembleStep {
         if pending == nil {
             guard Self.headerSectionEnd(buffer, start: start, from: &scanOffset) != nil else {
@@ -340,20 +341,19 @@ extension HTTPServer where C.Duration == Duration {
                     // flow — so a route cap REPLACES the global bound (it may raise as well as
                     // tighten); the parser resolves framing with no size policy of its own. `nil`
                     // (no router / no per-route cap) falls back to the global maxBodySize.
-                    let resolved = snapshot.resolver?
+                    plan.match = plan.snapshot.resolver?
                         .match(
                             method: parsed.head.request.method,
                             path: parsed.head.request.path,
                             isUpgrade: false
                         )
-                    bodyLimit = resolved?.route.bodyLimit
-                    let effectiveLimit = resolved?.route.bodyLimit ?? limits.maxBodySize
+                    let effectiveLimit = plan.bodyLimit ?? limits.maxBodySize
                     if case .contentLength(let length) = parsed.head.framing,
                         length > effectiveLimit
                     {
                         return .failed(.bodyTooLarge)
                     }
-                    if resolved?.route.streamsBody == true {
+                    if plan.streamsBody {
                         return .streamingHead(parsed)
                     }
                     pending = parsed
@@ -364,7 +364,7 @@ extension HTTPServer where C.Duration == Duration {
         guard let pending else {
             return .incomplete
         }
-        switch frameBody(buffer, pending, chunked: &chunked, bodyLimit: bodyLimit) {
+        switch frameBody(buffer, pending, chunked: &chunked, bodyLimit: plan.bodyLimit) {
             case .complete(let parsed, let consumed):
                 return .request(FramedRequest(parsed: parsed, consumed: consumed))
             case .incomplete:

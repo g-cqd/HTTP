@@ -120,10 +120,13 @@ extension HTTP2Connection {
         // is accepted (Phase 1.2). The route cap REPLACES the global maxBodySize — it may raise as
         // well as tighten it (the connection-level aggregate bound stretches with it, see
         // HTTP2Connection+FlowControl); no route (nil) falls back to the global bound.
-        record.effectiveBodyLimit = resolveBodyLimit(request) ?? limits.maxBodySize
+        // ONE query for both facts, and the only one this request needs: the driver files the match
+        // it made here against `streamID`, and reuses it at dispatch (audit CR-F19).
+        let policy = resolveRoute(streamID, request)
+        record.effectiveBodyLimit = policy.limit ?? limits.maxBodySize
         // Whether this route consumes its body as a stream (Phase 1.4): surface it incrementally rather
         // than buffering one `request`. A tunnel (below) is never a streaming-body request.
-        record.isStreaming = resolveStreamsBody(request)
+        record.isStreaming = policy.isStreaming
         // An Extended CONNECT (RFC 8441 §4) opens a tunnel rather than a request: surface it for the
         // driver to accept, and route this stream's DATA as opaque tunnel bytes from here on.
         if let connectProtocol {

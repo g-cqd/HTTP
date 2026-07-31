@@ -76,27 +76,33 @@ extension HTTPServer {
         // this is the unconsumed-bytes watermark, since the engine credits it only as the handler
         // consumes; the connection-level companion is raised by the engine's own preface WINDOW_UPDATE.
         settings.initialWindowSize = limits.streamReceiveWindow
-        // The matched route's body limit, resolved from each request head before its DATA is buffered
-        // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
-        let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
-            currentSnapshot.resolver?
-                .match(method: request.method, path: request.path, isUpgrade: false)?
-                .route.bodyLimit
-        }
-        // Whether the matched route streams its request body (Phase 1.4) — the engine then surfaces the
-        // body incrementally (requestHead/requestBodyChunk/requestEnd) instead of one buffered request.
-        let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool = { [self] request in
-            currentSnapshot.resolver?
-                .match(method: request.method, path: request.path, isUpgrade: false)?
-                .route.streamsBody ?? false
+        // The per-stream dispatch plans: one route match per request head, filed here by the resolver
+        // below and taken again at dispatch, so the table is walked ONCE per request (audit CR-F19) and
+        // the head's policy and the handler that runs come from the same generation (CR-F12).
+        let plans = HTTP2DispatchPlans()
+        // Resolve the matched route from each request head, before its DATA is buffered (Phase 1.2 /
+        // 1.4). `snapshot` is read per head rather than per connection: an h2 connection outlives many
+        // reloads, and pinning it at the preface would make a long-lived connection permanently blind
+        // to `reloadResponder`. Reading it here and filing the resulting match is what makes the *rest*
+        // of the request — body limit, streaming policy, handler — one generation.
+        let resolveRoute: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = {
+            [self] streamID, request in
+            let snapshot = currentSnapshot
+            let plan = DispatchPlan(
+                snapshot: snapshot,
+                match: snapshot.resolver?
+                    .match(method: request.method, path: request.path, isUpgrade: false)
+            )
+            plans.file(plan, for: streamID)
+            return RequestBodyPolicy(limit: plan.bodyLimit, isStreaming: plan.streamsBody)
         }
         var state = HTTP2ConnectionState(
             engine: HTTP2Connection(
                 localSettings: settings,
                 limits: limits,
-                resolveBodyLimit: resolveBodyLimit,
-                resolveStreamsBody: resolveStreamsBody
-            )
+                resolveRoute: resolveRoute
+            ),
+            plans: plans
         )
         let (wakeups, continuation) = AsyncStream.makeStream(
             of: HTTP2Wakeup.self, bufferingPolicy: .unbounded

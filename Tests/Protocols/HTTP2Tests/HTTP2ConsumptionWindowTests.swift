@@ -171,7 +171,7 @@ struct HTTP2ConsumptionWindowTests {
         var settings = HTTP2Settings()
         settings.enableConnectProtocol = true
         settings.initialWindowSize = H2Window.streamWindow
-        var connection = try H2Window.gated(localSettings: settings) { _ in false }
+        var connection = try H2Window.gated(localSettings: settings, streamsBody: false)
         _ = try connection.receive(
             H2Wire.headers(
                 streamID: 1,

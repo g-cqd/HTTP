@@ -106,6 +106,14 @@ public struct RequestContext: Sendable {
     /// check this and `Task.isCancelled` at every I/O and loop boundary; see ``timeRemaining(now:)``.
     public var deadline: ContinuousClock.Instant?
 
+    /// The route this request's head matched, resolved once by the server and carried here so the
+    /// ``Router`` can run it without walking its table again (audit CR-F19).
+    ///
+    /// Advisory, never authoritative: the router checks that the match came from *its own* table (and
+    /// for the same method and path) before using it, so a match minted by a different generation or a
+    /// different router is a cache miss and falls back to a normal scan — never a mis-dispatch.
+    var route: RouteMatch?
+
     /// The lazily-allocated, copy-on-write storage bag (see ``subscript(_:)``).
     ///
     /// Defaults to a shared empty sentinel, so an unused bag costs no per-request allocation; the first
@@ -125,6 +133,7 @@ public struct RequestContext: Sendable {
         self.id = id
         self.parameters = parameters
         self.deadline = deadline
+        self.route = nil
         self.storage = .empty
     }
 
@@ -139,22 +148,22 @@ public struct RequestContext: Sendable {
     /// skipped at a call site (audit CR-F13).
     static func ingress(
         _ request: HTTPRequest,
-        over connection: any TransportConnection
+        over connection: any TransportConnection,
+        matching match: RouteMatch? = nil
     ) -> (request: HTTPRequest, context: Self) {
-        (
-            Self.stripped(request),
-            Self(
-                connection: Connection(
-                    peer: connection.peer,
-                    tlsPeerSubject: connection.tlsPeerSubject,
-                    tlsPeerIdentity: connection.tlsPeerIdentity,
-                    isSecure: connection.isSecure,
-                    negotiatedApplicationProtocol: connection.negotiatedApplicationProtocol,
-                    id: connection.id
-                ),
-                id: Self.inboundRequestID(request)
-            )
+        var context = Self(
+            connection: Connection(
+                peer: connection.peer,
+                tlsPeerSubject: connection.tlsPeerSubject,
+                tlsPeerIdentity: connection.tlsPeerIdentity,
+                isSecure: connection.isSecure,
+                negotiatedApplicationProtocol: connection.negotiatedApplicationProtocol,
+                id: connection.id
+            ),
+            id: Self.inboundRequestID(request)
         )
+        context.route = match
+        return (Self.stripped(request), context)
     }
 
     /// The ingress seam for a request that arrived over a ``QUICConnection`` (HTTP/3).
@@ -164,21 +173,21 @@ public struct RequestContext: Sendable {
     /// strip is identical to the ``TransportConnection`` seam above.
     static func ingress(
         _ request: HTTPRequest,
-        over quic: any QUICConnection
+        over quic: any QUICConnection,
+        matching match: RouteMatch? = nil
     ) -> (request: HTTPRequest, context: Self) {
-        (
-            Self.stripped(request),
-            Self(
-                connection: Connection(
-                    peer: quic.peer,
-                    tlsPeerSubject: quic.tlsPeerSubject,
-                    tlsPeerIdentity: quic.tlsPeerIdentity,
-                    isSecure: true,
-                    negotiatedApplicationProtocol: quic.negotiatedApplicationProtocol ?? "h3"
-                ),
-                id: Self.inboundRequestID(request)
-            )
+        var context = Self(
+            connection: Connection(
+                peer: quic.peer,
+                tlsPeerSubject: quic.tlsPeerSubject,
+                tlsPeerIdentity: quic.tlsPeerIdentity,
+                isSecure: true,
+                negotiatedApplicationProtocol: quic.negotiatedApplicationProtocol ?? "h3"
+            ),
+            id: Self.inboundRequestID(request)
         )
+        context.route = match
+        return (Self.stripped(request), context)
     }
 
     /// `request` with every ``HTTPFieldName/serverAsserted`` field removed (RFC 9110 §17.1).

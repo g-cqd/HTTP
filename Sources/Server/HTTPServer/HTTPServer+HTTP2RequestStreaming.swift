@@ -45,15 +45,22 @@ extension HTTPServer {
     ) async {
         switch event {
             case .request(let streamID, let inbound, let body):
-                let responder = currentSnapshot  // the hot-swappable table, read once (G4a)
+                // The plan this stream's HEADERS resolved: its generation and its route match, filed
+                // by the engine's `resolveRoute` and taken here, so the table is walked once for the
+                // whole request (CR-F19) and the body limit already enforced against it and the
+                // handler about to run belong to the same generation (CR-F12).
+                let plan =
+                    state.plans.plan(for: streamID) ?? DispatchPlan(snapshot: currentSnapshot)
                 // The ingress seam (audit CR-F13): both halves are bound `let` here so the sanitized
                 // request — never the inbound one — is what the dispatch child captures.
-                let (request, context) = RequestContext.ingress(inbound, over: connection)
+                let (request, context) = RequestContext.ingress(
+                    inbound, over: connection, matching: plan.match
+                )
                 state.dispatched.insert(streamID)
                 group.addTask { [self] in
-                    let response = await responder.responder.respond(
+                    let response = await plan.snapshot.responder.respond(
                         to: request,
-                        body: requestBody(body, for: request, in: responder),
+                        body: requestBody(body, following: plan),
                         context: context
                     )
                     continuation.yield(.requestReady(streamID, response))
@@ -63,6 +70,8 @@ extension HTTPServer {
                     request: request,
                     streamID: streamID,
                     connection: connection,
+                    plan: state.plans.plan(for: streamID)
+                        ?? DispatchPlan(snapshot: currentSnapshot),
                     group: &group,
                     reporting: &state.consumption,
                     dispatched: &state.dispatched,
@@ -161,6 +170,7 @@ extension HTTPServer {
         request inbound: HTTPRequest,
         streamID: HTTP2StreamID,
         connection: any TransportConnection,
+        plan: DispatchPlan,
         group: inout DiscardingTaskGroup,
         reporting consumption: inout [HTTP2StreamID: HTTP2ConsumptionSignal],
         dispatched: inout Set<HTTP2StreamID>,
@@ -171,8 +181,10 @@ extension HTTPServer {
         let canceller = HTTP2StreamCanceller()
         consumption[streamID] = signal
         // The ingress seam (audit CR-F13) — the sanitized request is what the handler child captures.
-        let (request, context) = RequestContext.ingress(inbound, over: connection)
-        let current = currentSnapshot.responder  // hot-swappable responder, read once (G4a)
+        let (request, context) = RequestContext.ingress(
+            inbound, over: connection, matching: plan.match
+        )
+        let current = plan.snapshot.responder  // this request's generation (CR-F12)
         dispatched.insert(streamID)
         group.addTask {
             // The group child still owns the lifetime; the inner `Task` exists only so a peer
