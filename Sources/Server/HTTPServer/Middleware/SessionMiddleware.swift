@@ -4,7 +4,8 @@
 //
 //  Tamper-proof session identity via a signed cookie (RFC 6265bis + RFC 9110). The cookie carries a
 //  random session id and an HMAC-SHA256 tag over it (`<id>.<base64url(mac)>`); on each request the tag
-//  is verified in constant time (``HMACSHA256``), so a client cannot forge or alter the id. A valid session
+//  is verified in constant time against every key in ``SessionSigningKeys``, so a client cannot forge or
+//  alter the id and a signing key can be rotated without logging everyone out. A valid session
 //  continues untouched; an absent or tampered one is replaced with a fresh signed `Set-Cookie`
 //  (`HttpOnly`, `SameSite=Lax`). The verified bare id is asserted onto the request as `X-Session-ID` for
 //  the handler — any client-supplied value is stripped, so the handler only ever sees a server-verified
@@ -16,27 +17,27 @@ public import HTTPCore
 
 /// Issues and verifies HMAC-signed session cookies, exposing the verified id as `X-Session-ID`.
 public struct SessionMiddleware: HTTPMiddleware {
-    private let key: [UInt8]
+    private let keys: SessionSigningKeys
     private let cookieName: String
     private let maxAge: Int?
     private let isSecure: Bool
     private let generate: @Sendable () -> String
     private let store: (any SessionStore)?
 
-    /// Creates the middleware with the HMAC `key` (keep it secret and stable across restarts).
+    /// Creates the middleware with the signing `keys` (keep them secret and stable across restarts).
     ///
     /// `maxAge` bounds the cookie lifetime; `isSecure` marks the cookie `Secure` (HTTPS-only, the safe
     /// default). `generate` defaults to a 128-bit random id. Pass a `store` for server-side expiry and
     /// revocation; omit it (the default) for a fully stateless signed-cookie session.
     public init(
-        key: [UInt8],
+        keys: SessionSigningKeys,
         cookieName: String = "session",
         maxAge: Int? = 86_400,
         isSecure: Bool = true,
         generate: @escaping @Sendable () -> String = Self.randomID,
         store: (any SessionStore)? = nil
     ) {
-        self.key = key
+        self.keys = keys
         self.cookieName = cookieName
         self.maxAge = maxAge
         self.isSecure = isSecure
@@ -101,14 +102,12 @@ public struct SessionMiddleware: HTTPMiddleware {
             return nil
         }
         let id = String(parts[0])
-        let expected = HMACSHA256.authenticationCode(key: key, message: Array(id.utf8))
-        let valid = HMACSHA256.constantTimeEquals(mac, expected)
-        return valid ? id : nil
+        return keys.isValid(tag: mac, for: Array(id.utf8)) ? id : nil
     }
 
-    /// Signs `id` as `<id>.<base64url(HMAC-SHA256(id))>`.
+    /// Signs `id` as `<id>.<base64url(HMAC-SHA256(id))>` under the current key.
     private func sign(_ id: String) -> String {
-        let mac = HMACSHA256.authenticationCode(key: key, message: Array(id.utf8))
+        let mac = keys.tag(for: Array(id.utf8))
         return id + "." + Base64.encode(mac, alphabet: .urlSafe, padded: false)
     }
 

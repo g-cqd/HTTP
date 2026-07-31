@@ -42,9 +42,22 @@ public enum JWT {
     /// conformance fails to compile there; the keys carry no mutable state, so the unchecked conformance is
     /// sound on both platforms.
     public enum Key: @unchecked Sendable {
-        case hs256([UInt8])  // shared secret
+        case hs256(SymmetricKey)  // shared secret
         case es256(P256.Signing.PublicKey)
         case rs256(_RSA.Signing.PublicKey)
+
+        /// An HS256 key from `secret`, or nil if it is shorter than the SHA-256 digest.
+        ///
+        /// RFC 7518 §3.2: "A key of the same size as the hash output (for instance, 256 bits for
+        /// "HS256") or larger MUST be used with this algorithm." The raw `[UInt8]` case accepted any
+        /// length, including empty, so a token could be "verified" against no secret at all
+        /// (CWE-326, inadequate encryption strength).
+        public static func hs256(secret: [UInt8]) -> Self? {
+            guard secret.count >= Crypto.SHA256.Digest.byteCount else {
+                return nil
+            }
+            return .hs256(SymmetricKey(data: secret))
+        }
 
         /// The `alg` header value this key verifies.
         var algorithm: String {
@@ -156,11 +169,10 @@ public enum JWT {
         // straight into swift-crypto — no per-verify `Data(...)` copy of either buffer.
         switch key {
             case .hs256(let secret):
+                // The `SymmetricKey` is built once, when the key is constructed — not per verify.
                 return HMAC<Crypto.SHA256>
                     .isValidAuthenticationCode(
-                        signature,
-                        authenticating: signingInput,
-                        using: SymmetricKey(data: secret)
+                        signature, authenticating: signingInput, using: secret
                     )
             case .es256(let publicKey):
                 guard let parsed = try? P256.Signing.ECDSASignature(rawRepresentation: signature)

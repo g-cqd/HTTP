@@ -152,10 +152,15 @@ let package = Package(
         .package(url: "https://github.com/swift-server/swift-prometheus.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.1.0"),
         .package(url: "https://github.com/apple/swift-service-context.git", from: "1.1.0"),
-        // apple/swift-crypto (gap G7) — JWT signature verification in the isolated `HTTPAuth` module:
-        // HS256 via `Crypto`'s HMAC, ES256 via P256, RS256 via `_CryptoExtras`' `_RSA`. Confined to
-        // `HTTPAuth`, so a bare-server consumer never resolves it (`_CryptoExtras` pulls a BoringSSL
-        // graph). apple/* — allowed by CLAUDE.md.
+        // apple/swift-crypto (gap G7) — every keyed primitive on a security boundary. Two products,
+        // deliberately scoped differently:
+        //   `Crypto`         — `HTTPServer` (the session cookie's HMAC-SHA256) and `HTTPAuth` (JWT
+        //                      HS256 + the Basic-auth blinded comparison). Reaching a bare-server
+        //                      consumer is the accepted cost of not shipping in-house SHA-256/HMAC on
+        //                      a signing path.
+        //   `_CryptoExtras`  — `HTTPAuth` ONLY (RS256 via `_RSA`). It pulls a BoringSSL graph, so it
+        //                      stays confined to the module that actually needs RSA.
+        // apple/* — allowed by CLAUDE.md.
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         // The one first-party dependency: shared SIMD byte kernels (see `adFoundationDependency`).
         adFoundationDependency()
@@ -358,6 +363,10 @@ let package = Package(
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
                 "HTTPConcurrency",
+                // The session cookie's HMAC-SHA256 is a security boundary, so it uses the audited
+                // first-party implementation rather than an in-house one (see the `swift-crypto`
+                // dependency comment). `Crypto` only — never `_CryptoExtras`.
+                .product(name: "Crypto", package: "swift-crypto"),
                 // Linux gzip coding (zlib); on Darwin gzip is Apple's Compression, so this stays off the graph.
                 .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
             ],
