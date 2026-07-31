@@ -193,10 +193,15 @@ struct HTTPServerHTTP3DispatchTests {
         }
     }
 
-    /// Polls `condition` on the cooperative pool until it holds or the budget runs out.
+    /// Polls `condition` until it holds, failing the test if the budget runs out.
+    ///
+    /// The budget exhausting is a *failure*, not a quiet return. Falling out of the loop with the
+    /// condition still false let the test carry on and either pass vacuously or fail later at a
+    /// confusing assertion — which is how a genuinely unmet condition could read as a green run.
     private static func settle(until condition: @Sendable () -> Bool) async throws {
         for _ in 0 ..< 200 where !condition() {
             try await Task.sleep(for: .milliseconds(10))
         }
+        #expect(condition(), "settle budget exhausted with the condition still false")
     }
 }

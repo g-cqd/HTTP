@@ -10,6 +10,7 @@ import HPACK
 import HTTP2
 import HTTPCore
 import QPACK
+import Testing
 
 /// HTTP/2 and HTTP/3 request wire for a POST with a separately delivered body.
 enum DispatchPlanWire {
@@ -127,17 +128,25 @@ enum DispatchPlanWire {
         }
     }
 
-    /// Polls `condition` on the cooperative pool until it holds or the budget runs out.
+    /// Polls `condition` until it holds, failing the test if the budget runs out.
+    ///
+    /// The budget exhausting is a *failure*, not a quiet return. Falling out of the loop with the
+    /// condition still false let the test carry on and either pass vacuously or fail later at a
+    /// confusing assertion — which is how a genuinely unmet condition could read as a green run.
     static func settle(until condition: @Sendable () -> Bool) async throws {
         for _ in 0 ..< 300 where !condition() {
             try await Task.sleep(for: .milliseconds(10))
         }
+        #expect(condition(), "settle budget exhausted with the condition still false")
     }
 
-    /// Polls an `async` `condition` until it holds or the budget runs out — for an actor-isolated fake.
+    /// Polls an `async` `condition` until it holds, failing the test if the budget runs out.
+    ///
+    /// See ``settle(until:)`` — exhausting the budget is a failure, not a quiet return.
     static func settleAsync(until condition: @Sendable () async -> Bool) async throws {
         for _ in 0 ..< 300 where await !condition() {
             try await Task.sleep(for: .milliseconds(10))
         }
+        #expect(await condition(), "settle budget exhausted with the condition still false")
     }
 }

@@ -79,9 +79,22 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
             group.addTask { try await self.waitForThreshold(count) }
             group.addTask {
                 try await clock.sleep(for: duration)
+                // Re-check the threshold before reporting a timeout.
+                //
+                // `group.next()` returns whichever child finishes first, and these two race: the
+                // threshold can be reached while this timer is already in flight, or in the same
+                // instant it fires. Throwing unconditionally then reports a timeout for a condition
+                // that is *satisfied* — the observed failures said "2/2" and "1/1", i.e. every
+                // requested event had already been recorded. A test suite that fails on met
+                // conditions is worse than one with a missing test, because it teaches the reader to
+                // re-run rather than to look.
+                let settled = self.events
+                guard settled.count < count else {
+                    return settled
+                }
                 throw AsyncEventProbeTimeoutError(
                     requested: count,
-                    recorded: self.count,
+                    recorded: settled.count,
                     creation: creation
                 )
             }
