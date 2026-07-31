@@ -94,10 +94,16 @@ public struct RequestContext: Sendable {
     /// it — replacing the former `Route.currentParameters` task-local.
     public var parameters: RouteParameters
 
-    /// An optional point in time by which the response should be produced.
+    /// The earliest point in time by which the response should be produced.
     ///
-    /// Carried here for handlers and a future timeout layer to honor; the engine does not enforce it on
-    /// its own. Timed against the continuous clock.
+    /// The *earliest* deadline any layer has imposed: a nested ``TimeoutMiddleware`` narrows this and
+    /// never widens it, so an inner middleware cannot grant a handler more time than an outer one
+    /// allowed. Timed against the continuous clock.
+    ///
+    /// Enforcement is cooperative. ``TimeoutMiddleware`` will stop *waiting* at this instant and answer
+    /// `504`, but a Swift task group cannot return until its children have actually exited, so a
+    /// responder that ignores cancellation still delays that answer by its own runtime. Handlers must
+    /// check this and `Task.isCancelled` at every I/O and loop boundary; see ``timeRemaining(now:)``.
     public var deadline: ContinuousClock.Instant?
 
     /// The lazily-allocated, copy-on-write storage bag (see ``subscript(_:)``).
@@ -152,6 +158,22 @@ public struct RequestContext: Sendable {
             ),
             id: Self.inboundRequestID(request)
         )
+    }
+
+    /// How long is left before ``deadline``.
+    ///
+    /// `nil` when no deadline is set, and `.zero` once it has already passed — never negative, so a
+    /// caller can pass it straight to a timeout without a sign check.
+    ///
+    /// Returned as a *duration* rather than an instant on purpose: the server is generic over its
+    /// clock, and a `ContinuousClock.Instant` cannot be compared against another clock's instants. A
+    /// remaining duration is meaningful in every clock domain, which is what lets the engine's own
+    /// read/write deadlines honor a request deadline set by middleware.
+    public func timeRemaining(now: ContinuousClock.Instant = ContinuousClock.now) -> Duration? {
+        guard let deadline else {
+            return nil
+        }
+        return now < deadline ? now.duration(to: deadline) : .zero
     }
 
     /// Reads or writes the value middleware stored under `key` — a type-safe, per-request bag for
