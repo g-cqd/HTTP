@@ -46,7 +46,10 @@ public final class ConnectionAdmission: Sendable {
         /// The ceiling on live connections from one peer host (`HTTPLimits.maxConnectionsPerClient`).
         public var perHost: Int
         /// The fraction of ``total`` the live count must fall back to before a saturated accept source
-        /// re-arms (`HTTPLimits.acceptResumeRatio`); clamped to `0...1`.
+        /// re-arms (`HTTPLimits.acceptResumeRatio`).
+        ///
+        /// Clamped into `0...1` by the gate, NaN-safely — a ratio that is not a number falls back to
+        /// the default rather than propagating into an arithmetic conversion that traps.
         public var resumeRatio: Double
 
         /// Creates a capacity from the global and per-host ceilings.
@@ -99,8 +102,34 @@ public final class ConnectionAdmission: Sendable {
     /// Creates a gate enforcing `capacity`.
     public init(capacity: Capacity) {
         self.capacity = capacity
-        let ratio = min(max(capacity.resumeRatio, 0), 1)
-        self.resumeWatermark = max(0, Int((Double(capacity.total) * ratio).rounded(.down)))
+        self.resumeWatermark = Self.watermark(total: capacity.total, ratio: capacity.resumeRatio)
+    }
+
+    /// The hysteresis ratio substituted for one that is not a number.
+    ///
+    /// NaN is unordered, so there is nothing to clamp it *to*. `0` would leave a saturated accept
+    /// source suspended until the server fully drained — a liveness cliff worse than the churn the
+    /// hysteresis exists to prevent — and `1` would delete the hysteresis outright. The documented
+    /// default is the only substitution that keeps the property the field was configured for.
+    private static let defaultResumeRatio = 0.875
+
+    /// `total * ratio` rounded down, clamped into `0...total`, with no conversion that can trap.
+    ///
+    /// Three separate invalid operations live in the obvious one-liner (IEEE 754-2019 §7.2;
+    /// CWE-1339, "unexpected behavior from floating-point precision loss"):
+    ///
+    /// - `min`/`max` are `Comparable`, and NaN compares `false` against everything, so
+    ///   `min(max(.nan, 0), 1)` is `.nan` — the clamp passes NaN straight through. `Double.minimum`
+    ///   / `Double.maximum` are the IEEE 754 operations that return the *non*-NaN operand, so ±∞
+    ///   clamp to `1`/`0` correctly and only a true NaN reaches the substitution above.
+    /// - `Int(Double.nan)` traps, which is how the NaN arrived in the crash report rather than in a
+    ///   log line.
+    /// - `Double(Int.max)` rounds *up* to 2^63, so even a correctly clamped ratio of `1` produces a
+    ///   value one past `Int.max`; `Int(exactly:)` reports that instead of trapping on it.
+    private static func watermark(total: Int, ratio: Double) -> Int {
+        let clamped = Double.minimum(Double.maximum(ratio.isNaN ? defaultResumeRatio : ratio, 0), 1)
+        let scaled = (Double(total) * clamped).rounded(.down)
+        return max(0, min(Int(exactly: scaled) ?? total, total))
     }
 
     deinit {
