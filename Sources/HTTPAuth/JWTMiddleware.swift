@@ -8,6 +8,12 @@
 //  invalid token gets a `401` with `WWW-Authenticate: Bearer error="invalid_token"`. The token is never
 //  logged.
 //
+//  A verified token with no `sub` (RFC 7519 §4.1.2) is refused by default — see `requireSubject`. Before
+//  audit CR-F13 it was accepted, and because the assertion was conditional it then left whatever
+//  `X-Auth-Subject` the *client* had sent in place, where a handler cannot distinguish it from a server
+//  assertion (CWE-290). The server's ingress strip closes that even for the opted-out case; this
+//  middleware also removes the field itself, so a hand-assembled chain is safe without the server.
+//
 
 internal import Foundation
 public import HTTPCore
@@ -22,11 +28,18 @@ public struct JWTMiddleware: HTTPMiddleware {
     private let audience: String?
     private let issuer: String?
     private let leeway: Double
+    private let requireSubject: Bool
     private let now: @Sendable () -> Double
 
     /// Creates the middleware verifying tokens against `key`, requiring `audience`/`issuer` when given.
     ///
     /// `now` supplies the current epoch seconds (defaults to wall-clock); `leeway` tolerates clock skew.
+    ///
+    /// `requireSubject` (on by default) refuses a verified token that carries no `sub` claim
+    /// (RFC 7519 §4.1.2) with the `401` challenge: such a token authenticates nothing a handler can key
+    /// an authorization decision on. Turn it off only for a deployment whose tokens genuinely name no
+    /// principal — a capability token whose `scope` is the whole authorization — in which case
+    /// `.xAuthSubject` is removed from the request rather than left as the client sent it.
     ///
     /// A non-finite `leeway`, a negative one, or a `now` closure that returns a non-finite value makes
     /// every request fail closed with the `401` challenge — ``JWT/verify(_:key:audience:issuer:now:
@@ -37,12 +50,14 @@ public struct JWTMiddleware: HTTPMiddleware {
         audience: String? = nil,
         issuer: String? = nil,
         leeway: Double = 0,
+        requireSubject: Bool = true,
         now: @escaping @Sendable () -> Double = Self.systemNow
     ) {
         self.keys = [key]
         self.audience = audience
         self.issuer = issuer
         self.leeway = leeway
+        self.requireSubject = requireSubject
         self.now = now
     }
 
@@ -58,6 +73,7 @@ public struct JWTMiddleware: HTTPMiddleware {
         audience: String? = nil,
         issuer: String? = nil,
         leeway: Double = 0,
+        requireSubject: Bool = true,
         now: @escaping @Sendable () -> Double = Self.systemNow
     ) {
         guard let algorithm = keys.first?.algorithm,
@@ -69,6 +85,7 @@ public struct JWTMiddleware: HTTPMiddleware {
         self.audience = audience
         self.issuer = issuer
         self.leeway = leeway
+        self.requireSubject = requireSubject
         self.now = now
     }
 
@@ -83,9 +100,20 @@ public struct JWTMiddleware: HTTPMiddleware {
             return challenge()
         }
         var request = request
-        if let subject = claims.subject {
-            _ = request.headerFields.setValue(subject, for: .xAuthSubject)
+        guard let subject = claims.subject else {
+            // A verified token that names no principal (RFC 7519 §4.1.2) cannot authorize anything a
+            // handler would key on identity, so by default it is refused rather than waved through as
+            // an anonymous "authenticated" request (CWE-287).
+            guard !requireSubject else {
+                return challenge()
+            }
+            // Opted out: the field is *removed*, never left as it arrived. The server already strips it
+            // at ingress (audit CR-F13); this is the second half of the same invariant, for a chain
+            // assembled by hand around a responder rather than run by the server.
+            request.headerFields.removeAll(named: .xAuthSubject)
+            return await next.respond(to: request, body: body, context: context)
         }
+        _ = request.headerFields.setValue(subject, for: .xAuthSubject)
         return await next.respond(to: request, body: body, context: context)
     }
 

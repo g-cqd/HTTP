@@ -30,7 +30,7 @@ extension HTTPServer {
     /// than no answer at all.
     func serveHTTP3StreamingRequest(
         _ id: QUICStreamID,
-        request: HTTPRequest,
+        request inbound: HTTPRequest,
         buffered: (chunks: [[UInt8]], ended: Bool),
         stream: any QUICStream,
         engine: Engine,
@@ -39,7 +39,8 @@ extension HTTPServer {
         deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         let handoff = AsyncHandoff()
-        let context = RequestContext(quic: quic, request: request)
+        // The ingress seam (audit CR-F13) — the sanitized request is what the handler child captures.
+        let (request, context) = RequestContext.ingress(inbound, over: quic)
         let current = currentResponder  // hot-swappable responder, read once (G4a)
         let handler = Task {
             let response = await current.respond(

@@ -44,11 +44,13 @@ extension HTTPServer {
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
         switch event {
-            case .request(let streamID, let request, let body):
+            case .request(let streamID, let inbound, let body):
                 let responder = currentResponder  // hot-swappable responder, read once (G4a)
+                // The ingress seam (audit CR-F13): both halves are bound `let` here so the sanitized
+                // request — never the inbound one — is what the dispatch child captures.
+                let (request, context) = RequestContext.ingress(inbound, over: connection)
                 state.dispatched.insert(streamID)
                 group.addTask { [self] in
-                    let context = RequestContext(connection: connection, request: request)
                     let response = await responder.respond(
                         to: request, body: requestBody(body, for: request), context: context
                     )
@@ -154,7 +156,7 @@ extension HTTPServer {
     /// `.requestReady` wakeup once it finishes — unified with the buffered-request path (the response is
     /// APPLIED to the engine only later, when the consumer processes that wakeup).
     private func beginHTTP2StreamingRequest(
-        request: HTTPRequest,
+        request inbound: HTTPRequest,
         streamID: HTTP2StreamID,
         connection: any TransportConnection,
         group: inout DiscardingTaskGroup,
@@ -166,7 +168,8 @@ extension HTTPServer {
         let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
         let canceller = HTTP2StreamCanceller()
         consumption[streamID] = signal
-        let context = RequestContext(connection: connection, request: request)
+        // The ingress seam (audit CR-F13) — the sanitized request is what the handler child captures.
+        let (request, context) = RequestContext.ingress(inbound, over: connection)
         let current = currentResponder  // hot-swappable responder, read once (G4a)
         dispatched.insert(streamID)
         group.addTask {

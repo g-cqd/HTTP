@@ -128,36 +128,71 @@ public struct RequestContext: Sendable {
         self.storage = .empty
     }
 
-    /// Builds the context for a request that arrived over a ``TransportConnection`` (HTTP/1.1, HTTP/2),
-    /// copying its verified metadata and adopting any valid inbound `X-Request-ID`.
-    init(connection: any TransportConnection, request: HTTPRequest) {
-        self.init(
-            connection: Connection(
-                peer: connection.peer,
-                tlsPeerSubject: connection.tlsPeerSubject,
-                tlsPeerIdentity: connection.tlsPeerIdentity,
-                isSecure: connection.isSecure,
-                negotiatedApplicationProtocol: connection.negotiatedApplicationProtocol,
-                id: connection.id
-            ),
-            id: Self.inboundRequestID(request)
+    /// The ingress seam for a request that arrived over a ``TransportConnection`` (HTTP/1.1, HTTP/2):
+    /// the context built from the connection's verified metadata, and the request with every
+    /// server-asserted field stripped.
+    ///
+    /// The two halves are returned together because they are one operation: an inbound `X-Request-ID`
+    /// is *moved* out of the header section into ``id`` (validated on the way, see
+    /// ``inboundRequestID(_:)``), and every other server-asserted field is dropped outright. Building
+    /// a context is the only way to obtain the request a handler may see, so the strip cannot be
+    /// skipped at a call site (audit CR-F13).
+    static func ingress(
+        _ request: HTTPRequest,
+        over connection: any TransportConnection
+    ) -> (request: HTTPRequest, context: Self) {
+        (
+            Self.stripped(request),
+            Self(
+                connection: Connection(
+                    peer: connection.peer,
+                    tlsPeerSubject: connection.tlsPeerSubject,
+                    tlsPeerIdentity: connection.tlsPeerIdentity,
+                    isSecure: connection.isSecure,
+                    negotiatedApplicationProtocol: connection.negotiatedApplicationProtocol,
+                    id: connection.id
+                ),
+                id: Self.inboundRequestID(request)
+            )
         )
     }
 
-    /// Builds the context for a request that arrived over a ``QUICConnection`` (HTTP/3): QUIC is always
-    /// encrypted, so `isSecure` is `true` and the protocol defaults to `"h3"`; the QUIC connection
-    /// exposes no transport-connection id, so ``Connection/id`` is `nil`.
-    init(quic: any QUICConnection, request: HTTPRequest) {
-        self.init(
-            connection: Connection(
-                peer: quic.peer,
-                tlsPeerSubject: quic.tlsPeerSubject,
-                tlsPeerIdentity: quic.tlsPeerIdentity,
-                isSecure: true,
-                negotiatedApplicationProtocol: quic.negotiatedApplicationProtocol ?? "h3"
-            ),
-            id: Self.inboundRequestID(request)
+    /// The ingress seam for a request that arrived over a ``QUICConnection`` (HTTP/3).
+    ///
+    /// QUIC is always encrypted, so `isSecure` is `true` and the protocol defaults to `"h3"`; the QUIC
+    /// connection exposes no transport-connection id, so ``Connection/id`` is `nil`. The server-asserted
+    /// strip is identical to the ``TransportConnection`` seam above.
+    static func ingress(
+        _ request: HTTPRequest,
+        over quic: any QUICConnection
+    ) -> (request: HTTPRequest, context: Self) {
+        (
+            Self.stripped(request),
+            Self(
+                connection: Connection(
+                    peer: quic.peer,
+                    tlsPeerSubject: quic.tlsPeerSubject,
+                    tlsPeerIdentity: quic.tlsPeerIdentity,
+                    isSecure: true,
+                    negotiatedApplicationProtocol: quic.negotiatedApplicationProtocol ?? "h3"
+                ),
+                id: Self.inboundRequestID(request)
+            )
         )
+    }
+
+    /// `request` with every ``HTTPFieldName/serverAsserted`` field removed (RFC 9110 §17.1).
+    ///
+    /// A handler reading one of these is reading a server assertion, so a value that arrived from the
+    /// wire must not survive to be mistaken for one (CWE-290). The mutation is guarded per field, so a
+    /// request carrying none of them — every ordinary request — triggers no copy-on-write of the field
+    /// storage and the strip costs one pointer compare per name.
+    private static func stripped(_ request: HTTPRequest) -> HTTPRequest {
+        var request = request
+        for name in HTTPFieldName.serverAsserted where request.headerFields[name] != nil {
+            request.headerFields.removeAll(named: name)
+        }
+        return request
     }
 
     /// How long is left before ``deadline``.

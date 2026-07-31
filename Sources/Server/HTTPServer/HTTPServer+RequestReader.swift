@@ -61,7 +61,12 @@ extension HTTPServer where C.Duration == Duration {
         // Advance past this request (O(1)); any pipelined remainder stays in place, unshifted.
         start = framed.consumed
 
-        let request = framed.parsed.request
+        // Build the per-request context from the verified connection metadata (peer, TLS subject, ALPN,
+        // id) and take the sanitized request back. The verified mutual-TLS client identity (G3) reaches
+        // handlers via `context.connection.tlsPeerSubject` rather than a header, and the same seam
+        // strips every client-supplied server-asserted field off the request (audit CR-F13) — before
+        // the WebSocket branch too, so a handshake handler cannot read a spoofed identity either.
+        let (request, context) = RequestContext.ingress(framed.parsed.request, over: connection)
         // A WebSocket Upgrade request (RFC 6455 §4) to a matching `.webSocket` route the app accepts
         // hands the connection to the WebSocket engine for its lifetime; the h1 keep-alive loop ends
         // here. A non-upgrade GET to that path falls through to `respond` → 426 (the route's fallback);
@@ -82,10 +87,6 @@ extension HTTPServer where C.Duration == Duration {
             )
             return false
         }
-        // Build the per-request context from the verified connection metadata (peer, TLS subject, ALPN,
-        // id). The verified mutual-TLS client identity (G3) now reaches handlers via
-        // `context.connection.tlsPeerSubject`, replacing the former X-Client-Cert-Subject header stamp.
-        let context = RequestContext(connection: connection, request: request)
         // Read the hot-swappable responder once (G4a); the lock is never held across the await.
         let current = currentResponder
         let response = await current.respond(

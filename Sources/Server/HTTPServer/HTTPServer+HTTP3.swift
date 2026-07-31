@@ -367,7 +367,7 @@ extension HTTPServer {
     /// else buffered (RFC 9114 §4.1).
     private func respondHTTP3(
         _ id: QUICStreamID,
-        request: HTTPRequest,
+        request inbound: HTTPRequest,
         body: [UInt8],
         stream: any QUICStream,
         engine: Engine,
@@ -376,8 +376,9 @@ extension HTTPServer {
     ) async {
         // Build the per-request context from the QUIC connection's verified metadata (peer, TLS subject);
         // the verified mutual-TLS subject reaches handlers via `context.connection.tlsPeerSubject` rather
-        // than a spoofable header (audit P0-1) — the same model the h1/h2 paths use.
-        let context = RequestContext(quic: quic, request: request)
+        // than a spoofable header (audit P0-1) — the same model the h1/h2 paths use. The same seam
+        // strips every client-supplied server-asserted field off the request (audit CR-F13).
+        let (request, context) = RequestContext.ingress(inbound, over: quic)
         let current = currentResponder  // hot-swappable responder, read once (G4a)
         let response = await current.respond(
             to: request, body: requestBody(body, for: request), context: context

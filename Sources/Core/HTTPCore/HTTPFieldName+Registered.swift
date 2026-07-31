@@ -177,17 +177,27 @@ extension HTTPFieldName {
     /// `Retry-After` (RFC 9110 §10.2.3) — how long to wait before retrying (e.g. after a 429 / 503).
     public static let retryAfter = HTTPFieldName(unchecked: "retry-after")
     /// `X-Request-ID` (de-facto convention) — a per-request correlation id for tracing and logging.
+    ///
+    /// Server-asserted (see ``serverAsserted``): the server *moves* a syntactically valid inbound value
+    /// into `RequestContext.id` and strips the field, so a handler reads an id the server validated
+    /// rather than raw wire bytes. `RequestIDMiddleware` re-asserts it on the request for downstream.
     public static let xRequestID = HTTPFieldName(unchecked: "x-request-id")
-    /// `X-Session-ID` — the verified session id ``SessionMiddleware`` asserts for the handler; any
-    /// client-supplied value is stripped, so it is server-asserted and never trusted from the wire.
+    /// `X-Session-ID` — the verified session id ``SessionMiddleware`` asserts for the handler.
+    ///
+    /// Server-asserted (see ``serverAsserted``): any client-supplied value is stripped at ingress.
     public static let xSessionID = HTTPFieldName(unchecked: "x-session-id")
     /// `X-Auth-Subject` — the verified principal (a Basic username or a JWT `sub`) the auth middlewares
-    /// assert for the handler; any client-supplied value is stripped (server-asserted, never trusted).
-    public static let xAuthSubject = HTTPFieldName(unchecked: "x-auth-subject")
-    /// `X-Client-Cert-Subject` — the subject of the verified TLS client certificate (mutual TLS) the
-    /// server asserts for the handler; any client-supplied value is stripped (server-asserted, never
-    /// trusted).
+    /// assert for the handler.
     ///
-    /// Present only on a connection that completed a `.required` client-auth handshake.
+    /// Server-asserted (see ``serverAsserted``): any client-supplied value is stripped at ingress, so a
+    /// middleware that authenticates a request but has nothing to assert leaves the handler with no
+    /// value rather than with the client's (CWE-290).
+    public static let xAuthSubject = HTTPFieldName(unchecked: "x-auth-subject")
+    /// `X-Client-Cert-Subject` — the subject of a verified TLS client certificate (mutual TLS).
+    ///
+    /// Server-asserted (see ``serverAsserted``): stripped at ingress. The server no longer *writes* it —
+    /// the verified identity reaches handlers as `RequestContext.connection.tlsPeerSubject`, a value
+    /// that never round-trips through a header (G3) — so the name survives as something a client must
+    /// not be able to supply, and as the field an upstream-terminating proxy would set.
     public static let xClientCertSubject = HTTPFieldName(unchecked: "x-client-cert-subject")
 }
