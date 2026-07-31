@@ -78,12 +78,20 @@ public enum QUICVarint {
         }
         var value = UInt64(first & 0x3F)
         reader.advance()
-        for _ in 1 ..< length {
+        // An index-based `while`, not `for _ in 1 ..< length`. The generic `IndexingIterator` a
+        // `for-in` over a `Range` builds is a heap allocation in an unoptimized build (release
+        // specializes it away), and this decoder sits under every HTTP/3 frame header (RFC 9114 §7.1)
+        // and every QPACK instruction (RFC 9204) — so it cost one allocation per frame in the
+        // debug-build allocation oracles that guard those paths, and no borrowed frame walk above it
+        // could ever measure zero. Same shape and same reason as `MultipartParser` (task #29 sweep).
+        var index = 1
+        while index < length {
             // `remaining` above already guards the read.
             guard let byte = reader.readByte() else {
                 return nil
             }
             value = (value << 8) | UInt64(byte)
+            index += 1
         }
         return value
     }

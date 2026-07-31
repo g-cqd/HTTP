@@ -66,6 +66,49 @@ struct HTTP3StreamTable: Sequence {
     /// The number of tracked streams — the record count a driver is obliged to retire (audit REG-3).
     var count: Int { storage.count }
 
+    /// Takes a stream's receive buffer out of the table, leaving its record in place.
+    ///
+    /// The record keeps an empty buffer, so nothing else observes a gap.
+    ///
+    /// The engine walks those octets through a borrowed `RawSpan` while mutating itself, which Swift's
+    /// exclusivity rules forbid on state the table still holds — and any later `append` or `removeAll`
+    /// on a buffer the table still shares would pay a copy-on-write copy of the whole thing. Handing
+    /// the storage out with sole ownership solves both, and costs nothing: it is a pointer move
+    /// (audit CR-F18).
+    ///
+    /// This reaches `storage` directly rather than going through the counter-maintaining subscript,
+    /// which is sound *because* it changes neither `body` nor `blockedSection` — the two quantities
+    /// the running totals track. Nothing else here may take that shortcut.
+    mutating func takeBuffer(of id: QUICStreamID) -> (buffer: [UInt8], start: Int)? {
+        guard var state = storage.removeValue(forKey: id) else {
+            return nil
+        }
+        var taken: [UInt8] = []
+        swap(&taken, &state.buffer)
+        let start = state.bufferStart
+        state.bufferStart = 0
+        storage[id] = state
+        return (taken, start)
+    }
+
+    /// Returns a taken buffer to `id` with the cursor at `consumed`, reclaiming any dead prefix.
+    ///
+    /// Does nothing when a handler retired the stream while its octets were borrowed — that stream is
+    /// gone and its buffer goes with it.
+    mutating func restoreBuffer(
+        _ buffer: inout [UInt8],
+        of id: QUICStreamID,
+        consumedTo consumed: Int
+    ) {
+        guard var state = storage.removeValue(forKey: id) else {
+            return
+        }
+        swap(&state.buffer, &buffer)
+        state.bufferStart = consumed
+        state.reclaimBuffer()
+        storage[id] = state
+    }
+
     func makeIterator() -> Dictionary<QUICStreamID, HTTP3Connection.StreamState>.Iterator {
         storage.makeIterator()
     }

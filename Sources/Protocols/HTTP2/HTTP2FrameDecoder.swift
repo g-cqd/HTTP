@@ -38,7 +38,29 @@ public struct HTTP2FrameDecoder {
     /// Pulls the next complete frame from `reader`, advancing it; returns nil if one is still arriving.
     ///
     /// Throws FRAME_SIZE_ERROR if the header declares a payload larger than `maxFrameSize` (§4.2).
+    ///
+    /// The OWNING half: it materializes the payload, so the frame outlives the buffer it came from.
+    /// The connection engine uses ``nextFrameRange(_:)`` instead and never pays this copy; this entry
+    /// point remains for callers that need an escaping value (tests, tools, out-of-module clients).
     public func nextFrame(_ reader: inout ByteReader) throws(HTTP2Error) -> Frame? {
+        guard let framing = try nextFrameRange(&reader) else {
+            return nil
+        }
+        let payload = reader.slice(in: framing.payload).withUnsafeBytes { Array($0) }
+        return Frame(header: framing.header, payload: payload)
+    }
+
+    /// Locates the next complete frame without copying it, as a header plus a payload range.
+    ///
+    /// The range indexes `reader`'s own buffer.
+    ///
+    /// The BORROWED half (audit CR-F18), and the implementation ``nextFrame(_:)`` copies from — so the
+    /// two cannot disagree about where a frame starts or ends. The cursor advances identically; the
+    /// caller reads the payload in place via ``ByteReader/slice(in:)`` and materializes only what has
+    /// to outlive the borrow. Returns nil while a frame is still arriving, leaving the cursor put.
+    func nextFrameRange(
+        _ reader: inout ByteReader
+    ) throws(HTTP2Error) -> (header: HTTP2FrameHeader, payload: Range<Int>)? {
         // Probe on a copy so an incomplete frame leaves the real cursor untouched for a later retry.
         var probe = reader
         guard let header = HTTP2FrameHeader.parse(&probe) else {
@@ -54,8 +76,6 @@ public struct HTTP2FrameDecoder {
         reader.advance(by: HTTP2FrameHeader.encodedLength)
         let start = reader.position
         reader.advance(by: header.payloadLength)
-        let payload = reader.slice(in: start ..< (start + header.payloadLength))
-            .withUnsafeBytes { Array($0) }
-        return Frame(header: header, payload: payload)
+        return (header, start ..< (start + header.payloadLength))
     }
 }

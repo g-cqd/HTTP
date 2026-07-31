@@ -106,7 +106,18 @@ public struct HTTP2Connection {
     }
 
     private var phase = Phase.awaitingPreface
-    private var inbound: [UInt8] = []
+    /// The rolling inbound buffer, and the read cursor into it (audit CR-F18).
+    ///
+    /// Octets are consumed by ADVANCING `inboundStart`, not by `removeFirst` — a frame-sized memmove
+    /// of the tail on every drain — and the dead prefix is reclaimed only when the buffer empties or
+    /// the prefix passes ``inboundCompactionThreshold``. That is the same rolling-buffer idiom the
+    /// HTTP/1 reader uses for keep-alive (`HTTPServer+RequestReader.reclaim`).
+    ///
+    /// Internal rather than private so `HTTP2InboundBufferTests` can assert the reclaim invariant on
+    /// them: `removeFirst` bounded the retained octets and capacity for free, and a cursor that never
+    /// compacts is a leak, so the bound has to be tested rather than assumed.
+    var inbound: [UInt8] = []
+    var inboundStart = 0
     var writer = HTTP2FrameWriter()
     private var decoder: HPACKDecoder
     var encoder: HPACKEncoder
@@ -282,9 +293,7 @@ public struct HTTP2Connection {
                 }
             }
             var events: [Event] = []
-            for frame in try drainFrames() {
-                try process(frame, into: &events)
-            }
+            try drainFrames(into: &events)
             return events
         }
         catch {
@@ -300,45 +309,106 @@ public struct HTTP2Connection {
     // MARK: Preface
 
     private mutating func consumePreface() throws(HTTP2Error) -> Bool {
+        let start = inboundStart  // read before the borrow, so nothing reads `self` inside it
         let result: Result<Bool, HTTP2Error> = inbound.withUnsafeBytes { raw in
             Result { () throws(HTTP2Error) in
-                var reader = ByteReader(raw)
+                var reader = ByteReader(raw, startingAt: start)
                 return try HTTP2ConnectionPreface.consume(&reader) == .matched
             }
         }
         guard try result.get() else {
             return false
         }
-        inbound.removeFirst(HTTP2ConnectionPreface.client.count)
+        inboundStart += HTTP2ConnectionPreface.client.count
         phase = .awaitingSettings
         return true
     }
 
     // MARK: Frame decoding
 
-    private mutating func drainFrames() throws(HTTP2Error) -> [HTTP2FrameDecoder.Frame] {
-        let decoded: Result<(frames: [HTTP2FrameDecoder.Frame], consumed: Int), HTTP2Error> =
-            inbound.withUnsafeBytes { raw in
-                Result { () throws(HTTP2Error) in
-                    var reader = ByteReader(raw)
-                    var frames: [HTTP2FrameDecoder.Frame] = []
-                    while let frame = try frameDecoder.nextFrame(&reader) { frames.append(frame) }
-                    return (frames, reader.position)
+    /// The dead-prefix size past which the rolling buffer is compacted (one `maxFrameSize` default).
+    ///
+    /// Below it, advancing the cursor is O(1) and shifting would be a memmove per drain; above it the
+    /// prefix is large enough that keeping it would let a busy connection's buffer grow without bound.
+    /// The same threshold, for the same reason, as the HTTP/1 keep-alive reader.
+    private static let inboundCompactionThreshold = 16_384
+
+    /// Walks the buffered octets one frame at a time, processing each frame while its payload is still
+    /// BORROWED from the buffer (audit CR-F18).
+    ///
+    /// The buffer is moved into a local for the walk. The handlers mutate the connection — they open
+    /// streams, queue output, append events — while a `RawSpan` into the buffer is live, and Swift's
+    /// exclusivity rules forbid that on a stored property. A local holds the sole reference (`inbound`
+    /// is left empty by the swap, so no copy-on-write copy is made either), which separates the borrow
+    /// from the mutation without separating them in time, and lets the payload stay where it landed.
+    ///
+    /// Consumed octets are handed back as a cursor, not shifted out. A frame that is still arriving
+    /// leaves the cursor before it, so it is re-read from the same place once the rest lands.
+    private mutating func drainFrames(into events: inout [Event]) throws(HTTP2Error) {
+        var buffer: [UInt8] = []
+        swap(&buffer, &inbound)
+        let start = inboundStart
+        let outcome: Result<Int, HTTP2Error> = buffer.withUnsafeBytes { raw in
+            Result { () throws(HTTP2Error) in
+                var reader = ByteReader(raw, startingAt: start)
+                // An index-based `while` over the cursor, never a `for-in` over a span-derived
+                // sequence: the shape every span-borrowing scan in the package uses (see
+                // `MultipartParser`), so the debug-build allocation oracles are not charged for
+                // `IndexingIterator.next()` (task #29 sweep).
+                while let framing = try frameDecoder.nextFrameRange(&reader) {
+                    try process(
+                        HTTP2FrameView(
+                            header: framing.header,
+                            payload: reader.slice(in: framing.payload)
+                        ),
+                        into: &events
+                    )
                 }
+                return reader.position
             }
-        switch decoded {
-            case .success(let value):
-                inbound.removeFirst(value.consumed)
-                return value.frames
+        }
+        // Hand the storage back with a second swap, NOT `inbound = buffer`: an assignment would leave
+        // `buffer` holding a live second reference for the rest of this scope, so the very next
+        // `removeAll(keepingCapacity:)` would see a shared buffer and allocate a fresh one — paying
+        // the copy-on-write tax on every receive and throwing away the capacity this idiom exists to
+        // reuse. Measured: assignment cost one fresh ~wire-sized allocation per receive; the swap
+        // costs none.
+        swap(&inbound, &buffer)
+        switch outcome {
+            case .success(let consumed):
+                inboundStart = consumed
+                reclaimInbound()
             case .failure(let error):
+                // Fatal for this connection: `receive` queues GOAWAY and the driver closes, so the
+                // buffer is released rather than kept for a next chunk that will not come.
+                inbound = []
+                inboundStart = 0
                 throw error
+        }
+    }
+
+    /// Reclaims the consumed prefix of the rolling buffer once it is worth reclaiming.
+    ///
+    /// Fully drained — the common case, one chunk carrying whole frames — costs nothing: the buffer is
+    /// emptied and its storage kept for the next chunk. Otherwise the prefix is only shifted out once
+    /// it is large, so the steady state pays no memmove at all while a peer that always leaves a
+    /// partial frame behind still cannot make the buffer grow.
+    private mutating func reclaimInbound() {
+        if inboundStart == inbound.count {
+            inbound.removeAll(keepingCapacity: true)
+            inboundStart = 0
+            return
+        }
+        if inboundStart >= Self.inboundCompactionThreshold {
+            inbound.removeFirst(inboundStart)
+            inboundStart = 0
         }
     }
 
     // MARK: Frame dispatch
 
     private mutating func process(
-        _ frame: HTTP2FrameDecoder.Frame,
+        _ frame: HTTP2FrameView,
         into events: inout [Event]
     ) throws(HTTP2Error) {
         if phase == .awaitingSettings {
@@ -370,7 +440,7 @@ public struct HTTP2Connection {
     }
 
     private mutating func dispatch(
-        _ frame: HTTP2FrameDecoder.Frame,
+        _ frame: HTTP2FrameView,
         into events: inout [Event]
     ) throws(HTTP2Error) {
         switch frame.header.type {

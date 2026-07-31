@@ -10,17 +10,17 @@
 
 extension HTTP2Connection {
     /// Validates a PRIORITY frame (RFC 9113 §6.3); the deprecated priority data (§5.3.2) is not used.
-    mutating func receivePriority(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
+    mutating func receivePriority(_ frame: HTTP2FrameView) throws(HTTP2Error) {
         guard frame.header.streamID != .connection else {
             throw .connection(.protocolError, "PRIORITY must not be on stream 0")
         }
-        guard frame.payload.count == 5 else {
+        guard frame.payload.byteCount == 5 else {
             throw .stream(frame.header.streamID, .frameSizeError, "PRIORITY must be 5 octets")
         }
         let dependency = HTTP2StreamID(
-            rawValue: frame.payload.withUnsafeBytes {
-                UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self))
-            }
+            rawValue: UInt32(
+                bigEndian: frame.payload.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self)
+            )
         )
         guard dependency != frame.header.streamID else {
             throw .stream(frame.header.streamID, .protocolError, "stream depends on itself")
@@ -31,7 +31,7 @@ extension HTTP2Connection {
     }
 
     /// Validates a received GOAWAY (RFC 9113 §6.8); a client GOAWAY is informational to a server.
-    func receiveGoAway(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
+    func receiveGoAway(_ frame: HTTP2FrameView) throws(HTTP2Error) {
         guard frame.header.streamID == .connection else {
             throw .connection(.protocolError, "GOAWAY must be on stream 0")
         }
@@ -39,12 +39,12 @@ extension HTTP2Connection {
 
     // MARK: SETTINGS / PING
 
-    mutating func applySettings(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
+    mutating func applySettings(_ frame: HTTP2FrameView) throws(HTTP2Error) {
         guard frame.header.streamID == .connection else {
             throw .connection(.protocolError, "SETTINGS must be on stream 0")
         }
         if frame.header.flags.contains(.ack) {
-            guard frame.payload.isEmpty else {
+            guard frame.payload.byteCount == 0 else {
                 throw .connection(.frameSizeError, "SETTINGS ACK must be empty")
             }
             try chargeControlFrame()  // a SETTINGS-ACK flood is cheap to send — charge it
@@ -53,13 +53,10 @@ extension HTTP2Connection {
         try chargeControlFrame()
         let previousInitialWindow = remoteSettings.initialWindowSize
         var updated = remoteSettings  // SETTINGS frames are deltas applied to the running set
-        let applied: Result<HTTP2Settings, HTTP2Error> = frame.payload.withUnsafeBytes { raw in
-            Result { () throws(HTTP2Error) in
-                try updated.apply(raw.bytes)
-                return updated
-            }
-        }
-        remoteSettings = try applied.get()
+        // §6.5.1 is parsed straight out of the inbound buffer: `HTTP2Settings.apply` already takes a
+        // `RawSpan`, so the payload never needed to be an `[UInt8]` to be read.
+        try updated.apply(frame.payload)
+        remoteSettings = updated
         // A change to SETTINGS_INITIAL_WINDOW_SIZE shifts every open stream's send window by the same
         // delta (RFC 9113 §6.9.2); a positive shift may unblock DATA that was waiting on the window.
         let windowDelta = remoteSettings.initialWindowSize - previousInitialWindow
@@ -69,18 +66,20 @@ extension HTTP2Connection {
         writer.writeFrame(.settings, flags: .ack)  // acknowledge (§6.5.3)
     }
 
-    mutating func receivePing(_ frame: HTTP2FrameDecoder.Frame) throws(HTTP2Error) {
+    mutating func receivePing(_ frame: HTTP2FrameView) throws(HTTP2Error) {
         guard frame.header.streamID == .connection else {
             throw .connection(.protocolError, "PING must be on stream 0 (RFC 9113 §6.7)")
         }
-        guard frame.payload.count == 8 else {
+        guard frame.payload.byteCount == 8 else {
             throw .connection(.frameSizeError, "PING payload must be 8 octets (RFC 9113 §6.7)")
         }
         guard !frame.header.flags.contains(.ack) else {  // a PING ACK needs no response
             return
         }
         try chargeControlFrame()
-        writer.writeFrame(.ping, flags: .ack, streamID: .connection, payload: frame.payload)
+        // The eight opaque octets are echoed from the inbound buffer into the outbound one without
+        // ever becoming a value (RFC 9113 §6.7) — a PING flood is the case that pays for this.
+        writer.writePingAck(frame.payload)
     }
 
     // MARK: RST_STREAM
@@ -88,10 +87,10 @@ extension HTTP2Connection {
     /// Handles a received RST_STREAM (RFC 9113 §6.4): closes the stream, charges the Rapid-Reset budget
     /// when it was still active, and surfaces the peer's error code as a `.streamReset` event.
     mutating func receiveReset(
-        _ frame: HTTP2FrameDecoder.Frame,
+        _ frame: HTTP2FrameView,
         into events: inout [Event]
     ) throws(HTTP2Error) {
-        guard frame.payload.count == 4 else {
+        guard frame.payload.byteCount == 4 else {
             throw .connection(.frameSizeError, "RST_STREAM payload must be 4 octets")
         }
         guard frame.header.streamID != .connection, frame.header.streamID <= lastPeerStreamID else {
@@ -105,9 +104,9 @@ extension HTTP2Connection {
         }
         // The 4-octet error code is big-endian (RFC 9113 §6.4); read it as one unaligned load rather
         // than re-rolling the shift-and-or by hand (the payload is exactly 4 octets, guarded above).
-        let code = frame.payload.withUnsafeBytes {
-            UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self))
-        }
+        let code = UInt32(
+            bigEndian: frame.payload.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self)
+        )
         // A reset mid-upload must still return the stream's outstanding credit to the CONNECTION window
         // (RFC 9113 §6.9.1 — that window outlives every stream), or a peer could permanently shrink it
         // by resetting streams part-way through their bodies.

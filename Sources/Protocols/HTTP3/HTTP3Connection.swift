@@ -87,8 +87,22 @@ public struct HTTP3Connection {
 
     /// Per-stream receive state: the classified kind, the unconsumed byte buffer, and FIN.
     struct StreamState: Sendable {
+        /// The dead-prefix size past which the receive buffer is compacted.
+        ///
+        /// Below it, advancing the cursor is O(1) and shifting would be a memmove per drain; above it
+        /// the prefix is large enough that keeping it would let a busy stream's buffer grow without
+        /// bound. The same threshold, for the same reason, as the HTTP/2 rolling buffer and the
+        /// HTTP/1 keep-alive reader.
+        static let compactionThreshold = 16_384
+
         var kind: StreamKind
+        /// The stream's rolling receive buffer, and the read cursor into it (audit CR-F18).
+        ///
+        /// Octets are consumed by ADVANCING `bufferStart`, not by `removeFirst` — which, on a state
+        /// record the table still shares, was both a memmove of the tail AND a copy-on-write copy of
+        /// the whole buffer, on every frame batch and every QPACK instruction batch.
         var buffer: [UInt8] = []
+        var bufferStart = 0
         var finReceived = false
         /// Whether the request HEADERS have been seen on a request stream (DATA-before-HEADERS guard,
         /// RFC 9114 §4.1).
@@ -126,6 +140,37 @@ public struct HTTP3Connection {
         /// its Required Insert Count until the encoder stream delivers those inserts and the stream
         /// decodes once `insertCount ≥ RIC` (RFC 9204 §2.1.2 blocked stream).
         var blockedSection: (payload: [UInt8], requiredInsertCount: Int)?
+
+        /// The octets received on this stream that no handler has consumed yet.
+        ///
+        /// What `buffer.count` meant before the cursor: a non-zero value at FIN is a frame whose
+        /// Length ran past the end of the stream (RFC 9114 §7.1).
+        var pendingOctets: Int { buffer.count - bufferStart }
+
+        /// Reclaims the consumed prefix once it is worth reclaiming.
+        ///
+        /// `removeFirst` bounded the retained octets and the retained capacity for free; a cursor
+        /// that never compacts is a leak. Fully drained — the common case — empties the buffer and
+        /// keeps its storage for the next chunk; otherwise the dead prefix is shifted out only once
+        /// it passes ``compactionThreshold``. Between those two, consuming costs nothing.
+        mutating func reclaimBuffer() {
+            if bufferStart >= buffer.count {
+                buffer.removeAll(keepingCapacity: true)
+                bufferStart = 0
+                return
+            }
+            if bufferStart >= Self.compactionThreshold {
+                buffer.removeFirst(bufferStart)
+                bufferStart = 0
+            }
+        }
+
+        /// Drops every buffered octet and releases the storage (RFC 9114 §6.2 — a reserved stream's
+        /// data is discarded, and no more is expected).
+        mutating func discardBuffer() {
+            buffer.removeAll(keepingCapacity: false)
+            bufferStart = 0
+        }
     }
 
     let localSettings: HTTP3Settings
@@ -343,8 +388,25 @@ public struct HTTP3Connection {
         if streams[streamID] == nil, streamID.kind == .serverBidirectional {
             throw .connection(.h3StreamCreationError, "a server-initiated bidirectional stream")
         }
+        buffer(bytes, on: streamID, fin: fin)
+        try dispatch(streamID, into: &events)
+    }
+
+    /// Appends an inbound chunk to a stream's rolling receive buffer, recording FIN.
+    ///
+    /// Deliberately its own function so no copy of the record — and therefore no second reference to
+    /// its buffer — is alive while ``dispatch(_:into:)`` runs. The handlers take that buffer out of
+    /// the table to walk it and put it back with `removeAll(keepingCapacity:)`; a stray live copy
+    /// would make that reclaim see a shared buffer and allocate a fresh one, discarding the capacity
+    /// the rolling buffer exists to reuse. Measured: one wire-sized allocation per receive with the
+    /// copy alive, none without it (audit CR-F18).
+    private mutating func buffer(_ bytes: [UInt8], on streamID: QUICStreamID, fin: Bool) {
+        // `removeValue` (not a subscript read) hands sole ownership of the receive buffer to `state`,
+        // so the append below lands in place. A subscript read would leave the table sharing that
+        // buffer, making every inbound chunk copy the whole thing first — O(n²) over a stream that
+        // arrives in pieces, which is every stream.
         var state =
-            streams[streamID]
+            streams.removeValue(forKey: streamID)
             ?? StreamState(
                 kind: streamID.isUnidirectional ? .unclassifiedUni : .request
             )
@@ -356,7 +418,6 @@ public struct HTTP3Connection {
             highestRequestStreamID = Swift.max(highestRequestStreamID ?? streamID, streamID)
         }
         streams[streamID] = state
-        try dispatch(streamID, into: &events)
     }
 
     /// Reads a stream's classified kind and routes it to the matching handler (RFC 9114 §6).
@@ -392,7 +453,7 @@ public struct HTTP3Connection {
                 try processQpackDecoderStream(streamID)
             case .reserved:
                 // §6.2 — an unknown unidirectional stream type: discard its buffered data.
-                streams[streamID]?.buffer.removeAll(keepingCapacity: false)
+                streams[streamID]?.discardBuffer()
             case .request:
                 try processRequestStream(streamID, into: &events)
         }
