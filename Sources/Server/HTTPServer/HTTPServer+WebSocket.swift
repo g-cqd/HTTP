@@ -129,13 +129,13 @@ extension HTTPServer {
         // so a published message arrives as a `.broadcast` wakeup, applied to the engine below.
         var token: UInt64?
         if let hub, let topic {
-            token = await hub.register { message in
+            token = hub.register { message in
                 // The `deposit` outcome is the inspected result the audit requires: an evicted
                 // broadcast is counted, and the pump turns a non-zero count into a 1008 close rather
                 // than silently serving the peer an incomplete view of the topic.
                 broadcasts.deposit(message) { continuation.yield(.broadcastReady) }
             }
-            if let token { await hub.subscribe(token, to: topic) }
+            if let token { hub.subscribe(token, to: topic) }
         }
         // Reader: feed the carryover, then inbound bytes (timed by the idle deadline), into the
         // lossless intake channel, yielding exactly one ticket per item.
@@ -177,7 +177,7 @@ extension HTTPServer {
         reader.cancel()
         await intake.abandon()  // unblocks a reader parked in `send` so the task actually exits
         continuation.finish()
-        if let hub, let token { await hub.remove(token) }
+        if let hub, let token { hub.remove(token) }
         await connection.close()
         // Lifecycle hook: the session is over — every ending funnels through here exactly once
         // (clean Close handshake, abrupt EOF, idle timeout, send failure).

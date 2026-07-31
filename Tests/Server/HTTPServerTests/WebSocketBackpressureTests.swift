@@ -83,7 +83,7 @@ struct WebSocketBackpressureTests {
                 return []
             }
             for index in 0 ..< 20 {
-                await hub.publish(.text("b\(index)"), to: "room")  // capacity is 4 → 16 evicted
+                hub.publish(.text("b\(index)"), to: "room")  // capacity is 4 → 16 evicted
             }
             await connection.close()
             return []
@@ -117,7 +117,7 @@ struct WebSocketBackpressureTests {
             guard case .message = event else {
                 return []
             }
-            await hub.publish(.text("hello"), to: "room")
+            hub.publish(.text("hello"), to: "room")
             await connection.close()
             return []
         }
@@ -162,7 +162,7 @@ struct WebSocketBackpressureTests {
                 while await connection.handedOutCount() < total {
                     await Task.yield()
                 }
-                await hub.publish(.text("ping"), to: "room")
+                hub.publish(.text("ping"), to: "room")
             }
             if text == "c7" {
                 // The last coalesced message: end the session so `serve` returns. The broadcast
