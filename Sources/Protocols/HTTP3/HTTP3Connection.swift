@@ -238,6 +238,16 @@ public struct HTTP3Connection {
         streams[id] = StreamState(kind: direction == .unidirectional ? .unclassifiedUni : .request)
     }
 
+    /// Whether `streamID` still holds a field section blocked on not-yet-received QPACK inserts
+    /// (RFC 9204 §2.1.2) — its request has not surfaced yet and will do so from *another* stream's
+    /// receive, once the encoder stream delivers those inserts.
+    ///
+    /// The driver reads this when a stream's own task ends: a blocked stream's writer must stay
+    /// reachable so the request can still be answered on it (audit addendum P0.3).
+    public func isBlocked(_ streamID: QUICStreamID) -> Bool {
+        streams[streamID]?.blockedSection != nil
+    }
+
     /// Drains the queued outbound actions for the driver to perform.
     public mutating func outbound() -> [Action] {
         var drained: [Action] = []
