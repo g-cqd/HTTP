@@ -108,8 +108,21 @@ let strictSwiftSettings: [SwiftSetting] = [
 
 // ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
 // UTF-8 validator uses the ASCII-run skip. This is the one first-party dependency HTTP takes.
+//
+// Pinned to an exact reviewed revision, not `branch: "main"` (2026-07-31 audit). A moving branch means
+// two checkouts of the same HTTP commit can resolve different dependency code, so a build is not
+// reproducible, a benchmark result is not attributable, and a CI green is not evidence about any
+// particular input. `Package.resolved` stays gitignored on purpose — this is a reusable library and its
+// consumers must resolve their own graph — so this pin is what makes *this* package's own builds
+// deterministic. Note the scope honestly: the rest of the graph is version-ranged and still floats
+// within its ranges; only this first-party, unversioned dependency is nailed down here.
+//
+// To advance it: review the target revision, update the constant below, delete `Package.resolved`, and
+// re-resolve.
+let adFoundationRevision = "2b90a625c668fa2e76aaf7ec48f9d415e7c86b30"
+
 func adFoundationDependency() -> Package.Dependency {
-    .package(url: "https://github.com/g-cqd/ADFoundation.git", branch: "main")
+    .package(url: "https://github.com/g-cqd/ADFoundation.git", revision: adFoundationRevision)
 }
 
 let package = Package(
