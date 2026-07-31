@@ -79,9 +79,12 @@ extension HTTPServer {
     /// Pumps the ``WebSocketConnection`` over `connection` until a Close, EOF, idle timeout, or send
     /// failure (RFC 6455 §6).
     ///
-    /// A reader task feeds inbound bytes, and a hub (Phase 2.7) feeds broadcasts, into one
-    /// ``WebSocketWakeup`` stream the pump consumes — so the server can push a frame without the pump
-    /// blocking on `receive`.
+    /// A reader task feeds inbound bytes, and a hub (Phase 2.7) feeds broadcasts, to the pump — so the
+    /// server can push a frame without the pump blocking on `receive`. The two travel by *different*
+    /// routes because they need opposite policies (2026-07-31 audit, finding 1): transport octets go
+    /// through a lossless, byte-watermarked ``BoundedByteChannel`` that parks the reader — and so
+    /// closes the peer's TCP window — while broadcasts go through a bounded ``WebSocketBroadcastMailbox``
+    /// with a counted drop. Only payload-free tickets travel on the ``WebSocketWakeup`` stream itself.
     private func driveWebSocket(
         _ connection: any TransportConnection,
         deadline: IdleDeadline<C.Instant>,
@@ -100,9 +103,19 @@ extension HTTPServer {
             maxMessageSize: limits.effectiveWebSocketMessageSize,
             permessageDeflate: permessageDeflate
         )
+        // `.unbounded` is safe here precisely because the payloads moved out: an inbound ticket is 1:1
+        // with a chunk the channel caps at `maxQueuedInboundChunks`, and the broadcast edge is
+        // coalesced to one outstanding ticket. See WebSocketWakeup.swift.
         let (wakeups, continuation) = AsyncStream.makeStream(
-            of: WebSocketWakeup.self, bufferingPolicy: .bufferingNewest(256)
+            of: WebSocketWakeup.self, bufferingPolicy: .unbounded
         )
+        let intake = BoundedByteChannel(
+            highWatermark: limits.maxQueuedInboundBytes,
+            lowWatermark: limits.maxQueuedInboundBytes / 2,
+            maxQueuedChunks: limits.maxQueuedInboundChunks,
+            coalescingBelow: 4 * 1_024
+        )
+        let broadcasts = WebSocketBroadcastMailbox(capacity: limits.maxQueuedBroadcasts)
         // Lifecycle hook: the upgrade is complete — let the handler speak first (a greeting/hello),
         // before any peer frame or broadcast is delivered.
         for action in await handler.onOpen() { engine.apply(action) }
@@ -116,25 +129,50 @@ extension HTTPServer {
         // so a published message arrives as a `.broadcast` wakeup, applied to the engine below.
         var token: UInt64?
         if let hub, let topic {
-            token = await hub.register { message in continuation.yield(.broadcast(message)) }
+            token = await hub.register { message in
+                // The `deposit` outcome is the inspected result the audit requires: an evicted
+                // broadcast is counted, and the pump turns a non-zero count into a 1008 close rather
+                // than silently serving the peer an incomplete view of the topic.
+                broadcasts.deposit(message) { continuation.yield(.broadcastReady) }
+            }
             if let token { await hub.subscribe(token, to: topic) }
         }
-        // Reader: feed the carryover, then inbound bytes (timed by the idle deadline), into the stream.
+        // Reader: feed the carryover, then inbound bytes (timed by the idle deadline), into the
+        // lossless intake channel, yielding exactly one ticket per item.
         let reader = Task {
-            if !carryover.isEmpty { continuation.yield(.inbound(carryover)) }
-            while true {
+            if !carryover.isEmpty {
+                await intake.send(carryover)
+                continuation.yield(.inboundReady)
+            }
+            while !Task.isCancelled {
                 deadline.arm(clock.now.advanced(by: limits.keepAliveTimeout))
                 let chunk = try? await connection.receive(maxLength: 16_384)
                 deadline.disarm()
                 guard let chunk, !chunk.isEmpty else {
-                    continuation.yield(.closed)  // EOF, idle timeout, or read failure
-                    return
+                    break  // EOF, idle timeout, or read failure
                 }
-                continuation.yield(.inbound(chunk))
+                // Arm around the handoff too. While the reader is parked waiting for the pump to
+                // drain, no receive is outstanding, so without this the connection watchdog would nap
+                // and re-check forever and a permanently wedged handler would hold the connection
+                // open indefinitely. A merely *slow* handler re-arms on each chunk and is not reaped.
+                deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+                await intake.send(chunk)
+                deadline.disarm()
+                continuation.yield(.inboundReady)
             }
+            await intake.finish()
+            continuation.yield(.inboundReady)  // the ticket that delivers the terminal item
         }
-        await pumpWebSocket(wakeups, engine: &engine, handler: handler, connection: connection)
+        await pumpWebSocket(
+            wakeups,
+            intake: intake,
+            broadcasts: broadcasts,
+            engine: &engine,
+            handler: handler,
+            connection: connection
+        )
         reader.cancel()
+        await intake.abandon()  // unblocks a reader parked in `send` so the task actually exits
         continuation.finish()
         if let hub, let token { await hub.remove(token) }
         await connection.close()
@@ -147,29 +185,20 @@ extension HTTPServer {
     /// after each, stopping on a queued Close, the reader closing, or a send failure (RFC 6455 §6).
     private func pumpWebSocket(
         _ wakeups: AsyncStream<WebSocketWakeup>,
+        intake: BoundedByteChannel,
+        broadcasts: WebSocketBroadcastMailbox,
         engine: inout WebSocketConnection,
         handler: any WebSocketHandler,
         connection: any TransportConnection
     ) async {
         for await wakeup in wakeups {
-            var ended = false
-            switch wakeup {
-                case .inbound(let bytes):
-                    do {
-                        for event in try engine.receive(bytes) {
-                            for action in await handler.handle(event) { engine.apply(action) }
-                        }
-                    }
-                    catch {
-                        ended = true  // the engine queued a Close; flush it below, then stop
-                    }
-                case .broadcast(.text(let string)):
-                    engine.apply(.sendText(string))
-                case .broadcast(.binary(let bytes)):
-                    engine.apply(.sendBinary(bytes))
-                case .closed:
-                    ended = true
-            }
+            let ended =
+                switch wakeup {
+                    case .inboundReady:
+                        await applyInbound(intake, engine: &engine, handler: handler)
+                    case .broadcastReady:
+                        applyBroadcasts(broadcasts, engine: &engine)
+                }
             let outbound = engine.outboundBytes()
             if !outbound.isEmpty, (try? await connection.send(outbound)) == nil {
                 return
@@ -178,6 +207,58 @@ extension HTTPServer {
                 return
             }
         }
+    }
+
+    /// Takes the one chunk this ticket accounts for and drives it through the engine and handler.
+    ///
+    /// The matching ``BoundedByteChannel/next()`` cannot suspend: the reader yields exactly one ticket
+    /// per queued item, so an item is always already there.
+    ///
+    /// - Returns: whether the session has ended (a protocol violation left a queued Close, or the
+    ///   producer reached EOF / was abandoned).
+    private func applyInbound(
+        _ intake: BoundedByteChannel,
+        engine: inout WebSocketConnection,
+        handler: any WebSocketHandler
+    ) async -> Bool {
+        switch await intake.next() {
+            case .chunk(let bytes):
+                do {
+                    for event in try engine.receive(bytes) {
+                        for action in await handler.handle(event) { engine.apply(action) }
+                    }
+                }
+                catch {
+                    return true  // the engine queued a Close; the caller flushes it, then stops
+                }
+                return false
+            case .finished, .aborted:
+                return true
+        }
+    }
+
+    /// Drains every queued broadcast into the engine, closing the session if any were evicted.
+    ///
+    /// A connection that could not keep up is closed with `1008` (RFC 6455 §7.4.1) rather than left
+    /// with a silent hole in its view of the topic — the explicit disconnect half of the bounded
+    /// drop policy.
+    private func applyBroadcasts(
+        _ broadcasts: WebSocketBroadcastMailbox,
+        engine: inout WebSocketConnection
+    ) -> Bool {
+        for message in broadcasts.drain() {
+            switch message {
+                case .text(let string):
+                    engine.apply(.sendText(string))
+                case .binary(let bytes):
+                    engine.apply(.sendBinary(bytes))
+            }
+        }
+        guard broadcasts.droppedCount > 0 else {
+            return false
+        }
+        engine.apply(.close(.policyViolation, reason: "broadcast backlog exceeded"))
+        return true
     }
 
     // MARK: WebSocket over HTTP/2 (RFC 8441 / RFC 9220)

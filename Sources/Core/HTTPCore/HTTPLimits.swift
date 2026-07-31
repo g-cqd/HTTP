@@ -94,6 +94,28 @@ public struct HTTPLimits: Sendable, Equatable {
     /// ``maxStreamResetsPerInterval`` so resets and control frames are bounded independently.
     public var maxControlFramesPerInterval: Int
 
+    // MARK: Transport→application handoff bounds (backpressure)
+
+    /// Unconsumed octets a transport intake channel holds before the reader task parks.
+    ///
+    /// The reader parking is the backpressure: it stops calling `receive`, so the kernel buffer fills
+    /// and the peer's TCP window closes. Bounds the HTTP/1.1 WebSocket intake and the HTTP/2 raw
+    /// mailbox, which were previously lossy and unbounded respectively (2026-07-31 audit, F1/F3).
+    public var maxQueuedInboundBytes: Int
+
+    /// Unconsumed chunks a transport intake channel holds before the reader task parks.
+    ///
+    /// A second, independent bound on the *ticket* count a merged mailbox can accumulate — a count of
+    /// chunks does not bound memory, and a byte watermark alone does not bound ticket cardinality when
+    /// a peer dribbles tiny frames.
+    public var maxQueuedInboundChunks: Int
+
+    /// Undelivered hub broadcasts a single WebSocket connection queues before the oldest is dropped.
+    ///
+    /// Unlike transport octets, broadcasts may be dropped — but never silently: the drop is counted
+    /// and the connection is closed with `1008` (RFC 6455 §7.4.1) rather than pretending it delivered.
+    public var maxQueuedBroadcasts: Int
+
     // MARK: Timeouts (Slowloris / slow-read defenses)
 
     /// Maximum time to receive a complete header section (Slowloris; → `408`).
@@ -140,6 +162,9 @@ public struct HTTPLimits: Sendable, Equatable {
         maxContinuationFrames: Int = 100,
         maxStreamResetsPerInterval: Int = 100,
         maxControlFramesPerInterval: Int = 1_000,
+        maxQueuedInboundBytes: Int = 256 * 1_024,
+        maxQueuedInboundChunks: Int = 64,
+        maxQueuedBroadcasts: Int = 64,
         headerReadTimeout: Duration = .seconds(10),
         idleTimeout: Duration = .seconds(60),
         keepAliveTimeout: Duration = .seconds(15),
@@ -161,6 +186,9 @@ public struct HTTPLimits: Sendable, Equatable {
         self.maxContinuationFrames = maxContinuationFrames
         self.maxStreamResetsPerInterval = maxStreamResetsPerInterval
         self.maxControlFramesPerInterval = maxControlFramesPerInterval
+        self.maxQueuedInboundBytes = maxQueuedInboundBytes
+        self.maxQueuedInboundChunks = maxQueuedInboundChunks
+        self.maxQueuedBroadcasts = maxQueuedBroadcasts
         self.headerReadTimeout = headerReadTimeout
         self.idleTimeout = idleTimeout
         self.keepAliveTimeout = keepAliveTimeout
@@ -180,6 +208,9 @@ public struct HTTPLimits: Sendable, Equatable {
     /// bounds that ``default`` provides. ``maxConcurrentStreams`` stays bounded (a memory bound, never
     /// a throughput one).
     public static let highThroughput = Self(
+        maxQueuedInboundBytes: 1 << 20,
+        maxQueuedInboundChunks: 256,
+        maxQueuedBroadcasts: 256,
         maxConnectionsPerClient: 1_048_576,
         maxConnections: 1_048_576
     )
@@ -196,6 +227,9 @@ public struct HTTPLimits: Sendable, Equatable {
         maxContinuationFrames: 32,
         maxStreamResetsPerInterval: 50,
         maxControlFramesPerInterval: 200,
+        maxQueuedInboundBytes: 64 * 1_024,
+        maxQueuedInboundChunks: 32,
+        maxQueuedBroadcasts: 16,
         headerReadTimeout: .seconds(5),
         idleTimeout: .seconds(30),
         keepAliveTimeout: .seconds(5),
