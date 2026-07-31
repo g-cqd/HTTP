@@ -36,6 +36,8 @@ let package = Package(
                 .product(name: "HTTP3", package: "HTTP"),
                 .product(name: "WebSocket", package: "HTTP"),
                 .product(name: "HTTPTransport", package: "HTTP"),
+                // Routing lives in HTTPServer; the F19 decision gate measures Router.resolve.
+                .product(name: "HTTPServer", package: "HTTP"),
                 .product(name: "Benchmark", package: "benchmark")
             ],
             path: "Benchmarks/HTTPBenchmarks",

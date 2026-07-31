@@ -35,5 +35,6 @@ let benchmarks: @Sendable () -> Void = {
     registerWebSocketBenchmarks()  // WebSocket — RFC 6455 frame decode (masked) + encode
     registerTransportBenchmarks()  // every backbone — loopback echo + in-memory abstraction
     registerCompressionBenchmarks()  // gzip CRC-32 backends — slice1 vs slice8 vs zlib vs ARM
+    registerRoutingBenchmarks()  // Router — resolution cost vs table size (audit F19 decision gate)
     registerColdPathBenchmarks()  // reject/error branches — adversarial-input cost (cold paths)
 }
