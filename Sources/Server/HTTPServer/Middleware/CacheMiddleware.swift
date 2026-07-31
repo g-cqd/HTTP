@@ -19,15 +19,25 @@ public import HTTPCore
 public struct CacheMiddleware: HTTPMiddleware {
     private let cache: ResponseCache
     private let now: @Sendable () -> Int
-    private let spawn: @Sendable (@escaping @Sendable () async -> Void) -> Void
+    private let supervisor: RevalidationSupervisor
 
     /// Creates the cache bounded to `maxBytes`; `now` (seconds, injectable for tests) drives freshness.
     ///
-    /// `spawn` runs a background `stale-while-revalidate` refresh (RFC 5861 §3) detached from the served
-    /// response; it defaults to an unstructured `Task` and a test injects one it can deterministically
-    /// settle.
+    /// - Parameters:
+    ///   - maxBytes: the accounted size of the stored responses, above which the least-recently-used
+    ///     entries are evicted.
+    ///   - maxConcurrentRevalidations: how many background `stale-while-revalidate` refreshes (RFC 5861
+    ///     §3) may be in flight at once. A refresh over the bound is skipped, not queued — the stale
+    ///     response was already served, so a skipped refresh costs freshness, never correctness.
+    ///   - revalidationDeadline: how long one background refresh may run. Cooperative — see
+    ///     ``RevalidationSupervisor`` for the precise contract.
+    ///   - now: wall-clock seconds; injectable so a test can drive freshness deterministically.
+    ///   - spawn: detaches a background refresh from the served response. Defaults to an unstructured
+    ///     `Task`; a test injects one it can deterministically settle.
     public init(
         maxBytes: Int = 16 * 1_024 * 1_024,
+        maxConcurrentRevalidations: Int = 16,
+        revalidationDeadline: Duration = .seconds(10),
         now: @escaping @Sendable () -> Int = Self.wallClockSeconds,
         spawn: @escaping @Sendable (@escaping @Sendable () async -> Void) -> Void = { work in
             Task { await work() }
@@ -35,7 +45,11 @@ public struct CacheMiddleware: HTTPMiddleware {
     ) {
         self.cache = ResponseCache(maxBytes: maxBytes)
         self.now = now
-        self.spawn = spawn
+        self.supervisor = RevalidationSupervisor(
+            maxConcurrent: maxConcurrentRevalidations,
+            deadline: revalidationDeadline,
+            spawn: spawn
+        )
     }
 
     /// The accounted size of the stored responses, in bytes — never above the configured `maxBytes`.
@@ -101,8 +115,12 @@ public struct CacheMiddleware: HTTPMiddleware {
         return response
     }
 
-    /// Spawns a single background refresh for `key` (at most one in flight), re-running the responder and
-    /// replacing the stored entry so later requests are fresh (RFC 5861 §3).
+    /// Offers a background refresh for `key` to the supervisor, re-running the responder and replacing
+    /// the stored entry so later requests are fresh (RFC 5861 §3).
+    ///
+    /// The supervisor decides: it admits at most one refresh per key (single-flight) and at most
+    /// `maxConcurrentRevalidations` overall, taking the permit and the per-key claim in one critical
+    /// section. A refusal is silent and correct — the caller has already served the stale response.
     private func revalidate(
         key: String,
         request: HTTPRequest,
@@ -110,13 +128,9 @@ public struct CacheMiddleware: HTTPMiddleware {
         context: RequestContext,
         next: any HTTPResponder
     ) {
-        guard cache.beginRevalidation(key) else {
-            return  // a refresh for this key is already running — single-flight
-        }
         let cache = self.cache
         let now = self.now
-        spawn {
-            defer { cache.finishRevalidation(key) }
+        supervisor.submit(key: key) {
             let response = await next.respond(to: request, body: body, context: context)
             if let entry = Self.storableEntry(request, response, key: key, now: now()) {
                 cache.store(key, entry)

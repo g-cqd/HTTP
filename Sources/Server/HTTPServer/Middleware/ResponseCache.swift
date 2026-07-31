@@ -7,7 +7,8 @@
 //  simply replaces the old. The store is Mutex-guarded (a class, since `Mutex` is non-copyable,
 //  mirroring ``DateCache``) and evicts the least-recently-used entries to stay under the byte cap, so a
 //  flood of distinct keys cannot grow it without bound (CWE-400). A stale entry may still be served
-//  within its RFC 5861 §3 `stale-while-revalidate` window while a single background revalidation runs.
+//  within its RFC 5861 §3 `stale-while-revalidate` window while a background revalidation runs; which
+//  refreshes are admitted, and how many, is ``RevalidationSupervisor``'s decision, not this store's.
 //
 //  Recency is ``BoundedLRU``: an index-linked list over a contiguous slab of slots, `Int32` offsets
 //  rather than object references. Move-to-front, insertion and eviction stay O(1), and — unlike the
@@ -43,8 +44,6 @@ final class ResponseCache: Sendable {
 
     private struct State {
         var entries: BoundedLRU<String, Entry>
-        /// Keys with a background revalidation already running — single-flight (RFC 5861 §3).
-        var revalidating: Set<String> = []
     }
 
     private let state: Mutex<State>
@@ -123,19 +122,6 @@ final class ResponseCache: Sendable {
         state.withLock { state in
             _ = state.entries.insert(entry, forKey: key, cost: entry.cost)
         }
-    }
-
-    /// Claims the single-flight revalidation slot for `key`, returning false if one is already running.
-    ///
-    /// Ensures at most one background `stale-while-revalidate` refresh per key (RFC 5861 §3); the caller
-    /// must pair a `true` result with ``finishRevalidation(_:)`` once the refresh completes.
-    func beginRevalidation(_ key: String) -> Bool {
-        state.withLock { $0.revalidating.insert(key).inserted }
-    }
-
-    /// Releases the single-flight revalidation slot for `key`.
-    func finishRevalidation(_ key: String) {
-        state.withLock { _ = $0.revalidating.remove(key) }
     }
 
     /// The age at which `entry` stops being servable stale, or nil when it has no window.
