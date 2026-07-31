@@ -120,21 +120,7 @@ public struct MultipartFormData: Sendable, Equatable {
     /// The value of the `name=` parameter in a header value (e.g. `form-data; name="x"`), unquoted; nil
     /// if absent.
     private static func parameter(_ name: String, in value: String) -> String? {
-        for segment in value.split(separator: ";") {
-            let token = segment.drop { $0 == " " || $0 == "\t" }
-            guard token.lowercased().hasPrefix("\(name)=") else {
-                continue
-            }
-            var raw = token.dropFirst(name.count + 1)
-            if raw.hasPrefix("\"") {
-                raw = raw.dropFirst()
-                if let close = raw.firstIndex(of: "\"") {
-                    raw = raw[..<close]
-                }
-            }
-            return String(raw)
-        }
-        return nil
+        MultipartParameters.value(of: name, in: value)
     }
 
     /// `slice` with leading and trailing ASCII spaces/tabs removed.
