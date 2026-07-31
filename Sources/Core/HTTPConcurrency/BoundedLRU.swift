@@ -48,9 +48,12 @@ public struct BoundedLRU<Key: Hashable & Sendable, Value: Sendable>: Sendable {
 
         /// Nothing was stored.
         ///
-        /// Either the map was full under ``Overflow/reject``, or the entry's own cost exceeds
-        /// ``maxCost``; in the latter case any previously stored value for the key is removed, so a
-        /// caller never reads a stale value it believes it has just overwritten.
+        /// One of three things happened. The entry's own cost exceeds ``maxCost``, in which case any
+        /// previously stored value for the key is *removed* — it can never be stored at that cost, so
+        /// a caller must not read back a stale value it believes it has just overwritten. Or the map
+        /// was full under ``Overflow/reject`` and the key is new, so nothing was displaced. Or the key
+        /// was already present under ``Overflow/reject`` and the replacement would have crossed
+        /// ``maxCost``, in which case the entry keeps the value it already had.
         case rejected
     }
 
@@ -167,8 +170,7 @@ public struct BoundedLRU<Key: Hashable & Sendable, Value: Sendable>: Sendable {
             return .rejected
         }
         if let position = index[key] {
-            replace(value, cost: cost, at: position)
-            return .replaced
+            return replace(value, cost: cost, at: position)
         }
         var evicted = 0
         // `maxCost - cost` rather than `totalCost + cost`: the guard above proved `cost <= maxCost`,
@@ -244,13 +246,30 @@ public struct BoundedLRU<Key: Hashable & Sendable, Value: Sendable>: Sendable {
     }
 
     /// Replaces the value at `position`, re-basing the cost total and promoting the entry.
-    private mutating func replace(_ value: Value, cost: Int, at position: Int32) {
+    ///
+    /// A replacement crosses ``maxCost`` exactly as an insertion does whenever it displaces a cheaper
+    /// value, so it answers to ``overflow`` in the same way: trim the least-recently-used end under
+    /// ``Overflow/evictLeastRecentlyUsed``, refuse under ``Overflow/reject``.
+    ///
+    /// Refusing means *keeping* the entry it could not overwrite. The stale value that
+    /// ``insert(_:forKey:cost:)`` drops on an oversized cost is unstorable at that cost forever, so
+    /// there is nothing to keep; this refusal is transient, and dropping a tracked entry on it would
+    /// hand any caller of a budget table a way to clear its own budget on demand — the displacement
+    /// hazard ``Overflow/reject`` exists to deny (CWE-770), through the key's own front door.
+    private mutating func replace(_ value: Value, cost: Int, at position: Int32) -> Insertion {
         let slot = Int(position)
+        // `totalCost - existing > maxCost - cost` rather than `totalCost - existing + cost >
+        // maxCost`: both sides are proven non-negative (`cost <= maxCost` by the caller's guard,
+        // `existing <= totalCost` by construction), so neither can overflow on a huge cost.
+        if totalCost - slots[slot].cost > maxCost - cost, case .reject = overflow {
+            return .rejected
+        }
         totalCost += cost - slots[slot].cost
         slots[slot].value = value
         slots[slot].cost = cost
         promote(position)
         trimToCost(protecting: position)
+        return .replaced
     }
 
     /// Fills a fresh slot with `key`/`value` and links it at the most-recently-used end.
