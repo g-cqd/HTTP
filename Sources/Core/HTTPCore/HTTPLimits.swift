@@ -120,6 +120,14 @@ public struct HTTPLimits: Sendable, Equatable {
     /// raise the process file-descriptor limit to match).
     public var maxConnections: Int
 
+    /// The fraction of ``maxConnections`` the live count must fall back to before a saturated accept
+    /// source re-arms — hysteresis preventing suspend/resume churn at the ceiling (audit F8).
+    ///
+    /// Without it a server sitting exactly at ``maxConnections`` would suspend and re-arm its accept
+    /// source on every single close — a `kevent`/`epoll_ctl` syscall storm at the worst moment.
+    /// Clamped to `0...1`; `1.0` disables the hysteresis (re-arm on the first free slot).
+    public var acceptResumeRatio: Double
+
     /// Creates a set of limits.
     ///
     /// Size/count guards and timeouts default to conservative values; the connection ceilings default
@@ -145,7 +153,8 @@ public struct HTTPLimits: Sendable, Equatable {
         keepAliveTimeout: Duration = .seconds(15),
         streamResetInterval: Duration = .seconds(1),
         maxConnectionsPerClient: Int = 1_024,
-        maxConnections: Int = 65_536
+        maxConnections: Int = 65_536,
+        acceptResumeRatio: Double = 0.875
     ) {
         self.maxRequestLineLength = maxRequestLineLength
         self.maxFieldSize = maxFieldSize
@@ -167,6 +176,7 @@ public struct HTTPLimits: Sendable, Equatable {
         self.streamResetInterval = streamResetInterval
         self.maxConnectionsPerClient = maxConnectionsPerClient
         self.maxConnections = maxConnections
+        self.acceptResumeRatio = acceptResumeRatio
     }
 
     /// The default limits — safe out of the box: conservative size/count/timeout guards and secure,
