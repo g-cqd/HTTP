@@ -53,44 +53,33 @@ public struct MultipartFormData: Sendable, Equatable {
 
     /// Parses a `multipart/form-data` body delimited by `boundary` (RFC 7578 §4 / RFC 2046 §5.1).
     ///
-    /// Returns `nil` if the body has no valid opening or closing delimiter; a part missing a
-    /// `Content-Disposition` `name` is skipped. Lenient and trap-free.
+    /// Returns `nil` if `boundary` is outside the RFC 2046 §5.1.1 grammar, or if the body has no valid
+    /// opening or closing delimiter; a part missing a `Content-Disposition` `name` is skipped. Lenient
+    /// and trap-free — a malformed or hostile body returns `nil` rather than trapping.
     public static func parse(_ body: [UInt8], boundary: String) -> Self? {
-        let crlf: [UInt8] = [0x0D, 0x0A]
-        let delimiter = crlf + Array("--\(boundary)".utf8)  // "\r\n--boundary"
-        // Prepend CRLF so the opening "--boundary" matches the same delimiter as the inner ones.
-        let data = crlf + body
-        guard var range = firstRange(of: delimiter, in: data, from: 0) else {
+        guard let validated = MultipartBoundary(boundary) else {
             return nil
         }
-        var parts: [Part] = []
-        while true {
-            let after = range.upperBound
-            // A closing delimiter is "--boundary--": two dashes follow the boundary.
-            if after + 1 < data.count, data[after] == 0x2D, data[after + 1] == 0x2D {
-                return Self(parts: parts)
-            }
-            // Otherwise CRLF follows the boundary line; the part runs to the next delimiter.
-            guard let lineEnd = firstRange(of: crlf, in: data, from: after)?.upperBound,
-                let next = firstRange(of: delimiter, in: data, from: lineEnd)
-            else {
-                return nil  // no terminating delimiter — malformed
-            }
-            if let part = parsePart(Array(data[lineEnd ..< next.lowerBound])) {
-                parts.append(part)
-            }
-            range = next
-        }
+        var parser = MultipartParser(body: body, boundary: validated)
+        return parser.parse()
     }
 
     /// The `boundary` parameter of a `multipart/form-data` `Content-Type` value (RFC 7578 §4.1), or nil.
+    ///
+    /// Returns `nil` when the parameter is absent *or* when its value is outside the RFC 2046 §5.1.1
+    /// `boundary` grammar, so a caller can never hand ``parse(_:boundary:)`` an unusable delimiter.
     public static func boundary(ofContentType value: String) -> String? {
-        parameter("boundary", in: value)
+        guard let candidate = parameter("boundary", in: value),
+            MultipartBoundary(candidate) != nil
+        else {
+            return nil
+        }
+        return candidate
     }
 
     /// Parses one part's `header section CRLF CRLF body` into a ``Part`` (RFC 7578 §4.2); nil if it has
     /// no `Content-Disposition` `name`.
-    private static func parsePart(_ content: [UInt8]) -> Part? {
+    static func parsePart(_ content: [UInt8]) -> Part? {
         let blankLine: [UInt8] = [0x0D, 0x0A, 0x0D, 0x0A]
         guard let headerEnd = firstRange(of: blankLine, in: content, from: 0) else {
             return nil

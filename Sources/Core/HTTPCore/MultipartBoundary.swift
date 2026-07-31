@@ -1,0 +1,73 @@
+//
+//  MultipartBoundary.swift
+//  HTTPCore
+//
+//  RFC 2046 §5.1.1 — the validated `multipart` boundary and the delimiter it generates:
+//
+//      boundary      := 0*69<bchars> bcharsnospace
+//      bchars        := bcharsnospace / " "
+//      bcharsnospace := DIGIT / ALPHA / "'" / "(" / ")" / "+" / "_" / "," / "-" / "." / "/" / ":"
+//                       / "=" / "?"
+//
+//  So a boundary is 1–70 characters from a closed ASCII set and may never end in a space. Validating
+//  it before any scanning is not cosmetic: the boundary is attacker-controlled needle data (it arrives
+//  in the request's `Content-Type`), and an unbounded one is copied into every delimiter comparison
+//  (CWE-1284, improper validation of a specified quantity in input). A boundary containing CR or LF
+//  would additionally let a peer make the delimiter needle self-overlap, which the parts scanner
+//  relies on being impossible.
+//
+
+/// A validated RFC 2046 §5.1.1 `multipart` boundary and the delimiter that separates its parts.
+///
+/// The delimiter is the boundary's real wire form: `CRLF "--" boundary`. Holding it pre-rendered lets
+/// the scanner compare against one contiguous needle instead of re-deriving the CRLF and dashes.
+struct MultipartBoundary {
+    /// The longest boundary RFC 2046 §5.1.1 permits (`0*69<bchars>` plus one `bcharsnospace`).
+    static let maxLength = 70
+
+    /// `CRLF "--" boundary` — the delimiter that precedes every part (RFC 2046 §5.1.1).
+    let delimiter: [UInt8]
+
+    /// The number of bytes the delimiter's leading CRLF occupies, which the opening `dash-boundary`
+    /// (the first delimiter in a body without a preamble) does not carry.
+    static let crlfCount = 2
+
+    /// Creates the delimiter for `boundary`, or nil when `boundary` is outside the RFC 2046 §5.1.1
+    /// grammar (empty, over 70 characters, space-terminated, or containing a non-`bchars` byte).
+    init?(_ boundary: String) {
+        let prefixCount = Self.crlfCount + 2  // CRLF "--"
+        var bytes: [UInt8] = [0x0D, 0x0A, 0x2D, 0x2D]
+        bytes.reserveCapacity(prefixCount + Self.maxLength)
+        var last: UInt8 = 0
+        for byte in boundary.utf8 {
+            guard Self.isBoundaryByte(byte), bytes.count < prefixCount + Self.maxLength else {
+                return nil
+            }
+            bytes.append(byte)
+            last = byte
+        }
+        // `0*69<bchars> bcharsnospace`: at least one character, and the last is never a space.
+        guard bytes.count > prefixCount, last != 0x20 else {
+            return nil
+        }
+        self.delimiter = bytes
+    }
+
+    /// Whether `byte` is an RFC 2046 §5.1.1 `bchars` character (`bcharsnospace` plus SP).
+    ///
+    /// Deliberately a closed set rather than "printable ASCII": the exclusions are what make a
+    /// delimiter unambiguous — no CR, no LF, no `"` (which would break the quoted `boundary=`
+    /// parameter), no `;` (which would break the parameter list itself).
+    static func isBoundaryByte(_ byte: UInt8) -> Bool {
+        switch byte {
+            case 0x30 ... 0x39, 0x41 ... 0x5A, 0x61 ... 0x7A:  // DIGIT / ALPHA
+                true
+            case 0x27, 0x28, 0x29, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F:  // ' ( ) + , - . /
+                true
+            case 0x3A, 0x3D, 0x3F, 0x5F, 0x20:  // : = ? _ SP
+                true
+            default:
+                false
+        }
+    }
+}
