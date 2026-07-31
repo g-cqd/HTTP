@@ -108,7 +108,11 @@ public final class POSIXDispatchTransport: ServerTransport {
         // an out-of-order resume would leave the flag unbalanced and the listener suspended forever.
         admission?
             .onResume { [weak self] in
-                self?.acceptQueue.async { self?.resumeAcceptAfterAdmission() }
+                // Bound strongly first — see the note on the Network.framework transport's resume.
+                guard let self else {
+                    return
+                }
+                acceptQueue.async { [self] in resumeAcceptAfterAdmission() }
             }
         source.resume()
         return stream

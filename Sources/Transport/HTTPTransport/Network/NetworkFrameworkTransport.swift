@@ -105,7 +105,14 @@ public final class NetworkFrameworkTransport: ServerTransport {
             .onResume { [weak self] in
                 // Onto the listener's own queue: the resume runs on whichever thread released the
                 // deciding slot, and every other `NWListener` interaction happens here.
-                self?.queue.async { self?.setConnectionLimit(NWListener.InfiniteConnectionLimit) }
+                //
+                // Bound strongly first: nesting a second `self?.` inside the hop would capture the
+                // outer optional binding itself, which the compiler reads as a captured `var` in
+                // concurrently-executing code.
+                guard let self else {
+                    return
+                }
+                queue.async { [self] in setConnectionLimit(NWListener.InfiniteConnectionLimit) }
             }
         listener.start(queue: queue)
         try await waitUntilReady()
