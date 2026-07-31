@@ -48,6 +48,12 @@ final class HTTP3StreamRegistry: Sendable {
         var isClaimed = false
         /// Routed events the owning task must act on itself (it holds the tunnel / body-feed state).
         var mailbox: [HTTP3Connection.Event] = []
+        /// The owning task's merged wakeup mailbox, signalled on every deposit (audit REG-2).
+        ///
+        /// Optional because the stream is registered on the connection's accept loop, one hop before
+        /// its serve task exists; a deposit that lands in that window is picked up by
+        /// ``attach(_:to:)``, which signals immediately when the mailbox is already non-empty.
+        var inbox: HTTP3StreamInbox?
         /// The ``DispatchPlan`` this stream's HEADERS resolved — its responder generation and its route
         /// match — filed by the engine's `resolveRoute` and taken again at dispatch.
         ///
@@ -96,22 +102,49 @@ final class HTTP3StreamRegistry: Sendable {
         }
     }
 
-    /// Hands `events` to the stream that owns them, reporting who must act on them.
-    func deposit(_ events: [HTTP3Connection.Event], for id: QUICStreamID) -> Deposit {
-        entries.withLock { current in
+    /// Registers the owning task's merged wakeup mailbox, so a deposit can wake it (audit REG-2).
+    ///
+    /// Signals at once when mail already arrived in the window between ``register(_:)`` and the serve
+    /// task starting — otherwise that deposit's wakeup would be lost and the stream would park until
+    /// its read deadline.
+    func attach(_ inbox: HTTP3StreamInbox, to id: QUICStreamID) {
+        let owed = entries.withLock { current -> Bool in
             guard var entry = current[id] else {
-                return .unknown
+                return false
+            }
+            entry.inbox = inbox
+            current[id] = entry
+            return !entry.mailbox.isEmpty
+        }
+        if owed {
+            inbox.signalRouted()
+        }
+    }
+
+    /// Hands `events` to the stream that owns them, reporting who must act on them.
+    ///
+    /// A deposit for a stream whose task is still reading also *wakes* that task: it may be parked on
+    /// its next `receive()` with no further request bytes coming, and a QPACK-unblocked field section
+    /// (RFC 9204 §2.1.2) is precisely the work that arrives without any (audit REG-2).
+    func deposit(_ events: [HTTP3Connection.Event], for id: QUICStreamID) -> Deposit {
+        let (outcome, inbox) = entries.withLock {
+            current -> (Deposit, HTTP3StreamInbox?) in
+            guard var entry = current[id] else {
+                return (.unknown, nil)
             }
             guard entry.isDriving else {
-                return .orphaned(entry.stream)
+                return (.orphaned(entry.stream), nil)
             }
             guard entry.mailbox.count + events.count <= Self.mailboxCapacity else {
-                return .overflow(entry.stream)
+                return (.overflow(entry.stream), nil)
             }
             entry.mailbox.append(contentsOf: events)
             current[id] = entry
-            return .queued
+            return (.queued, entry.inbox)
         }
+        // Resumed outside the lock: the woken task consults this same registry immediately.
+        inbox?.signalRouted()
+        return outcome
     }
 
     /// Files the plan a stream's head resolved, for its dispatch to take back.
@@ -158,6 +191,7 @@ final class HTTP3StreamRegistry: Sendable {
             }
             current[id]?.isDriving = false
             current[id]?.mailbox.removeAll(keepingCapacity: false)
+            current[id]?.inbox = nil  // its serve loop is gone; the dispatcher owns the stream now
         }
     }
 

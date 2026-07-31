@@ -175,11 +175,21 @@ extension HTTPServer {
                     guard registry.claim(id) != nil else {
                         return
                     }
+                    // The stream's own task is gone, so this dispatcher owns its reads too: give the
+                    // feed loop the same inbox shape the serve loop uses (audit REG-2), fed by a
+                    // reader task of ours rather than by a `receive()` call inline in the loop.
+                    let inbox = HTTP3StreamInbox()
+                    let reader = Task { await Self.pumpHTTP3Inbound(stream, into: inbox) }
+                    defer {
+                        reader.cancel()
+                        inbox.close()
+                    }
                     await serveHTTP3StreamingRequest(
                         id,
                         request: request,
                         buffered: Self.trailingBody(of: batch.events, after: index),
                         stream: stream,
+                        inbox: inbox,
                         engine: engine,
                         quic: quic,
                         registry: registry,
