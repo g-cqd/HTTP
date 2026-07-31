@@ -31,6 +31,14 @@ struct HTTP2ConnectionState {
     /// Active native-streaming responses (P6b): each relay's pull-permission gate, keyed by stream.
     var relays: [HTTP2StreamID: HTTP2StreamPermit] = [:]
 
+    /// Consumption reports from every *gated* stream — streaming-route requests and tunnels alike.
+    ///
+    /// Kept beside (not inside) `streaming` / `webSockets` so a `.consumed` wakeup can still be applied
+    /// after the body has ended but before the handler has drained what was already queued: the peer
+    /// gets its connection-window credit back at the moment the handler actually takes those octets,
+    /// not at the arbitrary moment the body happened to end (RFC 9113 §6.9, ADR 0006).
+    var consumption: [HTTP2StreamID: HTTP2ConsumptionSignal] = [:]
+
     /// Dispatched-but-not-yet-reported handler tasks (buffered and streaming-route alike).
     ///
     /// A request already fully received needs no more inbound data to finish, only the chance to run, so
@@ -54,11 +62,31 @@ struct HTTP2ConnectionState {
         readerClosed && pendingRequests == 0 && pendingTunnels == 0 && relays.isEmpty
     }
 
+    /// Retires every per-stream obligation for `streamID` — the one place credit is handed back.
+    ///
+    /// Consumption gating gives the connection a hard memory bound only if a stream that goes away
+    /// mid-body returns what it was holding; forgetting that on any single exit path silently shrinks
+    /// the shared connection window for the rest of the connection's life (RFC 9113 §6.9.1). Every path
+    /// that drops a gated stream — `requestReady`, `.streamReset`, `.tunnelEnded`, the EOF drain —
+    /// funnels through here rather than each remembering, which is the same class of omission as the
+    /// reset bug this series also fixes.
+    ///
+    /// Consumption the handler reported but the loop never drained needs no separate accounting:
+    /// `releaseReceiveWindow` returns *all* of this stream's outstanding credit at once.
+    mutating func retire(_ streamID: HTTP2StreamID) {
+        consumption.removeValue(forKey: streamID)
+        engine.releaseReceiveWindow(of: streamID)
+    }
+
     /// Ends every in-flight request-body stream, so no handler stays parked on one that will never
     /// receive another chunk.
-    mutating func finishAllStreaming() {
-        for pending in streaming.values {
-            pending.continuation.finish()
+    ///
+    /// Abandons rather than finishes: these are streams still mid-upload when the input ended, so the
+    /// handler must observe truncation, not a clean end of body.
+    mutating func finishAllStreaming() async {
+        for (streamID, pending) in streaming {
+            await pending.channel.abandon()
+            retire(streamID)
         }
         streaming.removeAll()
     }

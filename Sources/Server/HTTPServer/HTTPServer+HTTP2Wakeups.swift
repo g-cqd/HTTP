@@ -59,6 +59,13 @@ extension HTTPServer {
                     connection: connection,
                     sendDeadline: sendDeadline
                 )
+            case .consumed(let streamID):
+                await applyConsumed(
+                    streamID,
+                    state: &state,
+                    connection: connection,
+                    sendDeadline: sendDeadline
+                )
             case .tunnelOutbound(let streamID, let bytes):
                 await applyTunnelOutbound(
                     streamID,
@@ -111,7 +118,7 @@ extension HTTPServer {
                 // relay, or an open tunnel needs none to finish, only the chance to run. Abandon exactly
                 // the things that DO still need input (a streaming-route body mid-upload), end every
                 // tunnel, then drain what is left before actually closing.
-                state.finishAllStreaming()
+                await state.finishAllStreaming()
                 state.endAllTunnels()
                 state.readerClosed = true
                 return state.isDrained
@@ -137,7 +144,7 @@ extension HTTPServer {
             return true
         }
         for event in events {
-            handleHTTP2Event(
+            await handleHTTP2Event(
                 event,
                 state: &state,
                 connection: connection,
@@ -154,6 +161,27 @@ extension HTTPServer {
         return drainComplete(state.sentGoAway, state.engine)
     }
 
+    /// Credits a gated stream's receive windows for what its handler has consumed (RFC 9113 §6.9).
+    ///
+    /// The loop's half of the gate: the handler reported into a lock-free counter and poked the mailbox,
+    /// and only here — on the engine's single owner — is that report turned into a WINDOW_UPDATE.
+    /// Flushing immediately matters: the peer is stalled on a closed window until those octets reach it,
+    /// so batching this behind unrelated work would show up directly as upload latency.
+    private func applyConsumed(
+        _ streamID: HTTP2StreamID,
+        state: inout HTTP2ConnectionState,
+        connection: any TransportConnection,
+        sendDeadline: IdleDeadline<C.Instant>
+    ) async -> Bool {
+        // A report can outlive its stream (the handler drained a last chunk as the peer reset it); the
+        // credit was already returned wholesale by `retire`, so there is nothing left to do.
+        guard let consumed = state.consumption[streamID]?.takeAll(), consumed > 0 else {
+            return false
+        }
+        state.engine.replenishReceiveWindow(streamID, consumed: consumed)
+        return await flushHTTP2(&state.engine, to: connection, deadline: sendDeadline)
+    }
+
     private func applyRequestReady(
         _ streamID: HTTP2StreamID,
         response: ServerResponse,
@@ -164,6 +192,10 @@ extension HTTPServer {
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async -> Bool {
         state.pendingRequests -= 1
+        // The handler has returned, so nothing more will ever consume this stream's body. Hand back
+        // whatever it left untaken BEFORE responding — `engine.respond` may close and drop the stream,
+        // and credit not returned by then is credit the connection loses for good (§6.9.1).
+        state.retire(streamID)
         let fatal = beginHTTP2Response(
             streamID: streamID,
             response: response,
