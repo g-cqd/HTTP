@@ -36,13 +36,44 @@ struct HTTP2ResponseAllocationTests {
         // Warm up so lazy init (the Huffman DFA) and the HPACK dynamic table reach steady state — not
         // charged to the measured run.
         _ = connection.encodeResponseSection(response)
-        // Measured budget: 41 — down from 58 before the borrow refactor (the [HPACKField] array, the
-        // per-field `rawName` materialization, the status itoa, and the un-reserved buffer growth are
-        // gone). The residual is HPACK's stateful dynamic-table work + the HTTPFields iteration — a
-        // deeper, separate opportunity (the audit's O(n) HPACK dynamic lookup). The ceiling trips if the
-        // array rebuild / rawName / itoa returns.
-        _ = expectAllocations(noMoreThan: 41) {
+        // Measured budget: 1 — the reserved output buffer, and nothing else. The HPACK encode appends
+        // straight into it, the `:status` string is cached, and no per-field value is materialized.
+        //
+        // The ceiling was 41 with a note calling the residual "HPACK's stateful dynamic-table work +
+        // the HTTPFields iteration". That was two claims, and the measurement supports neither: the
+        // encode of this response actually cost 11, and 10 of the 11 was the `for field in
+        // response.headerFields` iterator in the unoptimized test build (~2 allocations per field).
+        // With the loop indexed it is 1. The stale 41 left 40 allocations of slack over a true floor
+        // of 1 — the array-rebuild / rawName / itoa regressions this case names could all have come
+        // back together and still passed.
+        _ = expectAllocations(noMoreThan: 3) {
             _ = connection.encodeResponseSection(response)
         }
+    }
+
+    @Test("the encode cost does not scale with the field count")
+    func encodeCostDoesNotScaleWithFieldCount() {
+        var wide = HTTPFields()
+        var index = 0
+        while index < 24 {
+            _ = wide.append("v\(index)", for: .server)
+            index += 1
+        }
+        var connection = HTTP2Connection()
+        let narrow = Self.response()
+        let response = HTTPResponse(status: .ok, headerFields: wide)
+        _ = connection.encodeResponseSection(narrow)
+        _ = connection.encodeResponseSection(narrow)
+        _ = connection.encodeResponseSection(response)
+        _ = connection.encodeResponseSection(response)
+        let narrowCost = mallocDelta { _ = connection.encodeResponseSection(narrow) }
+        let wideCost = mallocDelta { _ = connection.encodeResponseSection(response) }
+        guard let narrowCost, let wideCost else {
+            return  // allocation counting is unavailable on this platform
+        }
+        // The property, not a number: a 24-field response encodes into the same one reserved buffer as
+        // a 5-field one. This is what a re-introduced `for-in` breaks first, and the ceiling above
+        // would not necessarily catch it — a slope is invisible at a single field count.
+        #expect(wideCost == narrowCost)
     }
 }

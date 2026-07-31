@@ -177,9 +177,11 @@ enum MultipartParameters {
 
     /// The first offset of `needle` within `range`, or nil.
     ///
-    /// Written as a `while` rather than `for index in range`: iterating a `Range` while borrowing a
-    /// nonescapable span heap-allocates once per iteration in an unoptimized build, which is real cost
-    /// on every debug and test run and shows up directly in the allocation guards.
+    /// Written as a `while` rather than `for index in range`: `for-in` over a `Range` goes through
+    /// `IndexingIterator.next()`, one heap allocation per iteration in an unoptimized build, which is
+    /// real cost on every debug and test run and shows up directly in the allocation guards. The
+    /// borrowed span is incidental — the same loop over a `Range` of `Int` in a function with no span
+    /// costs the same — and release specializes it away, so the cost is to the oracles, not to serving.
     private static func firstIndex(
         of needle: UInt8,
         in header: RawSpan,

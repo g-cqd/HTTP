@@ -156,9 +156,14 @@ extension MultipartParser {
 
     /// The first offset of `needle` within `range`, or nil.
     ///
-    /// Every scan here is a `while` rather than a `for` over a `Range`: iterating a `Range` while
-    /// borrowing a nonescapable span heap-allocates once per iteration in an unoptimized build, so the
-    /// idiomatic spelling would cost one malloc per byte of every part header on every debug run.
+    /// Every scan here is a `while` rather than a `for` over a `Range`: `for-in` over a `Range` goes
+    /// through `IndexingIterator.next()`, one heap allocation per iteration in an unoptimized build, so
+    /// the idiomatic spelling costs one malloc per byte of every part header on every debug and test
+    /// run. The borrowed span is not what triggers it — an ordinary function iterating a `Range` of
+    /// `Int` and touching no span pays exactly the same — and release specializes it away, so this is a
+    /// measurement cost rather than a production one. It is worth avoiding anyway: the allocation
+    /// oracles for this parser run in the unoptimized build, and per-byte iterator traffic is precisely
+    /// what drowns out the per-part copies they exist to catch.
     private func firstIndex(of needle: UInt8, in range: Range<Int>) -> Int? {
         var index = range.lowerBound
         while index < range.upperBound {
