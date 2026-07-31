@@ -198,6 +198,71 @@ struct CacheMiddlewareTests {
         #expect(bEvicted.head.headerFields[.age] == nil)  // was the LRU, dropped by /c
     }
 
+    /// One row of the delta-seconds clamping table: what the origin sent, how far time moved, and
+    /// whether the second request is then served from the cache.
+    struct DeltaSecondsCase: Sendable, CustomStringConvertible {
+        let cacheControl: String
+        let after: Int
+        let served: Bool
+
+        init(_ cacheControl: String, after: Int, served: Bool) {
+            self.cacheControl = cacheControl
+            self.after = after
+            self.served = served
+        }
+
+        var description: String { "\(cacheControl) after \(after)s" }
+    }
+
+    /// `Int.max` spelled out — a `delta-seconds` argument this machine can represent but must not use.
+    static let intMaxSeconds = "9223372036854775807"
+
+    /// The RFC 9111 §1.2.2 clamping table, hoisted so each row fits on one line.
+    static let deltaSecondsCases: [DeltaSecondsCase] = [
+        // Exactly `Int.max`: representable, but far past the 2^31 ceiling §1.2.2 makes mandatory —
+        // clamped, so the entry is still fresh three thousand seconds later.
+        DeltaSecondsCase("max-age=\(intMaxSeconds)", after: 3_000, served: true),
+        // Beyond `Int.max`: a valid `delta-seconds` production this machine cannot represent, which
+        // §1.2.2 says to treat as the ceiling, NOT (as it did) as "no freshness lifetime at all".
+        DeltaSecondsCase("max-age=99999999999999999999", after: 3_000, served: true),
+        // The ceiling is a ceiling, not infinity: past 2^31 seconds the entry really is stale.
+        DeltaSecondsCase("max-age=\(intMaxSeconds)", after: 2_147_483_649, served: false),
+        // `delta-seconds` is `1*DIGIT`: neither of these is one, so the directive is unparseable and
+        // ignored (§5.2) and the response has no explicit lifetime — not stored at all.
+        DeltaSecondsCase("max-age=-1", after: 0, served: false),
+        DeltaSecondsCase("max-age=abc", after: 0, served: false),
+        // The pair the audit cites. It does NOT in fact overflow: the entry never goes stale, so
+        // `freshFor + window` is never evaluated. Kept as the regression it was reported as.
+        DeltaSecondsCase(
+            "max-age=\(intMaxSeconds), stale-while-revalidate=1", after: 3_000, served: true
+        ),
+        // The pair that does: a small lifetime with a huge window, so the entry goes stale and the
+        // addition IS evaluated. Unclamped this trapped the process; clamped it is inside the window.
+        DeltaSecondsCase(
+            "max-age=60, stale-while-revalidate=\(intMaxSeconds)", after: 3_000, served: true
+        ),
+        // `s-maxage` reaches the same arithmetic and needs the same clamp.
+        DeltaSecondsCase("s-maxage=\(intMaxSeconds)", after: 3_000, served: true)
+    ]
+
+    @Test(
+        "a max-age past the RFC 9111 delta-seconds ceiling is clamped, not trapped",
+        arguments: Self.deltaSecondsCases
+    )
+    func clampsDeltaSecondsToTheCeiling(_ testCase: DeltaSecondsCase) async {
+        let clock = TestClock()
+        let now: @Sendable () -> Int = { Int(clock.monotonicNanoseconds / 1_000_000_000) }
+        let middleware = CacheMiddleware(now: now) { _ in
+            // Clamping is decided before any refresh runs; dropping the spawned work keeps this
+            // deterministic and keeps the stale rows from reaching the origin a second time.
+        }
+        let next = responder(cacheControl: testCase.cacheControl)
+        _ = await middleware.respond(to: get(), body: [], next: next)
+        clock.advance(by: .seconds(testCase.after))
+        let response = await middleware.respond(to: get(), body: [], next: next)
+        #expect((response.head.headerFields[.age] != nil) == testCase.served)
+    }
+
     @Test("a dropped cache deallocates every stored response (CWE-401, audit finding 14)")
     func droppedCacheReleasesEveryEntry() {
         let counter = DeallocationCounter()

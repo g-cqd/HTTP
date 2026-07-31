@@ -167,7 +167,15 @@ public struct CacheMiddleware: HTTPMiddleware {
     ///
     /// Parsed here rather than in ``CacheControl`` because only this cache acts on the directive (RFC
     /// 5861 §3); the value is a `delta-seconds`, so a missing, negative, or non-numeric argument is
-    /// ignored (the entry simply has no stale-serving window).
+    /// ignored (the entry simply has no stale-serving window) and a huge one is clamped to
+    /// ``CacheControl/deltaSecondsCeiling`` (RFC 9111 §1.2.2).
+    ///
+    /// The clamp is load-bearing, not cosmetic. ``ResponseCache`` adds this window to the freshness
+    /// lifetime to decide whether a stale entry is still servable, and that sum is only evaluated once
+    /// the entry has actually gone stale. `Cache-Control: max-age=60, stale-while-revalidate=<Int.max>`
+    /// is a perfectly parseable header that reaches that addition sixty seconds later and traps the
+    /// process — a remotely triggered crash, not a wrong answer. Clamping both operands to 2^31 makes
+    /// the sum unrepresentably small by comparison.
     private static func staleWhileRevalidate(_ value: String?) -> Int? {
         guard let value else {
             return nil
@@ -183,7 +191,7 @@ public struct CacheMiddleware: HTTPMiddleware {
             }
             let value = token[token.index(after: separator)...]
             let argument = value.trimmingCharacters(in: .whitespaces)
-            if let seconds = Int(argument), seconds > 0 {
+            if let seconds = CacheControl.deltaSeconds(argument), seconds > 0 {
                 return seconds
             }
         }
