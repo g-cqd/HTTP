@@ -12,7 +12,7 @@
 //  conforming peer grow the server's memory without limit. This type replaces both.
 //
 //  Discipline:
-//    • Nothing is ever discarded. `send(_:)` parks the producer; `trySend(_:)` returns `false` and
+//    • Nothing is ever discarded. `send(_:)` parks the producer; `trySend(_:)` returns `.refused` and
 //      the caller escalates (RST_STREAM / close). A drop policy is never valid for transport octets.
 //    • The bound is in *bytes*, not chunks — a count of chunks does not bound retained memory. The
 //      chunk cap is a second, independent bound on the mailbox ticket count (see below).
@@ -21,11 +21,13 @@
 //
 //  Ticket pattern. Where a consumer must merge transport octets with other event kinds through a
 //  single sequential `for await`, the payload moves into this channel and the mailbox keeps a
-//  payload-free ticket (`.inboundReady`). The producer sends, *then* yields one ticket; the consumer
-//  sees the ticket and calls `next()`, which is guaranteed not to suspend and is 1:1 and
-//  order-preserving with tickets. The mailbox `AsyncStream` may then stay `.unbounded` because it is
-//  *provably* bounded: inbound tickets can never exceed `maxQueuedChunks`, since the producer is
-//  parked past that point.
+//  payload-free ticket (`.inboundReady`). The producer sends and yields one ticket **only when the
+//  send reports `.queued`** — i.e. only when the number of dequeueable items actually rose; a send
+//  that coalesced into the tail produced no new item and owes no ticket. That is what keeps `next()`
+//  from ever suspending, and it is not a detail: over-ticketing parks the sole consumer on a
+//  non-existent item and stalls every other wakeup kind with it. The mailbox `AsyncStream` may then
+//  stay `.unbounded` because it is *provably* bounded: inbound tickets can never exceed
+//  `maxQueuedChunks`, since the producer is parked past that point.
 //
 //  Sibling of `AsyncHandoff`, not a generalization of it. `AsyncHandoff` is a zero-queue rendezvous,
 //  and its "at most one chunk is ever in flight" property is load-bearing for `HTTP2StreamPermit`.
@@ -47,6 +49,26 @@ actor BoundedByteChannel {
         ///
         /// Any queued chunks are discarded.
         case aborted
+    }
+
+    /// What a send did, and therefore whether the caller owes a wakeup ticket.
+    ///
+    /// The ticket protocol's whole correctness rests on this: a merged consumer mailbox carries one
+    /// payload-free ticket per *dequeueable item*, and the consumer calls `next()` exactly once per
+    /// ticket. If a send that produced no new item still made the caller emit a ticket, that ticket
+    /// would send the sole consumer into `next()` with nothing to take — parking it, and with it every
+    /// other wakeup kind (responses, broadcasts, tunnel output) until unrelated traffic happened to
+    /// arrive. That is a connection-level stall, so the accounting cannot be left to the call site's
+    /// good intentions.
+    enum Acceptance: Sendable, Equatable {
+        /// A new item is queued; the caller MUST emit exactly one ticket for it.
+        case queued
+        /// The octets were absorbed into an item that already has a ticket outstanding — merged into
+        /// the tail, or handed straight to a parked consumer. The caller MUST NOT emit a ticket.
+        case absorbed
+        /// Nothing was enqueued: the channel is saturated, closed, or the producer was cancelled. No
+        /// ticket is owed. For `trySend` this is the fail-closed signal the caller escalates.
+        case refused
     }
 
     /// Queued octets past which `send(_:)` parks and `trySend(_:)` refuses.
@@ -107,17 +129,20 @@ actor BoundedByteChannel {
     /// Cancellation-aware. If the producing task is cancelled while parked — the connection is being
     /// reaped — this returns without enqueuing. That is a deliberate loss on a path where the
     /// connection is going away regardless; a *live* connection never loses an octet.
-    func send(_ chunk: [UInt8]) async {
+    ///
+    /// - Returns: whether the caller owes a wakeup ticket. See ``Acceptance``.
+    @discardableResult
+    func send(_ chunk: [UInt8]) async -> Acceptance {
         guard !chunk.isEmpty else {
-            return
+            return .refused
         }
         while terminal == nil, !Task.isCancelled, isSaturated {
             await parkProducer()
         }
         guard terminal == nil, !Task.isCancelled else {
-            return
+            return .refused
         }
-        enqueue(chunk)
+        return enqueue(chunk)
     }
 
     /// Sends `chunk` without ever suspending, for a producer that must not park.
@@ -125,20 +150,20 @@ actor BoundedByteChannel {
     /// The HTTP/2 serve loop is the sole owner of the connection engine and cannot block on
     /// application progress, so it uses this rather than `send(_:)`.
     ///
-    /// - Returns: `false` when the channel is saturated. That is a *hard error* the caller escalates
-    ///   (RST_STREAM / close), never a silent drop. On a consumption-gated stream it is unreachable
-    ///   in practice — the flow-control window already bounds what the peer may send — so it stands
-    ///   as defense in depth that fails closed.
+    /// - Returns: `.refused` when the channel is saturated or closed. That is a *hard error* the caller
+    ///   escalates (RST_STREAM / close), never a silent drop. On a consumption-gated stream it is
+    ///   unreachable in practice — the flow-control window already bounds what the peer may send — so
+    ///   it stands as defense in depth that fails closed. Otherwise, see ``Acceptance`` for whether a
+    ///   ticket is owed.
     @discardableResult
-    func trySend(_ chunk: [UInt8]) -> Bool {
+    func trySend(_ chunk: [UInt8]) -> Acceptance {
         guard !chunk.isEmpty else {
-            return true
+            return .absorbed
         }
         guard terminal == nil, !isSaturated else {
-            return false
+            return .refused
         }
-        enqueue(chunk)
-        return true
+        return enqueue(chunk)
     }
 
     /// Ends the stream normally.
@@ -201,18 +226,22 @@ actor BoundedByteChannel {
     /// Appends `chunk`, handing it straight to a parked consumer when there is one.
     ///
     /// A parked consumer implies an empty queue, so the direct handoff can never skip an ordering.
-    private func enqueue(_ chunk: [UInt8]) {
+    ///
+    /// - Returns: `.queued` only when the number of dequeueable items actually increased. Both other
+    ///   outcomes absorbed the octets into an item that is already accounted for.
+    private func enqueue(_ chunk: [UInt8]) -> Acceptance {
         if let consumer = consumerWaiter {
             consumerWaiter = nil
             consumer.resume(returning: .chunk(chunk))
-            return
+            return .absorbed
         }
         bytes += chunk.count
         if coalesceIntoTail(chunk) {
-            return
+            return .absorbed
         }
         ring[(head + queued) % ring.count] = chunk
         queued += 1
+        return .queued
     }
 
     /// Merges into the tail chunk while it is below `coalescingBelow`.

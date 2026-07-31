@@ -33,8 +33,7 @@ extension HTTPServer {
         into intake: BoundedByteChannel,
         signalling continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
-        if !initialBytes.isEmpty {
-            await intake.send(initialBytes)
+        if !initialBytes.isEmpty, await intake.send(initialBytes) == .queued {
             continuation.yield(.inboundReady)
         }
         while !Task.isCancelled {
@@ -45,9 +44,13 @@ extension HTTPServer {
                 break  // EOF, idle timeout, or read failure
             }
             deadline.arm(clock.now.advanced(by: limits.idleTimeout))
-            await intake.send(chunk)
+            let acceptance = await intake.send(chunk)
             deadline.disarm()
-            continuation.yield(.inboundReady)
+            // Exactly one ticket per dequeueable item. A coalesced send produced no new item, so
+            // ticketing it would park the sole consumer on an item that does not exist.
+            if acceptance == .queued {
+                continuation.yield(.inboundReady)
+            }
         }
         await intake.finish()
         continuation.yield(.inboundReady)  // the ticket that delivers the terminal item

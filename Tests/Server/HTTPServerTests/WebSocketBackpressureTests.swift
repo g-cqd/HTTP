@@ -134,6 +134,55 @@ struct WebSocketBackpressureTests {
         #expect(!Self.containsSubsequence(sent, [0x03, 0xF0]))  // no 1008
     }
 
+    /// The ticket invariant, end to end: a coalesced chunk must not strand an unrelated wakeup.
+    ///
+    /// The pump is the sole consumer of BOTH inbound octets and hub broadcasts. If a send that merely
+    /// merged into the tail still yielded a ticket, the pump would take the merged item on the first
+    /// ticket, park on the second with nothing to take, and never reach the `.broadcastReady` already
+    /// queued behind it — so a broadcast to a live connection would simply never be written.
+    ///
+    /// The interleaving is forced rather than hoped for: the handler holds the pump until every staged
+    /// chunk has been pulled off the wire, so the reader provably coalesces before the pump dequeues.
+    @Test("a coalesced inbound chunk does not strand a queued broadcast")
+    func coalescedChunkDoesNotStrandABroadcast() async {
+        let hub = WebSocketHub()
+        let staged: [[UInt8]] =
+            [Self.upgradeRequest, Self.maskedTextFrame("go")]
+            + (0 ..< 8).map { Self.maskedTextFrame("c\($0)") }
+        let total = staged.count
+        let connection = StagedChunkConnection(chunks: staged, parksAtEnd: true)
+
+        let handler = ClosureWebSocketHandler { event in
+            guard case .message(let opcode, let payload) = event, opcode == .text else {
+                return []
+            }
+            let text = String(decoding: payload, as: Unicode.UTF8.self)
+            if text == "go" {
+                // Hold the pump until the reader has drained the wire, forcing the coalesce.
+                while await connection.handedOutCount() < total {
+                    await Task.yield()
+                }
+                await hub.publish(.text("ping"), to: "room")
+            }
+            if text == "c7" {
+                // The last coalesced message: end the session so `serve` returns. The broadcast
+                // wakeup was queued before the reader's terminal ticket, so it is still processed.
+                await connection.close()
+            }
+            return []
+        }
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: Router {
+                Route.webSocket("/chat", hub: hub, topic: "room", handler: handler)
+            }
+        )
+        await server.serve(connection)
+
+        // The broadcast must have reached the wire as an outbound text frame.
+        #expect(Self.containsSubsequence(await connection.sentBytes(), Array("ping".utf8)))
+    }
+
     // MARK: Fixtures
 
     private static let upgradeRequest: [UInt8] = Array(

@@ -81,18 +81,20 @@ struct BoundedByteChannelTests {
     func trySendRefusesAtTheChunkCap() async {
         let channel = channel(high: 1 << 20, low: 1 << 19, chunks: 4)
         for _ in 0 ..< 4 {
-            #expect(await channel.trySend([1]))
+            #expect(await channel.trySend([1]) == .queued)
         }
-        #expect(await channel.trySend([1]) == false)
+        #expect(await channel.trySend([1]) == .refused)
         _ = await channel.next()
-        #expect(await channel.trySend([1]))  // a take frees exactly one slot
+        // A take frees exactly one slot.
+        #expect(await channel.trySend([1]) == .queued)
     }
 
     @Test("trySend refuses at the byte watermark but always accepts into an empty queue")
     func trySendRefusesAtTheByteWatermark() async {
         let channel = channel(high: 64, low: 32, chunks: 64)
-        #expect(await channel.trySend([UInt8](repeating: 0, count: 4_096)))  // oversized, but empty
-        #expect(await channel.trySend([1]) == false)  // now over the watermark
+        // Oversized, but the queue is empty, so it is always accepted.
+        #expect(await channel.trySend([UInt8](repeating: 0, count: 4_096)) == .queued)
+        #expect(await channel.trySend([1]) == .refused)  // now over the watermark
     }
 
     @Test("finish is delivered only after every already-queued chunk")
@@ -172,7 +174,8 @@ struct BoundedByteChannelTests {
     func coalescesSmallTailChunks() async {
         let channel = channel(chunks: 4, coalescing: 64)
         for byte in UInt8(1) ... 8 {
-            #expect(await channel.trySend([byte]))  // would exceed a 4-chunk cap without coalescing
+            // Would exceed a 4-chunk cap without coalescing.
+            _ = await channel.trySend([byte])
         }
         #expect(await channel.queuedChunks == 1)
         #expect(await channel.next() == .chunk([1, 2, 3, 4, 5, 6, 7, 8]))
@@ -183,7 +186,48 @@ struct BoundedByteChannelTests {
         let channel = channel()
         await channel.finish()
         await channel.send([1])
-        #expect(await channel.trySend([1]) == false)
+        #expect(await channel.trySend([1]) == .refused)
         #expect(await channel.next() == .finished)
+    }
+
+    /// The ticket invariant: a send reports `.queued` exactly when a new dequeueable item appears.
+    ///
+    /// This is what a merged-mailbox consumer needs to know. Coalescing deliberately merges octets
+    /// into the tail *without* creating a new item; if the caller ticketed that anyway, the consumer
+    /// would take the merged item on the first ticket and then park on the second with nothing to
+    /// take — stalling every other wakeup kind sharing its mailbox until unrelated traffic arrived.
+    @Test("a coalesced send reports absorbed, so the caller owes no extra ticket")
+    func coalescedSendOwesNoTicket() async {
+        let channel = channel(chunks: 8, coalescing: 64)
+        #expect(await channel.trySend([1]) == .queued)  // a new item
+        #expect(await channel.trySend([2]) == .absorbed)  // merged into it
+        #expect(await channel.trySend([3]) == .absorbed)
+        #expect(await channel.queuedChunks == 1)  // …and exactly one item exists
+
+        // One ticket, one item: the consumer takes it and is never left parked.
+        #expect(await channel.next() == .chunk([1, 2, 3]))
+    }
+
+    /// The same invariant the other way round: without coalescing, every send owes a ticket.
+    @Test("without coalescing every accepted send reports queued")
+    func uncoalescedSendsEachOweATicket() async {
+        let channel = channel(chunks: 8)
+        for byte in UInt8(1) ... 4 {
+            #expect(await channel.trySend([byte]) == .queued)
+        }
+        #expect(await channel.queuedChunks == 4)
+    }
+
+    /// Ticket accounting must survive the parked-consumer path too.
+    ///
+    /// A send that resumes a parked consumer hands the item over directly, so it is already accounted
+    /// for and owes no ticket either.
+    @Test("a send that resumes a parked consumer reports absorbed")
+    func sendToParkedConsumerOwesNoTicket() async {
+        let channel = channel()
+        let consumer = Task { await channel.next() }
+        await Task.yield()
+        #expect(await channel.send([7]) == .absorbed)
+        #expect(await consumer.value == .chunk([7]))
     }
 }

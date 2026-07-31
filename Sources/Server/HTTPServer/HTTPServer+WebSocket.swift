@@ -140,8 +140,7 @@ extension HTTPServer {
         // Reader: feed the carryover, then inbound bytes (timed by the idle deadline), into the
         // lossless intake channel, yielding exactly one ticket per item.
         let reader = Task {
-            if !carryover.isEmpty {
-                await intake.send(carryover)
+            if !carryover.isEmpty, await intake.send(carryover) == .queued {
                 continuation.yield(.inboundReady)
             }
             while !Task.isCancelled {
@@ -156,9 +155,14 @@ extension HTTPServer {
                 // and re-check forever and a permanently wedged handler would hold the connection
                 // open indefinitely. A merely *slow* handler re-arms on each chunk and is not reaped.
                 deadline.arm(clock.now.advanced(by: limits.idleTimeout))
-                await intake.send(chunk)
+                let acceptance = await intake.send(chunk)
                 deadline.disarm()
-                continuation.yield(.inboundReady)
+                // Exactly one ticket per dequeueable item. A coalesced send produced no new item, so
+                // ticketing it would park the pump on an item that does not exist — and with it every
+                // broadcast, since the pump is the sole consumer of both.
+                if acceptance == .queued {
+                    continuation.yield(.inboundReady)
+                }
             }
             await intake.finish()
             continuation.yield(.inboundReady)  // the ticket that delivers the terminal item
