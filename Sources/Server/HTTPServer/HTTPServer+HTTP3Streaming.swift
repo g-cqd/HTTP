@@ -21,6 +21,13 @@ extension HTTPServer {
     /// flow control back-pressures the sender in turn — bounded memory for an arbitrarily large upload.
     /// The handler abandons the handoff on return, so the feed loop resumes (dropping the rest) even if
     /// the handler did not drain the body; the whole body is still read off the wire to FIN.
+    ///
+    /// The body is only *complete* when the engine surfaced a `requestEnd` — QUIC's FIN, with the
+    /// declared content-length validated against it (RFC 9114 §4.1 / §4.1.2). An EOF, a peer reset, or a
+    /// receive failure leaves that unobserved, and the request is then refused with H3_REQUEST_INCOMPLETE
+    /// (§8.1) rather than answered: handing a handler a short body it cannot distinguish from a whole one
+    /// is a request-smuggling-shaped integrity fault (CWE-444), and a `200` for half an upload is worse
+    /// than no answer at all.
     func serveHTTP3StreamingRequest(
         _ id: QUICStreamID,
         request: HTTPRequest,
@@ -61,6 +68,12 @@ extension HTTPServer {
                 break
             }
         }
+        guard ended else {
+            await abandonTruncatedHTTP3Request(
+                id, handoff: handoff, handler: handler, stream: stream, registry: registry
+            )
+            return
+        }
         await handoff.finish()
         let response = await handler.value
         await sendHTTP3Response(
@@ -72,6 +85,26 @@ extension HTTPServer {
             quic: quic,
             registry: registry
         )
+        registry.retire(id)
+    }
+
+    /// Refuses a streaming request whose body never reached a valid end (RFC 9114 §8.1).
+    ///
+    /// The handoff is failed rather than finished, so the handler's body iteration ends *without* the
+    /// clean end-of-body it would otherwise be told; the handler task is cancelled and awaited so it
+    /// cannot outlive the stream, its response is discarded, and the stream is reset with
+    /// H3_REQUEST_INCOMPLETE so the peer learns the request was not processed.
+    private func abandonTruncatedHTTP3Request(
+        _ id: QUICStreamID,
+        handoff: AsyncHandoff,
+        handler: Task<ServerResponse, Never>,
+        stream: any QUICStream,
+        registry: HTTP3StreamRegistry
+    ) async {
+        await handoff.fail()
+        handler.cancel()
+        _ = await handler.value
+        stream.reset(errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue)
         registry.retire(id)
     }
 
