@@ -78,7 +78,14 @@ extension HTTP3Connection {
             HeaderField(name: ":status", value: response.status.decimalString),
             into: &output
         )
-        for field in response.headerFields {
+        // Indexed `while`, NOT `for field in response.headerFields`: `for-in` goes through
+        // `IndexingIterator.next()`, ~2 heap allocations per field in an unoptimized build. Release
+        // specializes it away, so this is not a serving cost — it is what the allocation ceiling in
+        // `HTTP3ResponseAllocationTests` measures. Do not "tidy" it back.
+        var index = response.headerFields.startIndex
+        while index < response.headerFields.endIndex {
+            let field = response.headerFields[index]
+            index += 1
             encoder.encode(
                 HeaderField(name: field.name.canonicalName, value: field.value), into: &output
             )
@@ -115,7 +122,12 @@ extension HTTP3Connection {
         var fields: [HeaderField] = []
         fields.reserveCapacity(response.headerFields.count + 1)
         fields.append(HeaderField(name: ":status", value: response.status.decimalString))
-        for field in response.headerFields {
+        // Indexed `while` for the same reason as `encodeResponseSection` above — `for-in` costs ~2
+        // heap allocations per field in an unoptimized build, on top of the array this one does keep.
+        var index = response.headerFields.startIndex
+        while index < response.headerFields.endIndex {
+            let field = response.headerFields[index]
+            index += 1
             fields.append(HeaderField(name: field.name.canonicalName, value: field.value))
         }
         return fields

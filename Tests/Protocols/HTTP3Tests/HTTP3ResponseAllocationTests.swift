@@ -34,12 +34,41 @@ struct HTTP3ResponseAllocationTests {
         // Warm up once so one-time lazy init (the Huffman DFA, the status-string cache) is not charged
         // to the measured run.
         _ = connection.encodeResponseSection(response)
-        // Measured budget: 11 — one reserved output buffer plus the per-field cost of iterating
-        // HTTPFields; the QPACK encode appends straight into the reserved buffer, the :status string is
-        // cached, and the intermediate [HeaderField] array is gone. This was **31** before the borrowing
-        // refactor; the ceiling trips if the array rebuild, un-reserved growth, or per-status itoa returns.
-        _ = expectAllocations(noMoreThan: 11) {
+        // Measured budget: 1 — the reserved output buffer, and nothing else. The QPACK encode appends
+        // straight into it, the `:status` string is cached, and the intermediate [HeaderField] array
+        // is gone.
+        //
+        // The ceiling was 11, described as "one reserved output buffer plus the per-field cost of
+        // iterating HTTPFields". That reading was right, and the per-field cost turned out to be the
+        // whole of it: `for field in response.headerFields` costs ~2 allocations per field in the
+        // unoptimized test build, so the five-field response paid 10 of the 11 for its own iterator.
+        // With the loop indexed the described floor — the one reserved buffer — is all that remains.
+        _ = expectAllocations(noMoreThan: 3) {
             _ = connection.encodeResponseSection(response)
         }
+    }
+
+    @Test("the encode cost does not scale with the field count")
+    func encodeCostDoesNotScaleWithFieldCount() {
+        var wide = HTTPFields()
+        var index = 0
+        while index < 24 {
+            _ = wide.append("v\(index)", for: .server)
+            index += 1
+        }
+        let connection = HTTP3Connection()
+        let narrow = Self.response()
+        let response = HTTPResponse(status: .ok, headerFields: wide)
+        _ = connection.encodeResponseSection(narrow)
+        _ = connection.encodeResponseSection(response)
+        let narrowCost = mallocDelta { _ = connection.encodeResponseSection(narrow) }
+        let wideCost = mallocDelta { _ = connection.encodeResponseSection(response) }
+        guard let narrowCost, let wideCost else {
+            return  // allocation counting is unavailable on this platform
+        }
+        // The property rather than a number: 24 fields encode into the same one reserved buffer as 5.
+        // A re-introduced `for-in` breaks this first, and a single-field-count ceiling cannot see a
+        // slope at all.
+        #expect(wideCost == narrowCost)
     }
 }

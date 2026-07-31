@@ -180,7 +180,14 @@ extension HTTP2Connection {
         encoder.encode(
             HPACKField(name: ":status", value: response.status.decimalString), into: &output
         )
-        for field in response.headerFields {
+        // Indexed `while`, NOT `for field in response.headerFields`: `for-in` goes through
+        // `IndexingIterator.next()`, ~2 heap allocations per field in an unoptimized build. Release
+        // specializes it away, so this is not a serving cost — it is what the allocation ceiling below
+        // measures, and at 2 per field the iterator was most of the number. Do not "tidy" it back.
+        var index = response.headerFields.startIndex
+        while index < response.headerFields.endIndex {
+            let field = response.headerFields[index]
+            index += 1
             encoder.encode(
                 HPACKField(name: field.name.canonicalName, value: field.value), into: &output
             )
