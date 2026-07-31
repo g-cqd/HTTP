@@ -90,7 +90,12 @@ extension HTTPServer {
         }
         guard ended else {
             await abandonTruncatedHTTP3Request(
-                id, handoff: handoff, handler: handler, stream: stream, registry: registry
+                id,
+                handoff: handoff,
+                handler: handler,
+                registry: registry,
+                engine: engine,
+                quic: quic
             )
             return
         }
@@ -138,14 +143,23 @@ extension HTTPServer {
         _ id: QUICStreamID,
         handoff: AsyncHandoff,
         handler: Task<ServerResponse, Never>,
-        stream: any QUICStream,
-        registry: HTTP3StreamRegistry
+        registry: HTTP3StreamRegistry,
+        engine: Engine,
+        quic: any QUICConnection
     ) async {
         await handoff.fail()
         handler.cancel()
         _ = await handler.value
-        stream.reset(errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue)
-        registry.retire(id)
+        // Through the shared reset so the engine is retired and the abuse budget charged (REG-3): an
+        // upload abandoned mid-body is the same shape as a lapsed deadline, and used to leak the same
+        // parser, QPACK and buffered-body state.
+        await resetHTTP3Stream(
+            id,
+            errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue,
+            registry: registry,
+            engine: engine,
+            quic: quic
+        )
     }
 
     /// Collects the body chunks (and whether `requestEnd` arrived) that follow a `requestHead` in the

@@ -254,6 +254,19 @@ public struct HTTP3Connection {
         streams[streamID]?.blockedSection != nil
     }
 
+    /// What this connection still retains, in the quantities a peer can grow (audit REG-3).
+    ///
+    /// The driver reads it to check that resetting a stream on the wire actually retired the state
+    /// behind it — a sans-I/O engine has no other way to learn a stream is gone.
+    public var census: HTTP3ConnectionCensus {
+        HTTP3ConnectionCensus(
+            trackedStreams: streams.count,
+            blockedSections: streams.blockedSectionCount,
+            bufferedRequestBodyBytes: streams.totalBufferedBody,
+            chargedStreamResets: streamResetCount
+        )
+    }
+
     /// Drains the queued outbound actions for the driver to perform.
     public mutating func outbound() -> [Action] {
         var drained: [Action] = []

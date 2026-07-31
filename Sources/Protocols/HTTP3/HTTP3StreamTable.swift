@@ -63,6 +63,9 @@ struct HTTP3StreamTable: Sequence {
         return removed
     }
 
+    /// The number of tracked streams — the record count a driver is obliged to retire (audit REG-3).
+    var count: Int { storage.count }
+
     func makeIterator() -> Dictionary<QUICStreamID, HTTP3Connection.StreamState>.Iterator {
         storage.makeIterator()
     }

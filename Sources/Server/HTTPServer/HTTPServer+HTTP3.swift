@@ -105,6 +105,24 @@ extension HTTPServer {
             connection.isBlocked(id)
         }
 
+        /// Retires the engine state behind `id` and returns the actions to flush (audit REG-3).
+        ///
+        /// The engine is sans-I/O: resetting a QUIC stream on the wire tells it nothing, so without
+        /// this call it keeps the stream's parser buffer, its decoded request, its buffered body, and
+        /// its slot in the SETTINGS_QPACK_BLOCKED_STREAMS allowance (RFC 9204 §2.1.2) for the life of
+        /// the connection. ``HTTP3Connection/resetStream(_:errorCode:)`` is the entry point rather than
+        /// a fresh partial cleanup precisely because it also charges the RFC 9114 §8.1 rolling reset
+        /// budget — a stream the peer abandons has to cost it something, or repeating it is free.
+        func retire(_ id: QUICStreamID, errorCode: UInt64) -> [HTTP3Connection.Action] {
+            _ = connection.resetStream(id, errorCode: errorCode)
+            return connection.outbound()
+        }
+
+        /// What the engine still retains for this connection (audit REG-3 observability).
+        func census() -> HTTP3ConnectionCensus {
+            connection.census
+        }
+
         /// Queues the graceful-shutdown GOAWAY (RFC 9114 §5.2) and returns the actions to flush.
         func beginGracefulShutdown() -> [HTTP3Connection.Action] {
             connection.beginGracefulShutdown()
@@ -178,7 +196,9 @@ extension HTTPServer {
         // one-task-per-connection shape the HTTP/1.1 idle watchdog uses, not one task per stream.
         let deadlines = HTTP3StreamDeadlines<C.Instant>()
         let watchdog = Task {
-            await self.runHTTP3DeadlineWatchdog(deadlines: deadlines, registry: registry)
+            await self.runHTTP3DeadlineWatchdog(
+                deadlines: deadlines, registry: registry, engine: engine, quic: quic
+            )
         }
         defer { watchdog.cancel() }
         let handle = registerHTTP3(

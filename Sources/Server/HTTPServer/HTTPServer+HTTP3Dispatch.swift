@@ -230,9 +230,16 @@ extension HTTPServer {
                     )
                     return
                 case .extendedConnect, .tunnelData, .tunnelClosed:
-                    // A tunnel needs a live reader to pump it; its stream has none (RFC 9220).
-                    stream.reset(errorCode: HTTP3ErrorCode.h3RequestRejected.rawValue)
-                    registry.retire(streamID)
+                    // A tunnel needs a live reader to pump it; its stream has none (RFC 9220). Retire
+                    // the engine with it (REG-3) — a tunnel record is never dropped by the engine on
+                    // its own, so leaving it is a per-refused-tunnel leak.
+                    await resetHTTP3Stream(
+                        streamID,
+                        errorCode: HTTP3ErrorCode.h3RequestRejected.rawValue,
+                        registry: registry,
+                        engine: engine,
+                        quic: quic
+                    )
                     return
                 case .requestBodyChunk, .requestEnd, .goAway:
                     break  // consumed by the streaming path above / connection-scoped
