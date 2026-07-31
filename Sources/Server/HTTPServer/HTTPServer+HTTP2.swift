@@ -127,6 +127,12 @@ extension HTTPServer {
                     continuation.yield(.localDeadlineLapsed)
                 }
             }
+            // The consumption gate's companion: bounds how long one non-consuming handler may hold the
+            // connection's shared receive window shut against its siblings (see the sweeper's file
+            // comment). Reports through the mailbox like every other local watchdog here.
+            group.addTask { [self] in
+                await runHTTP2StallSweeper(into: continuation)
+            }
 
             for await wakeup in wakeups {
                 let shouldClose = await applyHTTP2Wakeup(

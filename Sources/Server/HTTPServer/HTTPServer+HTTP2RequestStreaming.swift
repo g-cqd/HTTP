@@ -89,12 +89,39 @@ extension HTTPServer {
             return  // the stream was reset or ended out from under this chunk
         }
         guard await pending.channel.trySend(bytes) != .refused else {
-            state.streaming.removeValue(forKey: streamID)
-            await pending.channel.abandon()
-            try? state.engine.abortResponse(to: streamID, code: .flowControlError)
-            state.retire(streamID)
+            await endHTTP2Stream(streamID, resettingWith: .flowControlError, state: &state)
             return
         }
+    }
+
+    /// Tears down every per-stream obligation and resets the stream with `code` (RFC 9113 §6.4).
+    ///
+    /// The one teardown path for a stream the *server* decides to end — a `trySend` refusal, a swept
+    /// stall — and the shape the peer-initiated reset path reuses. Centralized deliberately: a stream
+    /// carries a body channel, a handler task, a consumption report, a stall count and receive credit,
+    /// and forgetting any one of them on any one path is the exact class of defect the audit found (a
+    /// handler parked forever, or credit lost from the shared connection window).
+    ///
+    /// `abandon` rather than `finish`: the stream is being reset, so the handler must observe truncation
+    /// rather than a clean end of body.
+    func endHTTP2Stream(
+        _ streamID: HTTP2StreamID,
+        resettingWith code: HTTP2ErrorCode?,
+        state: inout HTTP2ConnectionState
+    ) async {
+        if let pending = state.streaming.removeValue(forKey: streamID) {
+            await pending.channel.abandon()
+        }
+        if let tunnel = state.webSockets.removeValue(forKey: streamID) {
+            await tunnel.channel.abandon()
+        }
+        state.relays.removeValue(forKey: streamID)
+        if let code {
+            // Best-effort: a reset-budget overflow (MadeYouReset, CVE-2025-8671) has already queued the
+            // engine's own GOAWAY, and this stream is going away either way.
+            try? state.engine.abortResponse(to: streamID, code: code)
+        }
+        state.retire(streamID)
     }
 
     /// Begins a streaming-route request: an incremental body stream the consumer feeds, and a task

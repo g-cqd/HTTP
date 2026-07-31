@@ -62,6 +62,40 @@ struct HTTP2ConnectionState {
         readerClosed && pendingRequests == 0 && pendingTunnels == 0 && relays.isEmpty
     }
 
+    /// Consecutive sweeps a gated stream has held receive credit without reporting any consumption.
+    ///
+    /// Counted in sweeps rather than measured in time, so the sweeper task decides only *when* to look
+    /// and the decision itself is a pure function of byte progress — deterministic, and drivable by
+    /// hand from a test.
+    var stalls: [HTTP2StreamID: Int] = [:]
+
+    /// Clears the stall count for `streamID` — its handler has taken bytes, so it is making progress.
+    mutating func noteConsumption(_ streamID: HTTP2StreamID) {
+        stalls[streamID] = 0
+    }
+
+    /// Advances the stall count of every gated stream holding credit, returning those now over budget.
+    ///
+    /// A stream counts as stalled only while it actually *holds* credit: a handler that has drained
+    /// everything the peer sent and is simply waiting for more is idle, not stalling, and the
+    /// connection-level idle timeout is what governs it. Two sweeps rather than one so a handler that
+    /// happens to be between chunks when a sweep lands is never punished for it.
+    mutating func sweepStalls() -> [HTTP2StreamID] {
+        var overBudget: [HTTP2StreamID] = []
+        for streamID in consumption.keys {
+            guard engine.outstandingReceiveCredit(of: streamID) > 0 else {
+                stalls[streamID] = 0
+                continue
+            }
+            let count = (stalls[streamID] ?? 0) + 1
+            stalls[streamID] = count
+            if count >= 2 {
+                overBudget.append(streamID)
+            }
+        }
+        return overBudget
+    }
+
     /// Retires every per-stream obligation for `streamID` — the one place credit is handed back.
     ///
     /// Consumption gating gives the connection a hard memory bound only if a stream that goes away
@@ -75,6 +109,7 @@ struct HTTP2ConnectionState {
     /// `releaseReceiveWindow` returns *all* of this stream's outstanding credit at once.
     mutating func retire(_ streamID: HTTP2StreamID) {
         consumption.removeValue(forKey: streamID)
+        stalls.removeValue(forKey: streamID)
         engine.releaseReceiveWindow(of: streamID)
     }
 

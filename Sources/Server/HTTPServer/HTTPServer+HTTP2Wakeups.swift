@@ -82,6 +82,12 @@ extension HTTPServer {
                     connection: connection,
                     sendDeadline: sendDeadline
                 )
+            case .sweepStalls:
+                await applySweepStalls(
+                    state: &state,
+                    connection: connection,
+                    sendDeadline: sendDeadline
+                )
             case .localDeadlineLapsed:
                 // A wedged consumer send or a wedged relay producer. Unlike end-of-input this is not a
                 // graceful "let in-flight work finish" signal — something is actually stuck, so close.
@@ -179,7 +185,37 @@ extension HTTPServer {
             return false
         }
         state.engine.replenishReceiveWindow(streamID, consumed: consumed)
+        state.noteConsumption(streamID)  // byte progress — this stream is not stalling
         return await flushHTTP2(&state.engine, to: connection, deadline: sendDeadline)
+    }
+
+    /// Resets every gated stream that has held receive credit across two sweeps without consuming any.
+    ///
+    /// The price of consumption gating, paid deliberately. Replenishment now depends on the
+    /// application, so a handler that stops reading holds part of the *shared* connection window and
+    /// slows every sibling stream on the connection. That is HTTP/2's own semantics rather than a defect
+    /// — one connection, one window — but leaving it unbounded would turn a single wedged handler into a
+    /// connection-wide denial of service. ENHANCE_YOUR_CALM (RFC 9113 §7) names the condition exactly:
+    /// the peer is behaving correctly, the server simply cannot keep up with this stream.
+    ///
+    /// Surgical by design: only the offending stream is reset and its siblings keep running, which is
+    /// what distinguishes this from the connection-fatal `.localDeadlineLapsed` watchdogs.
+    private func applySweepStalls(
+        state: inout HTTP2ConnectionState,
+        connection: any TransportConnection,
+        sendDeadline: IdleDeadline<C.Instant>
+    ) async -> Bool {
+        let stalled = state.sweepStalls()
+        guard !stalled.isEmpty else {
+            return false
+        }
+        for streamID in stalled {
+            await endHTTP2Stream(streamID, resettingWith: .enhanceYourCalm, state: &state)
+        }
+        if await flushHTTP2(&state.engine, to: connection, deadline: sendDeadline) {
+            return true
+        }
+        return state.isDrained
     }
 
     private func applyRequestReady(

@@ -21,6 +21,7 @@
 //  conforming client would (RFC 9113 §6.9). A peer that ignored the window would simply be reset.
 //
 
+import HTTP2
 import HTTPCore
 import HTTPTestSupport
 import HTTPTransport
@@ -210,6 +211,103 @@ struct HTTP2RequestBackpressureTests {
             )
         }
         return wire
+    }
+
+    /// The head-of-line consequence of gating, bounded — the DECISION, driven directly.
+    ///
+    /// One non-consuming handler holds part of the shared connection window and slows every sibling.
+    /// That is HTTP/2's semantics, so the answer is not to prevent it but to bound it. The sweeper task
+    /// only decides *when* to look; the rule itself is a pure function of byte progress, so it is
+    /// exercised here with no clock at all.
+    @Test("a stream holding credit with no byte progress is over budget after two sweeps")
+    func sweepDecisionIsByteProgressBased() throws {
+        var state = HTTP2ConnectionState(
+            engine: try H2Gate.handshaked(limits: Self.limits, streaming: true)
+        )
+        let stalled = HTTP2StreamID(1)
+        let live = HTTP2StreamID(3)
+        for streamID in [stalled, live] {
+            state.consumption[streamID] = HTTP2ConsumptionSignal {
+                // The wakeup edge is irrelevant here; only the credit bookkeeping is under test.
+            }
+            _ = try state.engine.receive(H2Gate.openAndFill(streamID: streamID, count: 1_024))
+        }
+        // One sweep is not enough: a handler that merely happened to be between chunks must not be
+        // punished for it.
+        #expect(state.sweepStalls().isEmpty)
+        // The live stream reports progress; the stalled one does not.
+        state.engine.replenishReceiveWindow(live, consumed: 1_024)
+        state.noteConsumption(live)
+        #expect(state.sweepStalls() == [stalled])
+        // A stream holding no credit is idle, not stalling — that is the connection idle timeout's job.
+        state.engine.replenishReceiveWindow(stalled, consumed: 1_024)
+        state.noteConsumption(stalled)
+        #expect(state.sweepStalls().isEmpty)
+        #expect(state.sweepStalls().isEmpty)
+    }
+
+    /// The same rule end to end: the sweeper task fires, the stalled stream is reset, siblings survive.
+    @Test(
+        "a swept stream is reset with ENHANCE_YOUR_CALM while its sibling continues",
+        .timeLimit(.minutes(1)))
+    func aNonConsumingStreamIsSwept() async throws {
+        let stuck = AsyncGate()
+        let router = Router {
+            Route.post("/stuck") { _, _, _ in
+                try? await stuck.waitUntilOpen()
+                return .text("stuck")
+            }
+            .streamingBody()
+            Route.post("/normal") { _, body, _ in
+                .text("normal=\(await body.collect().count)")
+            }
+            .streamingBody()
+        }
+        // A short consumption budget so the sweeper's own timer drives this rather than a test hook;
+        // the decision it applies is the deterministic one asserted above.
+        let limits = HTTPLimits(
+            streamReceiveWindow: Self.streamWindow,
+            connectionReceiveWindow: Self.connectionWindow,
+            bodyConsumptionTimeout: .milliseconds(40)
+        )
+        let connection = ControllableConnection(alpn: "h2")
+        let server = HTTPServer(transport: FakeTransport(), responder: router, limits: limits)
+        let serving = Task { await server.serve(connection) }
+
+        await connection.feed(
+            H2ServerWire.preface + H2ServerWire.settings()
+                + H2ServerWire.headers(streamID: 1, path: "/stuck")
+                + H2ServerWire.headers(streamID: 3, path: "/normal")
+        )
+        try await stuck.waitForWaiters(atLeast: 1)
+        // Stream 1 takes a full window and consumes none of it; stream 3 takes one frame and drains.
+        await connection.feed(H2ServerWire.dataFrames(streamID: 1, total: Self.streamWindow))
+        await connection.feed(H2ServerWire.dataFrames(streamID: 3, total: H2ServerWire.maxFrame))
+        while H2ServerWire.resetCode(onStream: 1, in: await connection.sentBytes()) == nil,
+            !Task.isCancelled
+        {
+            await Self.settle()
+        }
+        // ENHANCE_YOUR_CALM = 0x0b (RFC 9113 §7): the peer is conforming, the server cannot keep up
+        // with this one stream — so only this one stream dies.
+        #expect(H2ServerWire.resetCode(onStream: 1, in: await connection.sentBytes()) == 0x0B)
+
+        // The sibling is untouched: a swept stall is surgical, never connection-fatal.
+        await connection.feed(
+            H2ServerWire.dataFrames(streamID: 3, total: H2ServerWire.maxFrame, endStream: true)
+        )
+        while !H2ServerWire.isFinished(onStream: 3, in: await connection.sentBytes()),
+            !Task.isCancelled
+        {
+            await Self.settle()
+        }
+        let body = H2ServerWire.body(onStream: 3, in: await connection.sentBytes())
+        let expected = "normal=\(2 * H2ServerWire.maxFrame)"
+        #expect(String(decoding: body, as: Unicode.UTF8.self) == expected)
+
+        stuck.open()
+        await connection.finishInbound()
+        await serving.value
     }
 
     @Test(

@@ -358,10 +358,7 @@ extension HTTPServer {
             return  // already closed or reset out from under this chunk
         }
         guard await tunnel.channel.trySend(bytes) != .refused else {
-            state.webSockets.removeValue(forKey: streamID)
-            await tunnel.channel.abandon()
-            try? state.engine.abortResponse(to: streamID, code: .flowControlError)
-            state.retire(streamID)
+            await endHTTP2Stream(streamID, resettingWith: .flowControlError, state: &state)
             return
         }
     }

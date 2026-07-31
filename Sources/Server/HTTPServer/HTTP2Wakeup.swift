@@ -48,6 +48,18 @@ enum HTTP2Wakeup: Sendable {
     /// ``HTTP2ConsumptionSignal``, which coalesces many chunk takes into one wakeup.
     case consumed(HTTP2StreamID)
 
+    /// Time to check whether any gated stream is holding receive credit without consuming it.
+    ///
+    /// The other side of the consumption gate. Because replenishment now depends on the application,
+    /// one handler that stops reading holds part of the *shared* connection window and slows every
+    /// sibling stream — that is HTTP/2's semantics, not a bug, but it must not be unbounded. A stream
+    /// making no byte progress across two sweeps is reset with ENHANCE_YOUR_CALM (RFC 9113 §7) and its
+    /// siblings carry on.
+    ///
+    /// Byte-progress based rather than clock based: the sweeper task only decides *when* to look, and a
+    /// test can drive this wakeup by hand for a fully deterministic result.
+    case sweepStalls
+
     /// A tunnel pump produced bytes to relay as tunnel DATA (RFC 8441 §5).
     case tunnelOutbound(HTTP2StreamID, [UInt8])
 
