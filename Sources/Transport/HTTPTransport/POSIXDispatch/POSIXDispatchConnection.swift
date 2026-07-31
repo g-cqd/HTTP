@@ -37,7 +37,14 @@ public final class POSIXDispatchConnection: TransportConnection {
     private let descriptor: Int32
     private let queue: DispatchQueue
     private let isClosed = Atomic<Bool>(false)
-    private let waiter = Mutex<Waiter?>(nil)
+    /// Parked read and write state, in ONE lock so teardown can take both atomically.
+    ///
+    /// They must be separate slots (2026-07-31 performance addendum, P0.2). HTTP/2 deliberately runs a
+    /// continuous reader and a sole writer in *separate tasks*, so a read and a write parked at the same
+    /// time is a supported state, not a contradiction. With one slot the later parker overwrote the
+    /// earlier: the displaced source stayed armed but became unreachable from teardown, and the close
+    /// sweep resumed at most one continuation — so one of the two operations never resumed at all.
+    private let waiters = Mutex<Waiters>(Waiters())
     /// Cached resumer for the read path (``receive(maxLength:)`` — this backbone has no scratch override).
     ///
     /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
@@ -46,14 +53,53 @@ public final class POSIXDispatchConnection: TransportConnection {
     private let readResumer = OnceResumer<[UInt8]?>()
     /// Cached resumer for the write path (``send(_:)``).
     ///
-    /// Reused the same way: writes on one connection are serial and never overlap a read.
+    /// Reused the same way: writes on one connection are serialized against each other. They may,
+    /// however, overlap a *read* — see ``waiters``.
     private let writeResumer = OnceResumer<Void>()
+
+    /// How many directions currently have a parked waiter — 0, 1, or 2.
+    ///
+    /// Exposed for the P0.2 invariant: with a read and a write both parked this is 2. Under the former
+    /// single-slot design it could only ever be 1, because the later parker overwrote the earlier. See
+    /// ``waiters`` for why that mattered.
+    var parkedDirectionCount: Int { waiters.withLock(\.parked).count }
 
     /// A parked read or write: its readiness source plus a closure that fails the awaiting continuation
     /// (read → EOF, write → error) when the connection is torn down out from under it.
     private struct Waiter {
         let source: any DispatchSourceProtocol
         let fail: @Sendable () -> Void
+    }
+
+    /// The connection's parked read and parked write, held together under one lock.
+    private struct Waiters {
+        var read: Waiter?
+        var write: Waiter?
+
+        var parked: [Waiter] { [read, write].compactMap(\.self) }
+    }
+
+    /// Counts parked sources down so the descriptor is closed exactly once — by the LAST cancel
+    /// handler to run, since `DispatchSource.cancel()` is asynchronous and each armed source must
+    /// quiesce before the fd can be reused.
+    private final class CloseBarrier: Sendable {
+        private let remaining: Mutex<Int>
+
+        init(_ count: Int) {
+            remaining = Mutex(count)
+        }
+
+        /// Whether this caller is the last to arrive.
+        func arrive() -> Bool {
+            remaining.withLock { value in
+                value -= 1
+                return value == 0
+            }
+        }
+
+        deinit {
+            // No teardown beyond ARC.
+        }
     }
 
     /// Spurious readiness: the source fired but `read(2)` returned `EAGAIN`; keep waiting.
@@ -102,20 +148,22 @@ public final class POSIXDispatchConnection: TransportConnection {
                         return
                     }
                     let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-                    waiter.withLock {
-                        $0 = Waiter(source: source) { [self] in readResumer.resume(returning: nil) }
+                    waiters.withLock {
+                        $0.read = Waiter(source: source) { [self] in
+                            readResumer.resume(returning: nil)
+                        }
                     }
                     source.setEventHandler { [self] in
                         do {
                             let bytes = try Self.readAvailable(fd, maxLength)
-                            clearWaiter(source)
+                            clearRead(source)
                             readResumer.resume(returning: bytes)
                         }
                         catch is WouldBlock {
                             // Spurious readiness — leave the source armed; it fires again.
                         }
                         catch {
-                            clearWaiter(source)
+                            clearRead(source)
                             readResumer.resume(throwing: error)
                         }
                     }
@@ -198,15 +246,15 @@ public final class POSIXDispatchConnection: TransportConnection {
         }
         switch outcome {
             case .done:
-                clearWaiter(nil)
+                clearWrite(nil)
                 once.resume(returning: ())
             case .failed(let code):
-                clearWaiter(nil)
+                clearWrite(nil)
                 once.resume(throwing: TransportError.ioFailed("write errno \(code)"))
             case .wouldBlock(let next):
                 let source = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: queue)
-                waiter.withLock {
-                    $0 = Waiter(source: source) {
+                waiters.withLock {
+                    $0.write = Waiter(source: source) {
                         once.resume(throwing: TransportError.ioFailed("connection closed"))
                     }
                 }
@@ -237,9 +285,18 @@ public final class POSIXDispatchConnection: TransportConnection {
         closeDescriptor()
     }
 
-    /// Clears the parked waiter and cancels a completed read/write `source` (called on `queue`).
-    private func clearWaiter(_ source: (any DispatchSourceProtocol)?) {
-        waiter.withLock { $0 = nil }
+    /// Clears the parked READ and cancels its completed `source` (called on `queue`).
+    ///
+    /// Direction-specific on purpose: clearing both slots would drop a concurrently parked write, which
+    /// teardown would then never resume.
+    private func clearRead(_ source: (any DispatchSourceProtocol)?) {
+        waiters.withLock { $0.read = nil }
+        source?.cancel()
+    }
+
+    /// Clears the parked WRITE and cancels its completed `source` (called on `queue`).
+    private func clearWrite(_ source: (any DispatchSourceProtocol)?) {
+        waiters.withLock { $0.write = nil }
         source?.cancel()
     }
 
@@ -256,19 +313,28 @@ public final class POSIXDispatchConnection: TransportConnection {
         }
         let fd = descriptor
         queue.async { [self] in
-            let parked = waiter.withLock { current -> Waiter? in
-                defer { current = nil }
-                return current
+            let parked = waiters.withLock { current -> [Waiter] in
+                defer { current = Waiters() }
+                return current.parked
             }
-            guard let parked else {
+            guard !parked.isEmpty else {
                 Darwin.close(fd)  // no armed source watching the fd → safe to close directly
                 return
             }
-            parked.source.setCancelHandler {
-                Darwin.close(fd)  // GCD guarantees delivery has stopped before this runs
-                parked.fail()  // unblock the parked receive/send (EOF / error)
+            // Both directions may be parked at once, and EVERY armed source must quiesce before the fd
+            // can be closed — otherwise a queued readiness handler could fire against a since-reused
+            // descriptor. The barrier closes it on the last arrival; each waiter is failed regardless,
+            // so neither a parked receive nor a parked send is left dangling.
+            let barrier = CloseBarrier(parked.count)
+            for waiter in parked {
+                waiter.source.setCancelHandler {
+                    if barrier.arrive() {
+                        Darwin.close(fd)  // GCD guarantees delivery has stopped before this runs
+                    }
+                    waiter.fail()  // unblock the parked receive/send (EOF / error)
+                }
+                waiter.source.cancel()
             }
-            parked.source.cancel()
         }
     }
 }
