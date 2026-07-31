@@ -137,9 +137,17 @@ public struct FileResponder: HTTPResponder {
         // Whether a sidecar *could* be offered for this resource — not whether one was, and not
         // whether this request would have taken it. Only that is invariant across statuses.
         let negotiated = precompressed && Self.isCompressible(name)
+        // One parse of `Accept-Encoding` per request, shared by the sidecar choice and the identity
+        // check below; a range is always served from the identity bytes, so no sidecar is sought.
+        let accept = AcceptEncoding(request.headerFields[.acceptEncoding])
         let choice =
-            negotiated
-            ? precompressedChoice(file, named: name, in: directory, request: request) : nil
+            negotiated && request.headerFields[.range] == nil
+            ? precompressedChoice(file, named: name, in: directory, accept: accept) : nil
+        // A client that excluded `identity` and cannot be given a coded representation has no
+        // acceptable one at all (RFC 9110 §12.5.3, §15.5.7).
+        guard choice != nil || accept.identityIsAcceptable else {
+            return ServerResponse(HTTPResponse(status: .notAcceptable))
+        }
         let served = choice?.file ?? file
         let etag = FileValidator.entityTag(for: served, encoding: choice?.encoding)
         let lastModified = HTTPDate.imfFixdate(served.modifiedAt)

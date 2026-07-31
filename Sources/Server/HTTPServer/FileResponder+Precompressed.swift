@@ -7,6 +7,10 @@
 //  sidecar is never served), serve it with `Content-Encoding` + `Vary`. A `Range` request always serves
 //  the identity bytes — a range over the compressed stream is not offered.
 //
+//  Which coding wins is decided by ``AcceptEncoding``, which parses the header ONCE into quality values;
+//  this file only turns that ranking into `openat(2)` attempts. Brotli has no hardcoded precedence — it
+//  wins a tie, and loses `br;q=0.1, gzip;q=0.9`.
+//
 //  The sidecar is opened with `openat(2)` on the SAME directory descriptor that reached the identity
 //  file, so it is inside the root by construction and no pathname is rebuilt or re-resolved; a symlinked
 //  sidecar is refused like any other symlink (CWE-59, CWE-367).
@@ -23,25 +27,40 @@ extension FileResponder {
 
     /// The fresh, accepted precompressed sibling of `file` to serve (with its content coding), or nil to
     /// serve the identity file.
+    ///
+    /// At most two `openat(2)` attempts, in the client's own order of preference, stopping at the first
+    /// sidecar that exists and is not stale.
     func precompressedChoice(
         _ file: OpenedFile,
         named name: Substring,
         in directory: OpenedDirectory,
-        request: HTTPRequest
+        accept: AcceptEncoding
     ) -> (file: OpenedFile, encoding: String)? {
-        guard request.headerFields[.range] == nil else {
+        let candidates = accept.candidates
+        if let first = candidates.first,
+            let choice = Self.sidecar(first, freshFor: file, named: name, in: directory)
+        {
+            return choice
+        }
+        guard let second = candidates.second else {
             return nil
         }
-        let accept = request.headerFields[.acceptEncoding] ?? ""
-        for (token, suffix) in [("br", ".br"), ("gzip", ".gz")] where Self.accepts(accept, token) {
-            guard let sidecar = directory.openFile(named: name + suffix),
-                sidecar.modifiedAt >= file.modifiedAt  // never serve a stale sidecar
-            else {
-                continue
-            }
-            return (sidecar, token)
+        return Self.sidecar(second, freshFor: file, named: name, in: directory)
+    }
+
+    /// The `<name><suffix>` sibling for `coding`, or nil when it is missing or older than `file`.
+    private static func sidecar(
+        _ coding: AcceptEncoding.Coding,
+        freshFor file: OpenedFile,
+        named name: Substring,
+        in directory: OpenedDirectory
+    ) -> (file: OpenedFile, encoding: String)? {
+        guard let sidecar = directory.openFile(named: name + coding.suffix),
+            sidecar.modifiedAt >= file.modifiedAt  // never serve a stale sidecar
+        else {
+            return nil
         }
-        return nil
+        return (sidecar, coding.rawValue)
     }
 
     /// Whether to seek a precompressed sibling for `name`, skipping already-compressed media types.
@@ -51,25 +70,5 @@ extension FileResponder {
     static func isCompressible(_ name: Substring) -> Bool {
         let type = contentType(name).lowercased()
         return !incompressibleTypes.contains { type.contains($0) }
-    }
-
-    /// Whether `acceptEncoding` offers `token` (present and not `;q=0`) (RFC 9110 §12.5.3).
-    private static func accepts(_ acceptEncoding: String, _ token: String) -> Bool {
-        for part in acceptEncoding.lowercased().split(separator: ",") {
-            let fields = part.split(separator: ";")
-            let coding = fields.first?.trimmingCharacters(in: .whitespaces) ?? ""
-            guard coding == token || coding == "*" else {
-                continue
-            }
-            let refused = fields.dropFirst()
-                .contains {
-                    $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: " ", with: "")
-                        == "q=0"
-                }
-            if !refused {
-                return true
-            }
-        }
-        return false
     }
 }

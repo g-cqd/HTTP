@@ -48,6 +48,10 @@ extension HTTPStatus {
     public static let notFound = HTTPStatus(unchecked: 404)
     /// `405 Method Not Allowed` (RFC 9110 §15.5.6).
     public static let methodNotAllowed = HTTPStatus(unchecked: 405)
+    /// `406 Not Acceptable` (RFC 9110 §15.5.7) — no available representation matches the proactive
+    /// negotiation headers, e.g. an `Accept-Encoding` that excludes `identity` with no coded
+    /// representation on hand (§12.5.3).
+    public static let notAcceptable = HTTPStatus(unchecked: 406)
     /// `412 Precondition Failed` (RFC 9110 §15.5.13) — an `If-Match` / `If-Unmodified-Since` failure.
     public static let preconditionFailed = HTTPStatus(unchecked: 412)
     /// `416 Range Not Satisfiable` (RFC 9110 §15.5.17).

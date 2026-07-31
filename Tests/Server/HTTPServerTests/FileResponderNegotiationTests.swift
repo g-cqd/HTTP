@@ -111,4 +111,125 @@ struct FileResponderNegotiationTests {
             #expect(both.notModified.body.isEmpty)
         }
     }
+
+    // MARK: q-values (RFC 9110 §12.4.2, §12.5.3)
+
+    /// A tree carrying the identity file plus both sidecars, so only negotiation decides the winner.
+    private static let bothSidecars = [
+        "a.css": Array("IDENTITY".utf8),
+        "a.css.br": Array("BROTLI".utf8),
+        "a.css.gz": Array("GZIP".utf8)
+    ]
+
+    /// The `Content-Encoding` and body the responder picks for `accept`.
+    private func negotiate(
+        _ responder: FileResponder,
+        accept: String
+    ) async -> (encoding: String?, body: [UInt8], status: HTTPStatus) {
+        let request = get("/a.css", headers: [(.acceptEncoding, accept)])
+        let response = await responder.respond(to: request, body: [])
+        return (response.head.headerFields[.contentEncoding], response.body, response.head.status)
+    }
+
+    @Test(
+        "every spelling of a zero quality refuses the coding (RFC 9110 §12.4.2)",
+        arguments: [
+            "br;q=0",
+            "br;q=0.0",
+            "br;q=0.00",
+            "br;q=0.000",
+            "br;Q=0",
+            "br;Q=0.000",
+            "br; q=0",
+            "br ; q=0.0",
+            "BR;q=0"
+        ]
+    )
+    func zeroQualityRefusesTheCoding(_ accept: String) async {
+        // Only the Brotli sidecar exists, so a coding that slipped through would be visible.
+        let files = ["a.css": Array("IDENTITY".utf8), "a.css.br": Array("BROTLI".utf8)]
+        await withTree(files) { responder in
+            let result = await negotiate(responder, accept: accept)
+            #expect(result.encoding == nil, "\(accept) was treated as acceptable")
+            #expect(result.body == Array("IDENTITY".utf8))
+        }
+    }
+
+    @Test(
+        "the highest q wins, not a hardcoded Brotli preference (RFC 9110 §12.5.3)",
+        arguments: [
+            ("br;q=0.1, gzip;q=0.9", "gzip"),
+            ("gzip;q=1.0, br;q=0.5", "gzip"),
+            ("br;q=0.9, gzip;q=0.1", "br"),
+            ("gzip;q=0.001, br;q=0.002", "br"),
+            ("br;q=0, gzip", "gzip"),
+            ("gzip;q=0, br", "br"),
+            ("br, gzip", "br"),
+            ("x-gzip;q=1, br;q=0.1", "gzip")
+        ]
+    )
+    func highestQualityWins(_ accept: String, _ expected: String) async {
+        await withTree(Self.bothSidecars) { responder in
+            let result = await negotiate(responder, accept: accept)
+            #expect(result.encoding == expected, "\(accept) chose \(result.encoding ?? "identity")")
+        }
+    }
+
+    @Test(
+        "a wildcard supplies a quality only where no explicit entry does",
+        arguments: [
+            ("*", "br"),
+            ("*;q=1, br;q=0", "gzip"),
+            ("*;q=0, br;q=1", "br"),
+            ("*;q=0.5, gzip;q=0.9", "gzip")
+        ]
+    )
+    func wildcardIsOnlyAFallback(_ accept: String, _ expected: String) async {
+        await withTree(Self.bothSidecars) { responder in
+            #expect(await negotiate(responder, accept: accept).encoding == expected)
+        }
+    }
+
+    @Test(
+        "a client that refuses identity and cannot be coded gets 406 (RFC 9110 §12.5.3, §15.5.7)",
+        arguments: ["identity;q=0", "identity;q=0.000", "*;q=0", "IDENTITY;Q=0"]
+    )
+    func identityRefusedIsNotAcceptable(_ accept: String) async {
+        await withTree(["a.css": Array("IDENTITY".utf8)]) { responder in
+            let result = await negotiate(responder, accept: accept)
+            #expect(result.status == .notAcceptable)
+            #expect(result.body.isEmpty)
+        }
+    }
+
+    @Test("refusing identity is fine when an accepted coding is actually available")
+    func identityRefusedButCodedAvailable() async {
+        await withTree(Self.bothSidecars) { responder in
+            let result = await negotiate(responder, accept: "identity;q=0, br")
+            #expect(result.status == .ok)
+            #expect(result.encoding == "br")
+            #expect(result.body == Array("BROTLI".utf8))
+        }
+    }
+
+    @Test("a more specific identity entry overrides a zero wildcard (RFC 9110 §12.5.3)")
+    func explicitIdentityBeatsZeroWildcard() async {
+        await withTree(["a.css": Array("IDENTITY".utf8)]) { responder in
+            let result = await negotiate(responder, accept: "*;q=0, identity;q=1")
+            #expect(result.status == .ok)
+            #expect(result.body == Array("IDENTITY".utf8))
+        }
+    }
+
+    @Test(
+        "a malformed weight makes the entry unusable rather than silently full quality",
+        arguments: ["br;q=", "br;q=2", "br;q=1.5", "br;q=0.0000", "br;q=abc", "br;q=-1"]
+    )
+    func malformedWeightIsIgnored(_ accept: String) async {
+        let files = ["a.css": Array("IDENTITY".utf8), "a.css.br": Array("BROTLI".utf8)]
+        await withTree(files) { responder in
+            let result = await negotiate(responder, accept: accept)
+            #expect(result.encoding == nil, "\(accept) was honored as a valid weight")
+        }
+    }
 }
