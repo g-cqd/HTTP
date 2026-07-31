@@ -2,87 +2,97 @@
 //  InMemorySessionStore.swift
 //  HTTPServer
 //
-//  A process-local ``SessionStore``: a Mutex-guarded map of session id → last-seen monotonic timestamp,
-//  with a sliding TTL (each ``validate(_:)`` refreshes it) so an idle session expires server-side, and
-//  explicit ``revoke(_:)`` for logout. Time is an injected ``MonotonicNowProvider`` (never the wall
-//  clock), so a test pins expiry with no real waiting. The map is bounded: when it grows past a cap, a
-//  ``register(_:)`` first drops expired ids, so a churn of sessions cannot grow it without bound
-//  (CWE-400). For a single process; back a multi-process deployment with a shared store instead.
+//  A process-local ``SessionStore``: session id → last-seen monotonic timestamp, with a sliding TTL
+//  (each ``validate(_:)`` refreshes it) so an idle session expires server-side, and explicit
+//  ``revoke(_:)`` for logout. Time is an injected ``MonotonicNowProvider`` (never the wall clock), so
+//  a test pins expiry with no real waiting. For a single process; back a multi-process deployment
+//  with a shared store instead.
+//
+//  The map is a ``SharedBoundedLRU``, which is a real bound rather than the one this type used to
+//  claim. The old `register` did "if the map is at its cap, drop the expired ids" and then inserted
+//  unconditionally — so when nothing had expired, which is exactly the case a session flood produces,
+//  it dropped nothing and inserted anyway, and the map grew past `maxSessions` without limit
+//  (CWE-400). It now reclaims a bounded slice of the most-idle ids and, if that is not enough, evicts
+//  the least recently used.
+//
+//  Eviction, not refusal, on purpose — the opposite of ``RateLimitMiddleware``'s admission table. A
+//  refused registration would hand the client a session cookie the server had already forgotten, so
+//  the very next request would fail validation and mint another, forever. Evicting the most idle
+//  session logs somebody out early, which is recoverable; refusing is a livelock.
 //
 
 public import HTTPConcurrency
 
-private import Synchronization
-
-/// An in-memory ``SessionStore`` with a sliding TTL and a bounded session map.
+/// An in-memory ``SessionStore`` with a sliding TTL and a hard-bounded session map.
 public final class InMemorySessionStore: SessionStore {
-    /// Mutex-guarded state in a class because `Mutex` is non-copyable (mirrors ``RateLimitMiddleware``).
-    private final class State: Sendable {
-        let sessions = Mutex<[String: MonotonicNanoseconds]>([:])
-
-        deinit {
-            // No teardown beyond ARC; the Mutex releases with the instance.
-        }
-    }
+    /// How many of the most-idle sessions a registration sweeps before falling back to eviction.
+    ///
+    /// Bounded so no single registration is charged an O(*n*) scan of the whole map.
+    private static let reclaimScan = 32
 
     private let ttlNanos: MonotonicNanoseconds
-    private let maxSessions: Int
     private let now: MonotonicNowProvider
-    private let state = State()
+    private let sessions: SharedBoundedLRU<String, MonotonicNanoseconds>
 
     deinit {
-        // No teardown beyond ARC; the State's Mutex releases with the instance.
+        // No teardown beyond ARC; the sharded map releases with the instance.
     }
 
-    /// Creates the store: a session idle longer than `ttl` expires; `maxSessions` bounds the map; `now`
-    /// is injectable for tests (defaults to the monotonic clock).
+    /// Creates the store: a session idle longer than `ttl` expires; `maxSessions` bounds the map.
+    ///
+    /// `shards` trades a little memory for lock contention, and `now` is injectable for tests
+    /// (defaulting to the monotonic clock).
     public init(
         ttl: Duration = .seconds(86_400),
         maxSessions: Int = 1_000_000,
+        shards: Int = 8,
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         self.ttlNanos = ttl.monotonicNanoseconds
-        self.maxSessions = max(1, maxSessions)
         self.now = now
+        self.sessions = SharedBoundedLRU(capacity: max(1, maxSessions), shards: max(1, shards))
     }
 
-    /// Whether `id` is live (within the sliding TTL), refreshing its last-seen time; drops it if expired.
+    /// How many sessions are held — by construction never above `maxSessions`.
+    public var count: Int {
+        sessions.totalCount
+    }
+
+    /// Whether `id` is live (within the sliding TTL), refreshing its last-seen time.
+    ///
+    /// A hit also promotes the session to the most-recently-used end, so the eviction victim is
+    /// genuinely the most idle one rather than merely the oldest to have registered.
     public func validate(_ id: String) async -> Bool {
         let instant = now()
-        return state.sessions.withLock { sessions in
-            guard let lastSeen = sessions[id], instant - lastSeen <= ttlNanos else {
-                sessions[id] = nil  // expired or unknown — drop so the map stays tight
+        return sessions.withShard(for: id) { live in
+            let alive = live.withValue(forKey: id) { lastSeen -> Bool in
+                guard instant - lastSeen <= ttlNanos else {
+                    return false
+                }
+                lastSeen = instant  // slide the TTL
+                return true
+            }
+            guard alive == true else {
+                live.removeValue(forKey: id)  // expired or unknown — drop so the map stays tight
                 return false
             }
-            sessions[id] = instant  // slide the TTL
             return true
         }
     }
 
-    /// Registers `id` as live now, first pruning expired ids when the map is at its cap.
+    /// Registers `id` as live now, reclaiming expired ids first and evicting the most idle if needed.
     public func register(_ id: String) async {
         let instant = now()
-        state.sessions.withLock { sessions in
-            if sessions.count >= maxSessions {
-                Self.prune(&sessions, at: instant, ttl: ttlNanos)
+        sessions.withShard(for: id) { live in
+            live.reclaim(scanning: Self.reclaimScan) { _, lastSeen in
+                instant - lastSeen > ttlNanos
             }
-            sessions[id] = instant
+            live.insert(instant, forKey: id)
         }
     }
 
     /// Revokes `id` immediately (logout); a later ``validate(_:)`` returns `false`.
     public func revoke(_ id: String) async {
-        state.sessions.withLock { $0[id] = nil }
-    }
-
-    /// Drops every session whose last-seen time is older than the TTL — bounding the map under churn.
-    private static func prune(
-        _ sessions: inout [String: MonotonicNanoseconds],
-        at instant: MonotonicNanoseconds,
-        ttl: MonotonicNanoseconds
-    ) {
-        for (id, lastSeen) in sessions where instant - lastSeen > ttl {
-            sessions[id] = nil
-        }
+        _ = sessions.withShard(for: id) { $0.removeValue(forKey: id) }
     }
 }
