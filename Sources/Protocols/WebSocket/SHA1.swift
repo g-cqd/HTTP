@@ -8,6 +8,14 @@
 //  throughput is irrelevant. SHA-1 is broken for collision resistance, but RFC 6455 uses it only as a
 //  fixed handshake transform — not for security — so it is the correct, spec-mandated primitive here.
 //
+//  DELIBERATELY NOT swift-crypto. This is the package's only remaining in-house hash, and that is on
+//  purpose: it is not a security primitive. There is no key, no secret, and nothing to forge — the
+//  input is the client's own nonce concatenated with the fixed, public GUID from RFC 6455 §1.3, and
+//  the output is echoed straight back. The keyed primitives on real security boundaries (session
+//  cookie tags, JWT signatures) DID move to swift-crypto; routing this one through
+//  `Crypto.Insecure.SHA1` would only pull swift-crypto into `WebSocket`, and so into every bare-server
+//  consumer's build graph, buying nothing. Please leave it here.
+//
 
 /// FIPS 180-4 §6.1 SHA-1 — a 160-bit digest, used only for the RFC 6455 handshake accept value.
 enum SHA1 {

@@ -168,6 +168,10 @@ let package = Package(
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
         // Zero external dependencies, no I/O — the self-contained substrate every engine builds on.
+        // No crypto either: the keyed primitives it used to host (SHA-256/HMAC/HKDF) live on the
+        // session and JWT signing boundaries, so they moved to swift-crypto in `HTTPServer`/`HTTPAuth`
+        // rather than being carried here. `RandomToken` needs none — `SystemRandomNumberGenerator`
+        // draws from the platform CSPRNG.
         .target(
             name: "HTTPCore",
             dependencies: [

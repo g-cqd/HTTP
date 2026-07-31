@@ -47,7 +47,7 @@ RFC 9000/9001/9002), WebSocket (RFC 6455) over h1 and h2/h3 (RFC 8441 / RFC 9220
 permessage-deflate (RFC 7692), Structured Fields (RFC 8941), Cookies (RFC 6265), Priorities
 (RFC 9218), Alt-Svc (RFC 7838), TLS 1.3 (RFC 8446) with ALPN (RFC 7301), mutual TLS with X.509
 peer identity (RFC 5280) and PEM intake (RFC 7468), problem+json (RFC 9457), multipart forms
-(RFC 7578), JWT verification (RFC 7519), and HKDF (RFC 5869).
+(RFC 7578), and JWT verification (RFC 7519).
 
 Security hardening is traced to its RFC §/CVE in `docs/Security.md` (e.g. HTTP/2 Rapid
 Reset CVE-2023-44487, CONTINUATION flood CVE-2024-27316, request smuggling, decompression bombs).
