@@ -53,134 +53,40 @@ public struct MultipartFormData: Sendable, Equatable {
 
     /// Parses a `multipart/form-data` body delimited by `boundary` (RFC 7578 §4 / RFC 2046 §5.1).
     ///
-    /// Returns `nil` if the body has no valid opening or closing delimiter; a part missing a
-    /// `Content-Disposition` `name` is skipped. Lenient and trap-free.
-    public static func parse(_ body: [UInt8], boundary: String) -> Self? {
-        let crlf: [UInt8] = [0x0D, 0x0A]
-        let delimiter = crlf + Array("--\(boundary)".utf8)  // "\r\n--boundary"
-        // Prepend CRLF so the opening "--boundary" matches the same delimiter as the inner ones.
-        let data = crlf + body
-        guard var range = firstRange(of: delimiter, in: data, from: 0) else {
+    /// Returns `nil` if `boundary` is outside the RFC 2046 §5.1.1 grammar, if the body has no valid
+    /// opening or closing delimiter, or if it breaches `limits`; a part missing a
+    /// `Content-Disposition` `name` is skipped. Lenient and trap-free — a malformed or hostile body
+    /// returns `nil` rather than trapping.
+    public static func parse(
+        _ body: [UInt8],
+        boundary: String,
+        limits: MultipartLimits = .default
+    ) -> Self? {
+        guard let validated = MultipartBoundary(boundary) else {
             return nil
         }
-        var parts: [Part] = []
-        while true {
-            let after = range.upperBound
-            // A closing delimiter is "--boundary--": two dashes follow the boundary.
-            if after + 1 < data.count, data[after] == 0x2D, data[after + 1] == 0x2D {
-                return Self(parts: parts)
-            }
-            // Otherwise CRLF follows the boundary line; the part runs to the next delimiter.
-            guard let lineEnd = firstRange(of: crlf, in: data, from: after)?.upperBound,
-                let next = firstRange(of: delimiter, in: data, from: lineEnd)
-            else {
-                return nil  // no terminating delimiter — malformed
-            }
-            if let part = parsePart(Array(data[lineEnd ..< next.lowerBound])) {
-                parts.append(part)
-            }
-            range = next
+        return body.withUnsafeBytes { raw in
+            var parser = MultipartParser(body: raw.bytes, boundary: validated, limits: limits)
+            return parser.parse()
         }
     }
 
     /// The `boundary` parameter of a `multipart/form-data` `Content-Type` value (RFC 7578 §4.1), or nil.
+    ///
+    /// Returns `nil` when the parameter is absent *or* when its value is outside the RFC 2046 §5.1.1
+    /// `boundary` grammar, so a caller can never hand ``parse(_:boundary:)`` an unusable delimiter.
     public static func boundary(ofContentType value: String) -> String? {
-        parameter("boundary", in: value)
-    }
-
-    /// Parses one part's `header section CRLF CRLF body` into a ``Part`` (RFC 7578 §4.2); nil if it has
-    /// no `Content-Disposition` `name`.
-    private static func parsePart(_ content: [UInt8]) -> Part? {
-        let blankLine: [UInt8] = [0x0D, 0x0A, 0x0D, 0x0A]
-        guard let headerEnd = firstRange(of: blankLine, in: content, from: 0) else {
-            return nil
-        }
-        let headers = parseHeaders(Array(content[0 ..< headerEnd.lowerBound]))
-        guard let disposition = headers["content-disposition"],
-            let name = parameter("name", in: disposition)
+        guard let candidate = parameter("boundary", in: value),
+            MultipartBoundary(candidate) != nil
         else {
             return nil
         }
-        return Part(
-            name: name,
-            filename: parameter("filename", in: disposition),
-            contentType: headers["content-type"],
-            body: Array(content[headerEnd.upperBound...])
-        )
-    }
-
-    /// Parses a part's header lines (`Name: value`, CRLF-separated) into lowercase-keyed pairs.
-    private static func parseHeaders(_ bytes: [UInt8]) -> [String: String] {
-        var headers: [String: String] = [:]
-        // Split on the LF byte (then drop a trailing CR) rather than `String.split(separator:)`, which is
-        // ambiguous for a "\n" literal and was silently not splitting CRLF-joined header lines.
-        for lineBytes in bytes.split(separator: 0x0A, omittingEmptySubsequences: true) {
-            let line = String(
-                decoding: lineBytes.last == 0x0D ? lineBytes.dropLast() : lineBytes,
-                as: Unicode.UTF8.self
-            )
-            guard let colon = line.firstIndex(of: ":") else {
-                continue
-            }
-            let name = trimmed(line[..<colon]).lowercased()
-            headers[name] = trimmed(line[line.index(after: colon)...])
-        }
-        return headers
+        return candidate
     }
 
     /// The value of the `name=` parameter in a header value (e.g. `form-data; name="x"`), unquoted; nil
     /// if absent.
     private static func parameter(_ name: String, in value: String) -> String? {
-        for segment in value.split(separator: ";") {
-            let token = segment.drop { $0 == " " || $0 == "\t" }
-            guard token.lowercased().hasPrefix("\(name)=") else {
-                continue
-            }
-            var raw = token.dropFirst(name.count + 1)
-            if raw.hasPrefix("\"") {
-                raw = raw.dropFirst()
-                if let close = raw.firstIndex(of: "\"") {
-                    raw = raw[..<close]
-                }
-            }
-            return String(raw)
-        }
-        return nil
-    }
-
-    /// `slice` with leading and trailing ASCII spaces/tabs removed.
-    private static func trimmed(_ slice: Substring) -> String {
-        let leading = slice.drop { $0 == " " || $0 == "\t" }
-        var end = leading.endIndex
-        while end > leading.startIndex {
-            let prior = leading.index(before: end)
-            guard leading[prior] == " " || leading[prior] == "\t" else {
-                break
-            }
-            end = prior
-        }
-        return String(leading[..<end])
-    }
-
-    /// The first range of `needle` in `haystack` at or after `start`, or nil (a small substring search).
-    private static func firstRange(
-        of needle: [UInt8], in haystack: [UInt8], from start: Int
-    ) -> Range<Int>? {
-        guard !needle.isEmpty, haystack.count - start >= needle.count else {
-            return nil
-        }
-        let last = haystack.count - needle.count
-        var index = start
-        while index <= last {
-            var matched = 0
-            while matched < needle.count, haystack[index + matched] == needle[matched] {
-                matched += 1
-            }
-            if matched == needle.count {
-                return index ..< (index + needle.count)
-            }
-            index += 1
-        }
-        return nil
+        MultipartParameters.value(of: name, in: value)
     }
 }
