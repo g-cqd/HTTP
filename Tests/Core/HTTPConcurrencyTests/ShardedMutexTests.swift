@@ -88,6 +88,22 @@ func shardingNeverRaisesTheGlobalBound(capacity: Int, shards: Int) {
     #expect(map.totalCount <= capacity)
 }
 
+@Test(
+    "a disabled (zero or negative) capacity retains nothing",
+    arguments: [0, -1, -1_000]
+)
+func disabledCapacityRetainsNothing(capacity: Int) {
+    // A caller asking for a *disabled* cache must get one. Clamping the per-shard division up to one
+    // turned `capacity: 0` into "hold exactly one entry", so a deployment that switched a cache off
+    // still retained an attacker-chosen key (CWE-400, the bound not meaning what it advertises).
+    let map = SharedBoundedLRU<Int, Int>(capacity: capacity, shards: 8)
+    for key in 0 ..< 64 {
+        #expect(map.withShard(for: key) { $0.insert(key, forKey: key) } == .rejected)
+    }
+    #expect(map.totalCount == 0)
+    #expect(map.withShard(for: 0) { $0.value(forKey: 0) } == nil)
+}
+
 @Test("a reject-overflow map refuses newcomers instead of evicting incumbents")
 func rejectOverflowSurvivesSharding() {
     let map = SharedBoundedLRU<Int, Int>(capacity: 8, overflow: .reject, shards: 1)
