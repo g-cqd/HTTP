@@ -72,10 +72,18 @@ struct MultipartBoundary {
     /// Built in `O(needle.count)` by the standard construction: the table is its own matcher, extending
     /// the current border when the next byte agrees and retreating through the already-built prefix
     /// when it does not.
+    ///
+    /// The outer loop is a `while` and NOT `for index in 1 ..< n`. `for-in` over a `Range` goes through
+    /// `IndexingIterator.next()`, which costs one heap allocation per iteration in an unoptimized build
+    /// — every `swift test` run. Release specializes it away, so this is not a production cost; it is a
+    /// *measurement* cost, and this table is built once per parse over the delimiter. As a `for`, the
+    /// multipart allocation oracle scaled 1:1 with the boundary length (a 37-octet browser boundary cost
+    /// 55 allocations against 19 for a 1-octet one) and drowned the per-part copies it exists to catch.
     static func failureTable(_ needle: [UInt8]) -> [UInt8] {
         var table = [UInt8](repeating: 0, count: needle.count + 1)
         var border = 0
-        for index in 1 ..< max(needle.count, 1) {
+        var index = 1
+        while index < max(needle.count, 1) {
             while border > 0, needle[index] != needle[border] {
                 border = Int(table[border])
             }
@@ -83,6 +91,7 @@ struct MultipartBoundary {
                 border += 1
             }
             table[index + 1] = UInt8(truncatingIfNeeded: border)
+            index += 1
         }
         return table
     }

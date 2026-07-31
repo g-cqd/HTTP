@@ -18,12 +18,12 @@ import Testing
 @testable import HTTPCore
 
 /// A body of `count` parts, each with a full header set and a `size`-byte payload.
-private func form(parts count: Int, size: Int) -> [UInt8] {
+private func form(parts count: Int, size: Int, boundary: String = "B") -> [UInt8] {
     let head =
-        "--B\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.txt\"\r\n"
+        "--\(boundary)\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.txt\"\r\n"
         + "Content-Type: text/plain\r\n\r\n"
     let part = head + String(repeating: "x", count: size) + "\r\n"
-    return Array((String(repeating: part, count: count) + "--B--\r\n").utf8)
+    return Array((String(repeating: part, count: count) + "--\(boundary)--\r\n").utf8)
 }
 
 @Test("a parse allocates only what the parts retain — nothing per header line, nothing per body")
@@ -47,6 +47,39 @@ func allocationCountIsIndependentOfBodySize() {
         return  // allocation counting is unavailable on this platform
     }
     #expect(largeCount == smallCount)
+}
+
+@Test("allocation count is independent of BOUNDARY length — the KMP table is not built per octet")
+func allocationCountIsIndependentOfBoundaryLength() {
+    // The suite's other cases all use the 1-octet boundary "B", which hid a cost that scales with the
+    // delimiter rather than the body: `MultipartBoundary.failureTable` built its KMP table with a
+    // `for index in 1 ..< n`, one heap allocation per iteration in the unoptimized test build. A real
+    // browser boundary is ~37 octets (`----WebKitFormBoundary…`), so the parse a server actually runs
+    // cost 55 allocations where this suite measured 19 — and the gap grew with any boundary a peer
+    // chose. Both spellings are free in release; this guards the oracle above, not production.
+    // Bound to `let`s: building these `String`s inside a measured closure would charge the
+    // measurement for the literal itself, which is what it is trying to hold constant.
+    let shortBoundary = "B"
+    let browserBoundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    let maximalBoundary = String(repeating: "z", count: 70)
+    let short = form(parts: 8, size: 64, boundary: shortBoundary)
+    let browser = form(parts: 8, size: 64, boundary: browserBoundary)
+    let maximal = form(parts: 8, size: 64, boundary: maximalBoundary)
+    _ = MultipartFormData.parse(short, boundary: shortBoundary)
+    _ = MultipartFormData.parse(browser, boundary: browserBoundary)
+    _ = MultipartFormData.parse(maximal, boundary: maximalBoundary)
+    let shortCount = mallocDelta { _ = MultipartFormData.parse(short, boundary: shortBoundary) }
+    let browserCount = mallocDelta {
+        _ = MultipartFormData.parse(browser, boundary: browserBoundary)
+    }
+    let maximalCount = mallocDelta {
+        _ = MultipartFormData.parse(maximal, boundary: maximalBoundary)
+    }
+    guard let shortCount, let browserCount, let maximalCount else {
+        return  // allocation counting is unavailable on this platform
+    }
+    #expect(browserCount == shortCount)
+    #expect(maximalCount == shortCount)
 }
 
 @Test("a rejected body allocates nothing per part: the limit is checked before the copy")
