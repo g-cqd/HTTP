@@ -40,6 +40,14 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// is the topology that shipped before this knob existed.
     let handlerExecution: HandlerExecutionPolicy
 
+    /// The per-route service-time record behind ``HandlerExecutionPolicy/adaptive(threshold:)``, or
+    /// `nil` under a policy that decides without measuring.
+    ///
+    /// `nil` for ``HandlerExecutionPolicy/inline`` and ``HandlerExecutionPolicy/concurrent`` so those
+    /// paths allocate nothing and consult nothing — the shared, synchronized state exists only when
+    /// something actually asked for it.
+    let handlerGate: HandlerExecutionGate?
+
     let clock: C
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
     let altSvc = Mutex<String?>(nil)
@@ -95,6 +103,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         self.snapshot = Mutex(ResponderSnapshot(responder, generation: 0))
         self.limits = limits
         self.handlerExecution = handlerExecution
+        if case .adaptive(let threshold) = handlerExecution {
+            self.handlerGate = HandlerExecutionGate(threshold: threshold)
+        }
+        else {
+            self.handlerGate = nil
+        }
         self.clock = clock
         self.admission = ConnectionAdmission(
             capacity: ConnectionAdmission.Capacity(

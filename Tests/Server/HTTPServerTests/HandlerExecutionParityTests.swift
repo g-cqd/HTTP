@@ -21,8 +21,14 @@ import Testing
 
 @Suite("Handler execution — every policy serves an identical response (CR-F7)")
 struct HandlerExecutionParityTests {
-    /// Every policy under test.
-    static let policies: [HandlerExecutionPolicy] = [.inline, .concurrent]
+    /// Every policy under test, shared by the ordering and reactor-affinity suites.
+    ///
+    /// `.adaptive` appears at a threshold of zero — the arm that actually hops, since no handler runs
+    /// in zero time — rather than at a realistic threshold that would leave it indistinguishable from
+    /// `.inline` on these tiny handlers and prove nothing.
+    static let policies: [HandlerExecutionPolicy] = [
+        .inline, .concurrent, .adaptive(threshold: .zero)
+    ]
 
     private static let bodySize = 24
     private static let expected = "tag=abc bytes=\(bodySize)"

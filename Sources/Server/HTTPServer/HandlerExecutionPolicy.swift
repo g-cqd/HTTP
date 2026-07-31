@@ -56,4 +56,18 @@ public enum HandlerExecutionPolicy: Sendable, Equatable {
     /// > example uses to disable an outer preference, and the preference is restored when the scoped
     /// > operation returns, which is what puts the response write back on the owning reactor.
     case concurrent
+
+    /// Run each route ``inline`` until its own measured service time exceeds `threshold`, then
+    /// ``concurrent``.
+    ///
+    /// The compromise between the two: a trivial route keeps the no-hop fast path, while a route that
+    /// turns out to be expensive stops holding a reactor for everything else on its shard. Service
+    /// time is measured against a monotonic clock per matched route and judged over a rolling window,
+    /// so one slow request does not move a route permanently and a route that becomes cheap again
+    /// returns to the inline path — see ``HandlerExecutionGate`` for the exact rule.
+    ///
+    /// A `threshold` of `.zero` moves every route off the reactor from its second request onward,
+    /// since no handler runs in zero time; that is a legitimate way to spell "`.concurrent`, but pay
+    /// the hop only for routes actually being used".
+    case adaptive(threshold: Duration)
 }

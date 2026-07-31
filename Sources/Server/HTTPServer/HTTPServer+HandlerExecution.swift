@@ -48,7 +48,37 @@ extension HTTPServer {
                 return await responder.respond(to: request, body: body, context: context)
             case .concurrent:
                 return await Self.hopped(responder, request, body, context)
+            case .adaptive:
+                return await adaptively(responder, request, body, context, following: plan)
         }
+    }
+
+    /// Runs the handler where this route's measured service time says it belongs, and files the
+    /// result of that run against the route.
+    ///
+    /// The two timestamps bracket the handler and nothing else, so the measurement is handler time
+    /// rather than reactor time — a route is judged on what it costs, not on what the connection
+    /// around it was doing. Both are plain monotonic reads; the gate's lock is taken twice per
+    /// request on this opt-in path and never across the `await`.
+    private func adaptively(
+        _ responder: any HTTPResponder,
+        _ request: HTTPRequest,
+        _ body: RequestBody,
+        _ context: RequestContext,
+        following plan: DispatchPlan
+    ) async -> ServerResponse {
+        guard let handlerGate else {
+            return await responder.respond(to: request, body: body, context: context)
+        }
+        let key = RouteExecutionKey(plan.match) ?? .unrouted
+        let hops = handlerGate.hops(key)
+        let started = handlerGate.timestamp()
+        let response =
+            hops
+            ? await Self.hopped(responder, request, body, context)
+            : await responder.respond(to: request, body: body, context: context)
+        handlerGate.record(handlerGate.timestamp() - started, for: key)
+        return response
     }
 
     /// Runs `responder` on the global concurrent executor, restoring the caller's preference on exit.
