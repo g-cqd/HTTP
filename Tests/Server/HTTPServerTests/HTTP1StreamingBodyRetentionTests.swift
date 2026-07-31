@@ -244,6 +244,55 @@ struct HTTP1StreamingBodyRetentionTests {
     }
 
     @Test(
+        "a large buffered upload does not leave its peak capacity on the connection",
+        .timeLimit(.minutes(1)))
+    func bufferedUploadReleasesItsPeakCapacity() async {
+        // The *buffered* path is the one that legitimately accumulates a body in the connection read
+        // buffer — `frameBody` needs the whole thing to build a `ParsedRequest`. Streaming no longer
+        // touches that buffer at all, so this is the only remaining way to leave a peak behind, and
+        // `removeAll(keepingCapacity: true)` would hand it to every later request on the connection.
+        let uploadSize = 8 << 20
+        let router = Router {
+            Route.post("/upload") { _, body, _ in .text("got \(await body.collect().count)") }
+            Route.get("/after") { _, _, _ in .text("AFTER") }
+        }
+        let head = Array(
+            "POST /upload HTTP/1.1\r\nHost: x\r\nContent-Length: \(uploadSize)\r\n\r\n".utf8
+        )
+        let connection = SynthesizedUploadConnection(
+            id: TransportConnectionID(1),
+            head: head,
+            bodyCount: uploadSize,
+            framing: .contentLength,
+            tail: Array("GET /after HTTP/1.1\r\nHost: x\r\n\r\n".utf8)
+        )
+        let server = HTTPServer(transport: FakeTransport(), responder: router)
+        var buffer: [UInt8] = []
+        var start = 0
+        var responseBuffer: [UInt8] = []
+
+        #expect(
+            await serveOne(
+                server,
+                on: connection,
+                buffer: &buffer,
+                start: &start,
+                responseBuffer: &responseBuffer
+            ))
+        // The peak itself is legitimate and expected — pinning it keeps this test honest about which
+        // case it exercises.
+        #expect(buffer.capacity > server.limits.keepAliveBufferCapacity)
+
+        _ = await serveOne(
+            server, on: connection, buffer: &buffer, start: &start, responseBuffer: &responseBuffer
+        )
+        #expect(buffer.capacity <= server.limits.keepAliveBufferCapacity)
+        let wire = String(decoding: await connection.sentBytes(), as: Unicode.UTF8.self)
+        #expect(wire.contains("got \(uploadSize)"))
+        #expect(wire.hasSuffix("AFTER"))
+    }
+
+    @Test(
         "a streamed chunked body over the route limit is refused mid-stream (RFC 9112 §7.1)",
         .timeLimit(.minutes(1)))
     func chunkedStreamedBodyStillHonorsTheRouteLimit() async {

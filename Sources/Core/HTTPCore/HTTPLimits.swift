@@ -171,9 +171,10 @@ public struct HTTPLimits: Sendable, Equatable {
     ///
     /// A *buffered* request body is accumulated in that buffer, so one large upload leaves an
     /// upload-sized allocation behind — and `removeAll(keepingCapacity:)` would then hand that peak to
-    /// every later request on the connection, for as long as the peer keeps it open. Above this
-    /// working size the storage is dropped and re-reserved instead: one allocation on the rare large
-    /// request, against unbounded per-connection retention for the common small one (CWE-401-shaped).
+    /// every later request on the connection, for as long as the peer keeps it open. Past this ceiling
+    /// the storage is released instead and grows back geometrically, as it did on the connection's
+    /// first request: a handful of allocations on the rare large request, against unbounded
+    /// per-connection retention for the common small one (CWE-401-shaped).
     public var keepAliveBufferCapacity: Int
 
     /// The enforced streaming chunked receive window: ``requestBodyWindowSize``, floored so a maximal

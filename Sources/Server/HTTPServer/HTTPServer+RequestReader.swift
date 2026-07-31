@@ -29,20 +29,7 @@ extension HTTPServer where C.Duration == Duration {
         start: inout Int,
         responseBuffer: inout [UInt8]
     ) async -> Bool {
-        // Reclaim the consumed prefix before reading the next request (audit L3 — the keep-alive ring
-        // buffer): free the whole buffer when it is fully drained (the common non-pipelined case — O(1),
-        // capacity kept), or compact a large dead prefix so a pipelined stream cannot grow it unbounded.
-        // Between pipelined requests we deliberately do *not* shift — advancing `start` past a consumed
-        // request is O(1), the win over the old per-request `removeFirst(consumed)` memmove.
-        if start == buffer.count {
-            buffer.removeAll(keepingCapacity: true)
-            start = 0
-        }
-        else if start >= 16_384 {
-            buffer.removeFirst(start)
-            start = 0
-        }
-
+        reclaim(&buffer, start: &start)
         let outcome: ReadOutcome
         do {
             outcome = try await readRequest(
@@ -159,6 +146,45 @@ extension HTTPServer where C.Duration == Duration {
         return !Self.shouldClose(
             version: framed.parsed.version, request: request, response: head
         )
+    }
+
+    /// Reclaims the keep-alive read buffer before the next request is read.
+    ///
+    /// First the consumed prefix (audit L3 — the keep-alive ring buffer): free the whole buffer when it
+    /// is fully drained (the common non-pipelined case — O(1), storage kept), or shift out a large dead
+    /// prefix so a pipelined stream cannot grow it without bound. Between pipelined requests we
+    /// deliberately do *not* shift — advancing `start` is O(1), the win over a `removeFirst` memmove per
+    /// request.
+    ///
+    /// Then the *storage*, which neither of those releases: `removeAll(keepingCapacity:)` and
+    /// `removeFirst` both keep the array's buffer, by design. A buffered request body is accumulated
+    /// here (`frameBody` needs the whole thing to build a `ParsedRequest`), so one large upload sizes
+    /// this array to the upload — and keeping that peak hands it to every later request for as long as
+    /// the peer holds the connection open, turning a one-off allocation into permanent per-connection
+    /// residency. An idle keep-alive connection would sit on a gibibyte because it once carried one
+    /// (audit CR-F5). So past the configured ceiling the storage is *released* and the few live octets
+    /// are moved into a fresh array, which then grows back geometrically exactly as it did on this
+    /// connection's first request. Deliberately not `reserveCapacity(ceiling)`: reserving speculates
+    /// that the next request is large when it almost never is, and the allocator rounds the reservation
+    /// up (65,536 becomes 81,888 here), so the ceiling would not actually be one.
+    private func reclaim(_ buffer: inout [UInt8], start: inout Int) {
+        if start == buffer.count {
+            buffer.removeAll(keepingCapacity: true)
+            start = 0
+        }
+        else if start >= 16_384 {
+            buffer.removeFirst(start)
+            start = 0
+        }
+        let ceiling = limits.keepAliveBufferCapacity
+        // `count <= ceiling` is a second condition, not an assumption: a pipelined remainder larger
+        // than the ceiling would only grow straight back, so leave it alone until it drains.
+        guard buffer.capacity > ceiling, buffer.count <= ceiling else {
+            return
+        }
+        var released: [UInt8] = []
+        released.append(contentsOf: buffer)
+        buffer = released
     }
 
     /// Caps an unterminated header section (431, throwing) and honors `Expect: 100-continue` once the
