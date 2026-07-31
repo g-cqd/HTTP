@@ -18,7 +18,7 @@ public struct JWTMiddleware: HTTPMiddleware {
     /// The default clock: the current wall-clock time in epoch seconds (keeps `Foundation` internal).
     public static let systemNow: @Sendable () -> Double = { Date().timeIntervalSince1970 }
 
-    private let key: JWT.Key
+    private let keys: [JWT.Key]
     private let audience: String?
     private let issuer: String?
     private let leeway: Double
@@ -34,7 +34,33 @@ public struct JWTMiddleware: HTTPMiddleware {
         leeway: Double = 0,
         now: @escaping @Sendable () -> Double = Self.systemNow
     ) {
-        self.key = key
+        self.keys = [key]
+        self.audience = audience
+        self.issuer = issuer
+        self.leeway = leeway
+        self.now = now
+    }
+
+    /// Creates a rotation-capable middleware accepting a token signed by any of `keys`, or nil if
+    /// `keys` is empty or they are not all bound to the same JWS algorithm.
+    ///
+    /// Rotation: put the new key first and keep the retired one until every token issued under it has
+    /// expired. The same-algorithm requirement is what preserves the algorithm-confusion defense — a
+    /// key set spanning two algorithms would make the verifier accept whichever `alg` the *token*
+    /// names, which is exactly the property RFC 7515 §10.7 warns against.
+    public init?(
+        keys: [JWT.Key],
+        audience: String? = nil,
+        issuer: String? = nil,
+        leeway: Double = 0,
+        now: @escaping @Sendable () -> Double = Self.systemNow
+    ) {
+        guard let algorithm = keys.first?.algorithm,
+            keys.allSatisfy({ $0.algorithm == algorithm })
+        else {
+            return nil
+        }
+        self.keys = keys
         self.audience = audience
         self.issuer = issuer
         self.leeway = leeway
@@ -48,13 +74,7 @@ public struct JWTMiddleware: HTTPMiddleware {
         context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        guard let token = Self.bearerToken(request) else {
-            return challenge()
-        }
-        let result = JWT.verify(
-            token, key: key, audience: audience, issuer: issuer, now: now(), leeway: leeway
-        )
-        guard case .success(let claims) = result else {
+        guard let token = Self.bearerToken(request), let claims = verifiedClaims(token) else {
             return challenge()
         }
         var request = request
@@ -62,6 +82,23 @@ public struct JWTMiddleware: HTTPMiddleware {
             _ = request.headerFields.setValue(subject, for: .xAuthSubject)
         }
         return await next.respond(to: request, body: body, context: context)
+    }
+
+    /// The claims of `token` under the first key that verifies it, or nil if none does.
+    ///
+    /// The clock is read once, so every key sees the same `now` and a token cannot straddle the
+    /// expiry boundary between two attempts.
+    private func verifiedClaims(_ token: Substring) -> JWT.Claims? {
+        let instant = now()
+        for key in keys {
+            let result = JWT.verify(
+                token, key: key, audience: audience, issuer: issuer, now: instant, leeway: leeway
+            )
+            if case .success(let claims) = result {
+                return claims
+            }
+        }
+        return nil
     }
 
     /// A `401` carrying the `Bearer` challenge (RFC 6750 §3).

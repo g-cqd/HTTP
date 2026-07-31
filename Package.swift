@@ -165,10 +165,15 @@ let package = Package(
         .package(url: "https://github.com/swift-server/swift-prometheus.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.1.0"),
         .package(url: "https://github.com/apple/swift-service-context.git", from: "1.1.0"),
-        // apple/swift-crypto (gap G7) — JWT signature verification in the isolated `HTTPAuth` module:
-        // HS256 via `Crypto`'s HMAC, ES256 via P256, RS256 via `_CryptoExtras`' `_RSA`. Confined to
-        // `HTTPAuth`, so a bare-server consumer never resolves it (`_CryptoExtras` pulls a BoringSSL
-        // graph). apple/* — allowed by CLAUDE.md.
+        // apple/swift-crypto (gap G7) — every keyed primitive on a security boundary. Two products,
+        // deliberately scoped differently:
+        //   `Crypto`         — `HTTPServer` (the session cookie's HMAC-SHA256) and `HTTPAuth` (JWT
+        //                      HS256 + the Basic-auth blinded comparison). Reaching a bare-server
+        //                      consumer is the accepted cost of not shipping in-house SHA-256/HMAC on
+        //                      a signing path.
+        //   `_CryptoExtras`  — `HTTPAuth` ONLY (RS256 via `_RSA`). It pulls a BoringSSL graph, so it
+        //                      stays confined to the module that actually needs RSA.
+        // apple/* — allowed by CLAUDE.md.
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         // The one first-party dependency: shared SIMD byte kernels (see `adFoundationDependency`).
         adFoundationDependency()
@@ -176,6 +181,10 @@ let package = Package(
     targets: [
         // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
         // Zero external dependencies, no I/O — the self-contained substrate every engine builds on.
+        // No crypto either: the keyed primitives it used to host (SHA-256/HMAC/HKDF) live on the
+        // session and JWT signing boundaries, so they moved to swift-crypto in `HTTPServer`/`HTTPAuth`
+        // rather than being carried here. `RandomToken` needs none — `SystemRandomNumberGenerator`
+        // draws from the platform CSPRNG.
         .target(
             name: "HTTPCore",
             dependencies: [
@@ -371,6 +380,10 @@ let package = Package(
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
                 "HTTPConcurrency",
+                // The session cookie's HMAC-SHA256 is a security boundary, so it uses the audited
+                // first-party implementation rather than an in-house one (see the `swift-crypto`
+                // dependency comment). `Crypto` only — never `_CryptoExtras`.
+                .product(name: "Crypto", package: "swift-crypto"),
                 // Linux gzip coding (zlib); on Darwin gzip is Apple's Compression, so this stays off the graph.
                 .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
             ],
@@ -442,7 +455,7 @@ let package = Package(
         .testTarget(
             name: "HTTPAuthTests",
             dependencies: [
-                "HTTPAuth", "HTTPServer", "HTTPCore",
+                "HTTPAuth", "HTTPServer", "HTTPCore", "HTTPTestSupport",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "_CryptoExtras", package: "swift-crypto")
             ],

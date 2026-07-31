@@ -34,6 +34,9 @@ struct JWTTests {
 
     private let hsHeader = #"{"alg":"HS256","typ":"JWT"}"#
 
+    /// The HS256 verification key for ``secret``, built from the shared 32-octet test secret.
+    private var hsKey: JWT.Key { .hs256(SymmetricKey(data: secret)) }
+
     @Test("a valid HS256 token verifies and exposes its claims")
     func validHS256() {
         let token = TokenFactory.hs256(
@@ -43,7 +46,7 @@ struct JWTTests {
         )
         let result = JWT.verify(
             token,
-            key: .hs256(secret),
+            key: hsKey,
             audience: "app",
             issuer: "me",
             now: 1_000
@@ -90,7 +93,7 @@ struct JWTTests {
     @Test("an expired token is rejected (exp < now)")
     func expired() {
         let token = TokenFactory.hs256(header: hsHeader, payload: #"{"exp":500}"#, secret: secret)
-        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.expired))
+        #expect(JWT.verify(token, key: hsKey, now: 1_000) == .failure(.expired))
     }
 
     @Test("a not-yet-valid token is rejected (nbf > now)")
@@ -98,21 +101,21 @@ struct JWTTests {
         let token = TokenFactory.hs256(
             header: hsHeader, payload: #"{"nbf":1500,"exp":2000}"#, secret: secret
         )
-        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.notYetValid))
+        #expect(JWT.verify(token, key: hsKey, now: 1_000) == .failure(.notYetValid))
     }
 
     @Test("a token without exp is rejected by default (unbounded lifetime)")
     func missingExpiration() {
         let token = TokenFactory.hs256(header: hsHeader, payload: #"{"sub":"x"}"#, secret: secret)
         #expect(
-            JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.missingExpiration))
+            JWT.verify(token, key: hsKey, now: 1_000) == .failure(.missingExpiration))
     }
 
     @Test("a token without exp is accepted when requireExpiration is disabled")
     func missingExpirationOptOut() {
         let token = TokenFactory.hs256(header: hsHeader, payload: #"{"sub":"x"}"#, secret: secret)
         let result = JWT.verify(
-            token, key: .hs256(secret), now: 1_000, requireExpiration: false
+            token, key: hsKey, now: 1_000, requireExpiration: false
         )
         guard case .success(let claims) = result else {
             Issue.record("expected success with requireExpiration disabled")
@@ -129,7 +132,7 @@ struct JWTTests {
             secret: secret
         )
         #expect(
-            JWT.verify(token, key: .hs256(secret), now: 1_000)
+            JWT.verify(token, key: hsKey, now: 1_000)
                 == .failure(.unsupportedCriticalHeader))
     }
 
@@ -138,22 +141,22 @@ struct JWTTests {
         let token = TokenFactory.hs256(
             header: hsHeader, payload: #"{"iat":1500,"exp":2000}"#, secret: secret
         )
-        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.notYetValid))
+        #expect(JWT.verify(token, key: hsKey, now: 1_000) == .failure(.notYetValid))
     }
 
     @Test("a non-finite exp is rejected, not treated as eternal")
     func nonFiniteExpiration() {
         let token = TokenFactory.hs256(header: hsHeader, payload: #"{"exp":1e400}"#, secret: secret)
-        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.malformed))
+        #expect(JWT.verify(token, key: hsKey, now: 1_000) == .failure(.malformed))
     }
 
     @Test("a non-strict base64url segment is rejected (JWS malleability)")
     func nonStrictBase64url() {
         // A '+' (standard alphabet) and a '=' (padding) are not valid base64url and must be refused.
         #expect(
-            JWT.verify("aa+a.bbbb.cccc", key: .hs256(secret), now: 1_000) == .failure(.malformed))
+            JWT.verify("aa+a.bbbb.cccc", key: hsKey, now: 1_000) == .failure(.malformed))
         #expect(
-            JWT.verify("aaaa.bb=b.cccc", key: .hs256(secret), now: 1_000) == .failure(.malformed))
+            JWT.verify("aaaa.bb=b.cccc", key: hsKey, now: 1_000) == .failure(.malformed))
     }
 
     @Test("a signature under the wrong key is rejected")
@@ -163,7 +166,7 @@ struct JWTTests {
             payload: #"{"exp":2000}"#,
             secret: Array("the-other-32-byte-long-hmac-key!".utf8)
         )
-        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.badSignature))
+        #expect(JWT.verify(token, key: hsKey, now: 1_000) == .failure(.badSignature))
     }
 
     @Test("a wrong audience is rejected")
@@ -171,7 +174,7 @@ struct JWTTests {
         let token = TokenFactory.hs256(
             header: hsHeader, payload: #"{"aud":"other","exp":2000}"#, secret: secret
         )
-        let result = JWT.verify(token, key: .hs256(secret), audience: "app", now: 1_000)
+        let result = JWT.verify(token, key: hsKey, audience: "app", now: 1_000)
         #expect(result == .failure(.audienceMismatch))
     }
 
@@ -181,14 +184,14 @@ struct JWTTests {
             header: hsHeader, payload: #"{"iss":"evil","exp":2000}"#, secret: secret
         )
         #expect(
-            JWT.verify(token, key: .hs256(secret), issuer: "me", now: 1_000)
+            JWT.verify(token, key: hsKey, issuer: "me", now: 1_000)
                 == .failure(.issuerMismatch))
     }
 
     @Test("alg:\"none\" is rejected before any key is used")
     func algNone() {
         let token = TokenFactory.unsigned(header: #"{"alg":"none"}"#, payload: #"{"exp":2000}"#)
-        #expect(JWT.verify(token, key: .hs256(secret), now: 1_000) == .failure(.algorithmMismatch))
+        #expect(JWT.verify(token, key: hsKey, now: 1_000) == .failure(.algorithmMismatch))
     }
 
     @Test("algorithm confusion: an HS256 token is rejected by an ES256 verifier")

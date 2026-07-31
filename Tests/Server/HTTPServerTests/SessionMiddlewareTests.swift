@@ -23,8 +23,12 @@ struct SessionMiddlewareTests {
 
     private func middleware(
         generate: @escaping @Sendable () -> String = { "sid-1" }
-    ) -> SessionMiddleware {
-        SessionMiddleware(key: key, isSecure: false, generate: generate)
+    ) throws -> SessionMiddleware {
+        SessionMiddleware(
+            keys: try #require(SessionSigningKeys(current: key)),
+            isSecure: false,
+            generate: generate
+        )
     }
 
     private func request(cookie: String? = nil) -> HTTPRequest {
@@ -36,8 +40,8 @@ struct SessionMiddlewareTests {
     }
 
     @Test("issues a signed session cookie when none is present")
-    func issuesCookie() async {
-        let response = await middleware().respond(to: request(), body: [], next: echo)
+    func issuesCookie() async throws {
+        let response = try await middleware().respond(to: request(), body: [], next: echo)
         let setCookie = response.head.headerFields[.setCookie] ?? ""
         #expect(setCookie.hasPrefix("session=sid-1."))  // <id>.<signature>
         #expect(setCookie.contains("HttpOnly"))
@@ -46,19 +50,21 @@ struct SessionMiddlewareTests {
     }
 
     @Test("a valid signed cookie continues the session without re-issuing")
-    func continuesSession() async {
-        let issued = await middleware().respond(to: request(), body: [], next: echo)
+    func continuesSession() async throws {
+        let issued = try await middleware().respond(to: request(), body: [], next: echo)
         // Resend just the `session=<id>.<sig>` pair (drop the cookie attributes).
         let signed = String((issued.head.headerFields[.setCookie] ?? "").prefix { $0 != ";" })
-        let response = await middleware().respond(to: request(cookie: signed), body: [], next: echo)
+        let response = try await middleware()
+            .respond(to: request(cookie: signed), body: [], next: echo)
         #expect(response.head.headerFields[.setCookie] == nil)  // no new cookie issued
         #expect(response.head.headerFields[.xSessionID] == "sid-1")
     }
 
     @Test("a tampered cookie is rejected: a fresh session is issued, the tampered id not trusted")
-    func rejectsTampered() async {
+    func rejectsTampered() async throws {
         let tampered = request(cookie: "session=evil.AAAA")
-        let response = await middleware { "fresh" }.respond(to: tampered, body: [], next: echo)
+        let response = try await middleware { "fresh" }
+            .respond(to: tampered, body: [], next: echo)
         #expect(response.head.headerFields[.setCookie]?.hasPrefix("session=fresh.") == true)
         #expect(response.head.headerFields[.xSessionID] == "fresh")  // never "evil"
     }
