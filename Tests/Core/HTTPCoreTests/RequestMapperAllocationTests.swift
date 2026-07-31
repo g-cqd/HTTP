@@ -30,13 +30,36 @@ struct RequestMapperAllocationTests {
     func mapStaysWithinFloor() {
         // Warm up once so any one-time lazy init is not charged to the measured run.
         _ = try? RequestMapper.makeRequest(from: Self.fields) { _ in CancellationError() }
-        // Measured floor: 17 — the owned HTTPRequest the responder receives (its HTTPFields storage, the
-        // four pseudo-header values, and the request struct). It is *not* redundant lowercasing
-        // (HTTPFieldName already reuses an already-lowercase name) and the QPACK decode is a separate 6
-        // (QPACKAllocationTests). Most is irreducible without owning less of the escaping request; the
-        // ceiling guards against a re-introduced double-materialization on the receive path.
-        _ = expectAllocations(noMoreThan: 17) {
+        // Measured floor: 3 — the owned HTTPRequest's `HTTPFields` storage growth. The four
+        // pseudo-header values and the request struct cost nothing extra: the values are retained
+        // references to the decoder's existing `String`s, not fresh copies.
+        //
+        // This floor was pinned at 17 until the mapper's `for field in fields` became an indexed
+        // `while`. Fourteen of that 17 was `IndexingIterator.next()` traffic in the unoptimized test
+        // build — the oracle was mostly measuring itself, and a regression that doubled the real cost
+        // would have sailed under the ceiling. The tight 5 is what makes this a guard rather than a
+        // description; it leaves headroom for a toolchain difference and nothing else.
+        _ = expectAllocations(noMoreThan: 5) {
             _ = try? RequestMapper.makeRequest(from: Self.fields) { _ in CancellationError() }
         }
+    }
+
+    @Test("the mapping cost does not scale with the field count — no per-field iterator traffic")
+    func mapCostDoesNotScaleWithFieldCount() {
+        let many = Self.fields + (0 ..< 40).map { HeaderField(name: "x-pad-\($0)", value: "v") }
+        _ = try? RequestMapper.makeRequest(from: Self.fields) { _ in CancellationError() }
+        _ = try? RequestMapper.makeRequest(from: many) { _ in CancellationError() }
+        let few = mallocDelta {
+            _ = try? RequestMapper.makeRequest(from: Self.fields) { _ in CancellationError() }
+        }
+        let lots = mallocDelta {
+            _ = try? RequestMapper.makeRequest(from: many) { _ in CancellationError() }
+        }
+        guard let few, let lots else {
+            return  // allocation counting is unavailable on this platform
+        }
+        // 47 fields against 7 may cost a few more `HTTPFields` storage re-grows, but nothing
+        // proportional: a per-field allocation would put this ratio near 6.7x, not under 3x.
+        #expect(lots < few * 3)
     }
 }
