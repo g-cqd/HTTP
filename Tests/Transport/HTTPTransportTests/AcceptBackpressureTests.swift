@@ -27,11 +27,15 @@ import Testing
 
 @Suite("Accept backpressure — the ceiling bites at accept(2) (audit F8)")
 struct AcceptBackpressureTests {
-    /// The backbones whose accept loops route through the shared `AcceptGate` on this platform.
+    /// The backbones whose accept paths route through the shared `AcceptGate` on this platform.
     ///
     /// `.posixEpoll` is the Linux mirror of `.posixKqueue` and compiles to nothing here, so it cannot
-    /// be exercised on Darwin; it shares the same accept-loop shape and gate.
-    static let gatedBackbones: [TransportBackbone] = [.posixKqueue, .posixDispatch, .swiftSystem]
+    /// be exercised on Darwin; it shares the same accept-loop shape and gate. `.networkFramework` has
+    /// no readiness source to leave un-armed, so it throttles with `NWListener.newConnectionLimit`
+    /// instead — a different mechanism, the same two observable behaviors.
+    static let gatedBackbones: [TransportBackbone] = [
+        .posixKqueue, .posixDispatch, .swiftSystem, .networkFramework
+    ]
 
     @Test(
         "at the global ceiling the transport stops accepting, and resumes when slots free",
@@ -50,7 +54,9 @@ struct AcceptBackpressureTests {
 
         let accepted = AcceptCollector()
         let collector = Task { await accepted.drain(stream) }
-        let clients = (0 ..< capacity * 2).map { _ in Self.connect(to: port) }
+        // Three times the ceiling, so there is still a backlog to drain after the resume even if the
+        // backbone refused a connection or two at the moment it saturated.
+        let clients = (0 ..< capacity * 3).map { _ in Self.connect(to: port) }
         defer {
             for client in clients {
                 Darwin.close(client)
@@ -58,7 +64,7 @@ struct AcceptBackpressureTests {
         }
 
         _ = try await accepted.probe.wait(forAtLeast: capacity)
-        // Settle: if the transport were still draining into the stream, the extra four would land here.
+        // Settle: if the transport were still draining into the stream, the excess would land here.
         // A negative ("nothing more arrives") cannot be awaited on a probe, so this is a bounded wait.
         try await Task.sleep(for: .milliseconds(300))
         #expect(accepted.probe.count == capacity, "the accept stream carried more than the ceiling")
@@ -66,7 +72,7 @@ struct AcceptBackpressureTests {
         #expect(gate.isSaturated, "the gate must be latched so the transport stays suspended")
 
         // Free every slot: the gate crosses its hysteresis watermark and re-arms the accept source,
-        // which then drains the four connections still sitting in the listen(2) backlog.
+        // which then drains the connections still sitting in the listen(2) backlog.
         await accepted.releaseAll()
         _ = try await accepted.probe.wait(forAtLeast: capacity * 2)
         #expect(accepted.probe.count >= capacity * 2)
@@ -104,6 +110,7 @@ struct AcceptBackpressureTests {
 
         _ = try await accepted.probe.wait(forAtLeast: capacity)
         try await Task.sleep(for: .milliseconds(300))  // bounded wait: nothing more may be yielded
+
         #expect(accepted.probe.count == capacity, "a refused connection reached the accept stream")
         #expect(!gate.isSaturated, "a per-host rejection must not suspend the accept source")
 

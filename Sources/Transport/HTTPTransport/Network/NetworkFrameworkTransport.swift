@@ -48,6 +48,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
         /// The inbound-connection stream continuation, captured at ``start()`` so a reloaded listener's
         /// `newConnectionHandler` can yield into the same stream the server is already consuming.
         var continuation: AsyncStream<any TransportConnection>.Continuation?
+        /// The admission policy applied when a connection is delivered, *before* the handshake
+        /// completes and before anything is yielded (audit F8); ungated until ``start(admission:)``.
+        var gate = AcceptGate(admission: nil)
     }
 
     /// Creates a Network.framework transport for `configuration`.
@@ -72,7 +75,7 @@ public final class NetworkFrameworkTransport: ServerTransport {
     ///
     /// Waits for the listener to reach `ready` (so ``boundPort`` is valid) before returning.
     public func start(
-        admission _: ConnectionAdmission?
+        admission: ConnectionAdmission?
     ) async throws -> AsyncStream<any TransportConnection> {
         let listener = try makeListener(tls: configuration.tls, port: configuration.port)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
@@ -93,7 +96,17 @@ public final class NetworkFrameworkTransport: ServerTransport {
             $0.tls = configuration.tls
             $0.continuation = continuation
             $0.listener = listener
+            $0.gate = AcceptGate(admission: admission)
         }
+        // `NWListener` has no suspend, but `newConnectionLimit` is exactly the equivalent knob: at zero
+        // "new connections will be queued and eventually blocked, until you raise the limit". The gate's
+        // hysteresis resume raises it back to infinite.
+        admission?
+            .onResume { [weak self] in
+                // Onto the listener's own queue: the resume runs on whichever thread released the
+                // deciding slot, and every other `NWListener` interaction happens here.
+                self?.queue.async { self?.setConnectionLimit(NWListener.InfiniteConnectionLimit) }
+            }
         listener.start(queue: queue)
         try await waitUntilReady()
         return stream
@@ -140,6 +153,11 @@ public final class NetworkFrameworkTransport: ServerTransport {
             let previous = current.listener
             current.listener = newListener
             current.tls = tls
+            // Carry the accept ceiling across the swap: a replacement listener starts unlimited, so a
+            // reload while the gate is saturated would silently re-open the tap (audit F8).
+            newListener.newConnectionLimit =
+                current.gate.admission?.isSaturated == true
+                ? 0 : NWListener.InfiniteConnectionLimit
             return previous
         }
         if let oldListener {
@@ -256,14 +274,40 @@ public final class NetworkFrameworkTransport: ServerTransport {
         return parameters
     }
 
+    /// Charges an admission slot for a delivered connection, then surfaces it once its handshake
+    /// settles.
+    ///
+    /// The charge happens **here** — when Network.framework delivers the connection, before it is
+    /// started and long before `.ready` — so a peer that completes the TCP connect and then stalls the
+    /// TLS handshake still holds a slot against the ceiling (audit F8). The stream stays `.unbounded`
+    /// deliberately: `AsyncStream`'s buffering policy *drops* on overflow, and a dropped connection is
+    /// a leaked `NWConnection`, strictly worse than the queue depth it would bound. The bound comes
+    /// from the gate, because a slot is charged before `yield`.
     private func handleNewConnection(
         _ nwConnection: NWConnection,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        let id = connectionIDs.next()
         // Read the active identity (swappable by reload, G4b): a TLS listener advertised ALPN, enforced
         // below. Once per accept, off the byte path.
-        let isSecure = state.withLock { $0.tls != nil }
+        let (gate, isSecure) = state.withLock { ($0.gate, $0.tls != nil) }
+        let peer = NetworkFrameworkConnection.address(of: nwConnection.endpoint)
+        let ticket: AdmissionTicket?
+        // There is no descriptor to close on this backbone — cancelling the `NWConnection` is the
+        // refusal, and it happens before the connection is ever started.
+        let refuse: (Int32) -> Void = { _ in nwConnection.cancel() }
+        switch gate.admit(descriptor: -1, host: peer.host, close: refuse) {
+            case .rejectedContinue:
+                return
+            case .saturatedStop:
+                setConnectionLimit(0)
+                return
+            case .admit(let charged, let saturated):
+                ticket = charged
+                if saturated {
+                    setConnectionLimit(0)  // that was the last slot — stop delivering
+                }
+        }
+        let id = connectionIDs.next()
         // Surface the connection only once the handshake settles (`.ready`), so its negotiated ALPN
         // protocol (RFC 7301) is known and the server can commit to h2 vs h1 without sniffing. For a
         // cleartext listener `.ready` is just the completed TCP connect and ALPN resolves to nil.
@@ -283,17 +327,32 @@ public final class NetworkFrameworkTransport: ServerTransport {
                             connection: nwConnection,
                             negotiatedApplicationProtocol: alpn,
                             isSecure: isSecure,
-                            tlsPeerIdentity: peerIdentity
+                            tlsPeerIdentity: peerIdentity,
+                            admissionTicket: ticket
                         )
                     )
                 case .failed, .cancelled:
                     nwConnection.stateUpdateHandler = nil
                     nwConnection.cancel()
+                    // The handshake never settled, so nothing downstream owns the slot: return it now
+                    // rather than waiting for the ticket's `deinit`.
+                    ticket?.release()
                 default:
                     break
             }
         }
         nwConnection.start(queue: queue)
+    }
+
+    /// Sets the live listener's `newConnectionLimit` — `0` to stop delivering, infinite to resume.
+    ///
+    /// `NWListener` exposes no suspend; this is the documented equivalent, and it is reversible: at
+    /// zero, inbound connections queue and are eventually blocked until the limit is raised again.
+    /// **Must be called on ``queue``** — from the new-connection handler it is applied synchronously,
+    /// so the limit lands before the framework delivers the next connection rather than one handler
+    /// later (which would refuse a connection that the backlog should have held).
+    private func setConnectionLimit(_ limit: Int) {
+        state.withLock(\.listener)?.newConnectionLimit = limit
     }
 
     private func handleStateChange(

@@ -21,6 +21,10 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
     /// The peer's address.
     public let peer: TransportAddress
 
+    /// The admission slot charged for this connection at accept time (audit F8) — before the TLS
+    /// handshake, so a peer stalled mid-handshake still counts against the ceiling.
+    public let admissionTicket: AdmissionTicket?
+
     /// The ALPN-negotiated protocol (RFC 7301), captured once the handshake reached `.ready`.
     public let negotiatedApplicationProtocol: String?
 
@@ -43,7 +47,8 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
         connection: NWConnection,
         negotiatedApplicationProtocol: String?,
         isSecure: Bool,
-        tlsPeerIdentity: TLSPeerIdentity? = nil
+        tlsPeerIdentity: TLSPeerIdentity? = nil,
+        admissionTicket: AdmissionTicket? = nil
     ) {
         self.id = id
         self.peer = Self.address(of: connection.endpoint)
@@ -51,6 +56,7 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
         self.isSecure = isSecure
         self.tlsPeerIdentity = tlsPeerIdentity
         self.connection = connection
+        self.admissionTicket = admissionTicket
     }
 
     deinit {
@@ -209,7 +215,7 @@ public final class NetworkFrameworkConnection: TransportConnection, @unchecked S
         connection.cancel()
     }
 
-    private static func address(of endpoint: NWEndpoint) -> TransportAddress {
+    static func address(of endpoint: NWEndpoint) -> TransportAddress {
         if case .hostPort(let host, let port) = endpoint {
             return TransportAddress(host: "\(host)", port: port.rawValue)
         }

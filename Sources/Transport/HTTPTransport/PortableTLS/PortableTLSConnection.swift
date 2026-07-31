@@ -47,6 +47,11 @@
         let peer: TransportAddress
         let isSecure = true
 
+        /// The admission slot the accept thread charged for this connection **before** `SSL_new` and
+        /// the handshake (audit F8), so a peer that connects and never sends a ClientHello still holds
+        /// a slot against the ceiling.
+        let admissionTicket: AdmissionTicket?
+
         var negotiatedApplicationProtocol: String? { negotiated.withLock(\.self) }
         var tlsPeerSubject: String? { tlsPeerIdentity?.subject }
         var tlsPeerIdentity: TLSPeerIdentity? { peerIdentity.withLock(\.self) }
@@ -87,7 +92,8 @@
             descriptor: Int32,
             eventLoop: TLSEventLoop,
             clientAuth: TransportTLS.ClientAuth,
-            verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
+            verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?,
+            admissionTicket: AdmissionTicket? = nil
         ) {
             self.id = id
             self.peer = peer
@@ -98,6 +104,7 @@
             self.eventLoop = eventLoop
             self.clientAuth = clientAuth
             self.verifyPeer = verifyPeer
+            self.admissionTicket = admissionTicket
         }
 
         deinit {
