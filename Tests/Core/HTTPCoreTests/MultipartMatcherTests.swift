@@ -36,9 +36,15 @@ private func measure(_ body: [UInt8], boundary: String) -> Measured {
     guard let validated = MultipartBoundary(boundary) else {
         return (nil, 0)
     }
-    var parser = MultipartParser(body: body, boundary: validated, limits: MultipartLimits())
-    let form = parser.parse()
-    return (form, parser.byteComparisons)
+    return body.withUnsafeBytes { raw in
+        var parser = MultipartParser(
+            body: raw.bytes,
+            boundary: validated,
+            limits: MultipartLimits()
+        )
+        let form = parser.parse()
+        return (form, parser.byteComparisons)
+    }
 }
 
 /// A one-part body whose payload is `payload`, framed by `boundary`.

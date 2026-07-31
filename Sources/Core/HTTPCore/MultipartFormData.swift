@@ -65,8 +65,10 @@ public struct MultipartFormData: Sendable, Equatable {
         guard let validated = MultipartBoundary(boundary) else {
             return nil
         }
-        var parser = MultipartParser(body: body, boundary: validated, limits: limits)
-        return parser.parse()
+        return body.withUnsafeBytes { raw in
+            var parser = MultipartParser(body: raw.bytes, boundary: validated, limits: limits)
+            return parser.parse()
+        }
     }
 
     /// The `boundary` parameter of a `multipart/form-data` `Content-Type` value (RFC 7578 §4.1), or nil.
@@ -82,42 +84,9 @@ public struct MultipartFormData: Sendable, Equatable {
         return candidate
     }
 
-    /// Parses a part's header lines (`Name: value`, CRLF-separated) into lowercase-keyed pairs.
-    static func parseHeaders(_ bytes: [UInt8]) -> [String: String] {
-        var headers: [String: String] = [:]
-        // Split on the LF byte (then drop a trailing CR) rather than `String.split(separator:)`, which is
-        // ambiguous for a "\n" literal and was silently not splitting CRLF-joined header lines.
-        for lineBytes in bytes.split(separator: 0x0A, omittingEmptySubsequences: true) {
-            let line = String(
-                decoding: lineBytes.last == 0x0D ? lineBytes.dropLast() : lineBytes,
-                as: Unicode.UTF8.self
-            )
-            guard let colon = line.firstIndex(of: ":") else {
-                continue
-            }
-            let name = trimmed(line[..<colon]).lowercased()
-            headers[name] = trimmed(line[line.index(after: colon)...])
-        }
-        return headers
-    }
-
     /// The value of the `name=` parameter in a header value (e.g. `form-data; name="x"`), unquoted; nil
     /// if absent.
     private static func parameter(_ name: String, in value: String) -> String? {
         MultipartParameters.value(of: name, in: value)
-    }
-
-    /// `slice` with leading and trailing ASCII spaces/tabs removed.
-    private static func trimmed(_ slice: Substring) -> String {
-        let leading = slice.drop { $0 == " " || $0 == "\t" }
-        var end = leading.endIndex
-        while end > leading.startIndex {
-            let prior = leading.index(before: end)
-            guard leading[prior] == " " || leading[prior] == "\t" else {
-                break
-            }
-            end = prior
-        }
-        return String(leading[..<end])
     }
 }

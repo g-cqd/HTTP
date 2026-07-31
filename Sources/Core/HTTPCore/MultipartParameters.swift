@@ -176,13 +176,21 @@ enum MultipartParameters {
     private static func isLWSP(_ byte: UInt8) -> Bool { byte == space || byte == tab }
 
     /// The first offset of `needle` within `range`, or nil.
+    ///
+    /// Written as a `while` rather than `for index in range`: iterating a `Range` while borrowing a
+    /// nonescapable span heap-allocates once per iteration in an unoptimized build, which is real cost
+    /// on every debug and test run and shows up directly in the allocation guards.
     private static func firstIndex(
         of needle: UInt8,
         in header: RawSpan,
         within range: Range<Int>
     ) -> Int? {
-        for index in range where byte(at: index, in: header) == needle {
-            return index
+        var index = range.lowerBound
+        while index < range.upperBound {
+            if byte(at: index, in: header) == needle {
+                return index
+            }
+            index += 1
         }
         return nil
     }

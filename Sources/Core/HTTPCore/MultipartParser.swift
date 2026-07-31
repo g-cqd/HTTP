@@ -22,9 +22,11 @@
 
 /// Splits a `multipart/form-data` body into parts using the RFC 2046 §5.1.1 delimiter grammar.
 ///
-/// The parser never copies the body to scan it: every position is an index into the caller's buffer,
-/// and bytes become owned values only where a ``MultipartFormData/Part`` must outlive the parse.
-struct MultipartParser {
+/// The parser borrows the body as a `RawSpan` and addresses it by offset: it never copies bytes to look
+/// at them. Being `~Escapable`, it is statically prevented from outliving that borrow. Bytes become
+/// owned values at exactly two points — a part's payload, and the header-derived strings a
+/// ``MultipartFormData/Part`` must carry — and nowhere else.
+struct MultipartParser: ~Escapable {
     /// One matched delimiter — where it starts, whether it closes the body, and where the next part
     /// would begin.
     struct Delimiter {
@@ -36,18 +38,20 @@ struct MultipartParser {
         let isClosing: Bool
     }
 
-    private static let cr: UInt8 = 0x0D
-    private static let lf: UInt8 = 0x0A
+    static let cr: UInt8 = 0x0D
+    static let lf: UInt8 = 0x0A
+    static let colon: UInt8 = 0x3A
+    static let space: UInt8 = 0x20
+    static let tab: UInt8 = 0x09
+
     private static let dash: UInt8 = 0x2D
-    private static let space: UInt8 = 0x20
-    private static let tab: UInt8 = 0x09
 
     /// The length of the `CRLF CRLF` that separates a part's header section from its payload.
-    private static let blankLineCount = 4
+    static let blankLineCount = 4
 
-    private let body: [UInt8]
-    private let boundary: MultipartBoundary
-    private let limits: MultipartLimits
+    let body: RawSpan
+    let boundary: MultipartBoundary
+    let limits: MultipartLimits
 
     /// The offset the next delimiter search resumes from.
     ///
@@ -55,7 +59,7 @@ struct MultipartParser {
     private var cursor: Int
 
     /// Bytes the parts built so far will retain, charged against ``MultipartLimits/maxRetainedBytes``.
-    private var retained: Int
+    var retained: Int
 
     /// Byte comparisons the delimiter matcher has performed — the complexity oracle for the tests.
     ///
@@ -65,8 +69,9 @@ struct MultipartParser {
     /// linearity test is deterministic instead of a wall-clock ratio that would flake under load.
     private(set) var byteComparisons: Int
 
-    /// Creates a parser over `body`, splitting it on `boundary` under `limits`.
-    init(body: [UInt8], boundary: MultipartBoundary, limits: MultipartLimits) {
+    /// Creates a parser over the borrowed `body`, splitting it on `boundary` under `limits`.
+    @_lifetime(copy body)
+    init(body: RawSpan, boundary: MultipartBoundary, limits: MultipartLimits) {
         self.body = body
         self.boundary = boundary
         self.limits = limits
@@ -118,15 +123,21 @@ struct MultipartParser {
     }
 
     /// Whether the body opens with `dash-boundary`, i.e. the delimiter minus its leading CRLF.
+    ///
+    /// A `while` rather than `for offset in 0 ..< count`: iterating a `Range` while borrowing a
+    /// nonescapable span heap-allocates once per iteration in an unoptimized build.
     private func opensWithDashBoundary() -> Bool {
         let needle = boundary.delimiter
         let dashBoundaryCount = needle.count - MultipartBoundary.crlfCount
-        guard body.count >= dashBoundaryCount else {
+        guard body.byteCount >= dashBoundaryCount else {
             return false
         }
-        for offset in 0 ..< dashBoundaryCount
-        where body[offset] != needle[offset + MultipartBoundary.crlfCount] {
-            return false
+        var offset = 0
+        while offset < dashBoundaryCount {
+            guard byte(at: offset) == needle[offset + MultipartBoundary.crlfCount] else {
+                return false
+            }
+            offset += 1
         }
         return true
     }
@@ -147,8 +158,8 @@ struct MultipartParser {
         let needle = boundary.delimiter
         var index = cursor
         var state = 0
-        while index < body.count {
-            let byte = body[index]
+        while index < body.byteCount {
+            let byte = byte(at: index)
             index += 1
             while true {
                 byteComparisons += 1
@@ -170,7 +181,7 @@ struct MultipartParser {
             }
             state = Int(boundary.failure[state])
         }
-        cursor = body.count
+        cursor = body.byteCount
         return nil
     }
 
@@ -182,77 +193,36 @@ struct MultipartParser {
     private func delimiter(startingAt start: Int, suffixFrom end: Int) -> Delimiter? {
         var index = end
         var isClosing = false
-        if index + 1 < body.count, body[index] == Self.dash, body[index + 1] == Self.dash {
+        if index + 1 < body.byteCount, byte(at: index) == Self.dash,
+            byte(at: index + 1) == Self.dash
+        {
             isClosing = true
             index += 2
         }
-        while index < body.count, body[index] == Self.space || body[index] == Self.tab {
+        while index < body.byteCount, byte(at: index) == Self.space || byte(at: index) == Self.tab {
             index += 1  // transport-padding := *LWSP-char
         }
-        if index + 1 < body.count, body[index] == Self.cr, body[index + 1] == Self.lf {
+        if index + 1 < body.byteCount, byte(at: index) == Self.cr, byte(at: index + 1) == Self.lf {
             return Delimiter(start: start, contentStart: index + 2, isClosing: isClosing)
         }
-        guard isClosing, index == body.count else {
+        guard isClosing, index == body.byteCount else {
             return nil
         }
         return Delimiter(start: start, contentStart: index, isClosing: true)
     }
 
-    /// Parses `range` as one part's `header-section CRLF CRLF body` (RFC 7578 §4.2) and appends it.
-    ///
-    /// Returns false to reject the whole body — a per-part header section or an aggregate retained
-    /// total over ``limits``. A part with no blank line (so no header section) or no
-    /// `Content-Disposition` `name` is skipped, and returns true: that is leniency, not a breach.
-    private mutating func append(
-        _ range: Range<Int>,
-        to parts: inout [MultipartFormData.Part]
-    ) -> Bool {
-        guard let blankLine = firstIndex(ofBlankLineIn: range) else {
-            return true
-        }
-        let headerRange = range.lowerBound ..< blankLine
-        guard headerRange.count <= limits.maxPartHeaderBytes else {
-            return false
-        }
-        let fields = MultipartFormData.parseHeaders(Array(body[headerRange]))
-        guard let disposition = fields["content-disposition"],
-            let name = MultipartParameters.value(of: "name", in: disposition)
-        else {
-            return true
-        }
-        let filename = MultipartParameters.value(of: "filename", in: disposition)
-        let contentType = fields["content-type"]
-        let payload = (blankLine + Self.blankLineCount) ..< range.upperBound
-        let charge =
-            payload.count + name.utf8.count + (filename?.utf8.count ?? 0)
-            + (contentType?.utf8.count ?? 0)
-        guard retained + charge <= limits.maxRetainedBytes else {
-            return false
-        }
-        retained += charge
-        parts.append(
-            MultipartFormData.Part(
-                name: name,
-                filename: filename,
-                contentType: contentType,
-                body: Array(body[payload])
-            )
-        )
-        return true
+    /// The byte at `index`; every caller derives `index` from a bound already checked against the body.
+    func byte(at index: Int) -> UInt8 {
+        body.unsafeLoad(fromByteOffset: index, as: UInt8.self)
     }
 
-    /// The offset of the `CRLF CRLF` that ends a part's header section within `range`, or nil.
-    private func firstIndex(ofBlankLineIn range: Range<Int>) -> Int? {
-        var index = range.lowerBound
-        let last = range.upperBound - Self.blankLineCount
-        while index <= last {
-            if body[index] == Self.cr, body[index + 1] == Self.lf, body[index + 2] == Self.cr,
-                body[index + 3] == Self.lf
-            {
-                return index
-            }
-            index += 1
-        }
-        return nil
+    /// The bytes of `range` copied into an exactly sized array — one of the two materialization points.
+    func bytes(in range: Range<Int>) -> [UInt8] {
+        body.extracting(range).withUnsafeBytes { [UInt8]($0) }
+    }
+
+    /// The bytes of `range` decoded as UTF-8 — the other materialization point.
+    func string(in range: Range<Int>) -> String {
+        body.extracting(range).withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
     }
 }
