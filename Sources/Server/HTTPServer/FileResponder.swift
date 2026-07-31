@@ -122,14 +122,23 @@ public struct FileResponder: HTTPResponder {
     /// Every validator comes off the open descriptor's own `fstat`, so there is no second lookup to
     /// disagree with the first — the `Content-Length`, `ETag`, and `Last-Modified` on the wire always
     /// describe the bytes the body will carry (CWE-367).
+    ///
+    /// `Vary` is decided by the *resource*, not by what this one request happened to negotiate, and is
+    /// therefore identical on the `200` and on the `304` that revalidates it (RFC 9110 §12.5.5,
+    /// §15.4.5). A cache keyed on the 200's `Vary` and later handed a `Vary`-less `304` would be told
+    /// the resource stopped being negotiated, and could replay stored Brotli bytes to a client that
+    /// never asked for them.
     private func serveFile(
         _ file: OpenedFile,
         named name: Substring,
         in directory: OpenedDirectory,
         request: HTTPRequest
     ) -> ServerResponse {
+        // Whether a sidecar *could* be offered for this resource — not whether one was, and not
+        // whether this request would have taken it. Only that is invariant across statuses.
+        let negotiated = precompressed && Self.isCompressible(name)
         let choice =
-            precompressed
+            negotiated
             ? precompressedChoice(file, named: name, in: directory, request: request) : nil
         let served = choice?.file ?? file
         let etag = FileValidator.entityTag(for: served, encoding: choice?.encoding)
@@ -138,6 +147,11 @@ public struct FileResponder: HTTPResponder {
             var head = HTTPResponse(status: .notModified)
             _ = head.headerFields.setValue(etag, for: .etag)
             _ = head.headerFields.setValue(lastModified, for: .lastModified)
+            // No `Content-Encoding`: §15.4.5 asks a 304 not to carry representation metadata beyond
+            // what guides a cache update, and the coding is already folded into the `ETag`.
+            if negotiated {
+                _ = head.headerFields.append("Accept-Encoding", for: .vary)
+            }
             return ServerResponse(head)
         }
         var head = HTTPResponse(status: .ok)
@@ -146,9 +160,11 @@ public struct FileResponder: HTTPResponder {
         _ = head.headerFields.setValue(etag, for: .etag)
         _ = head.headerFields.setValue(lastModified, for: .lastModified)
         _ = head.headerFields.setValue("bytes", for: .acceptRanges)
+        if negotiated {
+            _ = head.headerFields.append("Accept-Encoding", for: .vary)
+        }
         if let encoding = choice?.encoding {
             _ = head.headerFields.setValue(encoding, for: .contentEncoding)
-            _ = head.headerFields.append("Accept-Encoding", for: .vary)
         }
         return serve(
             served,

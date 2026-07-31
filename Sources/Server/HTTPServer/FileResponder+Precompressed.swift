@@ -29,7 +29,7 @@ extension FileResponder {
         in directory: OpenedDirectory,
         request: HTTPRequest
     ) -> (file: OpenedFile, encoding: String)? {
-        guard request.headerFields[.range] == nil, Self.isCompressible(name) else {
+        guard request.headerFields[.range] == nil else {
             return nil
         }
         let accept = request.headerFields[.acceptEncoding] ?? ""
@@ -45,7 +45,10 @@ extension FileResponder {
     }
 
     /// Whether to seek a precompressed sibling for `name`, skipping already-compressed media types.
-    private static func isCompressible(_ name: Substring) -> Bool {
+    ///
+    /// This is also what decides `Vary: Accept-Encoding`: a resource no sidecar will ever be sought
+    /// for is not negotiated, and claiming otherwise only fragments every downstream cache key.
+    static func isCompressible(_ name: Substring) -> Bool {
         let type = contentType(name).lowercased()
         return !incompressibleTypes.contains { type.contains($0) }
     }
