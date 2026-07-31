@@ -27,6 +27,15 @@
 //  *provably* bounded: inbound tickets can never exceed `maxQueuedChunks`, since the producer is
 //  parked past that point.
 //
+//  Coalescing interacts with that 1:1 rule, which is why `send`/`trySend` report a ``SendOutcome``
+//  rather than nothing/`Bool`. A coalesced send adds octets to an item that is *already* queued and
+//  therefore already has a ticket outstanding; yielding a second ticket for it would leave the consumer
+//  one ticket ahead of the queue, and its next `next()` would suspend — the very thing the pattern
+//  promises cannot happen. For a merged-mailbox consumer that is a hang: it is now parked here rather
+//  than on its `for await`, so it stops applying every OTHER wakeup kind too, including the consumption
+//  reports that re-open a stalled peer's flow-control window. A ticketed caller therefore yields a
+//  ticket only on `.queued`.
+//
 //  Sibling of `AsyncHandoff`, not a generalization of it. `AsyncHandoff` is a zero-queue rendezvous,
 //  and its "at most one chunk is ever in flight" property is load-bearing for `HTTP2StreamPermit`.
 //  Only the exactly-once continuation discipline is shared, and it is copied rather than inherited.
@@ -36,6 +45,21 @@
 
 /// A lossless, byte-watermarked FIFO from a transport producer to an application consumer.
 actor BoundedByteChannel {
+    /// What a send did — and, for a ticketed caller, whether it owes the consumer a ticket.
+    enum SendOutcome: Sendable, Equatable {
+        /// A new item was queued: a ticketed caller must now yield exactly one ticket for it.
+        case queued
+        /// The octets were merged into the tail item, whose ticket is already outstanding.
+        ///
+        /// A ticketed caller must **not** yield another ticket — the consumer would then be one ticket
+        /// ahead of the queue and its next `next()` would suspend (see the file comment).
+        case coalesced
+        /// Nothing was enqueued: the channel is saturated, terminated, or the producer was cancelled.
+        ///
+        /// For `trySend(_:)` this is a hard error the caller escalates (RST_STREAM / close).
+        case refused
+    }
+
     /// What the consuming loop pulls next.
     enum Item: Sendable, Equatable {
         case chunk([UInt8])
@@ -105,19 +129,22 @@ actor BoundedByteChannel {
     /// closes.
     ///
     /// Cancellation-aware. If the producing task is cancelled while parked — the connection is being
-    /// reaped — this returns without enqueuing. That is a deliberate loss on a path where the
+    /// reaped — this returns `.refused` without enqueuing. That is a deliberate loss on a path where the
     /// connection is going away regardless; a *live* connection never loses an octet.
-    func send(_ chunk: [UInt8]) async {
+    ///
+    /// - Returns: whether a new item was queued. A ticketed caller yields a ticket only on `.queued`.
+    @discardableResult
+    func send(_ chunk: [UInt8]) async -> SendOutcome {
         guard !chunk.isEmpty else {
-            return
+            return .coalesced  // nothing queued and nothing owed
         }
         while terminal == nil, !Task.isCancelled, isSaturated {
             await parkProducer()
         }
         guard terminal == nil, !Task.isCancelled else {
-            return
+            return .refused
         }
-        enqueue(chunk)
+        return enqueue(chunk)
     }
 
     /// Sends `chunk` without ever suspending, for a producer that must not park.
@@ -125,20 +152,20 @@ actor BoundedByteChannel {
     /// The HTTP/2 serve loop is the sole owner of the connection engine and cannot block on
     /// application progress, so it uses this rather than `send(_:)`.
     ///
-    /// - Returns: `false` when the channel is saturated. That is a *hard error* the caller escalates
-    ///   (RST_STREAM / close), never a silent drop. On a consumption-gated stream it is unreachable
-    ///   in practice — the flow-control window already bounds what the peer may send — so it stands
-    ///   as defense in depth that fails closed.
+    /// - Returns: `.refused` when the channel is saturated or already terminated. That is a *hard
+    ///   error* the caller escalates (RST_STREAM / close), never a silent drop. On a consumption-gated
+    ///   stream it is unreachable in practice — the flow-control window already bounds what the peer
+    ///   may send — so it stands as defense in depth that fails closed. `.queued` versus `.coalesced`
+    ///   tells a ticketed caller whether it owes a ticket.
     @discardableResult
-    func trySend(_ chunk: [UInt8]) -> Bool {
+    func trySend(_ chunk: [UInt8]) -> SendOutcome {
         guard !chunk.isEmpty else {
-            return true
+            return .coalesced  // nothing queued and nothing owed
         }
         guard terminal == nil, !isSaturated else {
-            return false
+            return .refused
         }
-        enqueue(chunk)
-        return true
+        return enqueue(chunk)
     }
 
     /// Ends the stream normally.
@@ -200,19 +227,22 @@ actor BoundedByteChannel {
 
     /// Appends `chunk`, handing it straight to a parked consumer when there is one.
     ///
-    /// A parked consumer implies an empty queue, so the direct handoff can never skip an ordering.
-    private func enqueue(_ chunk: [UInt8]) {
+    /// A parked consumer implies an empty queue, so the direct handoff can never skip an ordering — and
+    /// it counts as `.queued`, since it satisfies a *new* item rather than extending a queued one. (A
+    /// ticketed consumer cannot in fact be parked: its ticket only arrives after the item is queued.)
+    private func enqueue(_ chunk: [UInt8]) -> SendOutcome {
         if let consumer = consumerWaiter {
             consumerWaiter = nil
             consumer.resume(returning: .chunk(chunk))
-            return
+            return .queued
         }
         bytes += chunk.count
         if coalesceIntoTail(chunk) {
-            return
+            return .coalesced
         }
         ring[(head + queued) % ring.count] = chunk
         queued += 1
+        return .queued
     }
 
     /// Merges into the tail chunk while it is below `coalescingBelow`.

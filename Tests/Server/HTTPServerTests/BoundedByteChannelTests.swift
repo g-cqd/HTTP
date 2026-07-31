@@ -81,18 +81,19 @@ struct BoundedByteChannelTests {
     func trySendRefusesAtTheChunkCap() async {
         let channel = channel(high: 1 << 20, low: 1 << 19, chunks: 4)
         for _ in 0 ..< 4 {
-            #expect(await channel.trySend([1]))
+            #expect(await channel.trySend([1]) == .queued)
         }
-        #expect(await channel.trySend([1]) == false)
+        #expect(await channel.trySend([1]) == .refused)
         _ = await channel.next()
-        #expect(await channel.trySend([1]))  // a take frees exactly one slot
+        #expect(await channel.trySend([1]) == .queued)  // a take frees exactly one slot
     }
 
     @Test("trySend refuses at the byte watermark but always accepts into an empty queue")
     func trySendRefusesAtTheByteWatermark() async {
         let channel = channel(high: 64, low: 32, chunks: 64)
-        #expect(await channel.trySend([UInt8](repeating: 0, count: 4_096)))  // oversized, but empty
-        #expect(await channel.trySend([1]) == false)  // now over the watermark
+        // Oversized, but the queue is empty — an empty channel always accepts, whatever the chunk size.
+        #expect(await channel.trySend([UInt8](repeating: 0, count: 4_096)) == .queued)
+        #expect(await channel.trySend([1]) == .refused)  // now over the watermark
     }
 
     @Test("finish is delivered only after every already-queued chunk")
@@ -171,11 +172,40 @@ struct BoundedByteChannelTests {
     @Test("coalescing merges into a small tail chunk without changing the byte stream")
     func coalescesSmallTailChunks() async {
         let channel = channel(chunks: 4, coalescing: 64)
-        for byte in UInt8(1) ... 8 {
-            #expect(await channel.trySend([byte]))  // would exceed a 4-chunk cap without coalescing
+        // The first send queues a NEW item; every later one merges into it. That distinction is
+        // load-bearing for a *ticketed* caller (the HTTP/2 and WebSocket readers): a ticket is owed only
+        // for a new item, and yielding one for a merge would leave the consumer a ticket ahead of the
+        // queue and park it in `next()` — hanging the whole merged mailbox, not just this stream.
+        #expect(await channel.trySend([1]) == .queued)
+        for byte in UInt8(2) ... 8 {
+            #expect(await channel.trySend([byte]) == .coalesced)  // no ticket owed
         }
         #expect(await channel.queuedChunks == 1)
         #expect(await channel.next() == .chunk([1, 2, 3, 4, 5, 6, 7, 8]))
+    }
+
+    /// The regression for the ticket/coalescing mismatch (2026-07-31 audit follow-up).
+    ///
+    /// A ticketed producer that yielded one ticket per `send` — not per queued item — put the consumer
+    /// permanently ahead of the queue the moment two sends coalesced. `next()` then suspended, which for
+    /// a merged-mailbox consumer means it stops applying *every* wakeup kind: no responses, no tunnel
+    /// traffic, and in particular no consumption reports, so a peer stalled on a closed flow-control
+    /// window never gets it back and the connection hangs until the idle timeout.
+    @Test("one ticket per queued item survives coalescing — the consumer never runs ahead")
+    func ticketsMatchQueuedItemsUnderCoalescing() async {
+        let channel = channel(chunks: 8, coalescing: 4_096)
+        // A small chunk followed by a large one is the exact shape the HTTP/2 reader produces: a short
+        // preface/headers read, then a full-size body read landing while the first is still queued.
+        let head = [UInt8](repeating: 1, count: 60)
+        let tail = [UInt8](repeating: 2, count: 16_384)
+        var tickets = 0
+        for chunk in [head, tail] where await channel.send(chunk) == .queued {
+            tickets += 1
+        }
+        #expect(tickets == 1)
+        #expect(await channel.queuedChunks == 1)
+        // Every ticket is redeemable without suspending: exactly `tickets` items are waiting.
+        #expect(await channel.next() == .chunk(head + tail))
     }
 
     @Test("sending after finish is a no-op rather than a trap")
@@ -183,7 +213,7 @@ struct BoundedByteChannelTests {
         let channel = channel()
         await channel.finish()
         await channel.send([1])
-        #expect(await channel.trySend([1]) == false)
+        #expect(await channel.trySend([1]) == .refused)
         #expect(await channel.next() == .finished)
     }
 }

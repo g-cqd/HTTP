@@ -81,37 +81,51 @@ struct HTTP2ConsumptionWindowTests {
     }
 
     @Test(
-        "replenish emits the stream and connection WINDOW_UPDATE at the half-window, in order (§6.9)",
-        arguments: [32 * 1_024, 64 * 1_024, 128 * 1_024])
-    func replenishEmitsAtTheHalfWindow(streamWindow: Int) throws {
-        // The connection window is deliberately 4× the stream window, so the two half-window thresholds
-        // fall at different points and the frames can be told apart.
+        "while the peer still has window, credit batches to the half-window (§6.9)",
+        arguments: [4 * H2Window.frame, 8 * H2Window.frame, 16 * H2Window.frame])
+    func creditBatchesWhileThePeerHasWindow(streamWindow: Int) throws {
+        // The connection window is 4x the stream window, so only the stream dimension is in play.
         var connection = try H2Window.gated(
             streamWindow: streamWindow, connectionWindow: 4 * streamWindow
         )
         _ = try connection.receive(H2Wire.openStream(streamID: 1))
         _ = connection.outboundBytes()
-        for _ in 0 ..< (streamWindow / H2Window.frame) {
-            _ = try connection.receive(H2Window.dataFrame(streamID: 1, count: H2Window.frame))
-        }
 
-        // One octet short of half the STREAM window: batching means nothing has gone out yet.
-        let half = streamWindow / 2
-        connection.replenishReceiveWindow(HTTP2StreamID(1), consumed: half - 1)
+        // Offer only a quarter of the window and consume it. The peer still holds three quarters, so
+        // there is no liveness pressure, and a quarter is short of the half-window batch: nothing goes
+        // out. Batching is what bounds the WINDOW_UPDATE frame count on a long upload.
+        let quarter = streamWindow / 4
+        _ = try connection.receive(H2Window.dataFrames(streamID: 1, total: quarter))
+        connection.replenishReceiveWindow(HTTP2StreamID(1), consumed: quarter)
         #expect(H2Window.windowUpdates(connection.outboundBytes()).isEmpty)
 
-        // Crossing the half-window releases the stream's batch. The connection window is four times
-        // larger, so it has not yet reached ITS half — only the stream frame appears.
-        connection.replenishReceiveWindow(HTTP2StreamID(1), consumed: 1)
-        let first = H2Window.windowUpdates(connection.outboundBytes())
-        #expect(first == [H2Window.Update(streamID: HTTP2StreamID(1), increment: half)])
-
-        // Drain the rest. The remaining credit still never reaches the connection's half (streamWindow
-        // total against a 4× window), so the connection's batch stays pending — which is the point of
-        // batching — while the stream's second half goes out.
-        connection.replenishReceiveWindow(HTTP2StreamID(1), consumed: streamWindow - half)
+        // A second quarter takes the accrued credit to exactly half: now it is released, as one frame
+        // carrying the whole batch rather than two.
+        _ = try connection.receive(H2Window.dataFrames(streamID: 1, total: quarter))
+        connection.replenishReceiveWindow(HTTP2StreamID(1), consumed: quarter)
+        let updates = H2Window.windowUpdates(connection.outboundBytes())
+        #expect(updates == [H2Window.Update(streamID: HTTP2StreamID(1), increment: 2 * quarter)])
         #expect(connection.outstandingReceiveCredit == 0)
-        #expect(connection.connectionReceiveConsumed == streamWindow)
+    }
+
+    @Test("a peer under half its window is credited at once, not held for the batch (§6.9)")
+    func creditIsReleasedEarlyWhenThePeerIsStalled() throws {
+        // The liveness rule. Batching assumes credit accrues as fast as the window drains — which stops
+        // holding the moment another stream sits on part of the connection window, because the accrued
+        // counter then never reaches half and the peer waits forever on credit already earned. So a peer
+        // under half its window is paid immediately.
+        var connection = try H2Window.gated(streamWindow: 4 * H2Window.frame)
+        _ = try connection.receive(H2Wire.openStream(streamID: 1))
+        _ = try connection.receive(H2Window.dataFrames(streamID: 1, total: 4 * H2Window.frame))
+        _ = connection.outboundBytes()
+
+        // The stream window is fully spent (the gated steady state), so one frame's worth of
+        // consumption — far short of the half-window batch — goes out on its own.
+        connection.replenishReceiveWindow(HTTP2StreamID(1), consumed: H2Window.frame)
+        let updates = H2Window.windowUpdates(connection.outboundBytes())
+        #expect(
+            updates.contains(H2Window.Update(streamID: HTTP2StreamID(1), increment: H2Window.frame))
+        )
     }
 
     @Test("the connection WINDOW_UPDATE precedes the stream's when both cross together (§6.9)")

@@ -178,12 +178,34 @@ extension HTTP2Connection {
         creditConnectionReceiveWindow(by: credit)
         record.receiveOutstanding -= credit
         record.receiveConsumed += credit
-        guard !endStream, record.receiveConsumed * 2 >= localSettings.initialWindowSize else {
+        guard
+            !endStream,
+            Self.shouldRelease(
+                accrued: record.receiveConsumed,
+                remaining: record.receiveWindow,
+                window: localSettings.initialWindowSize
+            )
+        else {
             return
         }
         writer.writeWindowUpdate(streamID, increment: record.receiveConsumed)
         record.receiveWindow += record.receiveConsumed
         record.receiveConsumed = 0
+    }
+
+    /// Whether accrued credit should go out now as a WINDOW_UPDATE (RFC 9113 §6.9).
+    ///
+    /// Two triggers, and the second is not an optimization but a liveness requirement. Batching at the
+    /// half-window bounds the frame count, but it assumes credit accrues as fast as the window drains —
+    /// which stops being true once *some other* stream holds credit indefinitely, because that stream's
+    /// share never comes back and the accrued counter never reaches half. The peer is then stalled while
+    /// the server sits on credit it has already earned. So also release whenever the peer has burned
+    /// past half its window and anything at all is owed.
+    static func shouldRelease(accrued: Int, remaining: Int, window: Int) -> Bool {
+        guard accrued > 0 else {
+            return false
+        }
+        return accrued * 2 >= window || remaining * 2 < window
     }
 
     /// Credits `consumed` octets back to the connection window alone, emitting a stream-0 WINDOW_UPDATE
@@ -198,7 +220,13 @@ extension HTTP2Connection {
         }
         connectionReceiveOutstanding -= consumed
         connectionReceiveConsumed += consumed
-        guard connectionReceiveConsumed * 2 >= limits.connectionReceiveWindow else {
+        guard
+            Self.shouldRelease(
+                accrued: connectionReceiveConsumed,
+                remaining: connectionReceiveWindow,
+                window: limits.connectionReceiveWindow
+            )
+        else {
             return
         }
         writer.writeWindowUpdate(.connection, increment: connectionReceiveConsumed)

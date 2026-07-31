@@ -16,6 +16,9 @@
 //  counter when it processes that poke and issues the WINDOW_UPDATE itself. Neither side ever waits for
 //  the other.
 //
+//  The coalesced wakeup edge makes the two sides a store-buffer pair, which is why the orderings here
+//  are sequentially consistent rather than relaxed — see ``HTTP2ConsumptionSignal/takeAll()``.
+//
 
 internal import Synchronization
 
@@ -42,16 +45,16 @@ final class HTTP2ConsumptionSignal: Sendable {
 
     /// Records `count` consumed octets, waking the serve loop if it is not already due to look.
     ///
-    /// `.relaxed` is sufficient for the accumulate. This is a genuinely independent SPSC counter — one
-    /// handler adds, one serve loop drains, and *nothing else is published through it*: the octets
-    /// themselves travelled through the ``BoundedByteChannel``, which did its own synchronization, so
-    /// this value orders no other memory and needs no fence to carry any.
+    /// This counter publishes no other memory — the octets themselves travelled through the
+    /// ``BoundedByteChannel``, which did its own synchronization — so nothing here needs *acquire* or
+    /// *release* semantics. What it does need is **store-load** ordering against ``takeAll()``, which is
+    /// strictly stronger than release/acquire can express: see that method.
     func record(_ count: Int) {
         guard count > 0 else {
             return
         }
-        bytes.wrappingAdd(count, ordering: .relaxed)
-        if !signalled.exchange(true, ordering: .relaxed) {
+        bytes.wrappingAdd(count, ordering: .sequentiallyConsistent)
+        if !signalled.exchange(true, ordering: .sequentiallyConsistent) {
             notify()
         }
     }
@@ -60,15 +63,23 @@ final class HTTP2ConsumptionSignal: Sendable {
     ///
     /// Clear-then-drain is what makes the coalesced edge lossless: a ``record(_:)`` that lands between
     /// the two lines finds `signalled` already false and posts a *fresh* wakeup, so its bytes are either
-    /// included in this drain or announced by that next one — never both, never neither. Draining first
-    /// would leave exactly that interleaving with bytes banked and no wakeup pending, and the stream
-    /// would sit on credit it had already earned until some unrelated event happened to wake the loop.
+    /// included in this drain or announced by that next one. Draining first would leave exactly that
+    /// interleaving with bytes banked behind a lowered edge, and the stream would sit on credit it had
+    /// already earned until some unrelated event happened to wake the loop.
     ///
-    /// The drain uses `.acquiringAndReleasing` so the zeroing is published to the next `record(_:)` and
-    /// cannot be reordered above the mailbox dequeue that motivated it.
+    /// **Why sequential consistency, not relaxed.** The two sides are the store-buffer (SB / Dekker)
+    /// litmus test across two independent locations: this one stores `signalled` then reads `bytes`, the
+    /// other writes `bytes` then reads `signalled`. Relaxed — and release/acquire alike — permit *both*
+    /// reads to miss the other's write, and on arm64 that is not theoretical. The resulting interleaving
+    /// is a permanently lost wakeup: the handler's octets stay banked with no wakeup outstanding, and
+    /// since the peer is by then stalled on a closed window, nothing else will ever wake the loop for
+    /// this stream. Only sequential consistency forbids that outcome.
+    ///
+    /// The cost is one full barrier per body chunk — tens of nanoseconds against a 16 KiB frame, on the
+    /// opt-in streaming path rather than the buffered hot path.
     func takeAll() -> Int {
-        signalled.store(false, ordering: .relaxed)
-        return bytes.exchange(0, ordering: .acquiringAndReleasing)
+        signalled.store(false, ordering: .sequentiallyConsistent)
+        return bytes.exchange(0, ordering: .sequentiallyConsistent)
     }
 
     deinit {
