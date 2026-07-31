@@ -21,9 +21,17 @@ import Testing
 
 @Suite("Streamed request-body retention — HTTP/1.1 (audit CR-F5)")
 struct HTTP1StreamingBodyRetentionTests {
-    /// A quarter-gibibyte upload: far past any buffer the server may legitimately hold, and still
-    /// under the 1 GiB default ``HTTPLimits/maxBodySize`` so the size itself is not what refuses it.
+    /// A quarter-gibibyte upload: far past any buffer the server may legitimately hold.
     private static let uploadSize = 256 << 20
+
+    /// Limits that admit ``uploadSize``, so the *size* is not what refuses the request.
+    ///
+    /// The default ``HTTPLimits/maxBodySize`` is 16 MiB (audit CR-F15) and a quarter-gibibyte upload is
+    /// exactly the shape it now refuses with `413` — correctly, and not what this suite measures.
+    /// Retention is about what the server *holds* while streaming a body it has accepted, so the body
+    /// cap is raised here while every retention-relevant knob (`keepAliveBufferCapacity`,
+    /// `requestBodyWindowSize`) stays at its default, which is where the assertions read it from.
+    private static let streamingLimits = HTTPLimits.default.with { $0.maxBodySize = uploadSize }
 
     /// What a streaming handler observed, recorded across isolation domains.
     private final class ChunkLog: Sendable {
@@ -97,7 +105,11 @@ struct HTTP1StreamingBodyRetentionTests {
             framing: .contentLength,
             tail: Array("GET /after HTTP/1.1\r\nHost: x\r\n\r\n".utf8)
         )
-        let server = HTTPServer(transport: FakeTransport(), responder: streamingRouter(log))
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: streamingRouter(log),
+            limits: Self.streamingLimits
+        )
         var buffer: [UInt8] = []
         var start = 0
         var responseBuffer: [UInt8] = []
@@ -134,7 +146,11 @@ struct HTTP1StreamingBodyRetentionTests {
             framing: .chunked(chunkSize: 1 << 20),
             tail: Array("GET /after HTTP/1.1\r\nHost: x\r\n\r\n".utf8)
         )
-        let server = HTTPServer(transport: FakeTransport(), responder: streamingRouter(log))
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: streamingRouter(log),
+            limits: Self.streamingLimits
+        )
         var buffer: [UInt8] = []
         var start = 0
         var responseBuffer: [UInt8] = []
@@ -182,7 +198,11 @@ struct HTTP1StreamingBodyRetentionTests {
             bodyCount: Self.uploadSize,
             framing: .contentLength
         )
-        let server = HTTPServer(transport: FakeTransport(), responder: router)
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: router,
+            limits: Self.streamingLimits
+        )
         let serving = Task { await server.serve(connection) }
 
         // The handler is provably parked, so the producer can be at most one handed-off chunk ahead of

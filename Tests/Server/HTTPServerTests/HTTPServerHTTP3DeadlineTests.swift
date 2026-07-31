@@ -93,10 +93,11 @@ struct HTTPServerHTTP3DeadlineTests {
         clock: TestClock,
         streamingUploads: Bool = false
     ) throws -> HTTPServer<TestClock> {
-        var limits = HTTPLimits.default
-        limits.headerReadTimeout = .seconds(30)
-        limits.idleTimeout = .seconds(120)
-        limits.keepAliveTimeout = .seconds(30)
+        let limits = HTTPLimits.default.with {
+            $0.headerReadTimeout = .seconds(30)
+            $0.idleTimeout = .seconds(120)
+            $0.keepAliveTimeout = .seconds(30)
+        }
         let responder: any HTTPResponder =
             streamingUploads
             ? Router {

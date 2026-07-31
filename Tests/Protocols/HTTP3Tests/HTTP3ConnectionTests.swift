@@ -184,8 +184,7 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
 
     @Test("excessive stream resets trip H3_EXCESSIVE_LOAD (the Rapid Reset analog, §8.1)")
     func rapidReset() {
-        var limits = HTTPLimits()
-        limits.maxStreamResetsPerInterval = 2
+        let limits = HTTPLimits(maxStreamResetsPerInterval: 2)
         var connection = HTTP3Connection(limits: limits)
         _ = connection.outbound()  // drain the init actions
         for raw: UInt64 in [0, 4, 8] {  // three client-initiated bidirectional request streams
@@ -198,9 +197,7 @@ struct HTTP3ConnectionTests: HTTP3WireFixtures {
     @Test("the reset budget decays over the rolling window — a rate, not a total (§8.1)")
     func resetBudgetDecays() {
         let clock = TestClock()
-        var limits = HTTPLimits()
-        limits.maxStreamResetsPerInterval = 2
-        limits.streamResetInterval = .seconds(1)
+        let limits = HTTPLimits(maxStreamResetsPerInterval: 2, streamResetInterval: .seconds(1))
         var connection = HTTP3Connection(limits: limits, now: clock.nowProvider)
         _ = connection.outbound()  // drain the init actions
         // Two resets — exactly at the cap within the first window; no trip.

@@ -42,10 +42,7 @@ extension HTTPServer where C.Duration == Duration {
         )
         buffer.removeSubrange(pending.bodyStart ..< buffer.count)
         var state = ChunkedBodyDecoder.State()
-        var effectiveLimits = limits
-        if let bodyLimit {
-            effectiveLimits.maxBodySize = bodyLimit
-        }
+        let effectiveLimits = limits.bodyLimited(to: bodyLimit)
         while true {
             var chunk: [UInt8] = []
             let step = frame(&window, state: &state, into: &chunk, limits: effectiveLimits)
