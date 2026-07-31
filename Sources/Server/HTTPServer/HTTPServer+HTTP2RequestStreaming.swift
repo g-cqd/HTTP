@@ -66,7 +66,7 @@ extension HTTPServer {
             case .requestEnd(let streamID):
                 await endHTTP2StreamingRequest(streamID, streaming: &state.streaming)
             default:
-                handleHTTP2Tunnel(event, state: &state, group: &group, into: continuation)
+                await handleHTTP2Tunnel(event, state: &state, group: &group, into: continuation)
         }
     }
 

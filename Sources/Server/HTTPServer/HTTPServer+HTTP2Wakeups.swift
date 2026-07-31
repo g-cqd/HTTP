@@ -119,7 +119,7 @@ extension HTTPServer {
                 // the things that DO still need input (a streaming-route body mid-upload), end every
                 // tunnel, then drain what is left before actually closing.
                 await state.finishAllStreaming()
-                state.endAllTunnels()
+                await state.endAllTunnels()
                 state.readerClosed = true
                 return state.isDrained
         }
@@ -273,6 +273,9 @@ extension HTTPServer {
         // engine nothing further (RFC 9113 §5.1 lets a closed/reset stream's id go); only a SELF-
         // initiated close still needs `engine.closeTunnel` here.
         state.webSockets.removeValue(forKey: streamID)
+        // The pump has finished, so nothing more will ever consume this tunnel's inbound: give back any
+        // credit it was still holding before the engine drops the stream (RFC 9113 §6.9.1).
+        state.retire(streamID)
         if selfClosed {
             try? state.engine.closeTunnel(streamID)
         }

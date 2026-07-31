@@ -286,7 +286,7 @@ extension HTTPServer {
         state: inout HTTP2ConnectionState,
         group: inout DiscardingTaskGroup,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
-    ) {
+    ) async {
         switch event {
             case .extendedConnect(let streamID, let request, let proto):
                 // Resolve the WebSocket route for this stream's path; an Extended CONNECT to a path the
@@ -309,33 +309,60 @@ extension HTTPServer {
                     streamID,
                     secWebSocketExtensions: permessageDeflate?.headerValue
                 )
-                let (signals, mailbox) = AsyncStream.makeStream(
-                    of: HTTP2TunnelSignal.self, bufferingPolicy: .unbounded
-                )
-                state.webSockets[streamID] = HTTP2WebSocketTunnel(mailbox: mailbox)
+                // Consumption-gated, exactly like a streaming-route body (audit F2): the peer may run at
+                // most one `streamReceiveWindow` ahead of this tunnel's handler, and the window re-opens
+                // only as the pump reports what it has processed.
+                let channel = makeHTTP2GatedChannel()
+                let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
+                state.consumption[streamID] = signal
+                state.webSockets[streamID] = HTTP2WebSocketTunnel(channel: channel, signal: signal)
                 state.pendingTunnels += 1
                 group.addTask { [self] in
                     await runHTTP2Tunnel(
                         streamID: streamID,
                         handler: handler,
                         permessageDeflate: permessageDeflate,
-                        signals: signals,
+                        channel: channel,
+                        signal: signal,
                         into: continuation
                     )
                 }
             case .tunnelData(let streamID, let bytes):
-                state.webSockets[streamID]?.mailbox.yield(.bytes(bytes))
-            case .tunnelClosed(let streamID), .streamReset(let streamID, _):
-                // Exactly-once: only a tunnel still tracked gets the peer-ended signal (a self-closed
-                // removal — see `.tunnelEnded` in HTTPServer+HTTP2.swift — has already removed it). The
-                // pump task still reports back via `.tunnelEnded` once it processes this signal, so
-                // `pendingTunnels` (not this map) is what the EOF drain check waits on.
+                await pushHTTP2TunnelData(streamID, bytes: bytes, state: &state)
+            case .tunnelClosed(let streamID):
+                // Exactly-once: only a tunnel still tracked is ended here (a self-closed removal — see
+                // `.tunnelEnded` in HTTPServer+HTTP2Wakeups.swift — has already removed it). `finish()`
+                // rather than `abandon()`, so frames already in flight are still delivered before the
+                // pump sees the end. The pump reports back via `.tunnelEnded`, so `pendingTunnels` (not
+                // this map) is what the EOF drain check waits on.
                 if let tunnel = state.webSockets.removeValue(forKey: streamID) {
-                    tunnel.mailbox.yield(.peerEnded)
-                    tunnel.mailbox.finish()
+                    await tunnel.channel.finish()
                 }
             default:
                 break
+        }
+    }
+
+    /// Hands one decoded tunnel DATA chunk to its pump — never blocking the consumer (RFC 8441 §5).
+    ///
+    /// Same discipline as a streaming-route body chunk: `trySend`, because the consumer owns the engine
+    /// and must stay free to process the WINDOW_UPDATE that unblocks the connection. A refusal ends the
+    /// tunnel rather than dropping a frame — a WebSocket stream is a resumable parser, so a dropped
+    /// chunk would desynchronize framing rather than merely lose data (RFC 6455 §5).
+    private func pushHTTP2TunnelData(
+        _ streamID: HTTP2StreamID,
+        bytes: [UInt8],
+        state: inout HTTP2ConnectionState
+    ) async {
+        guard let tunnel = state.webSockets[streamID] else {
+            return  // already closed or reset out from under this chunk
+        }
+        guard await tunnel.channel.trySend(bytes) != .refused else {
+            state.webSockets.removeValue(forKey: streamID)
+            await tunnel.channel.abandon()
+            try? state.engine.abortResponse(to: streamID, code: .flowControlError)
+            state.retire(streamID)
+            return
         }
     }
 
@@ -349,17 +376,22 @@ extension HTTPServer {
     ///
     /// Exactly-once lifecycle hooks (RFC 6455 §7): `onOpen` before the first byte is processed; `onClose`
     /// exactly once, right here, as this function returns — for every ending, whether the local engine
-    /// decided to close, the peer ended the tunnel (`.peerEnded`), or the connection is tearing down
-    /// (cancellation unblocks the `for await` below exactly like a normal completion — `AsyncStream`
-    /// iteration is cancellation-aware on this runtime). `.tunnelEnded` is likewise yielded UNCONDITIONALLY
-    /// on every exit — including a cancelled one — so the consumer's `pendingTunnels` count (the EOF drain
+    /// decided to close, the peer ended the tunnel, or the connection is tearing down (``
+    /// BoundedByteChannel/next()`` is cancellation-aware and resumes `.aborted`, so a cancelled pump
+    /// unwinds exactly like a normal completion). `.tunnelEnded` is likewise yielded UNCONDITIONALLY on
+    /// every exit — including a cancelled one — so the consumer's `pendingTunnels` count (the EOF drain
     /// check) always reaches zero and the connection is never held open waiting on a pump task that has
     /// actually already finished.
+    ///
+    /// Consumption is reported AFTER the handler has been driven over the chunk, not when it is taken
+    /// off the channel: that is what makes the peer's window track the handler's real progress rather
+    /// than the pump's willingness to dequeue (audit F2).
     private func runHTTP2Tunnel(
         streamID: HTTP2StreamID,
         handler: any WebSocketHandler,
         permessageDeflate: PermessageDeflateParameters?,
-        signals: AsyncStream<HTTP2TunnelSignal>,
+        channel: BoundedByteChannel,
+        signal: HTTP2ConsumptionSignal,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
         var socket = WebSocketConnection(
@@ -374,22 +406,20 @@ extension HTTPServer {
         if !greeting.isEmpty { continuation.yield(.tunnelOutbound(streamID, greeting)) }
 
         var selfClosed = false
-        signalLoop: for await signal in signals {
-            switch signal {
-                case .bytes(let bytes):
-                    // A violation leaves a queued Close and sets `isClosing`; handled below.
-                    let events = (try? socket.receive(bytes)) ?? []
-                    for event in events {
-                        for action in await handler.handle(event) { socket.apply(action) }
-                    }
-                    let outbound = socket.outboundBytes()
-                    if !outbound.isEmpty { continuation.yield(.tunnelOutbound(streamID, outbound)) }
-                    if socket.isClosing {
-                        selfClosed = true
-                        break signalLoop
-                    }
-                case .peerEnded:
-                    break signalLoop
+        while case .chunk(let bytes) = await channel.next() {
+            // A violation leaves a queued Close and sets `isClosing`; handled below.
+            let events = (try? socket.receive(bytes)) ?? []
+            for event in events {
+                for action in await handler.handle(event) { socket.apply(action) }
+            }
+            let outbound = socket.outboundBytes()
+            if !outbound.isEmpty { continuation.yield(.tunnelOutbound(streamID, outbound)) }
+            // The handler has now seen everything in this chunk, so the octets are genuinely consumed
+            // and the peer may be given that much window back (RFC 9113 §6.9).
+            signal.record(bytes.count)
+            if socket.isClosing {
+                selfClosed = true
+                break
             }
         }
         await handler.onClose()  // lifecycle hook — the session is over, exactly once

@@ -92,10 +92,13 @@ struct HTTP2ConnectionState {
     }
 
     /// Tells every open tunnel its peer has ended, so each pump runs its `onClose` exactly once.
-    mutating func endAllTunnels() {
-        for tunnel in webSockets.values {
-            tunnel.mailbox.yield(.peerEnded)
-            tunnel.mailbox.finish()
+    ///
+    /// `finish()` rather than `abandon()`: frames already queued are still delivered, so a tunnel torn
+    /// down at end-of-input processes what actually arrived before it ends (RFC 6455 §7).
+    mutating func endAllTunnels() async {
+        for (streamID, tunnel) in webSockets {
+            await tunnel.channel.finish()
+            retire(streamID)
         }
         webSockets.removeAll()
     }
