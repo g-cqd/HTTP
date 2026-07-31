@@ -44,13 +44,35 @@
             return destination
         }
 
-        /// Decompresses a Brotli stream, bounding the output to `maxOutput` octets — over-cap input overruns
-        /// the sized buffer and fails closed (nil), the decompression-bomb defense (CWE-409).
+        /// The first destination size tried, in octets — see ``decompress(_:maxOutput:)``.
+        private static let window = 64 * 1_024
+
+        /// Decompresses a Brotli stream, bounding the output to `maxOutput` octets — a stream that
+        /// does not fit fails closed (nil), the decompression-bomb defense (CWE-409).
+        ///
+        /// The destination grows geometrically from ``window`` rather than being sized to the cap, for
+        /// the same reasons as `InflateLinux` (which carries the full note): sizing to the cap charged
+        /// every request the cap, and `maxOutput + 1` overflowed at `Int.max`. The last attempt is
+        /// sized to `maxOutput` exactly, so an over-cap body never fits.
         static func decompress(_ input: [UInt8], maxOutput: Int) -> [UInt8]? {
             guard maxOutput > 0, !input.isEmpty else {
                 return nil
             }
-            let capacity = maxOutput + 1
+            var capacity = min(window, maxOutput)
+            while true {
+                if let output = attempt(input, capacity: capacity) {
+                    return output
+                }
+                guard capacity < maxOutput else {
+                    return nil
+                }
+                capacity = capacity <= maxOutput / 2 ? capacity * 2 : maxOutput
+            }
+        }
+
+        /// One decode into a `capacity`-octet destination, or nil when the stream did not fit or is
+        /// malformed (the shim collapses both to 0 written).
+        private static func attempt(_ input: [UInt8], capacity: Int) -> [UInt8]? {
             var destination = [UInt8](repeating: 0, count: capacity)
             let written = input.withUnsafeBufferPointer { source in
                 destination.withUnsafeMutableBufferPointer { output -> Int in
@@ -60,7 +82,7 @@
                     return cbrotli_decompress(output, capacity, source, input.count)
                 }
             }
-            guard written > 0, written <= maxOutput else {
+            guard written > 0, written <= capacity else {
                 return nil
             }
             destination.removeLast(destination.count - written)

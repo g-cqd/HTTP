@@ -2,9 +2,9 @@
 //  HTTPLimits.swift
 //  HTTPCore
 //
-//  Defense-in-depth resource limits. Engines enforce these and fail closed on breach (the two
-//  inbound-decompression bounds are reserved until that feature lands — see their notes).
-//  Defaults are the reconciled safe values from the project's security analysis (RFCs + CVEs).
+//  Defense-in-depth resource limits. Engines enforce these and fail closed on breach (the three
+//  inbound-decompression bounds are enforced by the opt-in `DecompressionMiddleware` — see their
+//  notes). Defaults are the reconciled safe values from the project's security analysis (RFCs + CVEs).
 //
 
 /// Configurable resource limits enforced by every protocol engine.
@@ -53,15 +53,23 @@ public struct HTTPLimits: Sendable, Equatable {
 
     /// Maximum size of an inbound decompressed body (gzip/brotli decompression bombs; CWE-409).
     ///
-    /// Reserved, **not yet enforced**: the server performs only response-side compression today, so no
-    /// request body is decompressed. This bound activates when inbound `Content-Encoding` decoding is
-    /// added.
+    /// Enforced by the opt-in `DecompressionMiddleware`, which is the only thing in the server that
+    /// decodes an inbound `Content-Encoding`; a build without it never decompresses a request body.
     public var maxDecompressedBodySize: Int
 
     /// Maximum decompressed-to-compressed size ratio for an inbound body (decompression bombs).
     ///
-    /// Reserved alongside ``maxDecompressedBodySize`` — **not yet enforced** (no inbound decompression).
+    /// Charged against the size the peer actually sent, so it bounds total amplification even when
+    /// several codings are stacked. Enforced alongside ``maxDecompressedBodySize``.
     public var maxDecompressionRatio: Int
+
+    /// Maximum number of stacked inbound content codings (RFC 9110 §8.4.1).
+    ///
+    /// `Content-Encoding` is an ordered list and each entry costs a full decode pass, so an
+    /// arbitrarily long list is CPU amplification from a single header (CWE-409). Real traffic uses
+    /// one coding; the default of 2 leaves room for the legal `gzip, br` shape and refuses deeper
+    /// nesting with `415 Unsupported Media Type`.
+    public var maxDecompressionLayers: Int
 
     // MARK: HTTP/2 & HTTP/3 limits
 
@@ -164,6 +172,7 @@ public struct HTTPLimits: Sendable, Equatable {
         maxWebSocketMessageSize: Int? = nil,  // follow maxBodySize
         maxDecompressedBodySize: Int = 1 << 30,
         maxDecompressionRatio: Int = 10,
+        maxDecompressionLayers: Int = 2,
         maxConcurrentStreams: Int = 128,
         maxFrameSize: Int = 16 * 1_024,
         headerTableSize: Int = 4 * 1_024,
@@ -189,6 +198,7 @@ public struct HTTPLimits: Sendable, Equatable {
         self.maxWebSocketMessageSize = maxWebSocketMessageSize
         self.maxDecompressedBodySize = maxDecompressedBodySize
         self.maxDecompressionRatio = maxDecompressionRatio
+        self.maxDecompressionLayers = maxDecompressionLayers
         self.maxConcurrentStreams = maxConcurrentStreams
         self.maxFrameSize = maxFrameSize
         self.headerTableSize = headerTableSize

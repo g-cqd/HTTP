@@ -30,8 +30,13 @@ public final class SharedBoundedLRU<Key: Hashable & Sendable, Value: Sendable>: 
 
     /// Creates a map holding at most `capacity` entries and `maxCost` total cost across all shards.
     ///
-    /// `shards` is a hint: it is clamped to `capacity` (so every shard gets at least one entry) and
-    /// then rounded up to a power of two. Use `1` when a test needs a deterministic eviction order.
+    /// `shards` is a hint: it is clamped to `capacity` (so every shard of a non-empty map gets at
+    /// least one entry) and then rounded up to a power of two. Use `1` when a test needs a
+    /// deterministic eviction order.
+    ///
+    /// `capacity: 0` (or negative) means *disabled* and is honoured literally: every shard is built
+    /// with capacity zero, so the map refuses every insertion and retains nothing. Rounding it up to
+    /// one instead would leave a switched-off cache holding one attacker-chosen entry (CWE-400).
     public init(
         capacity: Int,
         maxCost: Int = .max,
@@ -40,7 +45,9 @@ public final class SharedBoundedLRU<Key: Hashable & Sendable, Value: Sendable>: 
     ) {
         let requested = max(1, min(shards, max(1, capacity)))
         let count = Self.roundedDownToPowerOfTwo(requested)
-        let perShardCapacity = max(1, capacity) / count
+        // `count <= capacity` whenever `capacity >= 1`, so the floor division is at least one there;
+        // at `capacity <= 0` it is zero, which is exactly the requested disabled map.
+        let perShardCapacity = max(0, capacity) / count
         let perShardCost = maxCost == .max ? .max : maxCost / count
         self.shards = ShardedMutex(shards: count) { _ in
             BoundedLRU(capacity: perShardCapacity, maxCost: perShardCost, overflow: overflow)

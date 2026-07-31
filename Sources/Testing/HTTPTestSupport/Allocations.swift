@@ -32,6 +32,48 @@ public func mallocDelta(_ body: () -> Void) -> Int? {
     return Int(httptk_malloc_count_end())
 }
 
+/// Counts the heap octets requested during `body`.
+///
+/// Same rules as ``mallocDelta(_:)`` (synchronous body, warm up first, per measuring thread). The
+/// total is *cumulative requested size*, not peak residency: a grow-copy-free loop is charged for
+/// every intermediate buffer. That is what makes it the right oracle for bounded growth — a routine
+/// that sizes one buffer straight to a hard cap and one that grows geometrically to a much smaller
+/// final size make a similar number of allocations and differ by orders of magnitude in octets.
+public func mallocByteDelta(_ body: () -> Void) -> Int? {
+    guard httptk_malloc_counting_available() != 0 else {
+        body()
+        return nil
+    }
+    var bytes: UInt64 = 0
+    httptk_malloc_count_begin()
+    body()
+    httptk_malloc_count_stop(nil, &bytes)
+    return Int(bytes)
+}
+
+/// Asserts `body` requests at most `limit` heap octets — the bounded-growth guard.
+///
+/// Trips when a routine starts sizing a buffer to its worst-case bound instead of growing into it —
+/// the decompression-bomb shape, where a small input plus a large cap must not become a large
+/// allocation (CWE-409). Where counting is unavailable it runs the body and records nothing.
+@discardableResult
+public func expectAllocatedBytes(
+    noMoreThan limit: Int,
+    sourceLocation: SourceLocation = #_sourceLocation,
+    _ body: () -> Void
+) -> Int? {
+    guard let bytes = mallocByteDelta(body) else {
+        return nil
+    }
+    if bytes > limit {
+        Issue.record(
+            "expected at most \(limit) allocated octet(s), measured \(bytes)",
+            sourceLocation: sourceLocation
+        )
+    }
+    return bytes
+}
+
 /// Asserts `body` makes at most `limit` heap allocations — a mutation-resistant performance guard.
 ///
 /// A re-introduced copy / box / un-reserved growth on a hot path trips it. Warm up + measure

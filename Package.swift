@@ -96,7 +96,9 @@ let strictSwiftSettings: [SwiftSetting] = [
     let appleCompressionTestSources = [
         "CompressionMiddlewareTests.swift",
         "DecompressionMiddlewareTests.swift",
-        "DecompressionFuzzTests.swift"
+        "DecompressionFuzzTests.swift",
+        "DecompressionPolicyTests.swift",
+        "InflateBoundsTests.swift"
     ]
 #else
     let darwinOnlyTransportSources: [String] = []

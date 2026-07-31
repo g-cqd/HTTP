@@ -44,14 +44,41 @@
             }
         }
 
-        /// The shared bounded decode into a `maxOutput + 1` buffer: zlib reaches `Z_STREAM_END` only when
-        /// the whole stream fits, so an over-cap body overruns `avail_out` and the shim returns 0 (nil
-        /// here). `raw` selects raw DEFLATE (no zlib/gzip header) over the auto-detecting path.
+        /// The first destination size tried, in octets — see ``decode(_:maxOutput:raw:)``.
+        private static let window = 64 * 1_024
+
+        /// The shared bounded decode: zlib reaches `Z_STREAM_END` only when the whole stream fits, so
+        /// the shim returns 0 for a destination that is too small. `raw` selects raw DEFLATE (no
+        /// zlib/gzip header) over the auto-detecting path.
+        ///
+        /// The destination grows geometrically from ``window`` rather than being sized to the cap.
+        /// Sizing to the cap made every request pay the cap — a small coded body under a default-scale
+        /// limit allocated hundreds of megabytes — and `maxOutput + 1` overflowed at `Int.max`. The
+        /// trade is CPU: the shim is one-shot, so unlike the Darwin path (`Inflate.swift`, which
+        /// enforces the bound *during* an incremental decode) each growth step re-inflates from the
+        /// start, costing about twice the decode of the final size across at most `log2(cap / window)`
+        /// attempts. Note also that the final attempt is sized to `maxOutput` exactly, so an over-cap
+        /// body simply never fits — which is the fail-closed signal, with no `+ 1` to overflow.
         private static func decode(_ input: [UInt8], maxOutput: Int, raw: Bool) -> [UInt8]? {
             guard maxOutput > 0, !input.isEmpty else {
                 return nil
             }
-            let capacity = maxOutput + 1
+            var capacity = min(window, maxOutput)
+            while true {
+                if let output = attempt(input, capacity: capacity, raw: raw) {
+                    return output
+                }
+                guard capacity < maxOutput else {
+                    return nil
+                }
+                // `capacity * 2` only where it provably stays within the cap, so it cannot overflow.
+                capacity = capacity <= maxOutput / 2 ? capacity * 2 : maxOutput
+            }
+        }
+
+        /// One decode into a `capacity`-octet destination, or nil when the stream did not fit or is
+        /// malformed (the shim collapses both to 0 written).
+        private static func attempt(_ input: [UInt8], capacity: Int, raw: Bool) -> [UInt8]? {
             var destination = [UInt8](repeating: 0, count: capacity)
             let written = input.withUnsafeBufferPointer { source in
                 destination.withUnsafeMutableBufferPointer { output -> Int in
@@ -63,7 +90,7 @@
                         : czlib_inflate(output, capacity, source, input.count)
                 }
             }
-            guard written > 0, written <= maxOutput else {
+            guard written > 0, written <= capacity else {
                 return nil
             }
             destination.removeLast(destination.count - written)
