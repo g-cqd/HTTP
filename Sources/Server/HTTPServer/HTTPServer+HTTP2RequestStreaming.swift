@@ -32,19 +32,15 @@ extension HTTPServer {
     /// the connection actually closes, rather than cancelling it out from under itself.
     func handleHTTP2Event(
         _ event: HTTP2Connection.Event,
-        engine: inout HTTP2Connection,
+        state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
         group: inout DiscardingTaskGroup,
-        webSockets: inout [HTTP2StreamID: HTTP2WebSocketTunnel],
-        streaming: inout [HTTP2StreamID: HTTP2StreamingRequest],
-        pendingRequests: inout Int,
-        pendingTunnels: inout Int,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) {
         switch event {
             case .request(let streamID, let request, let body):
                 let responder = currentResponder  // hot-swappable responder, read once (G4a)
-                pendingRequests += 1
+                state.pendingRequests += 1
                 group.addTask { [self] in
                     let context = RequestContext(connection: connection, request: request)
                     let response = await responder.respond(
@@ -53,27 +49,20 @@ extension HTTPServer {
                     continuation.yield(.requestReady(streamID, response))
                 }
             case .requestHead(let streamID, let request):
-                streaming[streamID] = beginHTTP2StreamingRequest(
+                state.streaming[streamID] = beginHTTP2StreamingRequest(
                     request: request,
                     streamID: streamID,
                     connection: connection,
                     group: &group,
-                    pendingRequests: &pendingRequests,
+                    pendingRequests: &state.pendingRequests,
                     into: continuation
                 )
             case .requestBodyChunk(let streamID, let bytes):
-                streaming[streamID]?.continuation.yield(bytes)
+                state.streaming[streamID]?.continuation.yield(bytes)
             case .requestEnd(let streamID):
-                endHTTP2StreamingRequest(streamID, streaming: &streaming)
+                endHTTP2StreamingRequest(streamID, streaming: &state.streaming)
             default:
-                handleHTTP2Tunnel(
-                    event,
-                    engine: &engine,
-                    group: &group,
-                    webSockets: &webSockets,
-                    pendingTunnels: &pendingTunnels,
-                    into: continuation
-                )
+                handleHTTP2Tunnel(event, state: &state, group: &group, into: continuation)
         }
     }
 

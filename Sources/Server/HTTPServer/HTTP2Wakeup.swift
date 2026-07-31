@@ -15,17 +15,22 @@ internal import HTTP2
 
 /// A wakeup for the HTTP/2 merged-mailbox consumer (see ``HTTPServer/serveHTTP2(_:deadline:initialBytes:)``).
 enum HTTP2Wakeup: Sendable {
-    /// Inbound octets off the wire (or the reader's initial carryover) to feed `engine.receive`.
-    case inbound([UInt8])
-
-    /// The reader hit EOF, an idle-timeout lapse, or a read failure — no more `.inbound` will ever
-    /// follow. NOT immediately connection-fatal: a request already fully received (dispatched to its own
-    /// task before this arrived), an active native-streaming relay, or an open tunnel may still have
-    /// meaningful work in flight — none of it needs any more input from the connection to finish, only
-    /// the chance to actually run. The consumer drains that in-flight work (abandoning anything that DOES
-    /// still need more input, e.g. a streaming-route request body mid-upload) and closes once none of it
-    /// remains, rather than cancelling it out from under itself the instant this wakeup is seen.
-    case closed
+    /// One item — a chunk of inbound octets, or the terminal end-of-input — is queued in the reader's
+    /// intake channel.
+    ///
+    /// A payload-free *ticket* (2026-07-31 audit, finding 3). The octets themselves live in a
+    /// ``BoundedByteChannel`` that parks the reader at a byte watermark, which is what lets this stream
+    /// stay `.unbounded` while being *provably* bounded: a ticket is 1:1 with a queued item, and the
+    /// channel caps those at `maxQueuedInboundChunks`. Carrying the payload here instead let an
+    /// adversarial peer outpace the consumer and grow memory without limit.
+    ///
+    /// End-of-input arrives *in band* through the same channel rather than as its own case, so it can
+    /// never overtake octets that were read before it. It is not immediately connection-fatal: a request
+    /// already fully received, an active native-streaming relay, or an open tunnel needs no further
+    /// input to finish, only the chance to run. The consumer drains that in-flight work — abandoning
+    /// exactly what does still need input, such as a streaming-route body mid-upload — and closes once
+    /// none remains.
+    case inboundReady
 
     /// A dispatched request's (buffered or streaming-route) handler finished; apply its response.
     case requestReady(HTTP2StreamID, ServerResponse)

@@ -280,10 +280,8 @@ extension HTTPServer {
     /// finish before the connection actually closes.
     func handleHTTP2Tunnel(
         _ event: HTTP2Connection.Event,
-        engine: inout HTTP2Connection,
+        state: inout HTTP2ConnectionState,
         group: inout DiscardingTaskGroup,
-        webSockets: inout [HTTP2StreamID: HTTP2WebSocketTunnel],
-        pendingTunnels: inout Int,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) {
         switch event {
@@ -304,15 +302,15 @@ extension HTTPServer {
                 let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(
                     request.headerFields
                 )
-                try? engine.acceptTunnel(  // 200, no END_STREAM (RFC 8441 §5)
+                try? state.engine.acceptTunnel(  // 200, no END_STREAM (RFC 8441 §5)
                     streamID,
                     secWebSocketExtensions: permessageDeflate?.headerValue
                 )
                 let (signals, mailbox) = AsyncStream.makeStream(
                     of: HTTP2TunnelSignal.self, bufferingPolicy: .unbounded
                 )
-                webSockets[streamID] = HTTP2WebSocketTunnel(mailbox: mailbox)
-                pendingTunnels += 1
+                state.webSockets[streamID] = HTTP2WebSocketTunnel(mailbox: mailbox)
+                state.pendingTunnels += 1
                 group.addTask { [self] in
                     await runHTTP2Tunnel(
                         streamID: streamID,
@@ -323,13 +321,13 @@ extension HTTPServer {
                     )
                 }
             case .tunnelData(let streamID, let bytes):
-                webSockets[streamID]?.mailbox.yield(.bytes(bytes))
+                state.webSockets[streamID]?.mailbox.yield(.bytes(bytes))
             case .tunnelClosed(let streamID), .streamReset(let streamID, _):
                 // Exactly-once: only a tunnel still tracked gets the peer-ended signal (a self-closed
                 // removal — see `.tunnelEnded` in HTTPServer+HTTP2.swift — has already removed it). The
                 // pump task still reports back via `.tunnelEnded` once it processes this signal, so
                 // `pendingTunnels` (not this map) is what the EOF drain check waits on.
-                if let tunnel = webSockets.removeValue(forKey: streamID) {
+                if let tunnel = state.webSockets.removeValue(forKey: streamID) {
                     tunnel.mailbox.yield(.peerEnded)
                     tunnel.mailbox.finish()
                 }
