@@ -45,7 +45,28 @@ public struct HTTP3FrameDecoder {
     ///
     /// Throws `H3_EXCESSIVE_LOAD` if the header declares a payload larger than `maxFrameSize` (a
     /// resource-exhaustion guard, RFC 9114 §7.1 / §8.1).
+    /// The OWNING half: it materializes the payload, so the frame outlives the buffer it came from.
+    /// The connection engine uses ``nextFrameRange(_:)`` instead and never pays this copy; this entry
+    /// point remains for callers that need an escaping value (tests, tools, out-of-module clients).
     public func nextFrame(_ reader: inout ByteReader) throws(HTTP3Error) -> Frame? {
+        guard let framing = try nextFrameRange(&reader) else {
+            return nil
+        }
+        let payload = reader.slice(in: framing.payload).withUnsafeBytes { Array($0) }
+        return Frame(type: framing.type, payload: payload)
+    }
+
+    /// Locates the next complete frame without copying it, as a type plus a payload range.
+    ///
+    /// The range indexes `reader`'s own buffer.
+    ///
+    /// The BORROWED half (audit CR-F18), and the implementation ``nextFrame(_:)`` copies from — so the
+    /// two cannot disagree about where a frame starts or ends. The cursor advances identically; the
+    /// caller reads the payload in place via ``ByteReader/slice(in:)`` and materializes only what has
+    /// to outlive the borrow. Returns nil while a frame is still arriving, leaving the cursor put.
+    func nextFrameRange(
+        _ reader: inout ByteReader
+    ) throws(HTTP3Error) -> (type: HTTP3FrameType, payload: Range<Int>)? {
         // Probe on a copy so an incomplete frame leaves the real cursor untouched for a later retry.
         var probe = reader
         guard let rawType = QUICVarint.decode(&probe) else {
@@ -65,10 +86,6 @@ public struct HTTP3FrameDecoder {
         reader.advance(by: probe.position - reader.position)  // consume the type + length varints
         let start = reader.position
         reader.advance(by: payloadLength)
-        let payload = reader.slice(in: start ..< (start + payloadLength))
-            .withUnsafeBytes {
-                Array($0)
-            }
-        return Frame(type: HTTP3FrameType(rawValue: rawType), payload: payload)
+        return (HTTP3FrameType(rawValue: rawType), start ..< (start + payloadLength))
     }
 }
