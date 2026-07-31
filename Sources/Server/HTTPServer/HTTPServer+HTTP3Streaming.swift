@@ -46,12 +46,15 @@ extension HTTPServer {
         let (request, context) = RequestContext.ingress(
             inbound, over: quic, matching: plan.match
         )
-        let current = plan.snapshot.responder  // this request's generation (CR-F12)
-        let handler = Task {
-            let response = await current.respond(
+        let handler = Task { [self] in
+            // Seam 6 of 6 (audit CR-F7). `plan` carries this request's generation (CR-F12). The feed
+            // loop below stays on the reactor and keeps sole ownership of `inbox`, `engine.receive`
+            // and the routed-event dispatch; only the handler body moves.
+            let response = await respond(
                 to: request,
                 body: .stream(HTTPRequestBodyStream(handoff: handoff)),
-                context: context
+                context: context,
+                following: plan
             )
             await handoff.abandon()  // unblock the feeder if the handler returned without draining
             return response

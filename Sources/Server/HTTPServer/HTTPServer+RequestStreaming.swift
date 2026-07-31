@@ -55,7 +55,10 @@ extension HTTPServer where C.Duration == Duration {
         )
         let handoff = AsyncHandoff()
         async let responseTask = respondStreaming(
-            request, handoff: handoff, context: context, on: plan.snapshot.responder
+            request,
+            handoff: handoff,
+            context: context,
+            following: plan
         )
         let consumed = await produceBody(
             pending,
@@ -90,10 +93,18 @@ extension HTTPServer where C.Duration == Duration {
         _ request: HTTPRequest,
         handoff: AsyncHandoff,
         context: RequestContext,
-        on responder: any HTTPResponder
+        following plan: DispatchPlan
     ) async -> ServerResponse {
-        let response = await responder.respond(
-            to: request, body: .stream(HTTPRequestBodyStream(handoff: handoff)), context: context
+        // Seam 2 of 6 (audit CR-F7). This already runs as an `async let` child of the reactor-pinned
+        // exchange, concurrently with the body feed; the policy decides only which executor that
+        // child's handler body uses. The feed loop's `buffer` stays an `inout` local of
+        // ``serveStreaming`` and is not reachable from here, and the `abandon` below runs after the
+        // scoped preference is restored.
+        let response = await respond(
+            to: request,
+            body: .stream(HTTPRequestBodyStream(handoff: handoff)),
+            context: context,
+            following: plan
         )
         await handoff.abandon()
         return response

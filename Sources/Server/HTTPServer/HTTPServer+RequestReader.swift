@@ -104,8 +104,17 @@ extension HTTPServer where C.Duration == Duration {
             )
             return false
         }
-        let response = await plan.snapshot.responder.respond(
-            to: request, body: .collected(framed.parsed.body), context: context
+        // Seam 1 of 6 (audit CR-F7): the handler runs under this server's ``HandlerExecutionPolicy``.
+        // The hop, when there is one, is scoped to exactly this call — `buffer`, `start` and
+        // `responseBuffer` are `inout` locals of the reactor-pinned keep-alive loop and are not
+        // captured here, and the serialize-and-send below runs after the scoped preference is
+        // restored. `serveOne` is one sequential statement of that loop, so a pipelined follow-up is
+        // not even read until this exchange has been written (RFC 9112 §9.3 — response order).
+        let response = await respond(
+            to: request,
+            body: .collected(framed.parsed.body),
+            context: context,
+            following: plan
         )
         var head = withAltSvc(response.head)
         // Graceful shutdown: signal this is the last exchange (RFC 9110 §7.6.1) and close after it.
