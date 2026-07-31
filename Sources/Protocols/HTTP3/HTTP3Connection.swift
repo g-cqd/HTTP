@@ -161,6 +161,12 @@ public struct HTTP3Connection {
     var remoteSettings = HTTP3Settings()
     /// The last GOAWAY id received — a subsequent GOAWAY must not increase it (RFC 9114 §5.2).
     var lastGoAwayID: UInt64?
+    /// The highest client-initiated bidirectional (request) stream id seen, which fixes the boundary
+    /// our own GOAWAY announces (RFC 9114 §5.2).
+    var highestRequestStreamID: QUICStreamID?
+    /// Whether ``beginGracefulShutdown()`` has already queued our GOAWAY — it is sent once, because a
+    /// later one must not raise the boundary (RFC 9114 §5.2).
+    var sentGoAway = false
     /// The highest MAX_PUSH_ID received — it must not decrease (RFC 9114 §7.2.7).
     var maxPushID: UInt64?
     /// The injected monotonic clock the reset rolling window is measured against (RFC 9114 §8.1).
@@ -236,6 +242,16 @@ public struct HTTP3Connection {
             return
         }
         streams[id] = StreamState(kind: direction == .unidirectional ? .unclassifiedUni : .request)
+    }
+
+    /// Whether `streamID` still holds a field section blocked on not-yet-received QPACK inserts
+    /// (RFC 9204 §2.1.2) — its request has not surfaced yet and will do so from *another* stream's
+    /// receive, once the encoder stream delivers those inserts.
+    ///
+    /// The driver reads this when a stream's own task ends: a blocked stream's writer must stay
+    /// reachable so the request can still be answered on it (audit addendum P0.3).
+    public func isBlocked(_ streamID: QUICStreamID) -> Bool {
+        streams[streamID]?.blockedSection != nil
     }
 
     /// Drains the queued outbound actions for the driver to perform.
@@ -321,6 +337,11 @@ public struct HTTP3Connection {
             )
         state.buffer.append(contentsOf: bytes)
         if fin { state.finReceived = true }
+        // Track the request-stream high-water mark so a graceful GOAWAY can name the first stream we
+        // will not process (RFC 9114 §5.2).
+        if state.kind == .request {
+            highestRequestStreamID = Swift.max(highestRequestStreamID ?? streamID, streamID)
+        }
         streams[streamID] = state
         try dispatch(streamID, into: &events)
     }

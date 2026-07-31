@@ -55,6 +55,16 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// ``shutdown(within:)`` force-closes any that have not drained by the deadline.
     let activeConnections = Mutex<[TransportConnectionID: any TransportConnection]>([:])
 
+    /// In-flight QUIC connections being served, keyed by a monotonic handle id (audit addendum P0.5).
+    ///
+    /// A QUIC connection is not a ``TransportConnection`` — it multiplexes streams rather than being
+    /// one — so it needs its own registry; without it the drain reached only the TCP half of the
+    /// server. ``shutdown(within:)`` GOAWAYs each of these, then force-closes whatever has not drained.
+    let activeQUICConnections = Mutex<[Int: HTTP3Handle]>([:])
+
+    /// The source of ``activeQUICConnections`` keys — a QUIC connection has no transport-assigned id.
+    let nextQUICHandleID = Atomic<Int>(0)
+
     /// Creates a server bound to `transport`, handling requests with `responder` and timing its
     /// Slowloris/idle deadlines against `clock`.
     public init(
