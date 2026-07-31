@@ -71,7 +71,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
     /// Binds the listener and begins accepting, returning a stream of inbound connections.
     ///
     /// Waits for the listener to reach `ready` (so ``boundPort`` is valid) before returning.
-    public func start() async throws -> AsyncStream<any TransportConnection> {
+    public func start(
+        admission _: ConnectionAdmission?
+    ) async throws -> AsyncStream<any TransportConnection> {
         let listener = try makeListener(tls: configuration.tls, port: configuration.port)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
 

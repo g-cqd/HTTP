@@ -41,7 +41,9 @@ public final class ModernQUICTransport: QUICServerTransport {
     }
 
     /// Binds the QUIC listener and begins accepting, returning a stream of inbound connections.
-    public func start() async throws -> AsyncStream<any QUICConnection> {
+    public func start(
+        admission _: ConnectionAdmission?
+    ) async throws -> AsyncStream<any QUICConnection> {
         guard let tls = configuration.tls else {
             throw TransportError.tlsConfigurationFailed("QUIC requires a TLS identity")
         }

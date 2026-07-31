@@ -47,7 +47,9 @@ public final class LegacyQUICTransport: QUICServerTransport {
     }
 
     /// Binds the QUIC listener and begins accepting, returning a stream of inbound connections.
-    public func start() async throws -> AsyncStream<any QUICConnection> {
+    public func start(
+        admission _: ConnectionAdmission?
+    ) async throws -> AsyncStream<any QUICConnection> {
         let listener = try makeListener()
         let (stream, continuation) = AsyncStream<any QUICConnection>.makeStream()
 

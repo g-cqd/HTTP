@@ -104,7 +104,9 @@ extension HTTPServer {
 
     /// Runs the QUIC listener: advertise `Alt-Svc` (RFC 7838), then serve each connection as HTTP/3.
     func runHTTP3() async {
-        guard let quicTransport, let connections = try? await quicTransport.start() else {
+        guard let quicTransport,
+            let connections = try? await quicTransport.start(admission: admission)
+        else {
             return
         }
         altSvc.withLock { $0 = "h3=\":\(quicTransport.boundPort)\"" }

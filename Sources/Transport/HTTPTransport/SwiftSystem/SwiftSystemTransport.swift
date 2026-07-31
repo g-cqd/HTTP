@@ -64,7 +64,9 @@ public final class SwiftSystemTransport: ServerTransport {
 
     /// Binds one non-blocking listening socket, spins up N event loops, and begins accepting on the
     /// first loop (assigning each connection round-robin to a loop).
-    public func start() async throws -> AsyncStream<any TransportConnection> {
+    public func start(
+        admission _: ConnectionAdmission?
+    ) async throws -> AsyncStream<any TransportConnection> {
         let loopCount = max(1, configuration.eventLoopCount ?? Self.defaultLoopCount())
         let listener = try POSIXSocket.makeListenSocket(
             host: configuration.host,

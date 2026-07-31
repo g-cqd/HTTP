@@ -62,7 +62,9 @@ public final class POSIXDispatchTransport: ServerTransport {
     }
 
     /// Binds a non-blocking TCP socket and begins accepting via a read source.
-    public func start() async throws -> AsyncStream<any TransportConnection> {
+    public func start(
+        admission _: ConnectionAdmission?
+    ) async throws -> AsyncStream<any TransportConnection> {
         let listener = try POSIXSocket.makeListenSocket(
             host: configuration.host,
             port: configuration.port,

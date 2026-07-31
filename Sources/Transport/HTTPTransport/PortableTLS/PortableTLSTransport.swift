@@ -88,7 +88,9 @@
         }
 
         /// Builds the shared `SSL_CTX`, spins up N event loops, binds the listening socket, and accepts.
-        public func start() async throws -> AsyncStream<any TransportConnection> {
+        public func start(
+            admission _: ConnectionAdmission?
+        ) async throws -> AsyncStream<any TransportConnection> {
             guard let tls = configuration.tls else {
                 throw TransportError.tlsConfigurationFailed(
                     "the portable TLS backbone requires a TLS identity"

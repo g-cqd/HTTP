@@ -68,7 +68,9 @@
         /// Binds one non-blocking listening socket — TCP, or `AF_UNIX` for the
         /// ``TransportBackbone/unixDomainSocket`` mode — spins up N event loops, and begins accepting
         /// on the first loop (assigning each connection round-robin to a loop).
-        public func start() async throws -> AsyncStream<any TransportConnection> {
+        public func start(
+            admission _: ConnectionAdmission?
+        ) async throws -> AsyncStream<any TransportConnection> {
             let loopCount = max(1, configuration.eventLoopCount ?? Self.defaultLoopCount())
             let listener: (descriptor: Int32, port: UInt16)
             if configuration.backbone == .unixDomainSocket {
