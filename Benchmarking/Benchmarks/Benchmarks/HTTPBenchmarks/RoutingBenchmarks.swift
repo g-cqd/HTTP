@@ -72,20 +72,20 @@ func registerRoutingBenchmarks() {
         Benchmark("routing/match/\(size)") { benchmark in
             var cursor = 0
             for _ in benchmark.scaledIterations {
-                blackHole(router.resolve(method: .get, path: hitPaths[cursor % hitPaths.count]))
+                blackHole(router.match(method: .get, path: hitPaths[cursor % hitPaths.count]))
                 cursor += 1
             }
         }
 
         Benchmark("routing/tail/\(size)") { benchmark in
             for _ in benchmark.scaledIterations {
-                blackHole(router.resolve(method: .get, path: tailPath))
+                blackHole(router.match(method: .get, path: tailPath))
             }
         }
 
         Benchmark("routing/miss/\(size)") { benchmark in
             for _ in benchmark.scaledIterations {
-                blackHole(router.resolve(method: .get, path: "/nothing/matches/this/path"))
+                blackHole(router.match(method: .get, path: "/nothing/matches/this/path"))
             }
         }
     }
@@ -95,21 +95,21 @@ func registerRoutingBenchmarks() {
     let staticRouter = Router { Route.get("/health/live") { _, _, _ in .text("ok") } }
     Benchmark("routing/capture/static") { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole(staticRouter.resolve(method: .get, path: "/health/live"))
+            blackHole(staticRouter.match(method: .get, path: "/health/live"))
         }
     }
 
     let parameterRouter = Router { Route.get("/users/:id/posts/:post") { _, _, _ in .text("ok") } }
     Benchmark("routing/capture/parameters") { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole(parameterRouter.resolve(method: .get, path: "/users/42/posts/7"))
+            blackHole(parameterRouter.match(method: .get, path: "/users/42/posts/7"))
         }
     }
 
     let catchAllRouter = Router { Route.get("/assets/*rest") { _, _, _ in .text("ok") } }
     Benchmark("routing/capture/catchAll") { benchmark in
         for _ in benchmark.scaledIterations {
-            blackHole(catchAllRouter.resolve(method: .get, path: "/assets/css/site/main.css"))
+            blackHole(catchAllRouter.match(method: .get, path: "/assets/css/site/main.css"))
         }
     }
 }

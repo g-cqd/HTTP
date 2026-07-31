@@ -339,8 +339,8 @@ extension HTTPServer {
                 // treated like a declined upgrade.
                 guard proto == "websocket",
                     let handler = currentSnapshot.resolver?
-                        .resolveWebSocket(path: request.path)?
-                        .webSocketHandler,
+                        .match(method: request.method, path: request.path, isUpgrade: true)?
+                        .route.webSocketHandler,
                     handler.shouldUpgrade(request),
                     handler.isOriginAllowed(request.headerFields[.origin])
                 else { return }

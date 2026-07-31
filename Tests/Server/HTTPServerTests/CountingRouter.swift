@@ -58,16 +58,10 @@ final class CountingRouter: HTTPRouter {
 
     // MARK: RouteResolver
 
-    func resolve(method: HTTPMethod, path: String) -> ResolvedRoute? {
+    func match(method: HTTPMethod, path: String, isUpgrade: Bool) -> RouteMatch? {
         walks.withLock { $0 += 1 }
         resolved?.record(path)
-        return router.resolve(method: method, path: path)
-    }
-
-    func resolveWebSocket(path: String) -> ResolvedRoute? {
-        walks.withLock { $0 += 1 }
-        resolved?.record(path)
-        return router.resolveWebSocket(path: path)
+        return router.match(method: method, path: path, isUpgrade: isUpgrade)
     }
 
     var hasWebSocketRoutes: Bool { router.hasWebSocketRoutes }

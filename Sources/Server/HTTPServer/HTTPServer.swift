@@ -148,8 +148,9 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         for request: HTTPRequest,
         in snapshot: ResponderSnapshot
     ) -> RequestBody {
-        let resolved = snapshot.resolver?.resolve(method: request.method, path: request.path)
-        return resolved?.streamsBody == true
+        let resolved = snapshot.resolver?
+            .match(method: request.method, path: request.path, isUpgrade: false)
+        return resolved?.route.streamsBody == true
             ? .stream(HTTPRequestBodyStream(yielding: body))
             : .collected(body)
     }

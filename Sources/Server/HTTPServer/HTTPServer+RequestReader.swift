@@ -82,8 +82,9 @@ extension HTTPServer where C.Duration == Duration {
         // here. A non-upgrade GET to that path falls through to `respond` → 426 (the route's fallback);
         // a WebSocket path the responder does not declare resolves to `nil` and is served normally.
         if Self.isWebSocketUpgrade(request),
-            let route = snapshot.resolver?.resolveWebSocket(path: request.path),
-            let handler = route.webSocketHandler,
+            let matched = snapshot.resolver?
+                .match(method: request.method, path: request.path, isUpgrade: true),
+            let handler = matched.route.webSocketHandler,
             handler.shouldUpgrade(request)
         {
             await serveWebSocket(
@@ -91,8 +92,8 @@ extension HTTPServer where C.Duration == Duration {
                 deadline: deadline,
                 request: request,
                 handler: handler,
-                hub: route.webSocketHub,
-                topic: route.webSocketTopic,
+                hub: matched.route.webSocketHub,
+                topic: matched.route.webSocketTopic,
                 carryover: Array(buffer[start...])
             )
             return false
@@ -340,17 +341,19 @@ extension HTTPServer where C.Duration == Duration {
                     // tighten); the parser resolves framing with no size policy of its own. `nil`
                     // (no router / no per-route cap) falls back to the global maxBodySize.
                     let resolved = snapshot.resolver?
-                        .resolve(
-                            method: parsed.head.request.method, path: parsed.head.request.path
+                        .match(
+                            method: parsed.head.request.method,
+                            path: parsed.head.request.path,
+                            isUpgrade: false
                         )
-                    bodyLimit = resolved?.bodyLimit
-                    let effectiveLimit = resolved?.bodyLimit ?? limits.maxBodySize
+                    bodyLimit = resolved?.route.bodyLimit
+                    let effectiveLimit = resolved?.route.bodyLimit ?? limits.maxBodySize
                     if case .contentLength(let length) = parsed.head.framing,
                         length > effectiveLimit
                     {
                         return .failed(.bodyTooLarge)
                     }
-                    if resolved?.streamsBody == true {
+                    if resolved?.route.streamsBody == true {
                         return .streamingHead(parsed)
                     }
                     pending = parsed

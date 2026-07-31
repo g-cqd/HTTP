@@ -51,8 +51,9 @@ extension HTTPServer where C.Duration == Duration {
         // The ingress seam: the context, and the request with every client-supplied server-asserted
         // field stripped (audit CR-F13).
         let (request, context) = RequestContext.ingress(pending.head.request, over: connection)
-        let bodyLimit = snapshot.resolver?.resolve(method: request.method, path: request.path)?
-            .bodyLimit
+        let bodyLimit = snapshot.resolver?
+            .match(method: request.method, path: request.path, isUpgrade: false)?
+            .route.bodyLimit
         let handoff = AsyncHandoff()
         async let responseTask = respondStreaming(
             request, handoff: handoff, context: context, on: snapshot.responder

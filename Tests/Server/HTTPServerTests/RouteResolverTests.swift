@@ -2,7 +2,7 @@
 //  RouteResolverTests.swift
 //  HTTPServerTests
 //
-//  The head-time route-metadata seam (Phase 1 foundation): ``Router`` resolves a route's body limit,
+//  The head-time route-matching seam (Phase 1 foundation): ``Router`` matches a route's body limit,
 //  WebSocket handler, and streaming opt-in from a request head (no handler run), and a ``MiddlewareChain``
 //  or `wrapped(by:)` chain forwards resolution to the router it wraps. A non-resolver responder simply
 //  does not conform.
@@ -30,29 +30,29 @@ struct RouteResolverTests {
                 streamsBody: true
             )
         }
-        let resolved = try #require(router.resolve(method: .post, path: "/upload"))
-        #expect(resolved.bodyLimit == 1_024)
-        #expect(resolved.streamsBody)
-        #expect(resolved.webSocketHandler == nil)
+        let matched = try #require(router.match(method: .post, path: "/upload"))
+        #expect(matched.route.bodyLimit == 1_024)
+        #expect(matched.route.streamsBody)
+        #expect(matched.route.webSocketHandler == nil)
     }
 
-    @Test("Router.resolve returns nil for an unmatched path or method")
+    @Test("Router.match returns nil for an unmatched path or method")
     func resolveMiss() {
         let router = Router { Route.get("/a") { _, _, _ in .text("a") } }
-        #expect(router.resolve(method: .get, path: "/b") == nil)
-        #expect(router.resolve(method: .post, path: "/a") == nil)
+        #expect(router.match(method: .get, path: "/b") == nil)
+        #expect(router.match(method: .post, path: "/a") == nil)
     }
 
-    @Test("Router.resolve folds HEAD onto the GET route (RFC 9110 §9.3.2)")
+    @Test("Router.match folds HEAD onto the GET route (RFC 9110 §9.3.2)")
     func resolveHeadFold() throws {
         let router = Router {
             Route(.get, Route.parse("/a"), handler: handler(), middleware: [], bodyLimit: 7)
         }
-        let resolved = try #require(router.resolve(method: .head, path: "/a"))
-        #expect(resolved.bodyLimit == 7)
+        let matched = try #require(router.match(method: .head, path: "/a"))
+        #expect(matched.route.bodyLimit == 7)
     }
 
-    @Test("resolveWebSocket finds a WS route by path, ignoring method, and sets hasWebSocketRoutes")
+    @Test("an upgrade match finds a WS route by path, ignoring method, and sets hasWebSocketRoutes")
     func resolvesWebSocket() throws {
         let socket = ClosureWebSocketHandler { _ in [] }
         let router = Router {
@@ -64,8 +64,14 @@ struct RouteResolverTests {
                 webSocketHandler: socket
             )
         }
-        #expect(try #require(router.resolveWebSocket(path: "/chat")).webSocketHandler != nil)
-        #expect(router.resolveWebSocket(path: "/nope") == nil)
+        // An Extended CONNECT arrives as CONNECT against a route declared GET (RFC 8441 §4).
+        let upgrade = try #require(
+            router.match(method: .connect, path: "/chat", isUpgrade: true)
+        )
+        #expect(upgrade.route.webSocketHandler != nil)
+        #expect(router.match(method: .connect, path: "/nope", isUpgrade: true) == nil)
+        // Without the flag, CONNECT matches nothing: the route is declared GET.
+        #expect(router.match(method: .connect, path: "/chat") == nil)
         #expect(router.hasWebSocketRoutes)
     }
 
@@ -85,7 +91,7 @@ struct RouteResolverTests {
         let resolver: any RouteResolver = MiddlewareChain(
             [ServerHeaderMiddleware("x")], terminatingAt: router
         )
-        #expect(resolver.resolve(method: .get, path: "/a")?.bodyLimit == 42)
+        #expect(resolver.match(method: .get, path: "/a", isUpgrade: false)?.route.bodyLimit == 42)
         #expect(resolver.hasWebSocketRoutes == false)
     }
 
@@ -103,7 +109,10 @@ struct RouteResolverTests {
         }
         let wrapped = router.wrapped(by: [ServerHeaderMiddleware("a"), ServerHeaderMiddleware("b")])
         let resolver = try #require(wrapped as? (any RouteResolver))
-        #expect(resolver.resolveWebSocket(path: "/chat")?.webSocketHandler != nil)
+        #expect(
+            resolver.match(method: .get, path: "/chat", isUpgrade: true)?
+                .route.webSocketHandler != nil
+        )
         #expect(resolver.hasWebSocketRoutes)
     }
 

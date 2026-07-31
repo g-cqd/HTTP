@@ -84,8 +84,8 @@ extension HTTPServer {
         // refuses the tunnel, as on the h1/h2 paths.
         guard proto == "websocket",
             let handler = currentSnapshot.resolver?
-                .resolveWebSocket(path: request.path)?
-                .webSocketHandler,
+                .match(method: request.method, path: request.path, isUpgrade: true)?
+                .route.webSocketHandler,
             handler.shouldUpgrade(request),
             handler.isOriginAllowed(request.headerFields[.origin])
         else {

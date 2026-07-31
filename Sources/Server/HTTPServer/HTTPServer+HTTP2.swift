@@ -79,14 +79,16 @@ extension HTTPServer {
         // The matched route's body limit, resolved from each request head before its DATA is buffered
         // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
         let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
-            currentSnapshot.resolver?.resolve(method: request.method, path: request.path)?
-                .bodyLimit
+            currentSnapshot.resolver?
+                .match(method: request.method, path: request.path, isUpgrade: false)?
+                .route.bodyLimit
         }
         // Whether the matched route streams its request body (Phase 1.4) — the engine then surfaces the
         // body incrementally (requestHead/requestBodyChunk/requestEnd) instead of one buffered request.
         let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool = { [self] request in
-            currentSnapshot.resolver?.resolve(method: request.method, path: request.path)?
-                .streamsBody ?? false
+            currentSnapshot.resolver?
+                .match(method: request.method, path: request.path, isUpgrade: false)?
+                .route.streamsBody ?? false
         }
         var state = HTTP2ConnectionState(
             engine: HTTP2Connection(
