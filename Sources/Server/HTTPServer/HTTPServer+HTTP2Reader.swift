@@ -44,11 +44,12 @@ extension HTTPServer {
                 break  // EOF, idle timeout, or read failure
             }
             deadline.arm(clock.now.advanced(by: limits.idleTimeout))
-            let acceptance = await intake.send(chunk)
+            let outcome = await intake.send(chunk)
             deadline.disarm()
-            // Exactly one ticket per dequeueable item. A coalesced send produced no new item, so
-            // ticketing it would park the sole consumer on an item that does not exist.
-            if acceptance == .queued {
+            // Exactly one ticket per QUEUED item. A coalesced send extended an item whose ticket is
+            // still outstanding; a second ticket for it would leave the consumer one ahead of the queue
+            // and park it inside `intake.next()` — which stalls every OTHER wakeup kind with it.
+            if outcome == .queued {
                 continuation.yield(.inboundReady)
             }
         }

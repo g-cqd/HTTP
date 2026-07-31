@@ -70,6 +70,12 @@ public struct HTTP2Connection {
         var receiveWindow: Int
         /// Octets received on this stream since we last replenished its window with a WINDOW_UPDATE.
         var receiveConsumed = 0
+        /// Octets debited from this stream's receive window that have **not** yet been credited back.
+        ///
+        /// Zero on a buffered stream (it credits at arrival). On a consumption-gated stream — a tunnel
+        /// or a streaming route — it is the unconsumed application bytes this stream is holding, and it
+        /// must be returned to the *connection* window when the stream retires (RFC 9113 §6.9.1).
+        var receiveOutstanding = 0
         /// Response body queued for sending, the offset already flushed, and whether the final frame
         /// carries END_STREAM.
         ///
@@ -120,6 +126,12 @@ public struct HTTP2Connection {
     var connectionReceiveWindow = 65_535
     /// Octets received since we last replenished the connection window with a WINDOW_UPDATE.
     var connectionReceiveConsumed = 0
+    /// Octets debited from the connection receive window that have not yet been credited back.
+    ///
+    /// The sum of every live stream's `receiveOutstanding`, and so the connection's total unconsumed
+    /// application bytes — bounded by ``HTTPLimits/connectionReceiveWindow`` because the peer cannot
+    /// send past a window it has not been given back (ADR 0006).
+    var connectionReceiveOutstanding = 0
     var pendingHeadersEndStream = false
     /// The deprecated priority-section stream dependency of the open HEADERS block, if any (RFC 9113
     /// §5.3.2) — captured when the HEADERS frame arrives, checked after the block decodes so a
@@ -214,6 +226,42 @@ public struct HTTP2Connection {
             start: now(), interval: limits.streamResetInterval.monotonicNanoseconds
         )
         writer.writeFrame(.settings, payload: advertised.encodePayload())
+        // RFC 9113 §6.9.2: the CONNECTION receive window's initial value is fixed at 65,535 and
+        // SETTINGS_INITIAL_WINDOW_SIZE does not apply to it — the only way to raise it is a stream-0
+        // WINDOW_UPDATE, so send one for the delta as part of the preface. Without it the connection
+        // window would be the binding constraint on every upload regardless of the configured knob.
+        let delta = limits.connectionReceiveWindow - connectionReceiveWindow
+        if delta > 0 {
+            writer.writeWindowUpdate(.connection, increment: delta)
+            connectionReceiveWindow += delta
+        }
+    }
+
+    /// Retires `streamID`, returning its outstanding receive credit to the connection window.
+    ///
+    /// The single drop path for a stream record. Centralized because a stream can be dropped from five
+    /// places (clean close, peer RST_STREAM, engine-emitted stream error, `abortResponse`, empty
+    /// END_STREAM) and forgetting the credit return in any one of them silently shrinks the shared
+    /// connection window for the rest of the connection's life (RFC 9113 §6.9.1).
+    mutating func retireStream(_ streamID: HTTP2StreamID, reason: StreamCloseReason) {
+        if var record = streams.removeValue(forKey: streamID) {
+            retire(streamID, &record, reason: reason)
+            return
+        }
+        markStreamClosed(streamID, reason: reason)
+    }
+
+    /// Retires a stream whose record the caller already holds (it was taken out of the table to be
+    /// mutated in place), returning its outstanding receive credit to the connection window.
+    mutating func retire(
+        _ streamID: HTTP2StreamID,
+        _ record: inout StreamRecord,
+        reason: StreamCloseReason
+    ) {
+        creditConnectionReceiveWindow(by: record.receiveOutstanding)
+        record.receiveOutstanding = 0
+        streams[streamID] = nil
+        markStreamClosed(streamID, reason: reason)
     }
 
     /// Drains the queued outbound octets (the server preface, ACKs, and responses).
@@ -313,8 +361,7 @@ public struct HTTP2Connection {
             // §5.4.2); a connection-scoped error propagates to GOAWAY + close (§5.4.1).
             guard let streamID = error.streamID else { throw error }
             writer.writeRstStream(streamID, code: error.code)
-            streams[streamID] = nil
-            markStreamClosed(streamID, reason: .reset)
+            retireStream(streamID, reason: .reset)
             // A server-*emitted* RST_STREAM counts against the reset budget too — otherwise an attacker
             // provokes unbounded resets the client never sends, bypassing the Rapid-Reset defense:
             // MadeYouReset (CVE-2025-8671).

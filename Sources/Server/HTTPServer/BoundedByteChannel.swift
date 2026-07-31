@@ -12,7 +12,7 @@
 //  conforming peer grow the server's memory without limit. This type replaces both.
 //
 //  Discipline:
-//    • Nothing is ever discarded. `send(_:)` parks the producer; `trySend(_:)` returns `.refused` and
+//    • Nothing is ever discarded. `send(_:)` parks the producer; `trySend(_:)` returns `false` and
 //      the caller escalates (RST_STREAM / close). A drop policy is never valid for transport octets.
 //    • The bound is in *bytes*, not chunks — a count of chunks does not bound retained memory. The
 //      chunk cap is a second, independent bound on the mailbox ticket count (see below).
@@ -21,13 +21,20 @@
 //
 //  Ticket pattern. Where a consumer must merge transport octets with other event kinds through a
 //  single sequential `for await`, the payload moves into this channel and the mailbox keeps a
-//  payload-free ticket (`.inboundReady`). The producer sends and yields one ticket **only when the
-//  send reports `.queued`** — i.e. only when the number of dequeueable items actually rose; a send
-//  that coalesced into the tail produced no new item and owes no ticket. That is what keeps `next()`
-//  from ever suspending, and it is not a detail: over-ticketing parks the sole consumer on a
-//  non-existent item and stalls every other wakeup kind with it. The mailbox `AsyncStream` may then
-//  stay `.unbounded` because it is *provably* bounded: inbound tickets can never exceed
-//  `maxQueuedChunks`, since the producer is parked past that point.
+//  payload-free ticket (`.inboundReady`). The producer sends, *then* yields one ticket; the consumer
+//  sees the ticket and calls `next()`, which is guaranteed not to suspend and is 1:1 and
+//  order-preserving with tickets. The mailbox `AsyncStream` may then stay `.unbounded` because it is
+//  *provably* bounded: inbound tickets can never exceed `maxQueuedChunks`, since the producer is
+//  parked past that point.
+//
+//  Coalescing interacts with that 1:1 rule, which is why `send`/`trySend` report a ``SendOutcome``
+//  rather than nothing/`Bool`. A coalesced send adds octets to an item that is *already* queued and
+//  therefore already has a ticket outstanding; yielding a second ticket for it would leave the consumer
+//  one ticket ahead of the queue, and its next `next()` would suspend — the very thing the pattern
+//  promises cannot happen. For a merged-mailbox consumer that is a hang: it is now parked here rather
+//  than on its `for await`, so it stops applying every OTHER wakeup kind too, including the consumption
+//  reports that re-open a stalled peer's flow-control window. A ticketed caller therefore yields a
+//  ticket only on `.queued`.
 //
 //  Sibling of `AsyncHandoff`, not a generalization of it. `AsyncHandoff` is a zero-queue rendezvous,
 //  and its "at most one chunk is ever in flight" property is load-bearing for `HTTP2StreamPermit`.
@@ -38,6 +45,21 @@
 
 /// A lossless, byte-watermarked FIFO from a transport producer to an application consumer.
 actor BoundedByteChannel {
+    /// What a send did — and, for a ticketed caller, whether it owes the consumer a ticket.
+    enum SendOutcome: Sendable, Equatable {
+        /// A new item was queued: a ticketed caller must now yield exactly one ticket for it.
+        case queued
+        /// The octets were merged into the tail item, whose ticket is already outstanding.
+        ///
+        /// A ticketed caller must **not** yield another ticket — the consumer would then be one ticket
+        /// ahead of the queue and its next `next()` would suspend (see the file comment).
+        case coalesced
+        /// Nothing was enqueued: the channel is saturated, terminated, or the producer was cancelled.
+        ///
+        /// For `trySend(_:)` this is a hard error the caller escalates (RST_STREAM / close).
+        case refused
+    }
+
     /// What the consuming loop pulls next.
     enum Item: Sendable, Equatable {
         case chunk([UInt8])
@@ -49,26 +71,6 @@ actor BoundedByteChannel {
         ///
         /// Any queued chunks are discarded.
         case aborted
-    }
-
-    /// What a send did, and therefore whether the caller owes a wakeup ticket.
-    ///
-    /// The ticket protocol's whole correctness rests on this: a merged consumer mailbox carries one
-    /// payload-free ticket per *dequeueable item*, and the consumer calls `next()` exactly once per
-    /// ticket. If a send that produced no new item still made the caller emit a ticket, that ticket
-    /// would send the sole consumer into `next()` with nothing to take — parking it, and with it every
-    /// other wakeup kind (responses, broadcasts, tunnel output) until unrelated traffic happened to
-    /// arrive. That is a connection-level stall, so the accounting cannot be left to the call site's
-    /// good intentions.
-    enum Acceptance: Sendable, Equatable {
-        /// A new item is queued; the caller MUST emit exactly one ticket for it.
-        case queued
-        /// The octets were absorbed into an item that already has a ticket outstanding — merged into
-        /// the tail, or handed straight to a parked consumer. The caller MUST NOT emit a ticket.
-        case absorbed
-        /// Nothing was enqueued: the channel is saturated, closed, or the producer was cancelled. No
-        /// ticket is owed. For `trySend` this is the fail-closed signal the caller escalates.
-        case refused
     }
 
     /// Queued octets past which `send(_:)` parks and `trySend(_:)` refuses.
@@ -127,14 +129,14 @@ actor BoundedByteChannel {
     /// closes.
     ///
     /// Cancellation-aware. If the producing task is cancelled while parked — the connection is being
-    /// reaped — this returns without enqueuing. That is a deliberate loss on a path where the
+    /// reaped — this returns `.refused` without enqueuing. That is a deliberate loss on a path where the
     /// connection is going away regardless; a *live* connection never loses an octet.
     ///
-    /// - Returns: whether the caller owes a wakeup ticket. See ``Acceptance``.
+    /// - Returns: whether a new item was queued. A ticketed caller yields a ticket only on `.queued`.
     @discardableResult
-    func send(_ chunk: [UInt8]) async -> Acceptance {
+    func send(_ chunk: [UInt8]) async -> SendOutcome {
         guard !chunk.isEmpty else {
-            return .refused
+            return .coalesced  // nothing queued and nothing owed
         }
         while terminal == nil, !Task.isCancelled, isSaturated {
             await parkProducer()
@@ -150,15 +152,15 @@ actor BoundedByteChannel {
     /// The HTTP/2 serve loop is the sole owner of the connection engine and cannot block on
     /// application progress, so it uses this rather than `send(_:)`.
     ///
-    /// - Returns: `.refused` when the channel is saturated or closed. That is a *hard error* the caller
-    ///   escalates (RST_STREAM / close), never a silent drop. On a consumption-gated stream it is
-    ///   unreachable in practice — the flow-control window already bounds what the peer may send — so
-    ///   it stands as defense in depth that fails closed. Otherwise, see ``Acceptance`` for whether a
-    ///   ticket is owed.
+    /// - Returns: `.refused` when the channel is saturated or already terminated. That is a *hard
+    ///   error* the caller escalates (RST_STREAM / close), never a silent drop. On a consumption-gated
+    ///   stream it is unreachable in practice — the flow-control window already bounds what the peer
+    ///   may send — so it stands as defense in depth that fails closed. `.queued` versus `.coalesced`
+    ///   tells a ticketed caller whether it owes a ticket.
     @discardableResult
-    func trySend(_ chunk: [UInt8]) -> Acceptance {
+    func trySend(_ chunk: [UInt8]) -> SendOutcome {
         guard !chunk.isEmpty else {
-            return .absorbed
+            return .coalesced  // nothing queued and nothing owed
         }
         guard terminal == nil, !isSaturated else {
             return .refused
@@ -225,19 +227,18 @@ actor BoundedByteChannel {
 
     /// Appends `chunk`, handing it straight to a parked consumer when there is one.
     ///
-    /// A parked consumer implies an empty queue, so the direct handoff can never skip an ordering.
-    ///
-    /// - Returns: `.queued` only when the number of dequeueable items actually increased. Both other
-    ///   outcomes absorbed the octets into an item that is already accounted for.
-    private func enqueue(_ chunk: [UInt8]) -> Acceptance {
+    /// A parked consumer implies an empty queue, so the direct handoff can never skip an ordering — and
+    /// it counts as `.queued`, since it satisfies a *new* item rather than extending a queued one. (A
+    /// ticketed consumer cannot in fact be parked: its ticket only arrives after the item is queued.)
+    private func enqueue(_ chunk: [UInt8]) -> SendOutcome {
         if let consumer = consumerWaiter {
             consumerWaiter = nil
             consumer.resume(returning: .chunk(chunk))
-            return .absorbed
+            return .queued
         }
         bytes += chunk.count
         if coalesceIntoTail(chunk) {
-            return .absorbed
+            return .coalesced
         }
         ring[(head + queued) % ring.count] = chunk
         queued += 1

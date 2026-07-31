@@ -108,8 +108,10 @@ extension HTTP2Connection {
         let code = frame.payload.withUnsafeBytes {
             UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self))
         }
-        streams[frame.header.streamID] = nil
-        markStreamClosed(frame.header.streamID, reason: .reset)
+        // A reset mid-upload must still return the stream's outstanding credit to the CONNECTION window
+        // (RFC 9113 §6.9.1 — that window outlives every stream), or a peer could permanently shrink it
+        // by resetting streams part-way through their bodies.
+        retireStream(frame.header.streamID, reason: .reset)
         events.append(
             .streamReset(streamID: frame.header.streamID, code: HTTP2ErrorCode(code: code))
         )

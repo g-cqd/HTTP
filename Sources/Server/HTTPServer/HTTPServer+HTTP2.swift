@@ -72,6 +72,10 @@ extension HTTPServer {
         // Advertise Extended CONNECT (RFC 8441 §3) only when the responder declares a WebSocket route.
         var settings = HTTP2Settings()
         settings.enableConnectProtocol = currentResolver?.hasWebSocketRoutes ?? false
+        // The per-stream receive window each stream is seeded with (RFC 9113 §6.9.2). On a gated stream
+        // this is the unconsumed-bytes watermark, since the engine credits it only as the handler
+        // consumes; the connection-level companion is raised by the engine's own preface WINDOW_UPDATE.
+        settings.initialWindowSize = limits.streamReceiveWindow
         // The matched route's body limit, resolved from each request head before its DATA is buffered
         // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
         let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
@@ -91,14 +95,6 @@ extension HTTPServer {
                 resolveStreamsBody: resolveStreamsBody
             )
         )
-        defer {
-            // Connection closing: end every in-flight body stream so no handler stays parked reading one
-            // that will never receive another chunk. The handler TASKS themselves are structured
-            // children of the task group below, already reaped by its own teardown by the time this
-            // runs — this is a defensive, now-mostly-symbolic mirror of that, kept for clarity.
-            state.finishAllStreaming()
-        }
-
         let (wakeups, continuation) = AsyncStream.makeStream(
             of: HTTP2Wakeup.self, bufferingPolicy: .unbounded
         )
@@ -131,6 +127,12 @@ extension HTTPServer {
                     continuation.yield(.localDeadlineLapsed)
                 }
             }
+            // The consumption gate's companion: bounds how long one non-consuming handler may hold the
+            // connection's shared receive window shut against its siblings (see the sweeper's file
+            // comment). Reports through the mailbox like every other local watchdog here.
+            group.addTask { [self] in
+                await runHTTP2StallSweeper(into: continuation)
+            }
 
             for await wakeup in wakeups {
                 let shouldClose = await applyHTTP2Wakeup(
@@ -150,5 +152,11 @@ extension HTTPServer {
             // Unblocks a reader parked in `send` so its task actually exits.
             await intake.abandon()
         }
+        // Connection closed: abandon every in-flight body channel so no handler stays parked reading one
+        // that will never receive another chunk. The handler TASKS themselves are structured children of
+        // the task group above, already reaped by its teardown by the time this runs — this is a
+        // defensive mirror of that. It follows the group rather than sitting in a `defer` because
+        // abandoning a channel is `async`, which a `defer` cannot be.
+        await state.finishAllStreaming()
     }
 }

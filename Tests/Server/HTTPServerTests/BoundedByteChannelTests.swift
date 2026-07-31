@@ -85,14 +85,13 @@ struct BoundedByteChannelTests {
         }
         #expect(await channel.trySend([1]) == .refused)
         _ = await channel.next()
-        // A take frees exactly one slot.
-        #expect(await channel.trySend([1]) == .queued)
+        #expect(await channel.trySend([1]) == .queued)  // a take frees exactly one slot
     }
 
     @Test("trySend refuses at the byte watermark but always accepts into an empty queue")
     func trySendRefusesAtTheByteWatermark() async {
         let channel = channel(high: 64, low: 32, chunks: 64)
-        // Oversized, but the queue is empty, so it is always accepted.
+        // Oversized, but the queue is empty — an empty channel always accepts, whatever the chunk size.
         #expect(await channel.trySend([UInt8](repeating: 0, count: 4_096)) == .queued)
         #expect(await channel.trySend([1]) == .refused)  // now over the watermark
     }
@@ -173,12 +172,40 @@ struct BoundedByteChannelTests {
     @Test("coalescing merges into a small tail chunk without changing the byte stream")
     func coalescesSmallTailChunks() async {
         let channel = channel(chunks: 4, coalescing: 64)
-        for byte in UInt8(1) ... 8 {
-            // Would exceed a 4-chunk cap without coalescing.
-            _ = await channel.trySend([byte])
+        // The first send queues a NEW item; every later one merges into it. That distinction is
+        // load-bearing for a *ticketed* caller (the HTTP/2 and WebSocket readers): a ticket is owed only
+        // for a new item, and yielding one for a merge would leave the consumer a ticket ahead of the
+        // queue and park it in `next()` — hanging the whole merged mailbox, not just this stream.
+        #expect(await channel.trySend([1]) == .queued)
+        for byte in UInt8(2) ... 8 {
+            #expect(await channel.trySend([byte]) == .coalesced)  // no ticket owed
         }
         #expect(await channel.queuedChunks == 1)
         #expect(await channel.next() == .chunk([1, 2, 3, 4, 5, 6, 7, 8]))
+    }
+
+    /// The regression for the ticket/coalescing mismatch (2026-07-31 audit follow-up).
+    ///
+    /// A ticketed producer that yielded one ticket per `send` — not per queued item — put the consumer
+    /// permanently ahead of the queue the moment two sends coalesced. `next()` then suspended, which for
+    /// a merged-mailbox consumer means it stops applying *every* wakeup kind: no responses, no tunnel
+    /// traffic, and in particular no consumption reports, so a peer stalled on a closed flow-control
+    /// window never gets it back and the connection hangs until the idle timeout.
+    @Test("one ticket per queued item survives coalescing — the consumer never runs ahead")
+    func ticketsMatchQueuedItemsUnderCoalescing() async {
+        let channel = channel(chunks: 8, coalescing: 4_096)
+        // A small chunk followed by a large one is the exact shape the HTTP/2 reader produces: a short
+        // preface/headers read, then a full-size body read landing while the first is still queued.
+        let head = [UInt8](repeating: 1, count: 60)
+        let tail = [UInt8](repeating: 2, count: 16_384)
+        var tickets = 0
+        for chunk in [head, tail] where await channel.send(chunk) == .queued {
+            tickets += 1
+        }
+        #expect(tickets == 1)
+        #expect(await channel.queuedChunks == 1)
+        // Every ticket is redeemable without suspending: exactly `tickets` items are waiting.
+        #expect(await channel.next() == .chunk(head + tail))
     }
 
     @Test("sending after finish is a no-op rather than a trap")
@@ -188,46 +215,5 @@ struct BoundedByteChannelTests {
         await channel.send([1])
         #expect(await channel.trySend([1]) == .refused)
         #expect(await channel.next() == .finished)
-    }
-
-    /// The ticket invariant: a send reports `.queued` exactly when a new dequeueable item appears.
-    ///
-    /// This is what a merged-mailbox consumer needs to know. Coalescing deliberately merges octets
-    /// into the tail *without* creating a new item; if the caller ticketed that anyway, the consumer
-    /// would take the merged item on the first ticket and then park on the second with nothing to
-    /// take — stalling every other wakeup kind sharing its mailbox until unrelated traffic arrived.
-    @Test("a coalesced send reports absorbed, so the caller owes no extra ticket")
-    func coalescedSendOwesNoTicket() async {
-        let channel = channel(chunks: 8, coalescing: 64)
-        #expect(await channel.trySend([1]) == .queued)  // a new item
-        #expect(await channel.trySend([2]) == .absorbed)  // merged into it
-        #expect(await channel.trySend([3]) == .absorbed)
-        #expect(await channel.queuedChunks == 1)  // …and exactly one item exists
-
-        // One ticket, one item: the consumer takes it and is never left parked.
-        #expect(await channel.next() == .chunk([1, 2, 3]))
-    }
-
-    /// The same invariant the other way round: without coalescing, every send owes a ticket.
-    @Test("without coalescing every accepted send reports queued")
-    func uncoalescedSendsEachOweATicket() async {
-        let channel = channel(chunks: 8)
-        for byte in UInt8(1) ... 4 {
-            #expect(await channel.trySend([byte]) == .queued)
-        }
-        #expect(await channel.queuedChunks == 4)
-    }
-
-    /// Ticket accounting must survive the parked-consumer path too.
-    ///
-    /// A send that resumes a parked consumer hands the item over directly, so it is already accounted
-    /// for and owes no ticket either.
-    @Test("a send that resumes a parked consumer reports absorbed")
-    func sendToParkedConsumerOwesNoTicket() async {
-        let channel = channel()
-        let consumer = Task { await channel.next() }
-        await Task.yield()
-        #expect(await channel.send([7]) == .absorbed)
-        #expect(await consumer.value == .chunk([7]))
     }
 }

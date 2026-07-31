@@ -39,6 +39,27 @@ enum HTTP2Wakeup: Sendable {
     /// state (P6b / RFC 9113 §8.1).
     case streamChunk(HTTP2StreamID, AsyncHandoff.Item)
 
+    /// A gated stream's handler took body octets; drain its report and credit the receive windows.
+    ///
+    /// The wakeup that makes consumption-gated flow control possible at all (RFC 9113 §6.9, ADR 0006).
+    /// Once the peer has exhausted its window it stops sending, so the connection goes quiet — and the
+    /// event that must produce the replenishing WINDOW_UPDATE is *handler consumption*, which has no
+    /// other way to reach the loop. Payload-free, like `.inboundReady`: the count lives in the stream's
+    /// ``HTTP2ConsumptionSignal``, which coalesces many chunk takes into one wakeup.
+    case consumed(HTTP2StreamID)
+
+    /// Time to check whether any gated stream is holding receive credit without consuming it.
+    ///
+    /// The other side of the consumption gate. Because replenishment now depends on the application,
+    /// one handler that stops reading holds part of the *shared* connection window and slows every
+    /// sibling stream — that is HTTP/2's semantics, not a bug, but it must not be unbounded. A stream
+    /// making no byte progress across two sweeps is reset with ENHANCE_YOUR_CALM (RFC 9113 §7) and its
+    /// siblings carry on.
+    ///
+    /// Byte-progress based rather than clock based: the sweeper task only decides *when* to look, and a
+    /// test can drive this wakeup by hand for a fully deterministic result.
+    case sweepStalls
+
     /// A tunnel pump produced bytes to relay as tunnel DATA (RFC 8441 §5).
     case tunnelOutbound(HTTP2StreamID, [UInt8])
 
