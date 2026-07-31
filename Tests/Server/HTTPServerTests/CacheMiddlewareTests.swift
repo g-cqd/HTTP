@@ -172,7 +172,8 @@ struct CacheMiddlewareTests {
 
     @Test("the byte cap evicts the least-recently-used entry (CWE-400)")
     func evictsLRU() async {
-        let middleware = CacheMiddleware(maxBytes: 300)  // ~one entry (256 overhead each)
+        // Room for one entry: an empty-bodied response with one header costs ~671 accounted bytes.
+        let middleware = CacheMiddleware(maxBytes: 900)
         let next = responder(cacheControl: "max-age=60", body: "")
         _ = await middleware.respond(to: get(path: "/a"), body: [], next: next)
         _ = await middleware.respond(to: get(path: "/b"), body: [], next: next)  // evicts /a
@@ -182,7 +183,8 @@ struct CacheMiddlewareTests {
 
     @Test("a cache hit promotes an entry so it survives a later eviction (intrusive-list touch)")
     func hitPromotesPastEviction() async {
-        let middleware = CacheMiddleware(maxBytes: 600)  // ~two entries (256 overhead each)
+        // Room for two ~671-byte entries and not a third.
+        let middleware = CacheMiddleware(maxBytes: 1_800)
         let next = responder(cacheControl: "max-age=60", body: "")
         _ = await middleware.respond(to: get(path: "/a"), body: [], next: next)  // store /a
         _ = await middleware.respond(to: get(path: "/b"), body: [], next: next)  // store /b
@@ -261,6 +263,64 @@ struct CacheMiddlewareTests {
         clock.advance(by: .seconds(testCase.after))
         let response = await middleware.respond(to: get(), body: [], next: next)
         #expect((response.head.headerFields[.age] != nil) == testCase.served)
+    }
+
+    /// A responder carrying a deliberately fat header section and a `Vary`, so the accounted cost has
+    /// to reach past the body to be right.
+    private func paddedResponder(padding: String, body: String) -> any HTTPResponder {
+        ClosureResponder { _, _, _ in
+            var fields = HTTPFields()
+            _ = fields.setValue("max-age=60", for: .cacheControl)
+            _ = fields.setValue("accept-language", for: .vary)
+            if let padded = HTTPField(name: "x-padding", value: padding) {
+                fields.append(padded)
+            }
+            let head = HTTPResponse(status: .ok, headerFields: fields)
+            return ServerResponse(head, body: Array(body.utf8))
+        }
+    }
+
+    @Test("stored bytes never exceed the configured cap under mixed entry sizes")
+    func costAccountsForEverythingStored() async {
+        let padding = String(repeating: "p", count: 2_048)
+        let language = String(repeating: "l", count: 512)
+        let body = String(repeating: "b", count: 100)
+        let cap = 64 * 1_024
+        let middleware = CacheMiddleware(maxBytes: cap)
+        let request = get(acceptLanguage: language)
+        let next = paddedResponder(padding: padding, body: body)
+        _ = await middleware.respond(to: request, body: [], next: next)
+
+        // A lower bound measured from what actually went in, not from the formula under test: the
+        // cache demonstrably owns at least these bytes, so anything smaller is an under-count.
+        let measured =
+            CacheMiddleware.key(for: request).utf8.count
+            + body.utf8.count
+            + "cache-control".utf8.count + "max-age=60".utf8.count
+            + "vary".utf8.count + "accept-language".utf8.count
+            + "x-padding".utf8.count + padding.utf8.count
+            + "accept-language".utf8.count  // the Vary name stored with the entry
+            + language.utf8.count  // the request value it selected on
+        #expect(middleware.storedBytes >= measured)
+        #expect(middleware.storedBytes <= cap)
+
+        // Mixed sizes against a tight cap: the advertised bound holds after every single store.
+        let tightCap = 8 * 1_024
+        let tight = CacheMiddleware(maxBytes: tightCap)
+        for index in 0 ..< 64 {
+            let sized = paddedResponder(
+                padding: String(repeating: "p", count: index * 64),
+                body: body
+            )
+            let path = "/\(index)"
+            _ = await tight.respond(
+                to: get(path: path, acceptLanguage: language),
+                body: [],
+                next: sized
+            )
+            #expect(tight.storedBytes <= tightCap)
+        }
+        #expect(tight.storedBytes > 0)  // the cap bounds the store, it does not empty it
     }
 
     @Test("a dropped cache deallocates every stored response (CWE-401, audit finding 14)")

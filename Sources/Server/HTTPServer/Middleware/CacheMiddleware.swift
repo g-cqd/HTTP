@@ -38,6 +38,14 @@ public struct CacheMiddleware: HTTPMiddleware {
         self.spawn = spawn
     }
 
+    /// The accounted size of the stored responses, in bytes — never above the configured `maxBytes`.
+    ///
+    /// Internal rather than private because the byte cap is a claim, and a claim nobody can read is a
+    /// claim nobody checks: the regression that pins the bound reads this.
+    var storedBytes: Int {
+        cache.storedBytes
+    }
+
     /// Serves a fresh (or briefly stale) stored response or delegates, storing a cacheable result.
     public func respond(
         to request: HTTPRequest,
@@ -59,7 +67,9 @@ public struct CacheMiddleware: HTTPMiddleware {
             )
         }
         let response = await next.respond(to: request, body: body, context: context)
-        if !directives.noStore, let entry = Self.storableEntry(request, response, now: instant) {
+        if !directives.noStore,
+            let entry = Self.storableEntry(request, response, key: key, now: instant)
+        {
             cache.store(key, entry)
         }
         return response
@@ -108,7 +118,7 @@ public struct CacheMiddleware: HTTPMiddleware {
         spawn {
             defer { cache.finishRevalidation(key) }
             let response = await next.respond(to: request, body: body, context: context)
-            if let entry = Self.storableEntry(request, response, now: now()) {
+            if let entry = Self.storableEntry(request, response, key: key, now: now()) {
                 cache.store(key, entry)
             }
         }
@@ -120,6 +130,7 @@ public struct CacheMiddleware: HTTPMiddleware {
     private static func storableEntry(
         _ request: HTTPRequest,
         _ response: ServerResponse,
+        key: String,
         now: Int
     ) -> ResponseCache.Entry? {
         guard response.stream == nil, response.head.status == .ok else {
@@ -142,9 +153,59 @@ public struct CacheMiddleware: HTTPMiddleware {
             staleWhileRevalidate: staleWhileRevalidate(response.head.headerFields[.cacheControl]),
             varyNames: varyNames,
             selecting: selecting,
-            cost: response.body.count + 256
+            cost: cost(key: key, response, varyNames: varyNames, selecting: selecting)
         )
     }
+
+    /// The bytes to charge the cache for one entry — deliberately an over-estimate.
+    ///
+    /// The bound this feeds is advertised to operators, who size a process around it. That makes the
+    /// two error directions asymmetric: over-counting costs cache hit rate, which is measurable and
+    /// tunable, while under-counting silently converts "16 MiB of responses" into an unbounded resident
+    /// set, which is CWE-400 with a configuration knob that appears to be working. So every term here
+    /// rounds up, and every byte the entry demonstrably owns is counted:
+    ///
+    /// - the key, which the store owns twice (the dictionary and the LRU slot);
+    /// - the buffered body;
+    /// - every stored header name and value — a response with 8 KiB of headers and no body used to be
+    ///   charged 256 bytes;
+    /// - the `Vary` field names and the request values they selected on, which are attacker-influenced
+    ///   in both count and length (a `Vary: accept-language` entry stores whatever the client sent);
+    /// - ``ResponseCache/minimumEntryCost`` per entry, for the dictionary slot, the LRU slot, the
+    ///   `Entry` struct, and the heap-object header on each of the five separate allocations an entry
+    ///   pulls in (the key string, the body array, the field array, and the two `Vary` arrays);
+    /// - ``fieldOverhead`` per header line and ``elementOverhead`` per `Vary` element, for the same
+    ///   per-element struct-and-allocator overhead the raw byte counts do not include.
+    ///
+    /// The constants are round numbers, not measurements. Measuring them would imply a precision that
+    /// the allocator's size classes do not offer, and a too-large constant is the safe direction.
+    private static func cost(
+        key: String,
+        _ response: ServerResponse,
+        varyNames: [HTTPFieldName],
+        selecting: [String?]
+    ) -> Int {
+        var total = ResponseCache.minimumEntryCost + key.utf8.count + response.body.count
+        for field in response.head.headerFields {
+            total += fieldOverhead + field.name.canonicalName.utf8.count + field.value.utf8.count
+        }
+        for name in varyNames {
+            total += elementOverhead + name.canonicalName.utf8.count
+        }
+        for value in selecting {
+            total += elementOverhead + (value?.utf8.count ?? 0)
+        }
+        return total
+    }
+
+    /// Charged per stored header line, on top of its name and value bytes.
+    ///
+    /// Covers the `HTTPField` struct in the field array (a name enum plus two `String` headers) and the
+    /// heap allocation each of those strings makes once it outgrows the small-string form.
+    private static let fieldOverhead = 128
+
+    /// Charged per `Vary` name and per selecting value, on top of the value's own bytes.
+    private static let elementOverhead = 64
 
     /// The `Vary` field names, or nil for `Vary: *` (which makes the response uncacheable).
     private static func varyFields(_ response: ServerResponse) -> [HTTPFieldName]? {
@@ -199,7 +260,7 @@ public struct CacheMiddleware: HTTPMiddleware {
     }
 
     /// The primary cache key: method, authority, and target (RFC 9111 §4 — query is significant).
-    private static func key(for request: HTTPRequest) -> String {
+    static func key(for request: HTTPRequest) -> String {
         "\(request.method.rawValue) \(request.effectiveAuthority ?? "") \(request.path)"
     }
 

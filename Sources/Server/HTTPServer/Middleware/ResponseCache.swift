@@ -56,7 +56,7 @@ final class ResponseCache: Sendable {
     /// the byte bound rather than a second, surprising limit: no entry can cost less than the floor, so
     /// the byte cap is what evicts. The count bound still has to exist — a cost of zero would otherwise
     /// let entries accumulate under an untouched byte total (CWE-400).
-    static let minimumEntryCost = 256
+    static let minimumEntryCost = 512
 
     /// Creates a cache bounded to `maxBytes` of stored responses.
     init(maxBytes: Int) {
