@@ -1,7 +1,8 @@
 # ADR 0007 — Handler execution policy (where application code runs)
 
-- **Status:** Accepted, shipped at `.inline`. The default is **not** flipped by this ADR; see
-  *Pre-registered decision rule* and *Measurement*.
+- **Status:** Accepted, shipped at `.inline`. The default is **not** flipped by this ADR: the
+  pre-registered rule fired on its throughput clause (−6.01 % against a −5 % bar), and the
+  measurement is explicitly provisional. See *Pre-registered decision rule* and *Measurement*.
 - **Context date:** 2026-08
 
 ## Context
@@ -75,6 +76,30 @@ Only the handler subtree is lifted, at the six `respond` seams:
 | 6 | `HTTPServer+HTTP3Streaming.swift` | HTTP/3 streaming |
 
 All six route through one function, `HTTPServer.respond(to:body:context:following:)`.
+
+### Correction: the real exposure was three seams, not six
+
+The finding describes the preference as reaching every handler. Measured on this toolchain, it does
+not, and the difference is invisible from the call sites:
+
+```
+enclosing task:      serial.probe
+async let child:     serial.probe          ← inherits
+group child:         serial.probe          ← inherits
+Task { }:            com.apple.root.default-qos.cooperative   ← does NOT inherit
+Task.detached { }:   com.apple.root.default-qos.cooperative   ← does NOT inherit
+```
+
+Seams 4 and 6 each dispatch through an unstructured `Task` — it exists so a peer `RST_STREAM` has a
+handle to cancel (audit finding 6) — so those handlers were **already** off the reactor. HTTP/3 has
+no preference at all in the first place: `runHTTP3()` is not wrapped, because a QUIC connection is
+not a `TransportConnection` and has no event loop to prefer, so seams 5 and 6 were never pinned.
+
+The seams that genuinely sat on a serial reactor were **HTTP/1.1 buffered, HTTP/1.1 streaming, and
+HTTP/2 buffered dispatch**. All six route through the policy regardless, so the guarantee is uniform
+rather than an accident of how each task happens to be created — and
+`HandlerExecutionReactorAffinityTests` pins the asymmetry, so turning either unstructured `Task` into
+a structured child cannot silently re-expose it.
 
 ### The hop is `globalConcurrentExecutor`, not `nil`
 
@@ -182,7 +207,119 @@ nginx, caddy, Go, Bun, Rust, Hummingbird, Vapor and Django is byte-identical whe
 
 ## Measurement
 
-Recorded separately, in the commit that took it. See the *Measurement* section appended below.
+### This measurement is PROVISIONAL and does not decide the default
+
+The host had been running concurrent agent workloads throughout this work. **No number below is
+decision-grade**, and the default is not flipped on this evidence. What follows is a record of what
+was measured, under what conditions, and what an idle-host run would have to show.
+
+Two runs were taken. Their disagreement is the most important thing in this section.
+
+| | run 1 | run 2 |
+|---|---|---|
+| load average at start | 14.17 | 6.30 |
+| concurrent interference | three `swift-frontend` at 50–90 % (this branch's own test compiles) | none of ours; `coreaudiod` at ~100 % throughout both |
+| `inline`/trivial rps across 3 rounds | 31,438 / 37,216 / 56,472 — a **1.80× spread** | 57,443 / 57,676 / 58,444 — a **1.02× spread** |
+| clause 3 verdict | 1.04× — fails | 2.28× — passes |
+
+The same configuration produced a 1.8× throughput spread across three consecutive rounds in run 1.
+A benchmark that cannot reproduce itself within 80 % cannot adjudicate a 5 % clause. Run 2 is
+reported below because its round-to-round spread is under 2 %, but "internally consistent" is not
+"decision-grade": both runs shared a host with a process pinning a core the entire time.
+
+### Run 2 — best of 3, `posixKqueue`, 64 connections, 10 s, 2 s warmup, 2026-08-01
+
+Darwin 27.0.0 arm64, 10 logical cores (6P + 4E), release build, load average 6.30 at start.
+
+**trivial route alone**
+
+| policy | rps | p50 (ms) | p99 (ms) | p99.9 (ms) |
+|---|---:|---:|---:|---:|
+| inline | 58,444 | 0.891 | 4.691 | 8.371 |
+| concurrent | 54,929 | 0.878 | 5.539 | 9.359 |
+| adaptive:1 | 53,512 | 1.008 | 3.866 | 5.856 |
+
+**90/10 trivial + blocking mix** (90 connections on `/exec/trivial`, 10 held in `/exec/block`)
+
+| policy | rps | p50 (ms) | p99 (ms) | p99.9 (ms) |
+|---|---:|---:|---:|---:|
+| inline | 5,367 | 15.646 | 33.082 | 38.213 |
+| concurrent | 14,965 | 2.588 | 14.490 | 15.234 |
+| adaptive:1 | 15,373 | 2.546 | 14.398 | 15.109 |
+
+**CPU route alone** (~1.8 ms of arithmetic; reported for attribution, not gated by the rule)
+
+| policy | rps | p50 (ms) | p99 (ms) | p99.9 (ms) |
+|---|---:|---:|---:|---:|
+| inline | 2,496 | 25.869 | 28.648 | 32.491 |
+| concurrent | 3,073 | 20.442 | 31.685 | 57.983 |
+| adaptive:1 | 3,098 | 20.332 | 30.523 | 46.553 |
+
+### Verdict against the pre-registered rule
+
+| clause | bar | `.concurrent` | result |
+|---|---|---|---|
+| 1 — trivial p50 | regression < 10 % | **−1.46 %** (0.891 → 0.878 ms; an improvement) | **pass** |
+| 2 — trivial throughput | regression < 5 % | **−6.01 %** (58,444 → 54,929 rps) | **fail** |
+| 3 — mix trivial p99 | improvement > 2× | **2.28×** (33.082 → 14.490 ms) | **pass** |
+
+**`.inline` stays the default.** Clause 2 fails by roughly one percentage point.
+
+`.adaptive(threshold: 1 ms)` is not rescued by the fallback branch — that branch is only reached when
+trivial p50 regresses by 10 % or more, which it did not — and it would fail anyway: p50 **+13.13 %**
+(clause 1) and throughput **−8.44 %** (clause 2). Its throughput cost on a trivial route is the price
+of the bookkeeping itself: two monotonic clock reads and two sharded-mutex acquisitions per request,
+on a route whose whole service time is under a millisecond. It buys nothing there, because a trivial
+route never crosses the threshold and so never hops.
+
+### What the numbers say beyond the rule
+
+The finding reproduces, and it is not subtle. Under the 90/10 mix, `.inline` serves the trivial route
+at **5,367 rps with a 15.6 ms median**, while `.concurrent` serves it at **14,965 rps with a 2.6 ms
+median** — 2.79× the throughput and 6.05× the median. Ten connections parked in a 10 ms handler cost
+`.inline` 91 % of its trivial-route throughput.
+
+Two things temper it, and both are why the rule was written the way it was:
+
+1. **`.inline` is already parallel across shards.** With the default `eventLoopCount` (one loop per
+   core), ten reactors run concurrently; what serializes is the connections *within* one shard. That
+   is why the CPU route gains only 23 % (2,496 → 3,073 rps) rather than a multiple: it was already
+   using every core. The blocking case is dramatic and the CPU case is modest, and both are correct.
+2. **`.concurrent` relocates the blocking damage, it does not remove it.** The mix p99 improves 2.28×
+   but not 10×, because ten threads held for 10 ms are ten threads held for 10 ms wherever they live.
+   Moving them off the reactors keeps readiness, parsing and writes flowing, which is what the median
+   shows; it does not create thread capacity.
+
+The trivial-route cost of `.concurrent` is real but small: p50 is actually *lower* (0.878 vs
+0.891 ms), while throughput is 6 % down. That shape is consistent with the hop costing scheduling
+overhead per request without adding latency to any individual one.
+
+### What an idle-host run would have to show
+
+To flip the default to `.concurrent`, a controlled run — quiesced machine, no other tenant above a
+few percent, ROUNDS ≥ 5, and a reported round-to-round spread under 5 % — would have to show
+trivial-route throughput within 5 % of `.inline` while keeping clause 3. Clause 2 is the only one
+currently failing and it fails by about one point, which is inside the noise band of even the good
+run here. That is precisely why it needs an idle host rather than a re-reading of these numbers.
+
+If a controlled run reproduces a 6 % trivial-throughput cost, the honest conclusion is not
+"`.concurrent` anyway" but that the default should stay `.inline` and `.concurrent` should be
+documented as the setting for deployments whose handlers do real work — which is what it is today.
+
+### Reproducing
+
+`Benchmarking/Bench/handler-execution.sh` (defaults: `DURATION=10s CONNECTIONS=64 ROUNDS=3
+MIX_TRIVIAL=90 MIX_BLOCKING=10 POLICIES="inline concurrent adaptive:1"`). It records host
+qualification alongside the results. Raw `oha` JSON lands under `Benchmarking/Bench/results/`, which
+is gitignored, so this ADR is the record.
+
+Two caveats about the harness itself, since they bound what it can claim. Best-of-N **selects
+favorable noise** rather than estimating a distribution; it is used here because `run.sh` uses it and
+comparability mattered more than rigor. And best-of-N is taken on **throughput**, so the p99 in each
+row is the p99 *of the highest-throughput round* — which is not the same as the best p99, and is a
+latent inconsistency in the pre-registered rule that clause 3 depends on. In run 2 the choice does
+not matter (p99 varies by under 1 % across rounds). In run 1 it changes clause 3 from 1.04× to 2.27×,
+which is a second, independent reason run 1 decides nothing.
 
 ## Consequences
 

@@ -26,6 +26,16 @@
 //  single-owner reactor affinity every engine depends on; only the handler subtree is lifted, and
 //  only at the six `respond` seams.
 //
+//  Which of those six were actually exposed is narrower than the finding states, and worth writing
+//  down because it is invisible from the call sites. Executor preference is inherited by `async let`
+//  and task-group children but NOT by an unstructured `Task { }` — measured on this toolchain, see
+//  ADR 0007. The HTTP/2 and HTTP/3 streaming-route handlers each run inside an unstructured `Task`
+//  (it exists so a peer RST_STREAM has a handle to cancel), so they were already off the reactor.
+//  HTTP/3 additionally has no preference at all: `runHTTP3()` is not wrapped, because a QUIC
+//  connection is not a `TransportConnection` and has no event loop to prefer. The seams that really
+//  sat on a serial reactor were HTTP/1.1 buffered, HTTP/1.1 streaming, and HTTP/2 buffered dispatch.
+//  All six route through the policy anyway, so the guarantee is uniform rather than incidental.
+//
 
 /// Where an ``HTTPServer`` runs application handlers relative to the connection's I/O reactor.
 ///
@@ -34,10 +44,12 @@
 /// policy serves an identical response on every protocol, and pipelined HTTP/1.1 responses stay in
 /// request order (RFC 9112 §9.3) under all of them.
 public enum HandlerExecutionPolicy: Sendable, Equatable {
-    /// Run handlers on whatever executor the connection's serve task is already on.
+    /// Run handlers on whatever executor the dispatching task is already on.
     ///
-    /// On a loop-backed backbone that is the connection's serial event loop, so read → parse → route
-    /// → respond → write happens inline on one thread with no executor hop. This is the fastest path
+    /// On a loop-backed backbone that is usually the connection's serial event loop, so read → parse
+    /// → route → respond → write happens inline on one thread with no executor hop. "Usually" rather
+    /// than "always": a seam that dispatches through an unstructured `Task` does not inherit the
+    /// preference, and HTTP/3 has none to inherit — see the file comment. This is the fastest path
     /// for a trivial, non-blocking handler and the reason it remains the default — but it is also the
     /// topology audit CR-F7 describes: a handler that blocks or burns CPU holds the reactor, and
     /// every other connection assigned to that shard waits behind it.

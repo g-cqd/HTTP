@@ -23,10 +23,18 @@
 //  production puts it in; calling `serve` bare would test nothing, since there would be no reactor to
 //  leave.
 //
+//  The last test in this file pins something the audit's own description of CR-F7 got wrong, and
+//  which is easy to re-break. Executor preference is inherited by `async let` and task-group children
+//  but NOT by an unstructured `Task { }` — measured on this toolchain, see ADR 0007. Two of the six
+//  `respond` seams sit inside an unstructured `Task`, so their handlers were already off the reactor
+//  before the policy existed. That is a fact about how those tasks are created, not a guarantee, and
+//  turning either into a structured child would silently re-expose it.
+//
 //  Standards: RFC 9113 §4.3 (HPACK is connection-scoped and order-dependent), §6.9 (flow control).
 //
 
 import HTTPCore
+import HTTPTestSupport
 import HTTPTransport
 import Testing
 
@@ -84,6 +92,42 @@ struct HandlerExecutionReactorAffinityTests {
         #expect(connection.transportCallCount > 0)
         #expect(connection.receivesOffReactor == 0, "an HTTP/1.1 receive left its event loop")
         #expect(connection.sendsOffReactor == 0, "an HTTP/1.1 send left its event loop")
+    }
+
+    @Test(
+        "under .inline, only the seams inside an INHERITING task actually sit on the reactor",
+        arguments: [(streaming: false, onReactor: true), (streaming: true, onReactor: false)]
+    )
+    func http2ExposureDependsOnHowTheHandlerTaskWasCreated(
+        streaming: Bool,
+        onReactor: Bool
+    ) async {
+        let executor = ReactorProbeExecutor()
+        let observed = AsyncEventProbe<Bool>()
+        let router = Router {
+            let route = Route.post("/upload/:tag") { _, body, _ in
+                observed.record(executor.isCurrent)
+                return .text("bytes=\(await body.collect().count)")
+            }
+            if streaming {
+                route.streamingBody()
+            }
+            else {
+                route
+            }
+        }
+        let connection = ReactorPinnedConnection(
+            inbound: DispatchPlanWire.http2Head(path: "/upload/abc")
+                + DispatchPlanWire.http2Body(count: 16),
+            executor: executor
+        )
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: router,
+            handlerExecution: .inline
+        )
+        await Self.servePinned(connection, by: server)
+        #expect(observed.events == [onReactor])
     }
 
     /// Serves `connection` under its own preferred executor — the body of `HTTPServer.accept(_:)`.
