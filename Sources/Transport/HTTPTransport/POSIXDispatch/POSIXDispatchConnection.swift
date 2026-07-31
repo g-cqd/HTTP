@@ -30,6 +30,10 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// The peer's address.
     public let peer: TransportAddress
 
+    /// The admission slot the accept loop charged for this connection before yielding it (audit F8);
+    /// the server releases it when the serve loop ends.
+    public let admissionTicket: AdmissionTicket?
+
     private let descriptor: Int32
     private let queue: DispatchQueue
     private let isClosed = Atomic<Bool>(false)
@@ -57,12 +61,17 @@ public final class POSIXDispatchConnection: TransportConnection {
 
     /// Wraps an accepted, non-blocking socket; the connection owns and eventually closes `descriptor`.
     init(
-        id: TransportConnectionID, descriptor: Int32, peer: TransportAddress, queue: DispatchQueue
+        id: TransportConnectionID,
+        descriptor: Int32,
+        peer: TransportAddress,
+        queue: DispatchQueue,
+        admissionTicket: AdmissionTicket? = nil
     ) {
         self.id = id
         self.peer = peer
         self.descriptor = descriptor
         self.queue = queue
+        self.admissionTicket = admissionTicket
     }
 
     deinit {

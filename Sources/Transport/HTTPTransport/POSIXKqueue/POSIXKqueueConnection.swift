@@ -28,6 +28,10 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// The peer's address.
     public let peer: TransportAddress
 
+    /// The admission slot the accept loop charged for this connection before yielding it (audit F8);
+    /// the server releases it when the serve loop ends.
+    public let admissionTicket: AdmissionTicket?
+
     /// The connection's own ``KqueueEventLoop`` — a `TaskExecutor` — so the server pins this
     /// connection's serve task to the loop and runs read → handler → write inline on the loop thread,
     /// with no hop to the cooperative pool (audit R4).
@@ -63,12 +67,14 @@ public final class POSIXKqueueConnection: TransportConnection {
         id: TransportConnectionID,
         descriptor: Int32,
         peer: TransportAddress,
-        eventLoop: KqueueEventLoop
+        eventLoop: KqueueEventLoop,
+        admissionTicket: AdmissionTicket? = nil
     ) {
         self.id = id
         self.peer = peer
         self.descriptor = descriptor
         self.eventLoop = eventLoop
+        self.admissionTicket = admissionTicket
     }
 
     deinit {

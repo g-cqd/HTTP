@@ -37,6 +37,12 @@ public final class POSIXDispatchTransport: ServerTransport {
     )
     private let state = Mutex<State>(State())
     private let connectionIDs = ConnectionIDAllocator()
+    /// Whether the read source is currently suspended for admission saturation.
+    ///
+    /// `DispatchSource` **traps** on an unbalanced `resume()`, so suspend/resume must be strictly 1:1;
+    /// this flag is the balance, and both transitions run on ``acceptQueue`` so they are serialized
+    /// against each other and against the accept handler that suspends (audit F8).
+    private let isSuspendedForAdmission = Mutex<Bool>(false)
 
     private struct State {
         var acceptSource: (any DispatchSourceRead)?
@@ -45,6 +51,9 @@ public final class POSIXDispatchTransport: ServerTransport {
         /// The connection-stream continuation, finished on ``shutdown()`` so a consumer's `for await`
         /// completes instead of hanging.
         var continuation: AsyncStream<any TransportConnection>.Continuation?
+        /// The admission policy applied between `accept(2)` and `yield` (audit F8), ungated until
+        /// ``start(admission:)`` installs the server's gate.
+        var gate = AcceptGate(admission: nil)
     }
 
     /// Creates a Dispatch transport for `configuration`.
@@ -63,7 +72,7 @@ public final class POSIXDispatchTransport: ServerTransport {
 
     /// Binds a non-blocking TCP socket and begins accepting via a read source.
     public func start(
-        admission _: ConnectionAdmission?
+        admission: ConnectionAdmission?
     ) async throws -> AsyncStream<any TransportConnection> {
         let listener = try POSIXSocket.makeListenSocket(
             host: configuration.host,
@@ -89,10 +98,18 @@ public final class POSIXDispatchTransport: ServerTransport {
             $0.boundPort = listener.port
             $0.isRunning = true
             $0.continuation = continuation
+            $0.gate = AcceptGate(admission: admission)
         }
         continuation.onTermination = { [weak self] _ in
             Task { await self?.shutdown() }
         }
+        // Resume the read source once the gate's live count falls back to its hysteresis watermark.
+        // Hopped onto `acceptQueue` so it is serialized *after* the accept handler that suspended —
+        // an out-of-order resume would leave the flag unbalanced and the listener suspended forever.
+        admission?
+            .onResume { [weak self] in
+                self?.acceptQueue.async { self?.resumeAcceptAfterAdmission() }
+            }
         source.resume()
         return stream
     }
@@ -109,17 +126,36 @@ public final class POSIXDispatchTransport: ServerTransport {
         }
         // Finish the connection stream so a consumer's `for await` completes instead of hanging.
         continuation?.finish()
+        // A suspended source never delivers its cancel handler (and deallocating it would trap), so
+        // balance the admission suspend before cancelling.
+        if isSuspendedForAdmission.withLock({ suspended -> Bool in
+            defer { suspended = false }
+            return suspended
+        }) {
+            source?.resume()
+        }
         source?.cancel()
     }
 
     // MARK: - Internals
 
     /// Drains every pending connection on a readiness event (a non-blocking socket is level- but
-    /// drained edge-style to avoid repeated wakeups).
+    /// drained edge-style to avoid repeated wakeups), charging each against the admission gate BEFORE
+    /// it is yielded.
+    ///
+    /// The connection stream stays `.unbounded` deliberately. `AsyncStream`'s buffering policy *drops*
+    /// on overflow, and a dropped connection here is a leaked file descriptor — an unbounded-loss bug
+    /// strictly worse than the queue depth it would bound. The bound comes from admission instead:
+    /// because a slot is charged before `yield`, the stream's depth can never exceed the gate's total.
+    /// Do not "fix" this by adding a dropping policy.
     private func acceptPending(
         listenFD: Int32,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
+        let gate = state.withLock(\.gate)
+        // A refused connection is closed here, on the accept queue: it has no readiness source yet, so
+        // a direct `close(2)` cannot race one.
+        let closeRefused: (Int32) -> Void = { close($0) }
         drain: while state.withLock(\.isRunning) {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
@@ -141,27 +177,91 @@ public final class POSIXDispatchTransport: ServerTransport {
                         break drain  // drained, or the listener was closed
                 }
             }
-            POSIXSocket.setNonBlocking(clientFD)
-            POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
-            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
-            let id = connectionIDs.next()
-            // A per-connection *serial* queue targeting the shared concurrent pool: it serializes this
-            // connection's read/write readiness handling and close (so a close never races a syscall on
-            // the fd), while still spreading connections across the pool's threads.
-            let connectionQueue = DispatchQueue(
-                label: "http.transport.posix-dispatch.conn",
-                qos: .userInitiated,
-                target: ioQueue
-            )
-            continuation.yield(
-                POSIXDispatchConnection(
-                    id: id,
-                    descriptor: clientFD,
-                    peer: POSIXSocket.peerAddress(from: address),
-                    queue: connectionQueue
-                )
-            )
+            let peer = POSIXSocket.peerAddress(from: address)
+            switch gate.admit(descriptor: clientFD, host: peer.host, close: closeRefused) {
+                case .rejectedContinue:
+                    continue  // this peer is over ITS cap; others are not — keep draining
+                case .saturatedStop:
+                    // This backbone has a real readiness source, so the backpressure is an explicit
+                    // suspend; the gate resumes it at the hysteresis watermark.
+                    suspendAcceptForAdmission()
+                    return
+                case .admit(let ticket, let saturated):
+                    yieldConnection(
+                        clientFD,
+                        peer: peer,
+                        ticket: ticket,
+                        continuation: continuation
+                    )
+                    if saturated {
+                        suspendAcceptForAdmission()  // that was the last slot
+                        return
+                    }
+            }
         }
+    }
+
+    /// Configures an admitted descriptor, gives it a serial queue, and yields it carrying its slot.
+    private func yieldConnection(
+        _ clientFD: Int32,
+        peer: TransportAddress,
+        ticket: AdmissionTicket?,
+        continuation: AsyncStream<any TransportConnection>.Continuation
+    ) {
+        POSIXSocket.setNonBlocking(clientFD)
+        POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+        POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
+        // A per-connection *serial* queue targeting the shared concurrent pool: it serializes this
+        // connection's read/write readiness handling and close (so a close never races a syscall on
+        // the fd), while still spreading connections across the pool's threads.
+        let connectionQueue = DispatchQueue(
+            label: "http.transport.posix-dispatch.conn",
+            qos: .userInitiated,
+            target: ioQueue
+        )
+        continuation.yield(
+            POSIXDispatchConnection(
+                id: connectionIDs.next(),
+                descriptor: clientFD,
+                peer: peer,
+                queue: connectionQueue,
+                admissionTicket: ticket
+            )
+        )
+    }
+
+    /// Suspends accept readiness because the admission gate is saturated (audit F8).
+    ///
+    /// Balanced 1:1 with ``resumeAcceptAfterAdmission()`` by ``isSuspendedForAdmission`` — an
+    /// unbalanced `resume()` traps. Both run on ``acceptQueue``: this one from inside the accept
+    /// handler, the resume as a block enqueued behind it, so the pair can never invert.
+    private func suspendAcceptForAdmission() {
+        let shouldSuspend = isSuspendedForAdmission.withLock { suspended -> Bool in
+            guard !suspended else {
+                return false
+            }
+            suspended = true
+            return true
+        }
+        guard shouldSuspend, let source = state.withLock(\.acceptSource) else {
+            return
+        }
+        source.suspend()
+    }
+
+    /// Resumes accept readiness once the gate's live count falls back to its hysteresis watermark.
+    private func resumeAcceptAfterAdmission() {
+        let shouldResume = isSuspendedForAdmission.withLock { suspended -> Bool in
+            guard suspended else {
+                return false
+            }
+            suspended = false
+            return true
+        }
+        guard shouldResume, let source = state.withLock(\.acceptSource) else {
+            return
+        }
+        source.resume()
     }
 
     /// Suspends the accept read source and resumes it after the fd-exhaustion backoff (audit F-EMFILE).
