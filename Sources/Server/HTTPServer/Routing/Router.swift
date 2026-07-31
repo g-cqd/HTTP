@@ -24,6 +24,10 @@ public struct Router: HTTPRouter {
     /// CONNECT advertisement (RFC 8441 / RFC 9220).
     public let hasWebSocketRoutes: Bool
 
+    /// This table's identity, so a ``RouteMatch`` it minted can be told apart from one another table
+    /// did — the check that makes carrying a match forward to dispatch safe across a hot reload.
+    let identity = RouterIdentity.mint()
+
     /// Builds a router from a ``RouteBuilder`` route table.
     public init(@RouteBuilder _ routes: () -> [Route]) {
         let table = routes()
@@ -43,6 +47,13 @@ public struct Router: HTTPRouter {
         // `OPTIONS *` is a server-wide capability query (RFC 9110 §9.3.7).
         if request.method == .options, request.path == "*" {
             return Self.allow(status: .noContent, methods: Self.serverMethods(routes))
+        }
+        // The server already matched this request's head against a table; if it was *this* table, for
+        // *this* request, run the route it named instead of finding it again (audit CR-F19).
+        if let route = adopted(context.route, for: request) {
+            var context = context
+            context.parameters = context.route?.parameters ?? RouteParameters()
+            return await route.run(request, body, context)
         }
         let components = Self.pathComponents(of: request.path)
         // HEAD is GET without a body (RFC 9110 §9.3.2): match it against GET routes and let the server
@@ -66,32 +77,67 @@ public struct Router: HTTPRouter {
         return Self.unmatched(method: request.method, pathMethods: pathMethods)
     }
 
-    // MARK: Route resolution (head-only)
-
-    /// Resolves the route metadata for `method` + `path` — a head-only match that runs no handler — or
-    /// `nil` when no route matches.
-    public func resolve(method: HTTPMethod, path: String) -> ResolvedRoute? {
-        let components = Self.pathComponents(of: path)
-        // HEAD is served by the matching GET route (RFC 9110 §9.3.2), as in `respond`.
-        let matchMethod: HTTPMethod = method == .head ? .get : method
-        for route in routes where route.method == matchMethod {
-            guard route.match(components) != nil else {
-                continue
-            }
-            return Self.metadata(of: route)
+    /// The route `match` names, but only if this router can vouch for every part of that claim.
+    ///
+    /// Internal rather than private so the regression suite can ask the same question the dispatch path
+    /// asks — "will this request cost a table walk?" — without restating the predicate and letting the
+    /// two drift apart.
+    ///
+    /// Four conditions, and a failure of any one is a cache miss that falls back to a full scan — never
+    /// a mis-dispatch:
+    ///
+    /// - the match carries a handle at all (a custom ``RouteResolver`` mints none, and neither does the
+    ///   public ``RouteMatch`` initializer);
+    /// - it came from *this* table (`origin`), so a hot reload between head and dispatch, or a nested
+    ///   router handed an enclosing router's match, is rejected rather than indexed;
+    /// - the index is still in range, which the identity check already implies but which must not be
+    ///   *assumed*, because the consequence of being wrong is an out-of-bounds trap;
+    /// - the request has not been rewritten underneath the match. A middleware between the server and
+    ///   the router may legitimately change the method or the path, and the route that then matches is
+    ///   not the one the head resolved.
+    func adopted(_ match: RouteMatch?, for request: HTTPRequest) -> Route? {
+        guard let match, let handle = match.handle,
+            handle.origin == identity,
+            handle.index < routes.count,
+            handle.method == request.method,
+            handle.path == request.path
+        else {
+            return nil
         }
-        return nil
+        return routes[handle.index]
     }
 
-    /// Resolves the WebSocket route matching `path` (method-agnostic, for an Extended CONNECT whose
-    /// `:method` is `CONNECT` while the route is declared `GET`), or `nil`.
-    public func resolveWebSocket(path: String) -> ResolvedRoute? {
+    // MARK: Route matching (head-only)
+
+    /// The route matching `method` + `path` — a head-only match that runs no handler — or `nil`.
+    ///
+    /// `isUpgrade` reads the table as a WebSocket handshake would: only routes carrying a handler are
+    /// candidates, and the method is ignored, because an upgrade arrives under a method the route was
+    /// not declared with (an h1 `GET` with `Upgrade: websocket`, RFC 6455 §4.1; an Extended CONNECT
+    /// whose `:method` is `CONNECT` against a `GET` route, RFC 8441 §4 / RFC 9220 §3). Otherwise the
+    /// method must match, with `HEAD` folded onto `GET` (RFC 9110 §9.3.2) as in ``respond(to:body:
+    /// context:)``.
+    ///
+    /// The returned match names the table entry it came from, so ``respond(to:body:context:)`` can run
+    /// it without scanning again.
+    public func match(method: HTTPMethod, path: String, isUpgrade: Bool = false) -> RouteMatch? {
         let components = Self.pathComponents(of: path)
-        for route in routes where route.isWebSocket {
-            guard route.match(components) != nil else {
+        let matchMethod: HTTPMethod = method == .head ? .get : method
+        for index in routes.indices {
+            let route = routes[index]
+            guard isUpgrade ? route.isWebSocket : route.method == matchMethod else {
                 continue
             }
-            return Self.metadata(of: route)
+            guard let parameters = route.match(components) else {
+                continue
+            }
+            return RouteMatch(
+                route: Self.metadata(of: route),
+                parameters: parameters,
+                handle: RouteMatch.Handle(
+                    origin: identity, index: index, method: method, path: path
+                )
+            )
         }
         return nil
     }

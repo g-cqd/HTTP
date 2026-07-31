@@ -38,7 +38,7 @@ public struct RequestIDMiddleware: HTTPMiddleware {
         context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        let id = resolvedID(request)
+        let id = resolvedID(request, context)
         var request = request
         _ = request.headerFields.setValue(id, for: field)  // server-asserted: replaces any inbound
         // Surface the resolved id on the context too, so handlers and the access log read a guaranteed
@@ -51,9 +51,20 @@ public struct RequestIDMiddleware: HTTPMiddleware {
     }
 
     /// A valid inbound id (when trusted), else a freshly generated one.
-    private func resolvedID(_ request: HTTPRequest) -> String {
-        if trustInbound, let inbound = request.headerFields[field], Self.isValid(inbound) {
+    ///
+    /// `X-Request-ID` is server-asserted, so the server *moves* a valid inbound one off the request
+    /// and into ``RequestContext/id`` at ingress (audit CR-F13) — the context is where a front proxy's
+    /// id survives, and reading the header alone would have silently turned `trustInbound` into a
+    /// no-op. A custom ``field`` is not on that strip list and is still read from the wire.
+    private func resolvedID(_ request: HTTPRequest, _ context: RequestContext) -> String {
+        guard trustInbound else {
+            return generate()
+        }
+        if let inbound = request.headerFields[field], Self.isValid(inbound) {
             return inbound
+        }
+        if field == .xRequestID, let lifted = context.id, Self.isValid(lifted) {
+            return lifted
         }
         return generate()
     }

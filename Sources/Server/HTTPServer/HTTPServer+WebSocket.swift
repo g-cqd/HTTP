@@ -338,9 +338,9 @@ extension HTTPServer {
                 // CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the tunnel,
                 // treated like a declined upgrade.
                 guard proto == "websocket",
-                    let handler = currentResolver?
-                        .resolveWebSocket(path: request.path)?
-                        .webSocketHandler,
+                    let handler = currentSnapshot.resolver?
+                        .match(method: request.method, path: request.path, isUpgrade: true)?
+                        .route.webSocketHandler,
                     handler.shouldUpgrade(request),
                     handler.isOriginAllowed(request.headerFields[.origin])
                 else { return }

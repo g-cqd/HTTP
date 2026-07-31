@@ -21,6 +21,12 @@ struct HTTP2ConnectionState {
     /// Single-owner: only the consumer touches it.
     var engine: HTTP2Connection
 
+    /// The route matches this connection's engine filed at HEADERS time, one per open stream.
+    ///
+    /// Shared with the engine's `resolveRoute` closure (which is why it is a class), and cleared by
+    /// ``retire(_:)`` so the table cannot outlive the streams it describes.
+    let plans: HTTP2DispatchPlans
+
     /// Per-stream WebSocket tunnels (RFC 8441) — each tunnel's mailbox; its own WebSocket engine and
     /// handler live inside that tunnel's pump task.
     var webSockets: [HTTP2StreamID: HTTP2WebSocketTunnel] = [:]
@@ -111,8 +117,11 @@ struct HTTP2ConnectionState {
     /// reset bug this series also fixes.
     ///
     /// Consumption the handler reported but the loop never drained needs no separate accounting:
-    /// `releaseReceiveWindow` returns *all* of this stream's outstanding credit at once.
+    /// `releaseReceiveWindow` returns *all* of this stream's outstanding credit at once. The stream's
+    /// head-time route match goes here too, for exactly the same reason: a table keyed by a peer-chosen
+    /// stream id that any single exit path forgets to clear grows without bound (CWE-770).
     mutating func retire(_ streamID: HTTP2StreamID) {
+        plans.remove(streamID)
         consumption.removeValue(forKey: streamID)
         stalls.removeValue(forKey: streamID)
         engine.releaseReceiveWindow(of: streamID)

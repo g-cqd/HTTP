@@ -18,11 +18,14 @@ enum H2Gate {
     static func handshaked(limits: HTTPLimits, streaming: Bool) throws -> HTTP2Connection {
         var settings = HTTP2Settings()
         settings.initialWindowSize = limits.streamReceiveWindow
-        let streamsBody: @Sendable (HTTPRequest) -> Bool = { _ in streaming }
+        let policy = RequestBodyPolicy(isStreaming: streaming)
+        let resolveRoute: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = { _, _ in
+            policy
+        }
         var connection = HTTP2Connection(
             localSettings: settings,
             limits: limits,
-            resolveStreamsBody: streamsBody
+            resolveRoute: resolveRoute
         )
         _ = connection.outboundBytes()
         _ = try connection.receive(H2ServerWire.preface + H2ServerWire.settings())

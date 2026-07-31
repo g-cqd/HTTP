@@ -8,7 +8,7 @@
 //  reported the listener's own bind address it silently collapsed for h3: every HTTP/3 request, from
 //  every client, drew on one shared budget (CWE-770, CWE-807).
 //
-//  These pin the h3 half of the chain — ``RequestContext/init(quic:request:)`` carrying the peer into
+//  These pin the h3 half of the chain — ``RequestContext/ingress(_:over:)`` carrying the peer into
 //  `context.connection.peer`, and the identity deriving a per-peer key from it — so a future change to
 //  either end cannot quietly re-share the budget. The transport half (that `peer` is the real remote
 //  address at all) is pinned by `QUICPeerAttributionTests`.
@@ -40,10 +40,12 @@ struct HTTP3RateLimitIdentityTests {
         ]
     )
     func keyIsDerivedFromTheQUICPeer(testCase: (peer: String, key: String)) {
-        let context = RequestContext(
-            quic: FakeQUICConnection(peer: TransportAddress(host: testCase.peer, port: 443)),
-            request: Self.request
-        )
+        let context =
+            RequestContext.ingress(
+                Self.request,
+                over: FakeQUICConnection(peer: TransportAddress(host: testCase.peer, port: 443))
+            )
+            .context
         let key = RateLimitIdentity.peerAddress().key(for: Self.request, context: context)
         #expect(context.connection.peer?.host == testCase.peer)
         #expect(key == testCase.key)
@@ -64,10 +66,12 @@ struct HTTP3RateLimitIdentityTests {
 
     /// The budget key an h3 request from `host` draws on.
     private static func key(forPeer host: String) -> String {
-        let context = RequestContext(
-            quic: FakeQUICConnection(peer: TransportAddress(host: host, port: 443)),
-            request: request
-        )
+        let context =
+            RequestContext.ingress(
+                request,
+                over: FakeQUICConnection(peer: TransportAddress(host: host, port: 443))
+            )
+            .context
         return RateLimitIdentity.peerAddress().key(for: request, context: context)
     }
 }

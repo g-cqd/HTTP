@@ -30,7 +30,7 @@ extension HTTPServer {
     /// than no answer at all.
     func serveHTTP3StreamingRequest(
         _ id: QUICStreamID,
-        request: HTTPRequest,
+        request inbound: HTTPRequest,
         buffered: (chunks: [[UInt8]], ended: Bool),
         stream: any QUICStream,
         engine: Engine,
@@ -39,8 +39,13 @@ extension HTTPServer {
         deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         let handoff = AsyncHandoff()
-        let context = RequestContext(quic: quic, request: request)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
+        // The plan this stream's HEADERS resolved (CR-F12 / CR-F19), and the ingress seam (CR-F13):
+        // the sanitized request is what the handler child captures.
+        let plan = registry.plan(for: id) ?? DispatchPlan(snapshot: currentSnapshot)
+        let (request, context) = RequestContext.ingress(
+            inbound, over: quic, matching: plan.match
+        )
+        let current = plan.snapshot.responder  // this request's generation (CR-F12)
         let handler = Task {
             let response = await current.respond(
                 to: request,

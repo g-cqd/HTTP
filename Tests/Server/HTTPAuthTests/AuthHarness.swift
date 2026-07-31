@@ -27,13 +27,21 @@ enum AuthHarness {
     }
 
     /// Runs `middleware` over a `GET /` request carrying `authorization` (if any).
+    ///
+    /// `spoofing` puts a client-supplied value on `.xAuthSubject`, standing in for the request a hostile
+    /// peer sends. The middleware is invoked directly, *without* the server's ingress strip, so these
+    /// runs pin the middleware's own behavior rather than the server's (audit CR-F13).
     static func run(
         _ middleware: any HTTPMiddleware,
-        authorization: String? = nil
+        authorization: String? = nil,
+        spoofing spoofedSubject: String? = nil
     ) async -> ServerResponse {
         var fields = HTTPFields()
         if let authorization {
             _ = fields.append(authorization, for: .authorization)
+        }
+        if let spoofedSubject {
+            _ = fields.append(spoofedSubject, for: .xAuthSubject)
         }
         let request = HTTPRequest(
             method: .get, scheme: "https", authority: "x", path: "/", headerFields: fields

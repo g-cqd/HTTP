@@ -29,16 +29,14 @@ extension HTTPServer {
         init(
             limits: HTTPLimits,
             enableConnectProtocol: Bool,
-            resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int?,
-            resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool
+            resolveRoute: @escaping @Sendable (QUICStreamID, HTTPRequest) -> RequestBodyPolicy
         ) {
             var settings = HTTP3Settings()
             settings.enableConnectProtocol = enableConnectProtocol  // RFC 9220 — WebSocket over h3
             connection = HTTP3Connection(
                 localSettings: settings,
                 limits: limits,
-                resolveBodyLimit: resolveBodyLimit,
-                resolveStreamsBody: resolveStreamsBody
+                resolveRoute: resolveRoute
             )
         }
 
@@ -136,34 +134,39 @@ extension HTTPServer {
     /// Opens the server's control + QPACK unidirectional streams concurrently (so a slow stream open
     /// never stalls request serving), then serves each inbound stream until the connection closes.
     func serveHTTP3(_ quic: any QUICConnection) async {
-        // The matched route's body limit, resolved from each request head before its DATA is buffered
-        // (Phase 1.2); `nil` when the responder is not a router or the route declares no limit.
-        let resolveBodyLimit: @Sendable (HTTPRequest) -> Int? = { [self] request in
-            currentResolver?.resolve(method: request.method, path: request.path)?.bodyLimit
-        }
-        // Whether the matched route streams its request body (Phase 1.4) — the engine then surfaces the
-        // body incrementally (requestHead/requestBodyChunk/requestEnd) instead of one buffered request.
-        let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool = { [self] request in
-            currentResolver?.resolve(method: request.method, path: request.path)?.streamsBody
-                ?? false
+        // The per-connection dispatcher (audit addendum P0.3): the registry routes engine output by
+        // stream id, and `routed` carries the events a stream task produced for a *different* stream.
+        // Bounded — the engine only crosses streams when it unblocks a QPACK-blocked section, and it
+        // caps those at `SETTINGS_QPACK_BLOCKED_STREAMS` (RFC 9204 §2.1.2), well under this budget.
+        // It is built FIRST because it is also where each stream's ``DispatchPlan`` is filed, and the
+        // resolver below closes over it.
+        let registry = HTTP3StreamRegistry()
+        // Resolve the matched route from each request head, before its DATA is buffered (Phase 1.2 /
+        // 1.4), and file the resulting plan against the stream that will dispatch it. `snapshot` is
+        // read per head, not per connection: an h3 connection outlives many reloads, so pinning it here
+        // would make a long-lived connection permanently blind to `reloadResponder`.
+        let resolveRoute: @Sendable (QUICStreamID, HTTPRequest) -> RequestBodyPolicy = {
+            [self] id, request in
+            let snapshot = currentSnapshot
+            let plan = DispatchPlan(
+                snapshot: snapshot,
+                match: snapshot.resolver?
+                    .match(method: request.method, path: request.path, isUpgrade: false)
+            )
+            registry.file(plan, for: id)
+            return RequestBodyPolicy(limit: plan.bodyLimit, isStreaming: plan.streamsBody)
         }
         let engine = Engine(
             limits: limits,
             // Advertise Extended CONNECT (RFC 9220) only when the responder declares a WebSocket route.
-            enableConnectProtocol: currentResolver?.hasWebSocketRoutes ?? false,
-            resolveBodyLimit: resolveBodyLimit,
-            resolveStreamsBody: resolveStreamsBody
+            enableConnectProtocol: currentSnapshot.hasWebSocketRoutes,
+            resolveRoute: resolveRoute
         )
         let initialActions = await engine.pendingActions()
         let serverStreams = Task {
             await self.holdServerStreams(from: initialActions, engine: engine, on: quic)
         }
         defer { serverStreams.cancel() }
-        // The per-connection dispatcher (audit addendum P0.3): the registry routes engine output by
-        // stream id, and `routed` carries the events a stream task produced for a *different* stream.
-        // Bounded — the engine only crosses streams when it unblocks a QPACK-blocked section, and it
-        // caps those at `SETTINGS_QPACK_BLOCKED_STREAMS` (RFC 9204 §2.1.2), well under this budget.
-        let registry = HTTP3StreamRegistry()
         let (routed, continuation) = AsyncStream<HTTP3RoutedEvents>
             .makeStream(
                 bufferingPolicy: .bufferingOldest(Self.http3RoutedEventBudget)
@@ -367,20 +370,25 @@ extension HTTPServer {
     /// else buffered (RFC 9114 §4.1).
     private func respondHTTP3(
         _ id: QUICStreamID,
-        request: HTTPRequest,
+        request inbound: HTTPRequest,
         body: [UInt8],
         stream: any QUICStream,
         engine: Engine,
         quic: any QUICConnection,
         registry: HTTP3StreamRegistry
     ) async {
+        // The plan this stream's HEADERS resolved (CR-F12 / CR-F19): the generation whose body limit
+        // was already enforced against these octets, and the route match it made.
+        let plan = registry.plan(for: id) ?? DispatchPlan(snapshot: currentSnapshot)
         // Build the per-request context from the QUIC connection's verified metadata (peer, TLS subject);
         // the verified mutual-TLS subject reaches handlers via `context.connection.tlsPeerSubject` rather
-        // than a spoofable header (audit P0-1) — the same model the h1/h2 paths use.
-        let context = RequestContext(quic: quic, request: request)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
-        let response = await current.respond(
-            to: request, body: requestBody(body, for: request), context: context
+        // than a spoofable header (audit P0-1) — the same model the h1/h2 paths use. The same seam
+        // strips every client-supplied server-asserted field off the request (audit CR-F13).
+        let (request, context) = RequestContext.ingress(
+            inbound, over: quic, matching: plan.match
+        )
+        let response = await plan.snapshot.responder.respond(
+            to: request, body: requestBody(body, following: plan), context: context
         )
         await sendHTTP3Response(
             response,

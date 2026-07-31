@@ -16,11 +16,13 @@ import Testing
 
 @Suite("Phase 1.4 — HTTP/2 incremental request streaming")
 struct HTTP2RequestStreamingTests {
-    private let streaming: @Sendable (HTTPRequest) -> Bool = { _ in true }
+    private let streaming: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = {
+        _, _ in RequestBodyPolicy(isStreaming: true)
+    }
 
     @Test("a streaming route surfaces head, then each body chunk, then end — incrementally")
     func incrementalDelivery() throws {
-        var connection = try H2Wire.handshaked(resolveStreamsBody: streaming)
+        var connection = try H2Wire.handshaked(resolveRoute: streaming)
         // HEADERS without END_STREAM: the head surfaces before any body arrives.
         let head = try connection.receive(H2Wire.openStream(streamID: 1))
         guard case .requestHead(let id, let request) = head.first, head.count == 1 else {
@@ -56,10 +58,12 @@ struct HTTP2RequestStreamingTests {
 
     @Test("the per-route body limit still resets an over-limit streaming body (Phase 1.2)")
     func streamingHonorsRouteLimit() throws {
+        let policy = RequestBodyPolicy(limit: 4, isStreaming: true)
+        let limited: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = { _, _ in policy
+        }
         var connection = try H2Wire.handshaked(
             limits: HTTPLimits(maxBodySize: 1_000),
-            resolveBodyLimit: { _ in 4 },
-            resolveStreamsBody: streaming
+            resolveRoute: limited
         )
         H2Wire.expectStreamError(
             .enhanceYourCalm,

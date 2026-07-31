@@ -48,6 +48,14 @@ final class HTTP3StreamRegistry: Sendable {
         var isClaimed = false
         /// Routed events the owning task must act on itself (it holds the tunnel / body-feed state).
         var mailbox: [HTTP3Connection.Event] = []
+        /// The ``DispatchPlan`` this stream's HEADERS resolved — its responder generation and its route
+        /// match — filed by the engine's `resolveRoute` and taken again at dispatch.
+        ///
+        /// It lives on the entry rather than in a table of its own precisely so it inherits this
+        /// registry's lifetime: `retire`/`endDriving` already drop an entry on every path a stream can
+        /// end, and a second table keyed by a peer-chosen stream id would be a second set of paths to
+        /// remember (CWE-770).
+        var plan: DispatchPlan?
     }
 
     /// The most routed events one stream may hold before the stream is reset instead.
@@ -106,6 +114,21 @@ final class HTTP3StreamRegistry: Sendable {
         }
     }
 
+    /// Files the plan a stream's head resolved, for its dispatch to take back.
+    ///
+    /// Audit CR-F12 / CR-F19: one route match and one responder generation per request.
+    ///
+    /// A no-op for a stream that is not registered — it was reset or retired while its HEADERS were
+    /// still decoding, and nothing will dispatch it.
+    func file(_ plan: DispatchPlan, for id: QUICStreamID) {
+        entries.withLock { $0[id]?.plan = plan }
+    }
+
+    /// The plan filed for `id`, or `nil` if its head never resolved one.
+    func plan(for id: QUICStreamID) -> DispatchPlan? {
+        entries.withLock { $0[id]?.plan }
+    }
+
     /// Drains the routed events queued for `id` (empty when there are none).
     func takeMailbox(_ id: QUICStreamID) -> [HTTP3Connection.Event] {
         entries.withLock { current in
@@ -151,5 +174,10 @@ final class HTTP3StreamRegistry: Sendable {
     /// The number of streams currently registered.
     var count: Int {
         entries.withLock(\.count)
+    }
+
+    /// Whether no stream is registered — every one this connection saw has been retired.
+    var isEmpty: Bool {
+        entries.withLock(\.isEmpty)
     }
 }

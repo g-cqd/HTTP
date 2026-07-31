@@ -130,17 +130,17 @@ public struct HTTP3Connection {
 
     let localSettings: HTTP3Settings
     let limits: HTTPLimits
-    /// Resolves the matched route's request-body limit from a request head (Phase 1.2): the engine caps
-    /// each stream's buffered body to it before buffering (RFC 9110 §15.5.14), tighter than the global
-    /// ``HTTPLimits/maxBodySize``.
+    /// Decides one stream's ``RequestBodyPolicy`` from its head, at HEADERS time (Phase 1.2 / 1.4):
+    /// the body ceiling to enforce before buffering (RFC 9110 §15.5.14) and whether the body is
+    /// surfaced incrementally.
     ///
-    /// Defaults to "no per-route limit".
-    let resolveBodyLimit: @Sendable (HTTPRequest) -> Int?
-    /// Resolves whether the matched route consumes its request body as a stream (Phase 1.4), from a
-    /// request head at HEADERS time.
+    /// One closure rather than the former separate limit/streaming pair, because both answers come
+    /// from one route match and asking twice walked the routing table twice (audit CR-F19). The stream
+    /// id is passed so the driver can file the match it just made against the stream that will need it
+    /// again at dispatch, rather than resolving it a third time.
     ///
-    /// Defaults to "no streaming route" — the engine buffers and surfaces one `request`.
-    let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool
+    /// Defaults to ``RequestBodyPolicy/unmatched`` — the global bound, buffered.
+    let resolveRoute: @Sendable (QUICStreamID, HTTPRequest) -> RequestBodyPolicy
     var decoder: QPACKDecoder
     var encoder: QPACKEncoder
     let frameDecoder: HTTP3FrameDecoder
@@ -192,8 +192,9 @@ public struct HTTP3Connection {
     public init(
         localSettings: HTTP3Settings = HTTP3Settings(),
         limits: HTTPLimits = .default,
-        resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
-        resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool = { _ in false },
+        resolveRoute: @escaping @Sendable (QUICStreamID, HTTPRequest) -> RequestBodyPolicy = {
+            _, _ in .unmatched
+        },
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // Advertise a dynamic QPACK table the peer encoder may populate (RFC 9204 §3.2); a caller can
@@ -210,8 +211,7 @@ public struct HTTP3Connection {
         }
         self.localSettings = advertised
         self.limits = limits
-        self.resolveBodyLimit = resolveBodyLimit
-        self.resolveStreamsBody = resolveStreamsBody
+        self.resolveRoute = resolveRoute
         self.decoder = QPACKDecoder(
             maxTableCapacity: advertised.qpackMaxTableCapacity, limits: limits
         )

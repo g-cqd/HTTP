@@ -42,19 +42,20 @@ extension HTTPServer where C.Duration == Duration {
         pending: PendingRequest,
         buffer: inout [UInt8],
         start: inout Int,
-        responseBuffer: inout [UInt8]
+        responseBuffer: inout [UInt8],
+        following plan: DispatchPlan
     ) async -> Bool {
-        let request = pending.head.request
         if await handleExpect(pending.head, on: connection) {
             return false  // a 417 was sent — the expectation cannot be met
         }
-        let bodyLimit = currentResolver?.resolve(method: request.method, path: request.path)?
-            .bodyLimit
+        // The ingress seam: the context, and the request with every client-supplied server-asserted
+        // field stripped (audit CR-F13).
+        let (request, context) = RequestContext.ingress(
+            pending.head.request, over: connection, matching: plan.match
+        )
         let handoff = AsyncHandoff()
-        let context = RequestContext(connection: connection, request: request)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
         async let responseTask = respondStreaming(
-            request, handoff: handoff, context: context, on: current
+            request, handoff: handoff, context: context, on: plan.snapshot.responder
         )
         let consumed = await produceBody(
             pending,
@@ -62,7 +63,7 @@ extension HTTPServer where C.Duration == Duration {
             buffer: &buffer,
             from: connection,
             deadline: deadline,
-            bodyLimit: bodyLimit
+            bodyLimit: plan.bodyLimit
         )
         guard let consumed else {
             await handoff.fail()  // the handler's body ends WITHOUT a clean end-of-body
