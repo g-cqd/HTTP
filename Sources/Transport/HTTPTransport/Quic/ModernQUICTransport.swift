@@ -18,6 +18,13 @@ internal import Network
 internal import Synchronization
 
 /// The modern Network.framework QUIC server backbone (`NetworkListener<QUIC>`, macOS 26+).
+///
+/// **Peer attribution.** Each accepted connection is charged to, and reports, the address its peer is
+/// speaking from — taken from the connection's `currentPath` (see ``peer(of:)``), so an h3 client
+/// counts against the same per-host ceiling as an h1/h2 client from the same address. Should Network
+/// ever report no remote endpoint, the connection still serves but is attributed to
+/// ``QUICPeer/unattributed`` rather than to a guess; every such connection then shares one admission
+/// bucket and one rate-limit budget (fail-closed, CWE-770).
 @available(macOS 26, iOS 26, *)
 public final class ModernQUICTransport: QUICServerTransport {
     private let configuration: TransportConfiguration
@@ -74,12 +81,10 @@ public final class ModernQUICTransport: QUICServerTransport {
         listenerBox.withLock { $0 = listener }
 
         let (stream, continuation) = AsyncStream<any QUICConnection>.makeStream()
-        let host = configuration.host
         let advertised = alpn.first
-        let port = boundPort
         let task = Task {
             try? await listener.run { networkConnection in
-                let peer = TransportAddress(host: host, port: port)
+                let peer = Self.peer(of: networkConnection)
                 // Charge before yielding. The handler blocks for the connection's whole lifetime, so
                 // the ticket is scoped exactly to it — no bookkeeping on the connection object.
                 let ticket: AdmissionTicket?
@@ -112,6 +117,22 @@ public final class ModernQUICTransport: QUICServerTransport {
     /// `cancel()`; teardown is via structured task cancellation).
     public func shutdown() async {
         runTask.withLock(\.self)?.cancel()
+    }
+
+    /// The address the peer of `connection` is speaking from.
+    ///
+    /// A QUIC connection is identified per peer (RFC 9000 §5.1).
+    ///
+    /// Read from `currentPath`, **not** from `NetworkConnection.remoteEndpoint`: on an inbound,
+    /// listener-vended connection `remoteEndpoint` is `nil` (it reflects the endpoint a connection was
+    /// *initialized to*, which an accepted connection never had), while `currentPath.remoteEndpoint`
+    /// is the effective remote address and is already populated when `run`'s handler fires — verified
+    /// against the SDK rather than assumed, because Apple documents neither property's inbound
+    /// behaviour. `remoteEndpoint` is still consulted as a fallback in case that ever changes.
+    private static func peer(
+        of connection: Network.NetworkConnection<Network.QUIC>
+    ) -> TransportAddress {
+        QUICPeer.address(of: connection.currentPath?.remoteEndpoint ?? connection.remoteEndpoint)
     }
 
     /// Polls until the listener has bound its port (so ``boundPort`` is valid before returning).

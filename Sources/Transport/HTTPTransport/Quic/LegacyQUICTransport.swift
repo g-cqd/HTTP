@@ -18,6 +18,13 @@ internal import Network
 internal import Synchronization
 
 /// The legacy Network.framework QUIC server backbone (`NWListener` + `NWConnectionGroup`).
+///
+/// **Peer attribution.** Each accepted connection group is charged to, and reports, the address its
+/// peer is speaking from — read from the group's descriptor members, so an h3 client counts against
+/// the same per-host ceiling as an h1/h2 client from the same address. Should a group name no member,
+/// the connection still serves but is attributed to ``QUICPeer/unattributed`` rather than to a guess;
+/// every such connection then shares one admission bucket and one rate-limit budget (fail-closed,
+/// CWE-770).
 public final class LegacyQUICTransport: QUICServerTransport {
     private let configuration: TransportConfiguration
     private let limits: HTTPLimits
@@ -128,7 +135,12 @@ public final class LegacyQUICTransport: QUICServerTransport {
         _ group: NWConnectionGroup,
         continuation: AsyncStream<any QUICConnection>.Continuation
     ) {
-        let peer = TransportAddress(host: configuration.host, port: boundPort)
+        // The group's descriptor names its members, and for a listener-vended multiplex group that is
+        // the peer — available synchronously here, before any stream, which is where the slot must be
+        // charged. (Apple documents `members` only for the client-side `NWMultiplexGroup(to:)`; the
+        // inbound behaviour is verified against the SDK. `NWConnectionGroup` itself exposes no path or
+        // endpoint, and the per-stream `NWConnection.endpoint` would arrive far too late.)
+        let peer = QUICPeer.address(of: group.descriptor.members.first)
         // Charge before yielding, so a QUIC peer counts against the same ceiling as a TCP one and an
         // over-cap peer is refused before the server ever drives a stream on it (audit F8).
         let ticket: AdmissionTicket?
