@@ -20,11 +20,39 @@ public enum HTTP2HeadersFrame {
         _ payload: [UInt8],
         flags: HTTP2FrameFlags
     ) throws(HTTP2Error) -> ArraySlice<UInt8> {
-        var start = payload.startIndex
-        var end = payload.endIndex
+        payload[try fieldBlockRange(count: payload.count, padLength: payload.first, flags: flags)]
+    }
+
+    /// Returns the range of the field block fragment within a borrowed HEADERS `payload` (§6.2).
+    ///
+    /// The zero-copy entry point: the connection engine slices the fragment out of the inbound buffer
+    /// in place rather than copying the payload to find it (audit CR-F18).
+    static func fieldBlockRange(
+        _ payload: RawSpan,
+        flags: HTTP2FrameFlags
+    ) throws(HTTP2Error) -> Range<Int> {
+        try fieldBlockRange(
+            count: payload.byteCount,
+            padLength: payload.byteCount > 0
+                ? payload.unsafeLoad(fromByteOffset: 0, as: UInt8.self) : nil,
+            flags: flags
+        )
+    }
+
+    /// The §6.2 fragment bounds within a payload of `count` octets whose first octet is `padLength`.
+    ///
+    /// Pure arithmetic on the two facts either representation can supply, so the owning and borrowed
+    /// entry points above cannot drift apart about where a fragment starts or ends.
+    private static func fieldBlockRange(
+        count: Int,
+        padLength: UInt8?,
+        flags: HTTP2FrameFlags
+    ) throws(HTTP2Error) -> Range<Int> {
+        var start = 0
+        var end = count
 
         if flags.contains(.padded) {
-            guard let padLength = payload.first else {
+            guard let padLength else {
                 throw .connection(.protocolError, "PADDED HEADERS missing the pad-length octet")
             }
             start += 1
@@ -40,7 +68,7 @@ public enum HTTP2HeadersFrame {
             }
             start += priorityFieldLength
         }
-        return payload[start ..< end]
+        return start ..< end
     }
 
     /// The stream dependency declared in a HEADERS frame's deprecated priority section (RFC 9113
@@ -65,5 +93,28 @@ public enum HTTP2HeadersFrame {
             (UInt32(payload[offset]) << 24 | UInt32(payload[offset + 1]) << 16
                 | UInt32(payload[offset + 2]) << 8 | UInt32(payload[offset + 3])) & 0x7FFF_FFFF
         return HTTP2StreamID(rawValue: dependency)
+    }
+
+    /// The stream dependency in a borrowed HEADERS payload's priority section, if it has one.
+    ///
+    /// RFC 9113 §5.3.2 / §6.2; nil when the PRIORITY flag is clear.
+    ///
+    /// The zero-copy counterpart of ``priorityDependency(_:flags:)`` — same 31-bit read, taken
+    /// straight out of the inbound buffer.
+    static func priorityDependency(
+        _ payload: RawSpan,
+        flags: HTTP2FrameFlags
+    ) -> HTTP2StreamID? {
+        guard flags.contains(.priority) else {
+            return nil
+        }
+        let offset = flags.contains(.padded) ? 1 : 0
+        guard payload.byteCount >= offset + priorityFieldLength else {
+            return nil
+        }
+        let dependency = UInt32(
+            bigEndian: payload.unsafeLoadUnaligned(fromByteOffset: offset, as: UInt32.self)
+        )
+        return HTTP2StreamID(rawValue: dependency & 0x7FFF_FFFF)
     }
 }

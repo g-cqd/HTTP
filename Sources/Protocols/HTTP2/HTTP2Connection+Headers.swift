@@ -16,22 +16,20 @@ internal import HTTPCore
 
 extension HTTP2Connection {
     mutating func receiveHeaders(
-        _ frame: HTTP2FrameDecoder.Frame,
+        _ frame: HTTP2FrameView,
         into events: inout [Event]
     ) throws(HTTP2Error) {
-        let fragment = try HTTP2HeadersFrame.fieldBlockFragment(
-            frame.payload,
-            flags: frame.header.flags
-        )
+        let range = try HTTP2HeadersFrame.fieldBlockRange(frame.payload, flags: frame.header.flags)
         pendingHeadersEndStream = frame.header.flags.contains(.endStream)
         pendingHeadersDependency = HTTP2HeadersFrame.priorityDependency(
             frame.payload,
             flags: frame.header.flags
         )
-        let outcome = try accumulator.begin(
+        let outcome = try accumulate(
+            frame.payload.extracting(range),
             streamID: frame.header.streamID,
-            fragment: fragment,
-            endHeaders: frame.header.flags.contains(.endHeaders)
+            endHeaders: frame.header.flags.contains(.endHeaders),
+            continuing: false
         )
         if case .complete(let streamID, let block) = outcome {
             try completeHeaderBlock(streamID, block: block, into: &events)
@@ -39,17 +37,45 @@ extension HTTP2Connection {
     }
 
     mutating func receiveContinuation(
-        _ frame: HTTP2FrameDecoder.Frame,
+        _ frame: HTTP2FrameView,
         into events: inout [Event]
     ) throws(HTTP2Error) {
-        let outcome = try accumulator.append(
+        let outcome = try accumulate(
+            frame.payload,
             streamID: frame.header.streamID,
-            fragment: frame.payload,
-            endHeaders: frame.header.flags.contains(.endHeaders)
+            endHeaders: frame.header.flags.contains(.endHeaders),
+            continuing: true
         )
         if case .complete(let streamID, let block) = outcome {
             try completeHeaderBlock(streamID, block: block, into: &events)
         }
+    }
+
+    /// Feeds one borrowed field-block fragment to the §6.10 accumulator without copying it first.
+    ///
+    /// `UnsafeRawBufferPointer` is a `Collection<UInt8>`, so the accumulator's existing generic entry
+    /// points take the borrowed octets directly: the ONE copy it makes — into the block it assembles,
+    /// which must outlive the frame — is the only one on this path (audit CR-F18).
+    private mutating func accumulate(
+        _ fragment: RawSpan,
+        streamID: HTTP2StreamID,
+        endHeaders: Bool,
+        continuing: Bool
+    ) throws(HTTP2Error) -> HTTP2HeaderBlockAccumulator.Outcome {
+        let outcome: Result<HTTP2HeaderBlockAccumulator.Outcome, HTTP2Error> =
+            fragment.withUnsafeBytes { raw in
+                Result { () throws(HTTP2Error) in
+                    guard continuing else {
+                        return try accumulator.begin(
+                            streamID: streamID, fragment: raw, endHeaders: endHeaders
+                        )
+                    }
+                    return try accumulator.append(
+                        streamID: streamID, fragment: raw, endHeaders: endHeaders
+                    )
+                }
+            }
+        return try outcome.get()
     }
 
     private mutating func completeHeaderBlock(

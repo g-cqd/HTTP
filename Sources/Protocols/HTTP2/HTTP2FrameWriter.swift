@@ -50,6 +50,24 @@ struct HTTP2FrameWriter {
         output.append(contentsOf: payload)
     }
 
+    /// Echoes a PING's opaque data back as a PING ACK, straight from the buffer it arrived in
+    /// (RFC 9113 §6.7).
+    ///
+    /// Takes a borrowed `RawSpan` rather than a `[UInt8]` so answering a PING flood — the whole point
+    /// of the frame — costs no allocation per PING. Deliberately a named method rather than a
+    /// `payload:` overload of ``writeFrame(_:flags:streamID:payload:)``: that method's payload has a
+    /// default value, so an overload pair would make every no-payload call site ambiguous.
+    mutating func writePingAck(_ payload: RawSpan) {
+        HTTP2FrameHeader(
+            payloadLength: payload.byteCount,
+            type: .ping,
+            flags: .ack,
+            streamID: .connection
+        )
+        .encode(into: &output)
+        payload.withUnsafeBytes { output.append(contentsOf: $0) }
+    }
+
     /// Queues a GOAWAY naming the last processed stream and the error code (RFC 9113 §6.8).
     mutating func writeGoAway(lastStreamID: HTTP2StreamID, code: HTTP2ErrorCode) {
         HTTP2FrameHeader(payloadLength: 8, type: .goAway, streamID: .connection)
