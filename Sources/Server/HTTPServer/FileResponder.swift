@@ -4,8 +4,9 @@
 //
 //  Static file serving (RFC 9110). An ``HTTPResponder`` that maps a request path to a file under a root
 //  directory and serves it with a content type (via the system `UTType` registry), `Last-Modified` /
-//  `ETag` validators (from the file's mtime + size), conditional-request short-circuiting (`If-None-Match`
-//  / `If-Modified-Since` → 304), and byte ranges (`206` / `416`, reusing the ``RangeMiddleware`` parser).
+//  `ETag` validators (``FileValidator`` — weak, from the descriptor's own `fstat(2)`),
+//  conditional-request short-circuiting (`If-None-Match` / `If-Modified-Since` → 304), and byte ranges
+//  (`206` / `416`, reusing the ``RangeMiddleware`` parser).
 //
 //  Path resolution is descriptor-anchored (``RootDirectory``): the root is opened once and every request
 //  component is an `openat(2)` hop with `O_NOFOLLOW` from it, so containment is structural rather than a
@@ -121,24 +122,44 @@ public struct FileResponder: HTTPResponder {
     /// Every validator comes off the open descriptor's own `fstat`, so there is no second lookup to
     /// disagree with the first — the `Content-Length`, `ETag`, and `Last-Modified` on the wire always
     /// describe the bytes the body will carry (CWE-367).
+    ///
+    /// `Vary` is decided by the *resource*, not by what this one request happened to negotiate, and is
+    /// therefore identical on the `200` and on the `304` that revalidates it (RFC 9110 §12.5.5,
+    /// §15.4.5). A cache keyed on the 200's `Vary` and later handed a `Vary`-less `304` would be told
+    /// the resource stopped being negotiated, and could replay stored Brotli bytes to a client that
+    /// never asked for them.
     private func serveFile(
         _ file: OpenedFile,
         named name: Substring,
         in directory: OpenedDirectory,
         request: HTTPRequest
     ) -> ServerResponse {
+        // Whether a sidecar *could* be offered for this resource — not whether one was, and not
+        // whether this request would have taken it. Only that is invariant across statuses.
+        let negotiated = precompressed && Self.isCompressible(name)
+        // One parse of `Accept-Encoding` per request, shared by the sidecar choice and the identity
+        // check below; a range is always served from the identity bytes, so no sidecar is sought.
+        let accept = AcceptEncoding(request.headerFields[.acceptEncoding])
         let choice =
-            precompressed
-            ? precompressedChoice(file, named: name, in: directory, request: request) : nil
+            negotiated && request.headerFields[.range] == nil
+            ? precompressedChoice(file, named: name, in: directory, accept: accept) : nil
+        // A client that excluded `identity` and cannot be given a coded representation has no
+        // acceptable one at all (RFC 9110 §12.5.3, §15.5.7).
+        guard choice != nil || accept.identityIsAcceptable else {
+            return ServerResponse(HTTPResponse(status: .notAcceptable))
+        }
         let served = choice?.file ?? file
-        let etag = Self.entityTag(
-            size: served.size, modified: served.modifiedAt, encoding: choice?.encoding
-        )
+        let etag = FileValidator.entityTag(for: served, encoding: choice?.encoding)
         let lastModified = HTTPDate.imfFixdate(served.modifiedAt)
         if Self.isNotModified(request, etag: etag, modified: served.modifiedAt) {
             var head = HTTPResponse(status: .notModified)
             _ = head.headerFields.setValue(etag, for: .etag)
             _ = head.headerFields.setValue(lastModified, for: .lastModified)
+            // No `Content-Encoding`: §15.4.5 asks a 304 not to carry representation metadata beyond
+            // what guides a cache update, and the coding is already folded into the `ETag`.
+            if negotiated {
+                _ = head.headerFields.append("Accept-Encoding", for: .vary)
+            }
             return ServerResponse(head)
         }
         var head = HTTPResponse(status: .ok)
@@ -147,9 +168,11 @@ public struct FileResponder: HTTPResponder {
         _ = head.headerFields.setValue(etag, for: .etag)
         _ = head.headerFields.setValue(lastModified, for: .lastModified)
         _ = head.headerFields.setValue("bytes", for: .acceptRanges)
+        if negotiated {
+            _ = head.headerFields.append("Accept-Encoding", for: .vary)
+        }
         if let encoding = choice?.encoding {
             _ = head.headerFields.setValue(encoding, for: .contentEncoding)
-            _ = head.headerFields.append("Accept-Encoding", for: .vary)
         }
         return serve(
             served,
@@ -227,16 +250,6 @@ public struct FileResponder: HTTPResponder {
             return nil
         }
         return components
-    }
-
-    /// A strong entity-tag from the file's size and mtime (and content coding, when precompressed):
-    /// `"<hex size>-<hex mtime>[-<coding>]"` (RFC 9110 §8.8.3).
-    static func entityTag(size: Int, modified: Int, encoding: String?) -> String {
-        let base = "\(String(size, radix: 16))-\(String(modified, radix: 16))"
-        guard let encoding else {
-            return "\"\(base)\""
-        }
-        return "\"\(base)-\(encoding)\""
     }
 
     /// Whether `If-None-Match` matches (weak) or `If-Modified-Since` is unmet — a `304` (RFC 9110 §13).

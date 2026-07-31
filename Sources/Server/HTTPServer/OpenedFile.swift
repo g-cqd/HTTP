@@ -32,11 +32,31 @@ public final class OpenedFile: Sendable {
     /// The modification time in whole seconds since the epoch, from the `fstat(2)` of ``descriptor``.
     public let modifiedAt: Int
 
+    /// The nanoseconds component of the modification time, from the same `fstat(2)`.
+    ///
+    /// Zero on a filesystem that stores no sub-second timestamp, so it sharpens a cache validator but
+    /// cannot by itself make one strong (see ``FileValidator``).
+    let modifiedNanoseconds: Int
+
+    /// The device the file lives on (`st_dev`), from the same `fstat(2)`.
+    let deviceIdentifier: UInt64
+
+    /// The inode number within ``deviceIdentifier`` (`st_ino`), from the same `fstat(2)`.
+    ///
+    /// `st_ino` is unique only per device, which is why the pair is what identifies a file; neither
+    /// number ever reaches the wire unhashed (CVE-2003-1418, the Apache inode-in-`ETag` disclosure).
+    let inode: UInt64
+
     /// Takes ownership of `descriptor`, which `status` must already have shown to be a regular file.
     init(descriptor: Int32, status: stat) {
         self.descriptor = descriptor
         size = Int(status.st_size)
         modifiedAt = POSIXFile.modificationTime(of: status)
+        modifiedNanoseconds = POSIXFile.modificationNanoseconds(of: status)
+        // `dev_t`/`ino_t` are signed on Darwin and unsigned on Linux; a truncating conversion is the
+        // one spelling that is correct on both and loses nothing at 64 bits.
+        deviceIdentifier = UInt64(truncatingIfNeeded: status.st_dev)
+        inode = UInt64(truncatingIfNeeded: status.st_ino)
     }
 
     deinit {

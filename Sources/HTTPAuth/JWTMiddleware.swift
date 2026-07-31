@@ -27,6 +27,11 @@ public struct JWTMiddleware: HTTPMiddleware {
     /// Creates the middleware verifying tokens against `key`, requiring `audience`/`issuer` when given.
     ///
     /// `now` supplies the current epoch seconds (defaults to wall-clock); `leeway` tolerates clock skew.
+    ///
+    /// A non-finite `leeway`, a negative one, or a `now` closure that returns a non-finite value makes
+    /// every request fail closed with the `401` challenge — ``JWT/verify(_:key:audience:issuer:now:
+    /// leeway:requireExpiration:)`` refuses to decide on an unusable clock rather than let NaN
+    /// comparisons wave an expired token through.
     public init(
         key: JWT.Key,
         audience: String? = nil,
