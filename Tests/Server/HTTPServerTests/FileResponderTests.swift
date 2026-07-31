@@ -3,9 +3,10 @@
 //  HTTPServerTests
 //
 //  Static file serving (RFC 9110): serving a file with content-type and validators, 404 for a missing
-//  file, 403 for a traversal path (CWE-22), HEAD with Content-Length and no body, byte ranges (206), the
-//  If-None-Match → 304 collapse, index.html for the root, and streaming a large file. Each test runs
-//  against a throwaway temp directory.
+//  file, 403 for a traversal path (CWE-22) or a symlink component (CWE-59), HEAD with Content-Length and
+//  no body, byte ranges (206), the If-None-Match → 304 collapse, index.html for the root, and streaming a
+//  large file. Each test runs against a throwaway temp directory. The TOCTOU regressions for the
+//  descriptor-anchored resolution live in `FileResponderSymlinkRaceTests` and `RootDirectoryTests`.
 //
 
 import Foundation
@@ -110,20 +111,33 @@ struct FileResponderTests {
         #expect(escape.body.isEmpty)
     }
 
-    @Test("an unreadable file fails closed with 500, not a 200 with a short body (audit F1)")
-    func unreadableFileFailsClosed() async {
+    @Test("a file the process cannot open is refused with 403, with no body")
+    func unopenableFileRefused() async {
         // Root bypasses POSIX permissions, so the unreadable case cannot be staged there.
         if getuid() == 0 {
             return
         }
         await withTree(["locked.txt": Array("secret".utf8)]) { responder, root in
-            // Readable by `classify` (a stat works) but not by `open` — the failure path F1 hardened.
             try? FileManager.default.setAttributes(
                 [.posixPermissions: 0], ofItemAtPath: root.path + "/locked.txt"
             )
+            // Resolution *is* the open now, so `EACCES` surfaces here as a 403 rather than as a 500 from
+            // a later read: there is no longer a window in which a stat succeeds and the open then fails.
             let response = await responder.respond(to: get("/locked.txt"), body: [])
-            #expect(response.head.status == .internalServerError)
+            #expect(response.head.status == .forbidden)
             #expect(response.body.isEmpty)
+        }
+    }
+
+    @Test("a file truncated after the head is framed fails the stream, never ships a short body")
+    func truncatedStreamFailsClosed() async {
+        let big = [UInt8](repeating: 0x41, count: 4_096)
+        await withTree(["big.bin": big], streamingThreshold: 1_024) { responder, root in
+            let response = await responder.respond(to: get("/big.bin"), body: [])
+            #expect(response.head.headerFields[.contentLength] == "4096")
+            // The Content-Length is committed; the file now cannot honour it.
+            #expect(truncate(root.path + "/big.bin", 16) == 0)
+            #expect(await response.stream?.collect(maxBytes: 1 << 20) == nil)
         }
     }
 
@@ -263,6 +277,7 @@ struct FileResponderTests {
     /// root URL (for mtime tweaks), and removes the tree afterward.
     private func withTree(
         _ files: [String: [UInt8]],
+        streamingThreshold: Int = 1 << 20,
         precompressed: Bool = true,
         autoindex: Bool = false,
         fallback: String? = nil,
@@ -277,7 +292,11 @@ struct FileResponderTests {
             manager.createFile(atPath: root.path + "/" + name, contents: Data(bytes))
         }
         let responder = FileResponder(
-            root: root.path, precompressed: precompressed, autoindex: autoindex, fallback: fallback
+            root: root.path,
+            streamingThreshold: streamingThreshold,
+            precompressed: precompressed,
+            autoindex: autoindex,
+            fallback: fallback
         )
         await body(responder, root)
     }
