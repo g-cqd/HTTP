@@ -8,6 +8,8 @@
 //  `parseHeadStep`, `frameBody`, `headerSectionEnd`) with the small step types they thread. `serveOne`
 //  is internal so the protocol sniffer in `serve` (main file) can drive the keep-alive loop; the rest
 //  stay private here, and `BodyStep` stays internal so `HTTPServer+Chunked.swift` can produce it.
+//  The streaming-route exchange lives in HTTPServer+RequestStreaming.swift, next to the body producer
+//  it drives.
 //
 
 internal import HTTP1
@@ -157,95 +159,6 @@ extension HTTPServer where C.Duration == Duration {
         return !Self.shouldClose(
             version: framed.parsed.version, request: request, response: head
         )
-    }
-
-    /// Serves one streaming-route exchange (Phase 1.4): dispatch the handler with an incremental
-    /// ``RequestBody/stream(_:)`` and read the whole body off the wire into it concurrently — so the
-    /// keep-alive cursor stays exact even if the handler abandons the stream — then send the response.
-    ///
-    /// `Expect: 100-continue` is honored before the body is read (RFC 9110 §10.1.1). A body that cannot
-    /// be fully read (truncation, or a chunked body that overran the route limit after dispatch) ends the
-    /// handler's stream early and closes the connection rather than desyncing a pipelined follow-up.
-    private func serveStreaming(
-        _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
-        pending: PendingRequest,
-        buffer: inout [UInt8],
-        start: inout Int,
-        responseBuffer: inout [UInt8]
-    ) async -> Bool {
-        let request = pending.head.request
-        if await handleExpect(pending.head, on: connection) {
-            return false  // a 417 was sent — the expectation cannot be met
-        }
-        let bodyLimit = currentResolver?.resolve(method: request.method, path: request.path)?
-            .bodyLimit
-        let (bodyStream, continuation) = AsyncStream.makeStream(of: [UInt8].self)
-        let context = RequestContext(connection: connection, request: request)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
-        // The handler consumes the body stream as chunks arrive while this task reads the whole body off
-        // the wire — the producer always runs to completion, so `start` advances past the exact body.
-        async let responseTask = current.respond(
-            to: request,
-            body: .stream(HTTPRequestBodyStream(bodyStream)),
-            context: context
-        )
-        let consumed = await produceBody(
-            pending,
-            into: continuation,
-            buffer: &buffer,
-            from: connection,
-            deadline: deadline,
-            bodyLimit: bodyLimit
-        )
-        continuation.finish()
-        let response = await responseTask
-        guard let consumed else {
-            return false  // body truncated / over-limit mid-stream — close rather than desync
-        }
-        start = consumed
-        var head = withAltSvc(response.head)
-        let draining = applyHTTP1Drain(to: &head)
-        if let stream = response.stream {
-            let sent = await sendStreamedResponse(
-                head,
-                stream: stream,
-                omitBody: request.method == .head,
-                on: connection,
-                deadline: deadline
-            )
-            guard sent, !draining else {
-                return false
-            }
-            return !Self.shouldClose(
-                version: pending.head.version, request: request, response: head
-            )
-        }
-        let sendsBody = ResponseSerializer.serializeHead(
-            head,
-            bodyLength: response.body.count,
-            omitBody: request.method == .head,
-            into: &responseBuffer
-        )
-        // Bound the buffered response send by the idle deadline (FIX #1) — see ``serveOne``.
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
-        do {
-            if sendsBody {
-                try await connection.send(responseBuffer, response.body)
-            }
-            else {
-                try await connection.send(responseBuffer)
-            }
-        }
-        catch {
-            deadline.disarm()
-            return false
-        }
-        deadline.disarm()
-        if draining {
-            return false
-        }
-        return !Self.shouldClose(version: pending.head.version, request: request, response: head)
     }
 
     /// Caps an unterminated header section (431, throwing) and honors `Expect: 100-continue` once the
