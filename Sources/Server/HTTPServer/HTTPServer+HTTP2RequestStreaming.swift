@@ -58,10 +58,15 @@ extension HTTPServer {
                 )
                 state.dispatched.insert(streamID)
                 group.addTask { [self] in
-                    let response = await plan.snapshot.responder.respond(
+                    // Seam 3 of 6 (audit CR-F7). The `.requestReady` yield below is the pre-existing
+                    // return-to-owner mechanism: the response is APPLIED to the engine only when the
+                    // single mailbox consumer processes that wakeup, so HPACK state, flow control and
+                    // `connection.send` keep one owner whatever executor this handler ran on.
+                    let response = await respond(
                         to: request,
                         body: requestBody(body, following: plan),
-                        context: context
+                        context: context,
+                        following: plan
                     )
                     continuation.yield(.requestReady(streamID, response))
                 }
@@ -184,15 +189,23 @@ extension HTTPServer {
         let (request, context) = RequestContext.ingress(
             inbound, over: connection, matching: plan.match
         )
-        let current = plan.snapshot.responder  // this request's generation (CR-F12)
         dispatched.insert(streamID)
-        group.addTask {
+        group.addTask { [self] in
             // The group child still owns the lifetime; the inner `Task` exists only so a peer
             // RST_STREAM has a handle to cancel (audit F6). The cancellation handler composes the two
             // paths, so `group.cancelAll()` still reaps this exactly as before.
             let body = HTTPRequestBodyStream(channel: channel, signal: signal)
             let work = Task {
-                await current.respond(to: request, body: .stream(body), context: context)
+                // Seam 4 of 6 (audit CR-F7). `plan` carries this request's generation (CR-F12), so
+                // the responder is still the one its HEADERS resolved; the policy only decides which
+                // executor runs it. Consumption signalling and the `.requestReady` yield are
+                // unaffected — both are lock-free and executor-agnostic by construction.
+                await respond(
+                    to: request,
+                    body: .stream(body),
+                    context: context,
+                    following: plan
+                )
             }
             canceller.adopt(work)
             let response = await withTaskCancellationHandler {

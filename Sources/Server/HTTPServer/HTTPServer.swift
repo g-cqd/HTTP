@@ -32,6 +32,22 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// (audit CR-F12).
     let snapshot: Mutex<ResponderSnapshot>
     let limits: HTTPLimits
+
+    /// Where application handlers run relative to this connection's I/O reactor (audit CR-F7).
+    ///
+    /// Read at each of the six `respond` seams through
+    /// ``respond(to:body:context:following:)``. Defaults to ``HandlerExecutionPolicy/inline``, which
+    /// is the topology that shipped before this knob existed.
+    let handlerExecution: HandlerExecutionPolicy
+
+    /// The per-route service-time record behind ``HandlerExecutionPolicy/adaptive(threshold:)``, or
+    /// `nil` under a policy that decides without measuring.
+    ///
+    /// `nil` for ``HandlerExecutionPolicy/inline`` and ``HandlerExecutionPolicy/concurrent`` so those
+    /// paths allocate nothing and consult nothing — the shared, synchronized state exists only when
+    /// something actually asked for it.
+    let handlerGate: HandlerExecutionGate?
+
     let clock: C
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
     let altSvc = Mutex<String?>(nil)
@@ -69,17 +85,30 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
 
     /// Creates a server bound to `transport`, handling requests with `responder` and timing its
     /// Slowloris/idle deadlines against `clock`.
+    ///
+    /// `handlerExecution` decides where application handlers run relative to the connection's I/O
+    /// reactor; see ``HandlerExecutionPolicy``. It defaults to
+    /// ``HandlerExecutionPolicy/inline`` — unchanged behavior — and is deliberately not part of
+    /// ``HTTPLimits``, which models engine resource limits rather than execution topology.
     public init(
         transport: any ServerTransport,
         responder: any HTTPResponder,
         quicTransport: (any QUICServerTransport)? = nil,
         limits: HTTPLimits = .default,
+        handlerExecution: HandlerExecutionPolicy = .inline,
         clock: C
     ) {
         self.transport = transport
         self.quicTransport = quicTransport
         self.snapshot = Mutex(ResponderSnapshot(responder, generation: 0))
         self.limits = limits
+        self.handlerExecution = handlerExecution
+        if case .adaptive(let threshold) = handlerExecution {
+            self.handlerGate = HandlerExecutionGate(threshold: threshold)
+        }
+        else {
+            self.handlerGate = nil
+        }
         self.clock = clock
         self.admission = ConnectionAdmission(
             capacity: ConnectionAdmission.Capacity(
@@ -283,13 +312,15 @@ extension HTTPServer where C == ContinuousClock {
         transport: any ServerTransport,
         responder: any HTTPResponder,
         quicTransport: (any QUICServerTransport)? = nil,
-        limits: HTTPLimits = .default
+        limits: HTTPLimits = .default,
+        handlerExecution: HandlerExecutionPolicy = .inline
     ) {
         self.init(
             transport: transport,
             responder: responder,
             quicTransport: quicTransport,
             limits: limits,
+            handlerExecution: handlerExecution,
             clock: ContinuousClock()
         )
     }

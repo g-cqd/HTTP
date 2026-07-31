@@ -43,6 +43,12 @@ enum HTTPDExample {
         if !Prefork.isWorker, let workers = Prefork.workerCount {
             Prefork.supervise(workers: workers)
         }
+        // HTTPD_EXEC_CALIBRATE=1 re-derives `ExecutionTopology.cpuIterations` on this machine and
+        // exits without binding anything (audit CR-F7 / ADR 0007).
+        if ProcessInfo.processInfo.environment["HTTPD_EXEC_CALIBRATE"] == "1" {
+            ExecutionTopology.calibrate()
+            return
+        }
         let port = parsePort()
         let backbone = parseBackbone()
         let tls = makeTLS()
@@ -98,7 +104,10 @@ enum HTTPDExample {
             transport: try TransportFactory.make(configuration),
             responder: responder,
             quicTransport: quicTransport,
-            limits: makeLimits()
+            limits: makeLimits(),
+            // HTTPD_HANDLER_EXEC selects where handlers run (audit CR-F7 / ADR 0007); `.inline` —
+            // the shipped default — when unset.
+            handlerExecution: ExecutionTopology.policy()
         )
 
         if Prefork.isWorker {
@@ -200,6 +209,10 @@ enum HTTPDExample {
             // localized per `Accept-Language`, `Vary` set, 406 when neither type fits. See
             // ``ContentNegotiation``.
             ContentNegotiation.route()
+            // The execution-topology workload set (audit CR-F7 / ADR 0007), behind
+            // HTTPD_EXEC_ROUTES=1 so the five-route parity set the comparative harness measures
+            // stays byte-identical when the flag is unset. Empty otherwise.
+            ExecutionTopology.routes()
             // A trailing `*path` catch-all capturing the remaining path (RFC 3986 §3.3).
             Route.get("/files/*path") { _, _, context in
                 .text("would serve: \(context.parameters["path"] ?? "")\n")

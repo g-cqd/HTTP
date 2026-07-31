@@ -394,8 +394,16 @@ extension HTTPServer {
         let (request, context) = RequestContext.ingress(
             inbound, over: quic, matching: plan.match
         )
-        let response = await plan.snapshot.responder.respond(
-            to: request, body: requestBody(body, following: plan), context: context
+        // Seam 5 of 6 (audit CR-F7). Verified against the HTTP/3 dispatcher rather than assumed:
+        // engine state is behind an actor and each response is written to its own QUIC stream
+        // (RFC 9000 §2 — streams are independent), so no cross-stream wire order depends on this
+        // task's executor. The `sendHTTP3Response` below runs after the scoped preference is
+        // restored, i.e. back on the connection's reactor, exactly as before.
+        let response = await respond(
+            to: request,
+            body: requestBody(body, following: plan),
+            context: context,
+            following: plan
         )
         await sendHTTP3Response(
             response,
