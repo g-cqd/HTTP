@@ -63,11 +63,8 @@ public struct RequestIDMiddleware: HTTPMiddleware {
         !id.isEmpty && id.count <= 200 && id.utf8.allSatisfy { (0x21 ... 0x7e).contains($0) }
     }
 
-    /// A 128-bit random hex token (`SystemRandomNumberGenerator`).
+    /// A 128-bit random token as exactly 32 lowercase hex digits (``RandomToken/hex128()``).
     public static func randomID() -> String {
-        var rng = SystemRandomNumberGenerator()
-        let high = UInt64.random(in: .min ... .max, using: &rng)
-        let low = UInt64.random(in: .min ... .max, using: &rng)
-        return String(high, radix: 16) + String(low, radix: 16)
+        RandomToken.hex128()
     }
 }

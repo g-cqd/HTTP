@@ -112,11 +112,8 @@ public struct SessionMiddleware: HTTPMiddleware {
         return id + "." + Base64.encode(mac, alphabet: .urlSafe, padded: false)
     }
 
-    /// A 128-bit random hex session id (`SystemRandomNumberGenerator`).
+    /// A 128-bit random session id as exactly 32 lowercase hex digits (``RandomToken/hex128()``).
     public static func randomID() -> String {
-        var rng = SystemRandomNumberGenerator()
-        let high = UInt64.random(in: .min ... .max, using: &rng)
-        let low = UInt64.random(in: .min ... .max, using: &rng)
-        return String(high, radix: 16) + String(low, radix: 16)
+        RandomToken.hex128()
     }
 }
