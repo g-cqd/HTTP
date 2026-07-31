@@ -28,11 +28,14 @@ extension HTTPServer {
     /// every engine mutation (`respond`/`acceptTunnel`/etc.) happens only when this consumer later
     /// processes the resulting wakeup, keeping the engine and `connection.send` single-owner throughout.
     ///
-    /// `pendingRequests` counts dispatched-but-not-yet-`.requestReady` handler tasks (buffered AND
-    /// streaming-route), incremented here on dispatch — the consumer's EOF drain check
-    /// (``HTTPServer/serveHTTP2(_:deadline:initialBytes:)``'s `.closed` case) reads it to know whether a
-    /// request that was already fully received might still be mid-flight and worth letting finish before
-    /// the connection actually closes, rather than cancelling it out from under itself.
+    /// `dispatched` records the streams whose handler task has started and not yet reported back
+    /// (buffered AND streaming-route). The consumer's EOF drain reads it to know whether a request that
+    /// was already fully received might still be mid-flight and worth letting finish, rather than
+    /// cancelling it out from under itself.
+    ///
+    /// The switch is deliberately EXHAUSTIVE over `HTTP2Connection.Event`. It used to end in `default:`,
+    /// which silently routed `.streamReset` into the tunnel handler — the whole of audit finding 6.
+    /// Listing every case makes a future event a compile error instead of a misroute.
     func handleHTTP2Event(
         _ event: HTTP2Connection.Event,
         state: inout HTTP2ConnectionState,
@@ -43,7 +46,7 @@ extension HTTPServer {
         switch event {
             case .request(let streamID, let request, let body):
                 let responder = currentResponder  // hot-swappable responder, read once (G4a)
-                state.pendingRequests += 1
+                state.dispatched.insert(streamID)
                 group.addTask { [self] in
                     let context = RequestContext(connection: connection, request: request)
                     let response = await responder.respond(
@@ -58,16 +61,36 @@ extension HTTPServer {
                     connection: connection,
                     group: &group,
                     reporting: &state.consumption,
-                    pendingRequests: &state.pendingRequests,
+                    dispatched: &state.dispatched,
                     into: continuation
                 )
             case .requestBodyChunk(let streamID, let bytes):
                 await pushHTTP2BodyChunk(streamID, bytes: bytes, state: &state)
             case .requestEnd(let streamID):
                 await endHTTP2StreamingRequest(streamID, streaming: &state.streaming)
-            default:
+            case .streamReset(let streamID, _):
+                await resetHTTP2Stream(streamID, state: &state)
+            case .extendedConnect, .tunnelData, .tunnelClosed:
                 await handleHTTP2Tunnel(event, state: &state, group: &group, into: continuation)
         }
+    }
+
+    /// Retires every per-stream obligation after the peer reset `streamID` (RFC 9113 §6.4).
+    ///
+    /// Audit finding 6: this event used to fall through `default:` into the tunnel handler, which only
+    /// consults `state.webSockets`. For a streaming-route request that meant the body channel was
+    /// neither ended nor removed, so the handler parked until the whole connection died, its receive
+    /// credit was never returned, and the dispatch count never came back down.
+    ///
+    /// No RST_STREAM is sent back: the engine dropped the stream when it processed the peer's frame, and
+    /// resetting an already-closed stream would both be pointless and charge our own Rapid Reset budget
+    /// (CVE-2023-44487). The handler's `.requestReady` still arrives afterwards and is dropped by
+    /// ``beginHTTP2Response``'s open-stream guard, which is what returns the accounting to zero.
+    func resetHTTP2Stream(
+        _ streamID: HTTP2StreamID,
+        state: inout HTTP2ConnectionState
+    ) async {
+        await endHTTP2Stream(streamID, resettingWith: nil, state: &state)
     }
 
     /// Hands one decoded DATA chunk to the handler's body channel — never blocking the consumer.
@@ -110,10 +133,12 @@ extension HTTPServer {
         state: inout HTTP2ConnectionState
     ) async {
         if let pending = state.streaming.removeValue(forKey: streamID) {
-            await pending.channel.abandon()
+            await pending.channel.abandon()  // the handler's `for await` returns nil: truncation
+            pending.canceller.cancel()  // ...and it stops even if it was parked elsewhere
         }
         if let tunnel = state.webSockets.removeValue(forKey: streamID) {
             await tunnel.channel.abandon()
+            tunnel.canceller.cancel()
         }
         state.relays.removeValue(forKey: streamID)
         if let code {
@@ -134,21 +159,33 @@ extension HTTPServer {
         connection: any TransportConnection,
         group: inout DiscardingTaskGroup,
         reporting consumption: inout [HTTP2StreamID: HTTP2ConsumptionSignal],
-        pendingRequests: inout Int,
+        dispatched: inout Set<HTTP2StreamID>,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) -> HTTP2StreamingRequest {
         let channel = makeHTTP2GatedChannel()
         let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
+        let canceller = HTTP2StreamCanceller()
         consumption[streamID] = signal
         let context = RequestContext(connection: connection, request: request)
         let current = currentResponder  // hot-swappable responder, read once (G4a)
-        pendingRequests += 1
+        dispatched.insert(streamID)
         group.addTask {
+            // The group child still owns the lifetime; the inner `Task` exists only so a peer
+            // RST_STREAM has a handle to cancel (audit F6). The cancellation handler composes the two
+            // paths, so `group.cancelAll()` still reaps this exactly as before.
             let body = HTTPRequestBodyStream(channel: channel, signal: signal)
-            let response = await current.respond(to: request, body: .stream(body), context: context)
+            let work = Task {
+                await current.respond(to: request, body: .stream(body), context: context)
+            }
+            canceller.adopt(work)
+            let response = await withTaskCancellationHandler {
+                await work.value
+            } onCancel: {
+                work.cancel()
+            }
             continuation.yield(.requestReady(streamID, response))
         }
-        return HTTP2StreamingRequest(channel: channel, signal: signal)
+        return HTTP2StreamingRequest(channel: channel, signal: signal, canceller: canceller)
     }
 
     /// Ends a streaming request's body stream; its handler's response arrives later as a `.requestReady`

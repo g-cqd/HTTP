@@ -15,10 +15,10 @@
 
 /// An in-flight HTTP/2 streaming request: the consumption-gated body channel and its report signal.
 ///
-/// No handler-task handle is kept *here*: the task is a structured child of the serve loop's task
-/// group, so `group.cancelAll()` (the merged-mailbox consumer's one teardown path) reaps it on every
-/// exit, and its response arrives asynchronously as a `.requestReady` wakeup rather than being awaited.
-/// A per-stream cancellation handle for the RST_STREAM path is added separately (audit F6).
+/// The handler task is a structured child of the serve loop's task group, so `group.cancelAll()` still
+/// reaps it on every exit and its response still arrives asynchronously as a `.requestReady` wakeup
+/// rather than being awaited here. The canceller adds the *early* exit that teardown alone cannot give:
+/// a peer RST_STREAM must stop work the client has withdrawn, not merely stop feeding it (audit F6).
 struct HTTP2StreamingRequest {
     /// Carries each decoded request-body chunk to the handler's ``HTTPRequestBodyStream``.
     ///
@@ -29,4 +29,7 @@ struct HTTP2StreamingRequest {
 
     /// Reports the handler's consumption back to the consumer, which credits the receive windows.
     let signal: HTTP2ConsumptionSignal
+
+    /// Cancels this stream's handler task when the peer resets the stream (RFC 9113 §6.4).
+    let canceller: HTTP2StreamCanceller
 }

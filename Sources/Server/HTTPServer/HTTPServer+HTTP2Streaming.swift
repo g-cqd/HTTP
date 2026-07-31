@@ -29,10 +29,12 @@ internal import HTTPCore
 internal import HTTPTransport
 
 extension HTTPServer {
-    /// Applies a request's finished response to `streamID`: buffered directly, or — for a `.stream` body
-    /// — HEADERS now plus a dedicated relay task pumping its DATA (P6b / RFC 9113 §8.1), so multiple
-    /// native-streaming responses progress concurrently. Returns true on a connection-fatal fault; the
-    /// caller flushes whatever the engine queued (best-effort GOAWAY) and closes either way.
+    /// Applies a request's finished response to `streamID`.
+    ///
+    /// Buffered directly, or — for a `.stream` body — HEADERS now plus a dedicated relay task pumping
+    /// its DATA (P6b / RFC 9113 §8.1), so multiple native-streaming responses progress concurrently.
+    /// Returns true on a connection-fatal fault; the caller flushes whatever the engine queued
+    /// (best-effort GOAWAY) and closes either way.
     func beginHTTP2Response(
         streamID: HTTP2StreamID,
         response: ServerResponse,
@@ -41,6 +43,15 @@ extension HTTPServer {
         relays: inout [HTTP2StreamID: HTTP2StreamPermit],
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) -> Bool {
+        // The handler ran off the loop, so its stream may have been reset (RFC 9113 §6.4) or cleanly
+        // closed while the response was in flight. Applying it would throw `internalError` — a
+        // CONNECTION-level fault, so `applyRequestReady` would `cancelAll()` and take every sibling
+        // stream down with it. That is the latent connection-kill audit finding 6 exposes the moment
+        // RST_STREAM stops being silently swallowed: a peer resetting one in-flight request would kill
+        // every other request on the connection. Drop the late response instead.
+        guard engine.isStreamOpen(streamID) else {
+            return false
+        }
         guard let bodyStream = response.stream else {
             do {
                 try engine.respond(to: streamID, withAltSvc(response.head), body: response.body)
@@ -56,7 +67,8 @@ extension HTTPServer {
             try engine.respondHeaders(to: streamID, withAltSvc(response.head))
         }
         catch {
-            return true  // responding to an unknown stream is an internal error — close (matches today)
+            // Responding to an unknown stream is an internal error — close (matches today).
+            return true
         }
         let handoff = AsyncHandoff()
         let permit = HTTP2StreamPermit()
@@ -71,7 +83,9 @@ extension HTTPServer {
                     await handoff.fail()
                 }
             }
-            await runHTTP2StreamRelay(streamID: streamID, handoff: handoff, permit: permit, into: continuation)
+            await runHTTP2StreamRelay(
+                streamID: streamID, handoff: handoff, permit: permit, into: continuation
+            )
             producer.cancel()
             // Unblock a producer still parked on an offer (a no-op once it has ended).
             await handoff.fail()
@@ -79,9 +93,11 @@ extension HTTPServer {
         return false
     }
 
-    /// Pumps one native-streaming response's body: waits for the consumer's pull permission, pulls the
-    /// producer's next item through the one-slot handoff, and reports it back — never touching `engine`
-    /// itself (only the consumer may; see ``HTTP2StreamPermit``'s file comment).
+    /// Pumps one native-streaming response's body.
+    ///
+    /// Waits for the consumer's pull permission, pulls the producer's next item through the one-slot
+    /// handoff, and reports it back — never touching `engine` itself (only the consumer may; see the
+    /// ``HTTP2StreamPermit`` file comment).
     ///
     /// A dedicated local ``IdleDeadline`` + watchdog reaps a producer that wedges — never offers a chunk
     /// within `idleTimeout` — independent of the whole-connection deadline (FIX #1 parity for a single

@@ -39,13 +39,18 @@ struct HTTP2ConnectionState {
     /// not at the arbitrary moment the body happened to end (RFC 9113 §6.9, ADR 0006).
     var consumption: [HTTP2StreamID: HTTP2ConsumptionSignal] = [:]
 
-    /// Dispatched-but-not-yet-reported handler tasks (buffered and streaming-route alike).
+    /// Streams whose handler task has been dispatched and has not yet reported back (buffered and
+    /// streaming-route alike).
     ///
     /// A request already fully received needs no more inbound data to finish, only the chance to run, so
     /// EOF drains these rather than cancelling them out from under itself.
-    var pendingRequests = 0
+    ///
+    /// A set of stream ids rather than a counter (audit F6): it is bounded by `maxConcurrentStreams`
+    /// either way, and "the accounting came back to zero" is then directly assertable — which is what a
+    /// counter silently getting out of step on the reset path cost.
+    var dispatched: Set<HTTP2StreamID> = []
 
-    /// Dispatched-but-not-yet-`.tunnelEnded` tunnel pump tasks — the tunnel half of `pendingRequests`.
+    /// Dispatched-but-not-yet-`.tunnelEnded` tunnel pump tasks — the tunnel half of `dispatched`.
     var pendingTunnels = 0
 
     /// Whether graceful shutdown has already queued its GOAWAY (RFC 9113 §6.8 — queue it once).
@@ -59,7 +64,7 @@ struct HTTP2ConnectionState {
     /// Checked only once the reader has actually closed: while it has not, more octets keep arriving and
     /// the connection has no reason to close regardless of this being transiently true.
     var isDrained: Bool {
-        readerClosed && pendingRequests == 0 && pendingTunnels == 0 && relays.isEmpty
+        readerClosed && dispatched.isEmpty && pendingTunnels == 0 && relays.isEmpty
     }
 
     /// Consecutive sweeps a gated stream has held receive credit without reporting any consumption.

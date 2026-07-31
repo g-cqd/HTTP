@@ -314,18 +314,32 @@ extension HTTPServer {
                 // only as the pump reports what it has processed.
                 let channel = makeHTTP2GatedChannel()
                 let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
+                let canceller = HTTP2StreamCanceller()
                 state.consumption[streamID] = signal
-                state.webSockets[streamID] = HTTP2WebSocketTunnel(channel: channel, signal: signal)
+                state.webSockets[streamID] = HTTP2WebSocketTunnel(
+                    channel: channel, signal: signal, canceller: canceller
+                )
                 state.pendingTunnels += 1
                 group.addTask { [self] in
-                    await runHTTP2Tunnel(
-                        streamID: streamID,
-                        handler: handler,
-                        permessageDeflate: permessageDeflate,
-                        channel: channel,
-                        signal: signal,
-                        into: continuation
-                    )
+                    // As on the streaming-request path: the group child owns the lifetime, and the inner
+                    // `Task` exists only so a peer RST_STREAM can stop a pump parked inside the route's
+                    // handler — somewhere abandoning the channel cannot reach (audit F6).
+                    let work = Task { [self] in
+                        await runHTTP2Tunnel(
+                            streamID: streamID,
+                            handler: handler,
+                            permessageDeflate: permessageDeflate,
+                            channel: channel,
+                            signal: signal,
+                            into: continuation
+                        )
+                    }
+                    canceller.adopt(work)
+                    await withTaskCancellationHandler {
+                        await work.value
+                    } onCancel: {
+                        work.cancel()
+                    }
                 }
             case .tunnelData(let streamID, let bytes):
                 await pushHTTP2TunnelData(streamID, bytes: bytes, state: &state)

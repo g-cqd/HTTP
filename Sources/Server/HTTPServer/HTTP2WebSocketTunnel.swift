@@ -27,4 +27,10 @@ struct HTTP2WebSocketTunnel: Sendable {
 
     /// Reports the pump's consumption back to the consumer, which credits the receive windows.
     let signal: HTTP2ConsumptionSignal
+
+    /// Cancels this tunnel's pump task when the peer resets the stream (RFC 9113 §6.4).
+    ///
+    /// Abandoning the channel already unblocks a pump waiting on inbound; this additionally unblocks one
+    /// parked inside the route's `handler.handle(event)`, which no amount of channel teardown reaches.
+    let canceller: HTTP2StreamCanceller
 }

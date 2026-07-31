@@ -227,7 +227,7 @@ extension HTTPServer {
         sendDeadline: IdleDeadline<C.Instant>,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async -> Bool {
-        state.pendingRequests -= 1
+        state.dispatched.remove(streamID)
         // The handler has returned, so nothing more will ever consume this stream's body. Hand back
         // whatever it left untaken BEFORE responding — `engine.respond` may close and drop the stream,
         // and credit not returned by then is credit the connection loses for good (§6.9.1).
