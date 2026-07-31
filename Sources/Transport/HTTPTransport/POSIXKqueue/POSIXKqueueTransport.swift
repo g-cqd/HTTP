@@ -48,6 +48,9 @@ public final class POSIXKqueueTransport: ServerTransport {
         /// The connection-stream continuation, finished on ``shutdown()`` so a consumer's `for await`
         /// completes instead of hanging.
         var continuation: AsyncStream<any TransportConnection>.Continuation?
+        /// The admission policy applied between `accept(2)` and `yield` (audit F8), ungated until
+        /// ``start(admission:)`` installs the server's gate.
+        var gate = AcceptGate(admission: nil)
     }
 
     /// Creates a kqueue transport for `configuration`.
@@ -67,7 +70,9 @@ public final class POSIXKqueueTransport: ServerTransport {
     /// Binds one non-blocking listening socket — TCP, or `AF_UNIX` for the
     /// ``TransportBackbone/unixDomainSocket`` mode — spins up N event loops, and begins accepting on
     /// the first loop (assigning each connection round-robin to a loop).
-    public func start() async throws -> AsyncStream<any TransportConnection> {
+    public func start(
+        admission: ConnectionAdmission?
+    ) async throws -> AsyncStream<any TransportConnection> {
         let loopCount = max(1, configuration.eventLoopCount ?? Self.defaultLoopCount())
         let listener: (descriptor: Int32, port: UInt16)
         if configuration.backbone == .unixDomainSocket {
@@ -104,10 +109,27 @@ public final class POSIXKqueueTransport: ServerTransport {
             $0.boundPort = listener.port
             $0.isRunning = true
             $0.continuation = continuation
+            $0.gate = AcceptGate(admission: admission)
         }
         continuation.onTermination = { [weak self] _ in
             Task { await self?.shutdown() }
         }
+        // An immutable snapshot: `loops` is a var (built incrementally above) and the resume closure
+        // runs concurrently on the side queue, so capturing the var there is a data-race smell.
+        let acceptLoops = loops
+        // Re-arm once the gate's live count falls back to its hysteresis watermark. Dispatched on the
+        // side queue so the `kevent` registration never runs on an event loop (which also drives every
+        // live connection's I/O), and so it is serialized after the accept batch that suspended us.
+        admission?
+            .onResume { [weak self] in
+                self?
+                    .scheduleAcceptRearm(
+                        listenFD: listener.descriptor,
+                        acceptLoop: acceptLoops[0],
+                        loops: acceptLoops,
+                        continuation: continuation
+                    )
+            }
         // Accept on the first loop; `acceptPending` fans connections out across all loops.
         armAccept(
             listenFD: listener.descriptor,
@@ -177,15 +199,26 @@ public final class POSIXKqueueTransport: ServerTransport {
         }
     }
 
+    /// Drains every pending connection, charging each against the admission gate BEFORE it is yielded.
+    ///
+    /// The connection stream stays `.unbounded` deliberately. `AsyncStream`'s buffering policy *drops*
+    /// on overflow, and a dropped connection here is a leaked file descriptor — an unbounded-loss bug
+    /// strictly worse than the queue depth it would bound. The bound comes from admission instead:
+    /// because a slot is charged before `yield`, the stream's depth can never exceed the gate's total.
+    /// Do not "fix" this by adding a dropping policy.
     private func acceptPending(
         listenFD: Int32,
         acceptLoop: KqueueEventLoop,
         loops: [KqueueEventLoop],
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        guard state.withLock(\.isRunning) else {
+        let (running, gate) = state.withLock { ($0.isRunning, $0.gate) }
+        guard running else {
             return
         }
+        // A refused connection is closed here, on the accept loop: it was never registered with any
+        // kqueue, so a direct `close(2)` cannot race a readiness handler.
+        let closeRefused: (Int32) -> Void = { close($0) }
         drain: while true {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
@@ -212,30 +245,77 @@ public final class POSIXKqueueTransport: ServerTransport {
                         break drain  // drained, or the listener was closed
                 }
             }
-            POSIXSocket.setNonBlocking(clientFD)
-            POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
-            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
-            let id = connectionIDs.next()
-            // Round-robin the connection onto a loop; its I/O and serve task live there for its lifetime.
-            let serveLoop = loops[
-                nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
             // A UNIX-domain peer carries no host:port — report the socket path (one shared "host",
             // which is also the right key for the per-client connection cap: local peers are one class).
             let peer =
                 configuration.unixSocketPath.map { TransportAddress(host: $0, port: 0) }
                 ?? POSIXSocket.peerAddress(from: address)
-            continuation.yield(
-                POSIXKqueueConnection(
-                    id: id,
-                    descriptor: clientFD,
-                    peer: peer,
-                    eventLoop: serveLoop
-                )
-            )
+            switch gate.admit(descriptor: clientFD, host: peer.host, close: closeRefused) {
+                case .rejectedContinue:
+                    continue  // this peer is over ITS cap; others are not — keep draining
+                case .saturatedStop:
+                    // Return WITHOUT re-arming: the `EV_ADD|EV_ONESHOT` registration makes "don't
+                    // re-arm" the backpressure. The kernel fills the listen(2) backlog and finally
+                    // refuses SYNs; the gate re-arms us at its hysteresis watermark.
+                    return
+                case .admit(let ticket, let saturated):
+                    yieldConnection(
+                        clientFD,
+                        peer: peer,
+                        ticket: ticket,
+                        loops: loops,
+                        continuation: continuation
+                    )
+                    if saturated {
+                        return  // that was the last slot — same backpressure, no re-arm
+                    }
+            }
         }
         armAccept(
             listenFD: listenFD, acceptLoop: acceptLoop, loops: loops, continuation: continuation
         )
+    }
+
+    /// Configures an admitted descriptor, assigns it a loop, and yields it carrying its slot.
+    private func yieldConnection(
+        _ clientFD: Int32,
+        peer: TransportAddress,
+        ticket: AdmissionTicket?,
+        loops: [KqueueEventLoop],
+        continuation: AsyncStream<any TransportConnection>.Continuation
+    ) {
+        POSIXSocket.setNonBlocking(clientFD)
+        POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+        POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
+        // Round-robin the connection onto a loop; its I/O and serve task live there for its lifetime.
+        let serveLoop = loops[nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
+        continuation.yield(
+            POSIXKqueueConnection(
+                id: connectionIDs.next(),
+                descriptor: clientFD,
+                peer: peer,
+                eventLoop: serveLoop,
+                admissionTicket: ticket
+            )
+        )
+    }
+
+    /// Re-arms accept from the gate's hysteresis resume, on ``backoffQueue`` so the `kevent`
+    /// registration never occupies an event loop.
+    private func scheduleAcceptRearm(
+        listenFD: Int32,
+        acceptLoop: KqueueEventLoop,
+        loops: [KqueueEventLoop],
+        continuation: AsyncStream<any TransportConnection>.Continuation
+    ) {
+        backoffQueue.async { [weak self] in
+            guard let self, state.withLock(\.isRunning) else {
+                return
+            }
+            armAccept(
+                listenFD: listenFD, acceptLoop: acceptLoop, loops: loops, continuation: continuation
+            )
+        }
     }
 
     /// Re-arms accept after the fd-exhaustion backoff, scheduled on ``backoffQueue`` so the wait never

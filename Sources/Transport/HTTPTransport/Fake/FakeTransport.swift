@@ -25,7 +25,14 @@ public final class FakeTransport: ServerTransport {
     }
 
     /// Yields the seeded connections in order, then finishes the stream.
-    public func start() async -> AsyncStream<any TransportConnection> {
+    ///
+    /// Deliberately **ungated**: the seeded connections are built by the test, so there is no accept
+    /// point at which to charge a slot and no descriptor to close on refusal. ``HTTPServer`` charges
+    /// each connection it dequeues from an ungated backbone (audit F8), so the ceiling still holds —
+    /// it just cannot cover the queue depth here, which a test controls anyway.
+    public func start(
+        admission _: ConnectionAdmission?
+    ) async -> AsyncStream<any TransportConnection> {
         let connections = self.connections
         return AsyncStream { continuation in
             for connection in connections {
@@ -33,6 +40,14 @@ public final class FakeTransport: ServerTransport {
             }
             continuation.finish()
         }
+    }
+
+    /// Yields the seeded connections with no admission gate — the non-throwing shim.
+    ///
+    /// Shadows the throwing ``ServerTransport/start()`` default for the concrete fake, so a test can
+    /// still write `await transport.start()` without a `try`.
+    public func start() async -> AsyncStream<any TransportConnection> {
+        await start(admission: nil)
     }
 
     /// A no-op for the in-memory transport.

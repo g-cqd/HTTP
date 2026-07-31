@@ -104,6 +104,15 @@ public protocol TransportConnection: Sendable {
     /// the in-memory fakes keep the no-op default below.
     func cancel()
 
+    /// The admission slot charged for this connection at accept time (audit F8), released when the
+    /// server's serve loop ends.
+    ///
+    /// A gated backbone charges the slot before it yields the connection — before any serve task
+    /// exists — and hands the ticket here, so the ceiling covers connections that are merely queued or
+    /// still handshaking, not only ones being served. `nil` for a connection accepted without a gate
+    /// (the in-memory fakes, benchmarks); the server then charges its own slot on dequeue.
+    var admissionTicket: AdmissionTicket? { get }
+
     /// The task executor this connection's serve task should prefer, or `nil` to use the global
     /// cooperative pool.
     ///
@@ -129,6 +138,10 @@ extension TransportConnection {
     /// No client certificate by default; a TLS backbone doing mutual TLS overrides this with the
     /// full verified identity once the handshake settles (G3).
     public var tlsPeerIdentity: TLSPeerIdentity? { nil }
+
+    /// No admission slot by default — a connection from an ungated backbone (the in-memory fakes,
+    /// benchmarks) carries none, and the server charges its own on dequeue (audit F8).
+    public var admissionTicket: AdmissionTicket? { nil }
 
     /// No executor preference by default — the serve task runs on the global cooperative pool.
     ///

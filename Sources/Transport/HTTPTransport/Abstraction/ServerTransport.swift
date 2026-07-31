@@ -24,7 +24,17 @@ public protocol ServerTransport: Sendable {
 
     /// Binds and begins accepting, returning a stream of inbound connections that finishes when the
     /// transport is shut down.
-    func start() async throws -> AsyncStream<any TransportConnection>
+    ///
+    /// `admission` is the shared connection ceiling (audit F8). A backbone charges a slot the instant
+    /// `accept(2)` hands it a descriptor and **before** it yields anything, attaching the resulting
+    /// ``AdmissionTicket`` to the connection; a refused connection is closed there and never yielded,
+    /// and a backbone that has saturated the gate stops re-arming its accept source until the gate's
+    /// resume fires. Pass `nil` (see ``start()``) for an ungated listener — benchmarks and the
+    /// in-memory fakes, where the server applies the ceiling itself.
+    ///
+    /// The bound on the returned stream's depth comes from `admission`, not from a buffering policy:
+    /// see the accept-loop comments in each backbone for why the stream stays `.unbounded`.
+    func start(admission: ConnectionAdmission?) async throws -> AsyncStream<any TransportConnection>
 
     /// Stops accepting and closes the listener.
     func shutdown() async
@@ -40,6 +50,16 @@ public protocol ServerTransport: Sendable {
 }
 
 extension ServerTransport {
+    /// Binds and begins accepting with **no** admission ceiling applied at the transport.
+    ///
+    /// The ungated entry point, for a caller that owns the ceiling itself (``HTTPServer`` charges
+    /// every connection it dequeues) or has none (benchmarks, the conformance battery). Prefer
+    /// ``start(admission:)`` in a server: only a transport-level gate can refuse a connection before
+    /// it is queued (audit F8).
+    public func start() async throws -> AsyncStream<any TransportConnection> {
+        try await start(admission: nil)
+    }
+
     /// Cleartext and the non-Network.framework backbones have no server TLS identity to swap, so a
     /// reload is unsupported; the Network.framework backbone overrides this.
     public func reload(tls _: TransportTLS) async throws {

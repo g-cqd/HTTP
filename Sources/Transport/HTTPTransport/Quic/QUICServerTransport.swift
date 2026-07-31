@@ -15,8 +15,22 @@ public protocol QUICServerTransport: Sendable {
     var boundPort: UInt16 { get }
 
     /// Binds and begins accepting, returning a stream of inbound connections that finishes at shutdown.
-    func start() async throws -> AsyncStream<any QUICConnection>
+    ///
+    /// `admission` is the shared connection ceiling (audit F8), charged before a connection is yielded
+    /// so a QUIC peer counts against the same budget as a TCP one. A QUIC listener has no readiness
+    /// source to suspend, so refusing the connection (CONNECTION_CLOSE, RFC 9000 §19.19) *is* the
+    /// backpressure. Pass `nil` (see ``start()``) for an ungated listener.
+    func start(admission: ConnectionAdmission?) async throws -> AsyncStream<any QUICConnection>
 
     /// Stops accepting and closes the listener.
     func shutdown() async
+}
+
+extension QUICServerTransport {
+    /// Binds and begins accepting with **no** admission ceiling applied at the transport.
+    ///
+    /// The ungated entry point, for the tests and tools that drive a QUIC listener directly.
+    public func start() async throws -> AsyncStream<any QUICConnection> {
+        try await start(admission: nil)
+    }
 }

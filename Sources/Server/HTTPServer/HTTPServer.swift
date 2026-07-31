@@ -41,23 +41,19 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// request. The drain helpers live in `HTTPServer+Shutdown.swift`.
     let isShuttingDown = Atomic<Bool>(false)
 
-    /// Live connection counts: a global total (``HTTPLimits/maxConnections``) and a per-host map
-    /// (``HTTPLimits/maxConnectionsPerClient``), guarded together.
+    /// The shared connection ceiling — a global total (``HTTPLimits/maxConnections``) and a per-host
+    /// budget (``HTTPLimits/maxConnectionsPerClient``) — handed to the transport at ``run()``.
     ///
-    /// A `Mutex` (not an actor) because the critical section is a single map/counter update with no
-    /// `await`.
-    private let connectionCounts = Mutex<ConnectionCounts>(ConnectionCounts())
+    /// It lives at the transport layer (audit F8) so a slot is charged the instant a descriptor is
+    /// accepted, *before* the connection is queued and before any serve task exists. This server-side
+    /// reference exists to build the gate from ``limits``, to hand it to the transport, and to charge
+    /// connections from an ungated backbone (the in-memory fakes) on dequeue.
+    let admission: ConnectionAdmission
 
     /// In-flight connections being served, keyed by id, registered/unregistered around ``serve(_:)``.
     ///
     /// ``shutdown(within:)`` force-closes any that have not drained by the deadline.
     let activeConnections = Mutex<[TransportConnectionID: any TransportConnection]>([:])
-
-    /// Live connection accounting: a global total plus per-host counts.
-    private struct ConnectionCounts {
-        var total = 0
-        var perHost: [String: Int] = [:]
-    }
 
     /// Creates a server bound to `transport`, handling requests with `responder` and timing its
     /// Slowloris/idle deadlines against `clock`.
@@ -73,6 +69,13 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         self.responder = Mutex(responder)
         self.limits = limits
         self.clock = clock
+        self.admission = ConnectionAdmission(
+            capacity: ConnectionAdmission.Capacity(
+                total: limits.maxConnections,
+                perHost: limits.maxConnectionsPerClient,
+                resumeRatio: limits.acceptResumeRatio
+            )
+        )
     }
 
     deinit {
@@ -84,7 +87,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// When a ``QUICServerTransport`` was supplied it is run alongside the TCP listener to serve
     /// HTTP/3 (RFC 9114), and `Alt-Svc` (RFC 7838) is advertised on the h1/h2 responses.
     public func run() async throws {
-        let connections = try await transport.start()
+        let connections = try await transport.start(admission: admission)
         await withDiscardingTaskGroup { group in
             if quicTransport != nil {
                 group.addTask(priority: .userInitiated) { await self.runHTTP3() }
@@ -140,31 +143,26 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             : .collected(body)
     }
 
-    /// Admits `connection` if it is under both the global (``HTTPLimits/maxConnections``) and
-    /// per-client (``HTTPLimits/maxConnectionsPerClient``) caps, serves it for its lifetime, then
-    /// releases the slot.
+    /// Takes ownership of the admission slot charged for `connection`, serves it for its lifetime,
+    /// then releases the slot.
+    ///
+    /// A gated backbone already charged the slot at accept time — before this connection was queued
+    /// and before this task existed (audit F8) — so the common path is pure adoption. A connection
+    /// from an ungated backbone (the in-memory fakes) carries no ticket and is charged here instead,
+    /// still before any serve work, so the ceiling holds on every backbone.
     ///
     /// A connection over either cap is closed immediately — a resource-exhaustion defense (the spirit
-    /// of a 429): the per-client cap (T-F4) blunts a single source, the global cap (audit T-F2) bounds
-    /// total live connections so a many-source flood cannot exhaust file descriptors / tasks.
+    /// of a 429, RFC 9110 §15.5.30): the per-client cap (T-F4) blunts a single source, the global cap
+    /// (audit T-F2) bounds total live connections so a many-source flood cannot exhaust file
+    /// descriptors / tasks.
     private func accept(_ connection: any TransportConnection) async {
-        let host = connection.peer.host
-        let admitted = connectionCounts.withLock { counts in
-            guard counts.total < limits.maxConnections else {
-                return false
-            }
-            let current = counts.perHost[host, default: 0]
-            guard current < limits.maxConnectionsPerClient else {
-                return false
-            }
-            counts.perHost[host] = current + 1
-            counts.total += 1
-            return true
-        }
-        guard admitted else {
+        guard let ticket = connection.admissionTicket ?? charge(connection) else {
             await connection.close()
             return
         }
+        // Held for the whole serve loop, then returned — which is also what frees the accept source to
+        // re-arm once enough slots come back (the gate's hysteresis watermark).
+        defer { ticket.release() }
         // Pin the serve task to the connection's preferred executor when it has one (the kqueue/epoll
         // loop): read → parse → route → respond → write then run inline on the loop thread with no hop
         // to the cooperative pool — median-latency parity with the blocking backbone (audit R4). `nil`
@@ -172,18 +170,15 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         await withTaskExecutorPreference(connection.preferredTaskExecutor) {
             await serve(connection)
         }
-        connectionCounts.withLock { counts in
-            counts.total -= 1
-            guard let current = counts.perHost[host] else {
-                return
-            }
-            if current <= 1 {
-                counts.perHost[host] = nil
-            }
-            else {
-                counts.perHost[host] = current - 1
-            }
+    }
+
+    /// Charges an admission slot for a connection its backbone did not charge for, or `nil` when it is
+    /// over the global or per-client ceiling.
+    private func charge(_ connection: any TransportConnection) -> AdmissionTicket? {
+        guard case .admitted(let ticket, _) = admission.admit(host: connection.peer.host) else {
+            return nil
         }
+        return ticket
     }
 
     /// Serves a connection for its lifetime, dispatching by protocol, then closes.

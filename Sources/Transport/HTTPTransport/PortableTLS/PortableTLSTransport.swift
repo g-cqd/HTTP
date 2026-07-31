@@ -57,6 +57,13 @@
         private let connectionIDs = ConnectionIDAllocator()
         /// Round-robin cursor distributing accepted connections across the loops.
         private let nextLoop = Atomic<Int>(0)
+        /// Parks the blocking accept thread while the admission gate is saturated (audit F8).
+        ///
+        /// This backbone accepts on a dedicated thread with a *blocking* `accept(2)`, so it has no
+        /// readiness registration to leave un-armed and no `DispatchSource` to suspend; parking the
+        /// thread is the equivalent backpressure. A `DispatchSemaphore` counts, so a resume that
+        /// arrives before the park is banked rather than lost.
+        private let admissionResume = DispatchSemaphore(value: 0)
 
         private struct State {
             /// The shared server `SSL_CTX`, swappable by ``reload(tls:)``.
@@ -66,6 +73,9 @@
             var listenDescriptor: Int32?
             var boundPort: UInt16 = 0
             var isRunning = false
+            /// The admission policy applied between `accept(2)` and `SSL_new` (audit F8), ungated
+            /// until ``start(admission:)`` installs the server's gate.
+            var gate = AcceptGate(admission: nil)
         }
 
         /// Carries the non-`Sendable` `SSL_CTX` pointer across the accept-thread hop.
@@ -88,7 +98,9 @@
         }
 
         /// Builds the shared `SSL_CTX`, spins up N event loops, binds the listening socket, and accepts.
-        public func start() async throws -> AsyncStream<any TransportConnection> {
+        public func start(
+            admission: ConnectionAdmission?
+        ) async throws -> AsyncStream<any TransportConnection> {
             guard let tls = configuration.tls else {
                 throw TransportError.tlsConfigurationFailed(
                     "the portable TLS backbone requires a TLS identity"
@@ -131,10 +143,14 @@
                 $0.listenDescriptor = listener.descriptor
                 $0.boundPort = listener.port
                 $0.isRunning = true
+                $0.gate = AcceptGate(admission: admission)
             }
             continuation.onTermination = { [weak self] _ in
                 Task { await self?.shutdown() }
             }
+            // Unpark the blocking accept thread once the gate's live count falls back to its
+            // hysteresis watermark.
+            admission?.onResume { [weak self] in self?.admissionResume.signal() }
             // Capture an immutable snapshot: `loops` is a var (built incrementally above), and the accept
             // loop runs concurrently on `acceptQueue`, so referencing the var there is a data-race smell.
             let acceptLoops = loops
@@ -163,6 +179,9 @@
             if let descriptor {
                 closeFD(descriptor)
             }
+            // The accept thread may be parked on the admission gate; closing the listener alone would
+            // not wake it, so signal too. (`isRunning` is already false, so it exits its park loop.)
+            admissionResume.signal()
             for loop in loops {
                 loop.stop()
             }
@@ -211,6 +230,7 @@
             loops: [TLSEventLoop],
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
+            let gate = state.withLock(\.gate)
             drain: while state.withLock(\.isRunning) {
                 var address = sockaddr_storage()
                 var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
@@ -230,10 +250,32 @@
                             break drain
                     }
                 }
-                // audit T-F1: a peer RST mid-write must not kill us; disable Nagle for p99.9 tail.
-                POSIXSocket.setNoSIGPIPE(clientFD)
-                POSIXSocket.setNoDelay(clientFD)
-                surface(clientFD, address: address, loops: loops, continuation: continuation)
+                // Charge BEFORE `surface(...)` — before `SSL_new` and before the handshake — so a peer
+                // that completes the TCP connect and then never sends a ClientHello is still holding a
+                // slot against the ceiling, which is precisely the Slowloris-shaped case the audit's
+                // "queued and handshaking connections" wording is about.
+                let peer = POSIXSocket.peerAddress(from: address)
+                switch gate.admit(descriptor: clientFD, host: peer.host, close: closeFD) {
+                    case .rejectedContinue:
+                        continue  // this peer is over ITS cap; others are not — keep accepting
+                    case .saturatedStop:
+                        parkUntilAdmissionResumes(gate)
+                        continue
+                    case .admit(let ticket, let saturated):
+                        // audit T-F1: a peer RST mid-write must not kill us; Nagle off for the tail.
+                        POSIXSocket.setNoSIGPIPE(clientFD)
+                        POSIXSocket.setNoDelay(clientFD)
+                        surface(
+                            clientFD,
+                            peer: peer,
+                            ticket: ticket,
+                            loops: loops,
+                            continuation: continuation
+                        )
+                        if saturated {
+                            parkUntilAdmissionResumes(gate)
+                        }
+                }
             }
             continuation.finish()
             let context = state.withLock { state -> ContextBox? in
@@ -246,11 +288,30 @@
             }
         }
 
-        /// Wraps an accepted descriptor in a libssl session over memory BIOs, assigns it a loop, drives
-        /// the handshake inline on that loop, and surfaces it once the handshake settles.
+        /// Parks the accept thread until the admission gate clears its saturation latch.
+        ///
+        /// The timed wait is a safety valve, not the wakeup path: the gate's resume signals the
+        /// semaphore, and a signal that arrives before the park is banked (semaphores count). The
+        /// timeout only bounds the park if the gate is torn down while we are in it.
+        private func parkUntilAdmissionResumes(_ gate: AcceptGate) {
+            guard let admission = gate.admission else {
+                return
+            }
+            while state.withLock(\.isRunning), admission.isSaturated {
+                _ = admissionResume.wait(timeout: .now() + .milliseconds(50))
+            }
+        }
+
+        /// Wraps an admitted descriptor in a libssl session over memory BIOs, assigns it a loop,
+        /// drives the handshake inline on that loop, and surfaces it once the handshake settles.
+        ///
+        /// The slot in `ticket` is already charged. If any step below fails the connection is torn
+        /// down without being yielded, and the ticket's `deinit` returns the slot — the failure paths
+        /// need no bookkeeping of their own.
         private func surface(
             _ clientFD: Int32,
-            address: sockaddr_storage,
+            peer: TransportAddress,
+            ticket: AdmissionTicket?,
             loops: [TLSEventLoop],
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
@@ -282,14 +343,15 @@
             let loop = loops[nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
             let connection = PortableTLSConnection(
                 id: connectionIDs.next(),
-                peer: POSIXSocket.peerAddress(from: address),
+                peer: peer,
                 ssl: ssl,
                 readBIO: readBIO,
                 writeBIO: writeBIO,
                 descriptor: clientFD,
                 eventLoop: loop,
                 clientAuth: configuration.tls?.clientAuth ?? .none,
-                verifyPeer: configuration.tls?.verifyPeer
+                verifyPeer: configuration.tls?.verifyPeer,
+                admissionTicket: ticket
             )
             // Drive the handshake inline on the connection's loop; surface only on success — a failed
             // handshake (ALPN no-overlap / ALPACA refusal) is torn down, never yielded.

@@ -29,6 +29,8 @@ public final class LegacyQUICTransport: QUICServerTransport {
         var isReady = false
         var failure: TransportError?
         var readyContinuation: CheckedContinuation<Void, any Error>?
+        /// The shared connection ceiling, charged before a connection group is yielded (audit F8).
+        var admission: ConnectionAdmission?
     }
 
     /// Creates a legacy QUIC transport for `configuration` (which must carry TLS) and `limits`.
@@ -47,8 +49,16 @@ public final class LegacyQUICTransport: QUICServerTransport {
     }
 
     /// Binds the QUIC listener and begins accepting, returning a stream of inbound connections.
-    public func start() async throws -> AsyncStream<any QUICConnection> {
+    ///
+    /// A QUIC listener has no readiness source to suspend, so the per-connection refusal *is* the
+    /// backpressure (audit F8): a peer over the ceiling gets a CONNECTION_CLOSE (RFC 9000 §19.19)
+    /// before any HTTP/3 stream is read. The slot is charged before the connection is yielded and is
+    /// owned by the connection object, so it comes back when that connection is torn down.
+    public func start(
+        admission: ConnectionAdmission?
+    ) async throws -> AsyncStream<any QUICConnection> {
         let listener = try makeListener()
+        state.withLock { $0.admission = admission }
         let (stream, continuation) = AsyncStream<any QUICConnection>.makeStream()
 
         listener.newConnectionGroupHandler = { [weak self] group in
@@ -118,12 +128,26 @@ public final class LegacyQUICTransport: QUICServerTransport {
         _ group: NWConnectionGroup,
         continuation: AsyncStream<any QUICConnection>.Continuation
     ) {
+        let peer = TransportAddress(host: configuration.host, port: boundPort)
+        // Charge before yielding, so a QUIC peer counts against the same ceiling as a TCP one and an
+        // over-cap peer is refused before the server ever drives a stream on it (audit F8).
+        let ticket: AdmissionTicket?
+        switch state.withLock(\.admission)?.admit(host: peer.host) {
+            case .rejectedTotal, .rejectedHost:
+                group.cancel()  // CONNECTION_CLOSE (RFC 9000 §19.19) — the refusal
+                return
+            case .admitted(let charged, _):
+                ticket = charged
+            case nil:
+                ticket = nil
+        }
         // This transport offers only "h3", so a completed QUIC handshake has negotiated it.
         let connection = LegacyQUICConnection(
             group: group,
             queue: queue,
-            peer: TransportAddress(host: configuration.host, port: boundPort),
-            negotiatedApplicationProtocol: configuration.tls?.applicationProtocols.first
+            peer: peer,
+            negotiatedApplicationProtocol: configuration.tls?.applicationProtocols.first,
+            admissionTicket: ticket
         )
         connection.start()
         continuation.yield(connection)

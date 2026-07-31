@@ -20,6 +20,10 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
     let peer: TransportAddress
     let negotiatedApplicationProtocol: String?
 
+    /// The admission slot charged for this connection at accept time (audit F8); it is released when
+    /// this object is deallocated, i.e. when the connection is fully torn down.
+    private let admissionTicket: AdmissionTicket?
+
     private let group: NWConnectionGroup
     private let queue: DispatchQueue
     private let inbound: AsyncStream<any QUICStream>
@@ -29,12 +33,14 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
         group: NWConnectionGroup,
         queue: DispatchQueue,
         peer: TransportAddress,
-        negotiatedApplicationProtocol: String?
+        negotiatedApplicationProtocol: String?,
+        admissionTicket: AdmissionTicket? = nil
     ) {
         self.group = group
         self.queue = queue
         self.peer = peer
         self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
+        self.admissionTicket = admissionTicket
         (self.inbound, self.continuation) = AsyncStream.makeStream()
         group.newConnectionHandler = { [weak self] streamConnection in
             self?.acceptInbound(streamConnection)

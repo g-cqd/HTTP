@@ -41,7 +41,15 @@ public final class ModernQUICTransport: QUICServerTransport {
     }
 
     /// Binds the QUIC listener and begins accepting, returning a stream of inbound connections.
-    public func start() async throws -> AsyncStream<any QUICConnection> {
+    ///
+    /// A QUIC listener has no readiness source to suspend, so the per-connection refusal *is* the
+    /// backpressure (audit F8): a peer over the ceiling has its handler return immediately, which tears
+    /// the connection down before a single HTTP/3 stream is read. The slot is charged before the
+    /// connection is yielded and released when the handler returns — i.e. when the connection closes —
+    /// so the QUIC peer counts against exactly the same budget as a TCP one.
+    public func start(
+        admission: ConnectionAdmission?
+    ) async throws -> AsyncStream<any QUICConnection> {
         guard let tls = configuration.tls else {
             throw TransportError.tlsConfigurationFailed("QUIC requires a TLS identity")
         }
@@ -71,9 +79,22 @@ public final class ModernQUICTransport: QUICServerTransport {
         let port = boundPort
         let task = Task {
             try? await listener.run { networkConnection in
+                let peer = TransportAddress(host: host, port: port)
+                // Charge before yielding. The handler blocks for the connection's whole lifetime, so
+                // the ticket is scoped exactly to it — no bookkeeping on the connection object.
+                let ticket: AdmissionTicket?
+                switch admission?.admit(host: peer.host) {
+                    case .rejectedTotal, .rejectedHost:
+                        return  // returning tears the connection down: the refusal
+                    case .admitted(let charged, _):
+                        ticket = charged
+                    case nil:
+                        ticket = nil
+                }
+                defer { ticket?.release() }
                 let connection = ModernQUICConnection(
                     connection: networkConnection,
-                    peer: TransportAddress(host: host, port: port),
+                    peer: peer,
                     negotiatedApplicationProtocol: advertised
                 )
                 continuation.yield(connection)
