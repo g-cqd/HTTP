@@ -24,12 +24,12 @@ struct WebSocketHubTests {
     }
 
     @Test("publishes a message to every subscriber of a topic")
-    func fanOut() async {
+    func fanOut() throws {
         let hub = WebSocketHub()
         let a = Recorder()
         let b = Recorder()
-        let tokenA = hub.register { a.messages.append($0) }
-        let tokenB = hub.register { b.messages.append($0) }
+        let tokenA = try #require(hub.register { a.messages.append($0) })
+        let tokenB = try #require(hub.register { b.messages.append($0) })
         hub.subscribe(tokenA, to: "room")
         hub.subscribe(tokenB, to: "room")
         hub.publish(.text("hi"), to: "room")
@@ -38,10 +38,10 @@ struct WebSocketHubTests {
     }
 
     @Test("a different topic and a non-subscriber receive nothing")
-    func isolation() async {
+    func isolation() throws {
         let hub = WebSocketHub()
         let recorder = Recorder()
-        let token = hub.register { recorder.messages.append($0) }
+        let token = try #require(hub.register { recorder.messages.append($0) })
         hub.subscribe(token, to: "room")
         hub.publish(.text("x"), to: "other")
         #expect(recorder.messages.isEmpty)
@@ -50,10 +50,10 @@ struct WebSocketHubTests {
     }
 
     @Test("unsubscribe and remove both stop delivery")
-    func unsubscribeAndRemove() async {
+    func unsubscribeAndRemove() throws {
         let hub = WebSocketHub()
         let recorder = Recorder()
-        let token = hub.register { recorder.messages.append($0) }
+        let token = try #require(hub.register { recorder.messages.append($0) })
         hub.subscribe(token, to: "room")
         hub.unsubscribe(token, from: "room")
         hub.publish(.text("a"), to: "room")

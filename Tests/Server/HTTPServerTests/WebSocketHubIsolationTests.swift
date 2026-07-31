@@ -43,16 +43,18 @@ private func waitUntil(
 /// must still complete. Against a hub that delivers under the lock — the actor this replaced, and the
 /// intermediate sharded version — B's publish blocks on the shard A is holding and this fails.
 @Test("a blocking sink does not serialize an unrelated publish")
-func blockingSinkDoesNotSerializeAnUnrelatedPublish() async {
+func blockingSinkDoesNotSerializeAnUnrelatedPublish() async throws {
     let hub = WebSocketHub(shards: 1)
     let release = ThreadGate()
     let parkedInside = Mutex(false)
     let deliveredToB = Mutex(false)
-    let slow = hub.register { _ in
+    let parkingSink: WebSocketHub.Sink = { _ in
         parkedInside.withLock { $0 = true }
         release.waitUntilOpen()
     }
-    let fast = hub.register { _ in deliveredToB.withLock { $0 = true } }
+    let recordingSink: WebSocketHub.Sink = { _ in deliveredToB.withLock { $0 = true } }
+    let slow = try #require(hub.register(parkingSink))
+    let fast = try #require(hub.register(recordingSink))
     hub.subscribe(slow, to: "a")
     hub.subscribe(fast, to: "b")
 
@@ -74,13 +76,15 @@ func blockingSinkDoesNotSerializeAnUnrelatedPublish() async {
 /// does not receive that message. Subscribing from inside a sink also re-enters the hub while the
 /// publish is in flight, which a hub delivering under a non-recursive lock cannot survive at all.
 @Test("a subscriber joining during a publish is not delivered that message")
-func aSubscriberJoiningDuringAPublishMissesIt() {
+func aSubscriberJoiningDuringAPublishMissesIt() throws {
     let hub = WebSocketHub(shards: 1)
     let latecomerReceived = Mutex(0)
-    let latecomer = hub.register { _ in latecomerReceived.withLock { $0 += 1 } }
+    let countingSink: WebSocketHub.Sink = { _ in latecomerReceived.withLock { $0 += 1 } }
+    let latecomer = try #require(hub.register(countingSink))
     // `weak`, because a sink stored in the hub that strongly captured the hub would be a retain cycle
     // ARC cannot collect — the exact leak shape `BoundedLRU` exists to keep out of this package.
-    let joiner = hub.register { [weak hub] _ in hub?.subscribe(latecomer, to: "room") }
+    let joiningSink: WebSocketHub.Sink = { [weak hub] _ in hub?.subscribe(latecomer, to: "room") }
+    let joiner = try #require(hub.register(joiningSink))
     hub.subscribe(joiner, to: "room")
 
     // The sink subscribes the latecomer mid-flight; the snapshot was taken before delivery began, so

@@ -24,6 +24,8 @@
 //      channel froze fan-out on every unrelated topic in the process. Sinks are now snapshotted under
 //      the lock and invoked outside it; what that costs in atomicity is documented on the type rather
 //      than papered over.
+//    • Topic and subscription cardinality were unbounded and attacker-chosen (CWE-770). ``Limits``
+//      bounds all four dimensions, and every refusal is reported through the return value.
 //
 
 internal import HTTPConcurrency
@@ -62,9 +64,94 @@ public import WebSocket
 /// therefore tolerate being called after ``remove(_:)`` (the server's does — it deposits into a
 /// per-connection mailbox nobody is reading any more). A subscriber that must not miss a message
 /// needs an acknowledged, replayable channel, not a fan-out hub.
+///
+/// ## Bounded cardinality
+///
+/// On any endpoint that lets a client name its own room, the topic name, the topic count and the
+/// subscription count are all attacker-chosen. ``Limits`` bounds them, and every refusal is *reported*
+/// rather than swallowed — ``register(_:)`` answers `nil`, ``subscribe(_:to:)`` answers
+/// ``Subscription/refused(_:)`` with the specific ``Refusal``. A silent refusal would leave the caller
+/// believing a connection is subscribed to a topic it will never hear from. The server turns either
+/// into a `1013` Close (RFC 6455 §7.4.1).
+///
+/// Refusal, never eviction: an admission table must not let an attacker-chosen newcomer displace a
+/// tracked legitimate connection, because that hands the attacker a way to knock any victim off the
+/// hub on demand — the same trade ``BoundedLRU/Overflow/reject`` exists for.
 public final class WebSocketHub: Sendable {
     /// A per-connection delivery channel: a closure that sends one ``WebSocketMessage`` to a connection.
     public typealias Sink = @Sendable (WebSocketMessage) -> Void
+
+    /// Cardinality bounds on the attacker-reachable dimensions of a hub (CWE-770).
+    public struct Limits: Sendable {
+        /// Connections the hub holds sinks for at once.
+        public var maxSubscribers: Int
+
+        /// Distinct topic names the hub holds at once.
+        public var maxTopics: Int
+
+        /// Topics one connection may hold subscriptions to.
+        public var maxSubscriptionsPerConnection: Int
+
+        /// The longest topic name, in UTF-8 octets, the hub accepts.
+        public var maxTopicNameLength: Int
+
+        /// Creates a set of bounds; the defaults suit a public endpoint.
+        public init(
+            maxSubscribers: Int = 65_536,
+            maxTopics: Int = 65_536,
+            maxSubscriptionsPerConnection: Int = 64,
+            maxTopicNameLength: Int = 256
+        ) {
+            self.maxSubscribers = maxSubscribers
+            self.maxTopics = maxTopics
+            self.maxSubscriptionsPerConnection = maxSubscriptionsPerConnection
+            self.maxTopicNameLength = maxTopicNameLength
+        }
+
+        /// The default bounds.
+        public static let `default` = Self()
+    }
+
+    /// Why the hub refused a subscription.
+    ///
+    /// Distinct cases because the caller's correct response differs: a stale token is that
+    /// connection's problem, while an exhausted budget is the server's and is worth retrying later.
+    public enum Refusal: Sendable, Equatable {
+        /// The token is not registered — never issued, or the connection has already been removed.
+        case unknownToken
+
+        /// The topic name was empty.
+        case emptyTopicName
+
+        /// The topic name exceeded ``Limits/maxTopicNameLength`` UTF-8 octets.
+        case topicNameTooLong
+
+        /// The topic name held an octet outside VCHAR (`%x21-7E`, RFC 5234 §B.1).
+        ///
+        /// Control octets in an attacker-chosen name reach logs and metric dimensions verbatim
+        /// (CWE-117, log injection), and a name is retained per topic and compared on every publish.
+        case topicNameNotVisibleASCII
+
+        /// This connection already holds ``Limits/maxSubscriptionsPerConnection`` topics.
+        case connectionSubscriptionLimit
+
+        /// The hub already holds ``Limits/maxTopics`` distinct topics.
+        case topicLimit
+    }
+
+    /// What ``subscribe(_:to:)`` did.
+    public enum Subscription: Sendable, Equatable {
+        /// The connection is subscribed to the topic (it may already have been — this is idempotent).
+        case admitted
+
+        /// Nothing was subscribed, for this reason.
+        case refused(Refusal)
+
+        /// Whether the connection is subscribed — the check a caller makes before proceeding.
+        public var isAdmitted: Bool {
+            self == .admitted
+        }
+    }
 
     /// One registered connection: its sink, plus the reverse index of the topics it holds.
     ///
@@ -75,9 +162,12 @@ public final class WebSocketHub: Sendable {
         var topics: Set<String> = []
     }
 
+    private let limits: Limits
     private let nextToken = Atomic<UInt64>(0)
     private let subscribers: ShardedMutex<[UInt64: Subscriber]>
     private let topics: ShardedMutex<[String: [UInt64: Sink]]>
+    private let maxSubscribersPerShard: Int
+    private let maxTopicsPerShard: Int
     /// Topic-map entries examined by ``remove(_:)`` since creation — the proportionality witness.
     ///
     /// Internal, and touched only on the disconnect path (once per topic the connection actually held),
@@ -90,35 +180,76 @@ public final class WebSocketHub: Sendable {
         // No teardown beyond ARC; the sharded partitions release with the instance.
     }
 
-    /// Creates an empty hub partitioned across roughly `shards` locks.
+    /// Creates an empty hub bounded by `limits` and partitioned across roughly `shards` locks.
     ///
-    /// `shards` is a hint, rounded to a power of two by ``ShardedMutex``. Pass `1` when a test needs
-    /// every key on one lock.
-    public init(shards: Int = 16) {
-        subscribers = ShardedMutex(shards: shards) { _ in [:] }
-        topics = ShardedMutex(shards: shards) { _ in [:] }
+    /// `shards` is a hint. As in ``SharedBoundedLRU``, it is clamped to the budget being divided and
+    /// rounded *down* to a power of two, so `shardCount × perShardBudget ≤ budget` holds and sharding
+    /// can only make a bound slightly tighter, never looser. The cost is skew: a hub refuses when *a
+    /// shard* fills, which per-process hash seeding makes unpredictable to a remote attacker (CWE-407)
+    /// but also means the effective global cap is reached a little early. Pass `1` when a test needs
+    /// every key on one lock and an exact budget.
+    public init(limits: Limits = .default, shards: Int = 16) {
+        self.limits = limits
+        let subscriberPlan = Self.shardPlan(budget: limits.maxSubscribers, hint: shards)
+        let topicPlan = Self.shardPlan(budget: limits.maxTopics, hint: shards)
+        maxSubscribersPerShard = subscriberPlan.perShard
+        maxTopicsPerShard = topicPlan.perShard
+        subscribers = ShardedMutex(shards: subscriberPlan.shards) { _ in [:] }
+        topics = ShardedMutex(shards: topicPlan.shards) { _ in [:] }
     }
 
     /// Registers a connection's `sink`, returning a token used to subscribe / unsubscribe / remove it.
-    public func register(_ sink: @escaping Sink) -> UInt64 {
+    ///
+    /// - Returns: the token, or `nil` when the subscriber budget is exhausted. `nil` is a refusal the
+    ///   caller must act on — the server closes the freshly upgraded socket with `1013` — never a
+    ///   condition to ignore.
+    public func register(_ sink: @escaping Sink) -> UInt64? {
         let token = nextToken.wrappingAdd(1, ordering: .relaxed).newValue
-        subscribers.withLock(forKey: token) { $0[token] = Subscriber(sink: sink) }
-        return token
+        return subscribers.withLock(forKey: token) { shard in
+            guard shard.count < maxSubscribersPerShard else {
+                return nil
+            }
+            shard[token] = Subscriber(sink: sink)
+            return token
+        }
     }
 
     /// Subscribes `token` to `topic`, so a message published there reaches that connection.
     ///
     /// The subscriber shard is held across the topic-shard acquisition (the documented order), so the
-    /// reverse index and the topic table are updated as one atomic step and can never disagree.
-    public func subscribe(_ token: UInt64, to topic: String) {
-        subscribers.withLock(forKey: token) { shard in
+    /// name check, both budget checks and both index updates are one atomic step: there is no window
+    /// where the reverse index and the topic table disagree, and so nothing to roll back on refusal.
+    ///
+    /// Idempotent — re-subscribing to a topic already held is ``Subscription/admitted`` and consumes
+    /// no budget, because that subscription is not a new allocation.
+    @discardableResult
+    public func subscribe(_ token: UInt64, to topic: String) -> Subscription {
+        if let refusal = refusal(forTopicName: topic) {
+            return .refused(refusal)
+        }
+        return subscribers.withLock(forKey: token) { shard in
             guard var subscriber = shard[token] else {
-                return  // never registered, or already removed
+                return .refused(.unknownToken)
+            }
+            let budget = limits.maxSubscriptionsPerConnection
+            let alreadyHeld = subscriber.topics.contains(topic)
+            guard alreadyHeld || subscriber.topics.count < budget else {
+                return .refused(.connectionSubscriptionLimit)
             }
             let sink = subscriber.sink
-            topics.withLock(forKey: topic) { $0[topic, default: [:]][token] = sink }
+            let admitted = topics.withLock(forKey: topic) { table in
+                guard table[topic] != nil || table.count < maxTopicsPerShard else {
+                    return false
+                }
+                table[topic, default: [:]][token] = sink
+                return true
+            }
+            guard admitted else {
+                return .refused(.topicLimit)
+            }
             subscriber.topics.insert(topic)
             shard[token] = subscriber
+            return .admitted
         }
     }
 
@@ -176,6 +307,37 @@ public final class WebSocketHub: Sendable {
     /// Topic-map entries examined by removals so far — see ``removalProbes``.
     var removalProbeCount: Int {
         removalProbes.load(ordering: .relaxed)
+    }
+
+    /// The refusal `topic` earns, or `nil` when the name is acceptable.
+    ///
+    /// VCHAR only (`%x21-7E`, RFC 5234 §B.1): no control octets, no space, no non-ASCII. A hub topic
+    /// is an identifier the server logs, counts and compares — not free text. Checked before any
+    /// budget is touched, so a malformed name cannot consume a connection's subscription budget.
+    private func refusal(forTopicName topic: String) -> Refusal? {
+        let octets = topic.utf8
+        guard !octets.isEmpty else {
+            return .emptyTopicName
+        }
+        guard octets.count <= limits.maxTopicNameLength else {
+            return .topicNameTooLong
+        }
+        guard !octets.contains(where: { $0 < 0x21 || $0 > 0x7E }) else {
+            return .topicNameNotVisibleASCII
+        }
+        return nil
+    }
+
+    /// Splits `budget` across a power-of-two shard count so the global bound stays hard.
+    ///
+    /// The count is clamped to `budget` (so every shard of a non-empty partition gets at least one
+    /// entry) and rounded *down* to a power of two, which makes `shards × perShard ≤ budget`. Rounding
+    /// *up* instead — what ``ShardedMutex`` does to its own hint — would let the partitioned total
+    /// exceed the requested cap, i.e. would quietly unbound the bound.
+    private static func shardPlan(budget: Int, hint: Int) -> (shards: Int, perShard: Int) {
+        let requested = max(1, min(hint, max(1, budget)))
+        let shards = 1 << (Int.bitWidth - 1 - requested.leadingZeroBitCount)
+        return (shards, max(1, max(1, budget) / shards))
     }
 
     /// Drops `token` from the membership of `topic`, retiring that topic once it empties.

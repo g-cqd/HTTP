@@ -3,10 +3,12 @@
 //  WebSocketTests
 //
 //  RFC 6455 §7.4.1 — exhaustive boundary coverage of `WebSocketCloseCode.isValidOnWire`. The valid
-//  spaces are 1000–1003, 1007–1011, 3000–3999 (registered) and 4000–4999 (private); everything else —
+//  spaces are 1000–1003, 1007–1014, 3000–3999 (registered) and 4000–4999 (private); everything else —
 //  including the "no code" sentinels 1004/1005/1006 and the TLS sentinel 1015 — MUST NOT appear on the
-//  wire. Every range edge is asserted on both sides so a one-off in a bound, a swapped comparison, or a
-//  dropped range cannot survive (see Tests/MUTATION-OPERATORS.md, operators M1/M4/M8).
+//  wire. 1012 Service Restart / 1013 Try Again Later / 1014 Bad Gateway sit past the §7.4.1 prose but
+//  are IANA-registered under the §11.7 registry §7.4.2 reserves 1000–2999 for. Every range edge is
+//  asserted on both sides so a one-off in a bound, a swapped comparison, or a dropped range cannot
+//  survive (see Tests/MUTATION-OPERATORS.md, operators M1/M4/M8).
 //
 
 import HTTPTestSupport
@@ -17,7 +19,7 @@ import Testing
 @Suite("RFC 6455 §7.4.1 — Close-code wire validity (boundaries)", .tags(.mutation))
 struct WebSocketCloseCodeTests {
     @Test(
-        "isValidOnWire holds exactly on 1000–1003, 1007–1011, 3000–4999",
+        "isValidOnWire holds exactly on 1000–1003, 1007–1014, 3000–4999",
         arguments: [
             // below the first range
             (0, false), (999, false),
@@ -25,10 +27,11 @@ struct WebSocketCloseCodeTests {
             (1_000, true), (1_001, true), (1_002, true), (1_003, true),
             // the gap 1004–1006 (1004 undefined, 1005/1006 "no code" sentinels)
             (1_004, false), (1_005, false), (1_006, false),
-            // 1007–1011 application range (edges + interior)
+            // 1007–1014 application + IANA-registered range (edges + interior)
             (1_007, true), (1_008, true), (1_009, true), (1_010, true), (1_011, true),
-            // above 1011, incl. the 1015 TLS sentinel
-            (1_012, false), (1_013, false), (1_014, false), (1_015, false), (1_016, false),
+            (1_012, true), (1_013, true), (1_014, true),
+            // above 1014, incl. the 1015 TLS sentinel
+            (1_015, false), (1_016, false),
             // the reserved gap up to the registered space
             (2_000, false), (2_999, false),
             // 3000–3999 registered + 4000–4999 private (edges)
@@ -44,7 +47,7 @@ struct WebSocketCloseCodeTests {
     func registeredConstantsAreValid() {
         let registered: [WebSocketCloseCode] = [
             .normalClosure, .goingAway, .protocolError, .unsupportedData,
-            .invalidPayloadData, .policyViolation, .messageTooBig, .internalError
+            .invalidPayloadData, .policyViolation, .messageTooBig, .internalError, .tryAgainLater
         ]
         for code in registered {
             #expect(code.isValidOnWire, "\(code.rawValue) must be wire-valid")
@@ -61,5 +64,6 @@ struct WebSocketCloseCodeTests {
         #expect(WebSocketCloseCode.policyViolation.rawValue == 1_008)
         #expect(WebSocketCloseCode.messageTooBig.rawValue == 1_009)
         #expect(WebSocketCloseCode.internalError.rawValue == 1_011)
+        #expect(WebSocketCloseCode.tryAgainLater.rawValue == 1_013)
     }
 }

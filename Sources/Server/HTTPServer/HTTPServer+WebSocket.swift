@@ -129,13 +129,22 @@ extension HTTPServer {
         // so a published message arrives as a `.broadcast` wakeup, applied to the engine below.
         var token: UInt64?
         if let hub, let topic {
-            token = hub.register { message in
-                // The `deposit` outcome is the inspected result the audit requires: an evicted
-                // broadcast is counted, and the pump turns a non-zero count into a 1008 close rather
-                // than silently serving the peer an incomplete view of the topic.
-                broadcasts.deposit(message) { continuation.yield(.broadcastReady) }
+            token = joinHub(
+                hub,
+                topic: topic,
+                broadcasts: broadcasts,
+                continuation: continuation
+            )
+            guard token != nil else {
+                // The hub is at a bounded budget (audit F16). A connection that cannot be subscribed
+                // would sit on a hub-backed route hearing nothing at all, so say so instead: 1013 Try
+                // Again Later — a capacity refusal, not a fault (RFC 6455 §7.4.1).
+                engine.apply(.close(.tryAgainLater, reason: "broadcast hub at capacity"))
+                _ = try? await connection.send(engine.outboundBytes())
+                await connection.close()
+                await handler.onClose()  // exactly once, as on every other ending
+                return
             }
-            if let token { hub.subscribe(token, to: topic) }
         }
         // Reader: feed the carryover, then inbound bytes (timed by the idle deadline), into the
         // lossless intake channel, yielding exactly one ticket per item.
@@ -182,6 +191,38 @@ extension HTTPServer {
         // Lifecycle hook: the session is over — every ending funnels through here exactly once
         // (clean Close handshake, abrupt EOF, idle timeout, send failure).
         await handler.onClose()
+    }
+
+    /// Registers this connection's broadcast sink with `hub` and auto-subscribes it to `topic`.
+    ///
+    /// - Returns: the hub token, or `nil` when either step was refused. The hub bounds subscriber,
+    ///   topic and per-connection cardinality and *reports* a refusal rather than swallowing it (audit
+    ///   F16, CWE-770); a connection admitted to a hub-backed route but not to its topic would sit
+    ///   there hearing nothing, which is exactly the silent failure the bound exists to avoid.
+    ///
+    /// A registration whose subscription is then refused is undone before returning, so a refusal
+    /// never leaks a sink into the hub's subscriber budget — leaking there would let repeated refused
+    /// upgrades exhaust the very bound that produced the refusal.
+    private func joinHub(
+        _ hub: WebSocketHub,
+        topic: String,
+        broadcasts: WebSocketBroadcastMailbox,
+        continuation: AsyncStream<WebSocketWakeup>.Continuation
+    ) -> UInt64? {
+        // The `deposit` outcome is the inspected result the audit requires: an evicted broadcast is
+        // counted, and the pump turns a non-zero count into a 1008 close rather than silently serving
+        // the peer an incomplete view of the topic.
+        let sink: WebSocketHub.Sink = { message in
+            broadcasts.deposit(message) { continuation.yield(.broadcastReady) }
+        }
+        guard let token = hub.register(sink) else {
+            return nil
+        }
+        guard hub.subscribe(token, to: topic).isAdmitted else {
+            hub.remove(token)
+            return nil
+        }
+        return token
     }
 
     /// Consumes the wakeup stream: receive → events → handler actions, or a hub broadcast → send; flushes

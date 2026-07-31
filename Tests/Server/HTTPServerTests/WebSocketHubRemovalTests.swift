@@ -22,11 +22,19 @@ private let discard: WebSocketHub.Sink = { _ in
     // Delivery is covered by `WebSocketHubTests`; here only the bookkeeping matters.
 }
 
+/// Bounds wide enough to be out of the way: this file is about removal cost, not about admission
+/// (which `WebSocketHubCardinalityTests` covers).
+private let unbounded = WebSocketHub.Limits(
+    maxSubscribers: 1 << 20,
+    maxTopics: 1 << 20,
+    maxSubscriptionsPerConnection: 1 << 20
+)
+
 @Test("removing a connection drops only its own subscriptions")
-func removalDropsOnlyItsOwnSubscriptions() {
-    let hub = WebSocketHub()
-    let leaver = hub.register(discard)
-    let stayer = hub.register(discard)
+func removalDropsOnlyItsOwnSubscriptions() throws {
+    let hub = WebSocketHub(limits: unbounded)
+    let leaver = try #require(hub.register(discard))
+    let stayer = try #require(hub.register(discard))
     let topics = (0 ..< 1_000).map { "topic-\($0)" }
     for topic in topics {
         hub.subscribe(stayer, to: topic)
@@ -55,13 +63,13 @@ func removalDropsOnlyItsOwnSubscriptions() {
     "removal cost does not scale with topic count",
     arguments: [100, 10_000, 100_000]
 )
-func removalCostIsIndependentOfTopicCount(topicCount: Int) {
-    let hub = WebSocketHub()
-    let crowd = hub.register(discard)
+func removalCostIsIndependentOfTopicCount(topicCount: Int) throws {
+    let hub = WebSocketHub(limits: unbounded)
+    let crowd = try #require(hub.register(discard))
     for index in 0 ..< topicCount {
         hub.subscribe(crowd, to: "t\(index)")
     }
-    let leaver = hub.register(discard)
+    let leaver = try #require(hub.register(discard))
     for topic in ["t0", "t1", "t2"] {
         hub.subscribe(leaver, to: topic)
     }
@@ -74,9 +82,9 @@ func removalCostIsIndependentOfTopicCount(topicCount: Int) {
 
 /// The reverse index must be kept in step by `unsubscribe` too, or a later `remove` under-probes.
 @Test("unsubscribe retires the reverse-index entry as well as the membership")
-func unsubscribeUpdatesBothIndexes() {
-    let hub = WebSocketHub()
-    let token = hub.register(discard)
+func unsubscribeUpdatesBothIndexes() throws {
+    let hub = WebSocketHub(limits: unbounded)
+    let token = try #require(hub.register(discard))
     hub.subscribe(token, to: "a")
     hub.subscribe(token, to: "b")
     hub.unsubscribe(token, from: "a")
