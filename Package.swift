@@ -97,6 +97,7 @@ let strictSwiftSettings: [SwiftSetting] = [
         "CompressionMiddlewareTests.swift",
         "DecompressionMiddlewareTests.swift",
         "DecompressionFuzzTests.swift",
+        "DecompressionPolicyTests.swift",
         "InflateBoundsTests.swift"
     ]
 #else

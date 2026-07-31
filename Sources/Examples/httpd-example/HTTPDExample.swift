@@ -67,10 +67,14 @@ enum HTTPDExample {
         if !quiet {
             middlewares.append(AccessLogMiddleware { print("httpd-example: \($0)") })
         }
+        middlewares.append(MetricsMiddleware(metrics))  // RED signals over the whole chain
+        // Inbound: gunzip a gzip body (bomb-capped). The initializer is failable because it refuses a
+        // configuration that is not a bound; the shipped defaults are one, so this always succeeds.
+        if let decompression = DecompressionMiddleware() {
+            middlewares.append(decompression)
+        }
         middlewares.append(
             contentsOf: [
-                MetricsMiddleware(metrics),  // RED signals over the whole chain (outermost timing)
-                DecompressionMiddleware(),  // inbound: gunzip a gzip body (bomb-capped)
                 CompressionMiddleware(),  // gzip the outgoing body
                 ServerHeaderMiddleware("httpd-example"),
                 DateHeaderMiddleware(),

@@ -42,44 +42,48 @@ struct DecompressionMiddlewareTests {
         _ body: [UInt8],
         ratio: Int = HTTPLimits.default.maxDecompressionRatio,
         maxSize: Int = HTTPLimits.default.maxDecompressedBodySize
-    ) async -> ServerResponse {
-        let middleware = DecompressionMiddleware(maxDecompressedSize: maxSize, maxRatio: ratio)
+    ) async throws -> ServerResponse {
+        // The initializer is failable: it refuses a configuration that is not a bound. Every set of
+        // caps used here is a valid one, so a nil is a defect in the test, not an expected outcome.
+        let middleware = try #require(
+            DecompressionMiddleware(maxDecompressedSize: maxSize, maxRatio: ratio)
+        )
         return await middleware.respond(to: request(encoding: encoding), body: body, next: echo)
     }
 
     @Test("a gzip body is decompressed to identity, and Content-Encoding is stripped")
-    func decompressesGzip() async {
+    func decompressesGzip() async throws {
         let original = Array(String(repeating: "decompression test. ", count: 50).utf8)
         // A generous ratio so this (compressible) body is not itself rejected — the caps are exercised
         // by the bomb cases below.
-        let response = await respond("gzip", Gzip.compress(original) ?? [], ratio: 1_000)
+        let response = try await respond("gzip", Gzip.compress(original) ?? [], ratio: 1_000)
         #expect(response.body == original)
         #expect(response.head.headerFields[.contentEncoding] == nil)
         #expect(response.head.headerFields[.contentLength] == String(original.count))
     }
 
     @Test("an unsupported Content-Encoding is left untouched for the responder")
-    func unsupportedEncodingPassesThrough() async {
+    func unsupportedEncodingPassesThrough() async throws {
         let body = Array("zstd-or-whatever".utf8)
-        let response = await respond("zstd", body)
+        let response = try await respond("zstd", body)
         #expect(response.body == body)
         #expect(response.head.headerFields[.contentEncoding] == "zstd")
     }
 
     @Test("a raw deflate body is decompressed to identity (RFC 1951)")
-    func decompressesDeflate() async {
+    func decompressesDeflate() async throws {
         let original = Array(String(repeating: "deflate test. ", count: 50).utf8)
         let coded = compress(original, using: COMPRESSION_ZLIB)
-        let response = await respond("deflate", coded, ratio: 1_000)
+        let response = try await respond("deflate", coded, ratio: 1_000)
         #expect(response.body == original)
         #expect(response.head.headerFields[.contentEncoding] == nil)
     }
 
     @Test("a Brotli body is decompressed to identity (RFC 7932)")
-    func decompressesBrotli() async {
+    func decompressesBrotli() async throws {
         let original = Array(String(repeating: "brotli test. ", count: 50).utf8)
         let coded = compress(original, using: COMPRESSION_BROTLI)
-        let response = await respond("br", coded, ratio: 1_000)
+        let response = try await respond("br", coded, ratio: 1_000)
         #expect(response.body == original)
         #expect(response.head.headerFields[.contentEncoding] == nil)
     }
@@ -93,7 +97,7 @@ struct DecompressionMiddlewareTests {
         named.append(contentsOf: Array("file.txt".utf8))
         named.append(0)
         named.append(contentsOf: plain[10...])
-        #expect(await respond("gzip", named, ratio: 1_000).body == original)
+        #expect(try await respond("gzip", named, ratio: 1_000).body == original)
     }
 
     @Test("a gzip member with a corrupt CRC is rejected, not mis-decoded (RFC 1952)")
@@ -101,38 +105,38 @@ struct DecompressionMiddlewareTests {
         let original = Array("integrity matters".utf8)
         var corrupt = try #require(Gzip.compress(original))
         corrupt[corrupt.count - 8] ^= 0xff  // flip a CRC-32 trailer byte
-        #expect(await respond("gzip", corrupt, ratio: 1_000).head.status == .contentTooLarge)
+        #expect(try await respond("gzip", corrupt, ratio: 1_000).head.status == .contentTooLarge)
     }
 
     @Test("a body with no Content-Encoding is left untouched")
-    func noEncodingPassesThrough() async {
+    func noEncodingPassesThrough() async throws {
         let body = Array("plain identity body".utf8)
-        #expect(await respond(nil, body).body == body)
+        #expect(try await respond(nil, body).body == body)
     }
 
     @Test("an empty gzip-labelled body passes straight through")
-    func emptyBodyPassesThrough() async {
-        let response = await respond("gzip", [])
+    func emptyBodyPassesThrough() async throws {
+        let response = try await respond("gzip", [])
         #expect(response.body.isEmpty)
         #expect(response.head.status == .ok)
     }
 
     @Test("a highly-compressible body over the ratio cap is 413, not a buffered bomb")
-    func bombOverRatioRejected() async {
+    func bombOverRatioRejected() async throws {
         let gzipped = Gzip.compress([UInt8](repeating: 0, count: 100_000)) ?? []
-        #expect(await respond("gzip", gzipped).head.status == .contentTooLarge)
+        #expect(try await respond("gzip", gzipped).head.status == .contentTooLarge)
     }
 
     @Test("a body past the absolute decompressed-size cap is 413")
-    func bombOverAbsoluteCapRejected() async {
+    func bombOverAbsoluteCapRejected() async throws {
         let gzipped = Gzip.compress([UInt8](repeating: 0x41, count: 4_096)) ?? []
-        let response = await respond("gzip", gzipped, ratio: 1_000_000, maxSize: 64)
+        let response = try await respond("gzip", gzipped, ratio: 1_000_000, maxSize: 64)
         #expect(response.head.status == .contentTooLarge)
     }
 
     @Test("a malformed gzip member (bad magic) is 413, never mis-decoded")
-    func malformedGzipRejected() async {
-        let response = await respond("gzip", Array("not a gzip member at all".utf8))
+    func malformedGzipRejected() async throws {
+        let response = try await respond("gzip", Array("not a gzip member at all".utf8))
         #expect(response.head.status == .contentTooLarge)
     }
 
