@@ -124,8 +124,11 @@ struct MultipartParser: ~Escapable {
 
     /// Whether the body opens with `dash-boundary`, i.e. the delimiter minus its leading CRLF.
     ///
-    /// A `while` rather than `for offset in 0 ..< count`: iterating a `Range` while borrowing a
-    /// nonescapable span heap-allocates once per iteration in an unoptimized build.
+    /// A `while` rather than `for offset in 0 ..< count`: `for-in` over a `Range` goes through
+    /// `IndexingIterator.next()`, one heap allocation per iteration in an unoptimized build. Nothing to
+    /// do with the borrowed span — it costs the same in a function that touches no span at all — and
+    /// release specializes it away entirely. What it costs is the allocation oracles that guard this
+    /// parser, which run in the unoptimized build. Do not "tidy" it back.
     private func opensWithDashBoundary() -> Bool {
         let needle = boundary.delimiter
         let dashBoundaryCount = needle.count - MultipartBoundary.crlfCount
