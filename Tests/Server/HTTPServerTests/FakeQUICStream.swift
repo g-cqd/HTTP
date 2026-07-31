@@ -118,6 +118,11 @@ final class FakeQUICStream: QUICStream, @unchecked Sendable {
         state.withLock(\.sent.count)
     }
 
+    /// The octets of each individual `send` call, in order.
+    var sends: [[UInt8]] {
+        state.withLock { $0.sent.map(\.bytes) }
+    }
+
     /// The QUIC application error codes this stream was reset with (RFC 9000 §19.4).
     var resetCodes: [UInt64] {
         state.withLock(\.resets)

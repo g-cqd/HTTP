@@ -95,7 +95,8 @@ public final class ModernQUICTransport: QUICServerTransport {
                 let connection = ModernQUICConnection(
                     connection: networkConnection,
                     peer: peer,
-                    negotiatedApplicationProtocol: advertised
+                    negotiatedApplicationProtocol: advertised,
+                    admissionTicket: ticket
                 )
                 continuation.yield(connection)
                 await connection.serve()  // blocks until the connection closes

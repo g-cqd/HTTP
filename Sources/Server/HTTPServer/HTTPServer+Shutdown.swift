@@ -18,17 +18,22 @@ extension HTTPServer {
     ///
     /// Stops accepting (the transport finishes the connection stream ``run()`` consumes) and flags a
     /// drain: each in-flight connection finishes its current exchange and closes (HTTP/1 `Connection:
-    /// close`, HTTP/2 GOAWAY, RFC 9113 §6.8). A connection that has not drained within `deadline` is
-    /// force-closed, so a stalled peer cannot hold the process open past it. Idempotent; returns
-    /// immediately when nothing is in flight.
+    /// close`, HTTP/2 GOAWAY, RFC 9113 §6.8; HTTP/3 GOAWAY on the QUIC control stream, RFC 9114 §5.2).
+    /// A connection that has not drained within `deadline` is force-closed, so a stalled peer cannot
+    /// hold the process open past it. Idempotent; returns immediately when nothing is in flight.
+    ///
+    /// QUIC connections are covered here too (audit addendum P0.5): they live in their own registry,
+    /// because a QUIC connection multiplexes streams rather than being one, and until this they were
+    /// simply invisible to the drain — an HTTP/3 peer could hold the process open past the deadline.
     public func shutdown(within deadline: Duration = .seconds(10)) async {
         guard !isShuttingDown.exchange(true, ordering: .acquiringAndReleasing) else {
             return
         }
         await transport.shutdown()
         await quicTransport?.shutdown()
+        await drainHTTP3Connections()  // GOAWAY on each live QUIC connection (RFC 9114 §5.2)
         let inFlight = activeConnections.withLock { Array($0.values) }
-        guard !inFlight.isEmpty else {
+        guard !inFlight.isEmpty || liveHTTP3ConnectionCount > 0 else {
             return  // nothing in flight — the drain is already complete
         }
         // Give in-flight connections the deadline to drain on their own, then force-close stragglers.
@@ -37,6 +42,7 @@ extension HTTPServer {
         for connection in stragglers {
             await connection.close()
         }
+        await forceCloseHTTP3Connections()
     }
 
     /// On a draining HTTP/2 connection, queues the GOAWAY exactly once (RFC 9113 §6.8).

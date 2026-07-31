@@ -20,9 +20,12 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
     let peer: TransportAddress
     let negotiatedApplicationProtocol: String?
 
-    /// The admission slot charged for this connection at accept time (audit F8); it is released when
-    /// this object is deallocated, i.e. when the connection is fully torn down.
-    private let admissionTicket: AdmissionTicket?
+    /// The admission slot charged for this connection at accept time (audit F8).
+    ///
+    /// Surfaced so the server *adopts* it rather than charging a second slot for the same peer, and
+    /// releases it promptly when the serve loop ends; `deinit` remains the backstop for a connection
+    /// that is never served (audit addendum P0.5).
+    let admissionTicket: AdmissionTicket?
 
     private let group: NWConnectionGroup
     private let queue: DispatchQueue

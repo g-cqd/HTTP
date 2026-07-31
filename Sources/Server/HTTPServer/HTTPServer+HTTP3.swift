@@ -106,6 +106,12 @@ extension HTTPServer {
         func isBlocked(_ id: QUICStreamID) -> Bool {
             connection.isBlocked(id)
         }
+
+        /// Queues the graceful-shutdown GOAWAY (RFC 9114 §5.2) and returns the actions to flush.
+        func beginGracefulShutdown() -> [HTTP3Connection.Action] {
+            connection.beginGracefulShutdown()
+            return connection.outbound()
+        }
     }
 
     /// Runs the QUIC listener: advertise `Alt-Svc` (RFC 7838), then serve each connection as HTTP/3.
@@ -118,7 +124,9 @@ extension HTTPServer {
         altSvc.withLock { $0 = "h3=\":\(quicTransport.boundPort)\"" }
         await withDiscardingTaskGroup { group in
             for await connection in connections {
-                group.addTask { await self.serveHTTP3(connection) }
+                // Charged through the same process-wide gate as a TCP connection, and released when
+                // the serve loop ends (audit addendum P0.5).
+                group.addTask { await self.acceptHTTP3(connection) }
             }
         }
     }
@@ -160,6 +168,12 @@ extension HTTPServer {
             .makeStream(
                 bufferingPolicy: .bufferingOldest(Self.http3RoutedEventBudget)
             )
+        // Visible to the drain for its whole life: GOAWAY on shutdown, forced close past the deadline
+        // (audit addendum P0.5).
+        let handle = registerHTTP3(
+            HTTP3Handle(quic: quic, registry: registry, engine: engine)
+        )
+        defer { unregisterHTTP3(handle) }
         await withDiscardingTaskGroup { group in
             group.addTask {
                 await self.drainRoutedHTTP3(

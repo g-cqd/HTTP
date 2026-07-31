@@ -22,6 +22,7 @@ final class FakeQUICConnection: QUICConnection, @unchecked Sendable {
         var opened: [FakeQUICStream] = []
         var nextServerUniID: UInt64 = 3  // RFC 9000 §2.1 — server-initiated unidirectional
         var closeCodes: [UInt64] = []
+        var ticket: AdmissionTicket?
     }
 
     private let state = Mutex(State())
@@ -35,6 +36,16 @@ final class FakeQUICConnection: QUICConnection, @unchecked Sendable {
 
     deinit {
         // No teardown beyond ARC.
+    }
+
+    /// The admission slot a charging listener took for this connection, for the server to adopt.
+    var admissionTicket: AdmissionTicket? {
+        state.withLock(\.ticket)
+    }
+
+    /// Attaches the slot a charging listener charged before yielding this connection.
+    func adopt(_ ticket: AdmissionTicket) {
+        state.withLock { $0.ticket = ticket }
     }
 
     /// Hands a peer-initiated stream to the server runtime.

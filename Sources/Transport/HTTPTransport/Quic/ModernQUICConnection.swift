@@ -20,6 +20,12 @@ final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
     let peer: TransportAddress
     let negotiatedApplicationProtocol: String?
 
+    /// The admission slot charged for this connection at accept time (audit F8).
+    ///
+    /// Surfaced so the server adopts it rather than charging a second slot for the same peer; the
+    /// listener handler's own `defer` release remains the backstop (audit addendum P0.5).
+    let admissionTicket: AdmissionTicket?
+
     private let connection: Network.NetworkConnection<Network.QUIC>
     private let inbound: AsyncStream<any QUICStream>
     private let continuation: AsyncStream<any QUICStream>.Continuation
@@ -28,11 +34,13 @@ final class ModernQUICConnection: QUICConnection, @unchecked Sendable {
     init(
         connection: Network.NetworkConnection<Network.QUIC>,
         peer: TransportAddress,
-        negotiatedApplicationProtocol: String?
+        negotiatedApplicationProtocol: String?,
+        admissionTicket: AdmissionTicket? = nil
     ) {
         self.connection = connection
         self.peer = peer
         self.negotiatedApplicationProtocol = negotiatedApplicationProtocol
+        self.admissionTicket = admissionTicket
         (self.inbound, self.continuation) = AsyncStream.makeStream()
     }
 
