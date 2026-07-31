@@ -57,6 +57,14 @@ struct MultipartParser {
     /// Bytes the parts built so far will retain, charged against ``MultipartLimits/maxRetainedBytes``.
     private var retained: Int
 
+    /// Byte comparisons the delimiter matcher has performed — the complexity oracle for the tests.
+    ///
+    /// Knuth-Morris-Pratt guarantees at most `2 × body` of them: the automaton state rises by at most
+    /// one per byte read and every retreat strictly lowers it, so retreats can never outnumber reads.
+    /// Asserting that bound is a property of the algorithm rather than of the machine, which is why the
+    /// linearity test is deterministic instead of a wall-clock ratio that would flake under load.
+    private(set) var byteComparisons: Int
+
     /// Creates a parser over `body`, splitting it on `boundary` under `limits`.
     init(body: [UInt8], boundary: MultipartBoundary, limits: MultipartLimits) {
         self.body = body
@@ -64,6 +72,7 @@ struct MultipartParser {
         self.limits = limits
         self.cursor = 0
         self.retained = 0
+        self.byteComparisons = 0
     }
 
     /// Parses the body into its parts in order, or nil when it is malformed or breaches ``limits``.
@@ -124,16 +133,44 @@ struct MultipartParser {
 
     /// Scans forward from ``cursor`` for the next syntactically valid delimiter, or nil if none remains.
     ///
+    /// A Knuth-Morris-Pratt scan: each body byte is loaded exactly once and, on a mismatch, the
+    /// automaton retreats through ``MultipartBoundary/failure`` instead of the text rewinding to the
+    /// candidate's start. That bounds the whole scan at `2 × body` byte comparisons however many partial
+    /// boundary prefixes the peer plants, *unconditionally* — a naive rescan happens to be linear here
+    /// too, but only because `bchars` excludes CR, which is a validation policy rather than a property
+    /// of the search (CWE-407).
+    ///
     /// A `CRLF "--" boundary` occurrence whose suffix fails ``delimiter(startingAt:suffixFrom:)`` is
-    /// ordinary part content, so the scan continues past it rather than splitting there.
+    /// ordinary part content, so the scan resumes from the automaton state it has already reached
+    /// rather than restarting — the reason a flood of junk-suffixed delimiters is linear too.
     private mutating func nextDelimiter() -> Delimiter? {
-        while let start = firstIndex(ofDelimiterFrom: cursor) {
-            cursor = start + boundary.delimiter.count
-            if let matched = delimiter(startingAt: start, suffixFrom: cursor) {
+        let needle = boundary.delimiter
+        var index = cursor
+        var state = 0
+        while index < body.count {
+            let byte = body[index]
+            index += 1
+            while true {
+                byteComparisons += 1
+                if byte == needle[state] {
+                    state += 1
+                    break
+                }
+                if state == 0 {
+                    break
+                }
+                state = Int(boundary.failure[state])
+            }
+            guard state == needle.count else {
+                continue
+            }
+            if let matched = delimiter(startingAt: index - needle.count, suffixFrom: index) {
                 cursor = matched.contentStart
                 return matched
             }
+            state = Int(boundary.failure[state])
         }
+        cursor = body.count
         return nil
     }
 
@@ -212,27 +249,6 @@ struct MultipartParser {
             if body[index] == Self.cr, body[index + 1] == Self.lf, body[index + 2] == Self.cr,
                 body[index + 3] == Self.lf
             {
-                return index
-            }
-            index += 1
-        }
-        return nil
-    }
-
-    /// The offset of the first `CRLF "--" boundary` occurrence at or after `start`, or nil.
-    private func firstIndex(ofDelimiterFrom start: Int) -> Int? {
-        let needle = boundary.delimiter
-        guard body.count >= needle.count else {
-            return nil
-        }
-        var index = max(0, start)
-        let last = body.count - needle.count
-        while index <= last {
-            var matched = 0
-            while matched < needle.count, body[index + matched] == needle[matched] {
-                matched += 1
-            }
-            if matched == needle.count {
                 return index
             }
             index += 1

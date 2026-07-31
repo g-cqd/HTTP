@@ -28,6 +28,19 @@ struct MultipartBoundary {
     /// `CRLF "--" boundary` — the delimiter that precedes every part (RFC 2046 §5.1.1).
     let delimiter: [UInt8]
 
+    /// The Knuth-Morris-Pratt failure function over ``delimiter``.
+    ///
+    /// `failure[length]` is the length of the longest proper prefix of `delimiter[0..<length]` that is
+    /// also a suffix of it, so a matcher that mismatches after `length` bytes can resume at
+    /// `failure[length]` without rewinding the text. It has `delimiter.count + 1` entries; values fit
+    /// in a byte because the delimiter is at most 74 bytes.
+    ///
+    /// For any boundary this type accepts the table is entirely zero — `bchars` excludes CR, so the
+    /// delimiter's leading CR cannot recur and the needle has no proper border. It is still computed
+    /// rather than assumed: the matcher's linearity then rests on the algorithm, not on the character
+    /// set staying exactly as it is today.
+    let failure: [UInt8]
+
     /// The number of bytes the delimiter's leading CRLF occupies, which the opening `dash-boundary`
     /// (the first delimiter in a body without a preamble) does not carry.
     static let crlfCount = 2
@@ -51,6 +64,27 @@ struct MultipartBoundary {
             return nil
         }
         self.delimiter = bytes
+        self.failure = Self.failureTable(bytes)
+    }
+
+    /// The Knuth-Morris-Pratt failure function over `needle`, with `needle.count + 1` entries.
+    ///
+    /// Built in `O(needle.count)` by the standard construction: the table is its own matcher, extending
+    /// the current border when the next byte agrees and retreating through the already-built prefix
+    /// when it does not.
+    static func failureTable(_ needle: [UInt8]) -> [UInt8] {
+        var table = [UInt8](repeating: 0, count: needle.count + 1)
+        var border = 0
+        for index in 1 ..< max(needle.count, 1) {
+            while border > 0, needle[index] != needle[border] {
+                border = Int(table[border])
+            }
+            if needle[index] == needle[border] {
+                border += 1
+            }
+            table[index + 1] = UInt8(truncatingIfNeeded: border)
+        }
+        return table
     }
 
     /// Whether `byte` is an RFC 2046 §5.1.1 `bchars` character (`bcharsnospace` plus SP).
