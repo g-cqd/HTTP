@@ -66,7 +66,7 @@ struct DispatchPlanLifetimeTests {
 
     @Test("a plan filed for an unregistered HTTP/3 stream is dropped, not accumulated")
     func http3RegistryFilesOnlyRegisteredStreams() {
-        let registry = HTTP3StreamRegistry()
+        let registry = HTTP3StreamRegistry(mailboxByteBudget: 1 << 20)
         // Nothing registered `id`: it was reset or retired while its HEADERS were still decoding.
         registry.file(Self.plan(), for: QUICStreamID(0))
         #expect(registry.plan(for: QUICStreamID(0)) == nil)
@@ -75,7 +75,7 @@ struct DispatchPlanLifetimeTests {
 
     @Test("retiring an HTTP/3 stream drops its plan with the registry entry")
     func http3RetireDropsThePlan() {
-        let registry = HTTP3StreamRegistry()
+        let registry = HTTP3StreamRegistry(mailboxByteBudget: 1 << 20)
         let stream = FakeQUICStream(id: QUICStreamID(0), direction: .bidirectional)
         registry.register(stream)
         registry.file(Self.plan(), for: stream.id)

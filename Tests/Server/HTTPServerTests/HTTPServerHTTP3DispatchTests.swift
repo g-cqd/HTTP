@@ -109,6 +109,49 @@ struct HTTPServerHTTP3DispatchTests {
         #expect(try Self.decodeResponse(second.sentBytes).0 == "200")
     }
 
+    @Test("a QPACK-unblocked stream is woken with no further bytes on its own stream")
+    func blockedStreamIsWokenWithoutFurtherInboundBytes() async throws {
+        let handled = AsyncEventProbe<String>()
+        let server = try Self.makeStreamingServer(handled)
+        let quic = FakeQUICConnection()
+        let consumed = AsyncEventProbe<QUICStreamID>()
+
+        // The same blocked field section as above, but **without FIN** — the case audit REG-2 found.
+        // A streaming route (Phase 1.4) surfaces `requestHead` as soon as the section decodes, so the
+        // engine really does route an event to this stream while its task is parked on `receive()`.
+        // With no FIN the peer sends nothing more, so the *only* thing that can run the handler is the
+        // deposit waking the owner; before REG-2 the event sat in the mailbox until the read deadline.
+        let request = FakeQUICStream(
+            id: Self.requestStream,
+            direction: .bidirectional,
+            inbound: [(Self.headersFrame(Self.blockedFieldSection), false)],
+            consumed: consumed
+        )
+        let encoder = FakeQUICStream(
+            id: Self.encoderStream,
+            direction: .unidirectional,
+            consumed: consumed
+        )
+
+        let serving = Task { await server.serveHTTP3(quic) }
+        defer { serving.cancel() }
+        quic.accept(request)
+        quic.accept(encoder)
+        _ = try await consumed.wait(forAtLeast: 1)
+        encoder.deliver([0x02] + Self.insertAuthority, fin: false)
+
+        // No further bytes are delivered on the request stream before this boundary.
+        _ = try await handled.wait(forAtLeast: 1)
+        #expect(handled.count == 1)
+        #expect(request.resetCodes.isEmpty)  // it was woken, not reaped by its read deadline
+
+        // And the response lands on the request stream once the body ends.
+        request.deliver([], fin: true)
+        try await Self.settle { request.sendCount > 0 }
+        #expect(try Self.decodeResponse(request.sentBytes).0 == "200")
+        #expect(encoder.sendCount == 0)
+    }
+
     // MARK: - Fixtures
 
     /// A responder echoing the request authority, recording each invocation on `probe`.
@@ -126,6 +169,26 @@ struct HTTPServerHTTP3DispatchTests {
                 TransportConfiguration(port: 0, backbone: .fake)
             ),
             responder: responder
+        )
+    }
+
+    /// A server whose one route consumes its body as a stream (Phase 1.4), so the engine surfaces a
+    /// `requestHead` for it as soon as the QPACK section decodes — without waiting for FIN.
+    private static func makeStreamingServer(
+        _ probe: AsyncEventProbe<String>
+    ) throws -> HTTPServer<ContinuousClock> {
+        let router = Router {
+            Route.get("/") { request, _, _ in
+                probe.record(request.path)
+                return .text("ok")
+            }
+            .streamingBody()
+        }
+        return HTTPServer(
+            transport: try TransportFactory.make(
+                TransportConfiguration(port: 0, backbone: .fake)
+            ),
+            responder: router
         )
     }
 

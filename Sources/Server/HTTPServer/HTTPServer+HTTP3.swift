@@ -105,6 +105,24 @@ extension HTTPServer {
             connection.isBlocked(id)
         }
 
+        /// Retires the engine state behind `id` and returns the actions to flush (audit REG-3).
+        ///
+        /// The engine is sans-I/O: resetting a QUIC stream on the wire tells it nothing, so without
+        /// this call it keeps the stream's parser buffer, its decoded request, its buffered body, and
+        /// its slot in the SETTINGS_QPACK_BLOCKED_STREAMS allowance (RFC 9204 §2.1.2) for the life of
+        /// the connection. ``HTTP3Connection/resetStream(_:errorCode:)`` is the entry point rather than
+        /// a fresh partial cleanup precisely because it also charges the RFC 9114 §8.1 rolling reset
+        /// budget — a stream the peer abandons has to cost it something, or repeating it is free.
+        func retire(_ id: QUICStreamID, errorCode: UInt64) -> [HTTP3Connection.Action] {
+            _ = connection.resetStream(id, errorCode: errorCode)
+            return connection.outbound()
+        }
+
+        /// What the engine still retains for this connection (audit REG-3 observability).
+        func census() -> HTTP3ConnectionCensus {
+            connection.census
+        }
+
         /// Queues the graceful-shutdown GOAWAY (RFC 9114 §5.2) and returns the actions to flush.
         func beginGracefulShutdown() -> [HTTP3Connection.Action] {
             connection.beginGracefulShutdown()
@@ -135,12 +153,12 @@ extension HTTPServer {
     /// never stalls request serving), then serves each inbound stream until the connection closes.
     func serveHTTP3(_ quic: any QUICConnection) async {
         // The per-connection dispatcher (audit addendum P0.3): the registry routes engine output by
-        // stream id, and `routed` carries the events a stream task produced for a *different* stream.
-        // Bounded — the engine only crosses streams when it unblocks a QPACK-blocked section, and it
-        // caps those at `SETTINGS_QPACK_BLOCKED_STREAMS` (RFC 9204 §2.1.2), well under this budget.
+        // stream id and holds the per-stream mailbox the routed events wait in. Its byte budget is the
+        // connection's own buffered-body ceiling, which is what already bounds a single engine hand-off
+        // — so the mailbox bounds *accumulation* on top of it rather than restating it (audit REG-1).
         // It is built FIRST because it is also where each stream's ``DispatchPlan`` is filed, and the
         // resolver below closes over it.
-        let registry = HTTP3StreamRegistry()
+        let registry = HTTP3StreamRegistry(mailboxByteBudget: limits.maxBodySize)
         // Resolve the matched route from each request head, before its DATA is buffered (Phase 1.2 /
         // 1.4), and file the resulting plan against the stream that will dispatch it. `snapshot` is
         // read per head, not per connection: an h3 connection outlives many reloads, so pinning it here
@@ -167,17 +185,20 @@ extension HTTPServer {
             await self.holdServerStreams(from: initialActions, engine: engine, on: quic)
         }
         defer { serverStreams.cancel() }
-        let (routed, continuation) = AsyncStream<HTTP3RoutedEvents>
-            .makeStream(
-                bufferingPolicy: .bufferingOldest(Self.http3RoutedEventBudget)
-            )
+        // The dispatcher's ticket channel: stream ids only, one outstanding per stream, so it needs no
+        // drop policy (audit REG-1). The registry holds the continuation, because deciding between
+        // waking a stream's own task and ticketing this dispatcher is its job, not its callers'.
+        let (tickets, continuation) = AsyncStream<QUICStreamID>.makeStream()
+        registry.attachDispatcher(continuation)
         // Visible to the drain for its whole life: GOAWAY on shutdown, forced close past the deadline
         // (audit addendum P0.5).
         // ONE read-deadline watchdog for all of this connection's request streams (P0.5) — the same
         // one-task-per-connection shape the HTTP/1.1 idle watchdog uses, not one task per stream.
         let deadlines = HTTP3StreamDeadlines<C.Instant>()
         let watchdog = Task {
-            await self.runHTTP3DeadlineWatchdog(deadlines: deadlines, registry: registry)
+            await self.runHTTP3DeadlineWatchdog(
+                deadlines: deadlines, registry: registry, engine: engine, quic: quic
+            )
         }
         defer { watchdog.cancel() }
         let handle = registerHTTP3(
@@ -187,7 +208,7 @@ extension HTTPServer {
         await withDiscardingTaskGroup { group in
             group.addTask {
                 await self.drainRoutedHTTP3(
-                    routed,
+                    tickets,
                     registry: registry,
                     engine: engine,
                     quic: quic,
@@ -204,24 +225,17 @@ extension HTTPServer {
                                 engine: engine,
                                 quic: quic,
                                 registry: registry,
-                                routed: continuation,
                                 deadlines: deadlines
                             )
                         }
                     }
                 }
                 // Every stream task has ended, so nothing can route any more: end the channel and let
-                // the dispatcher finish its in-flight batches.
+                // the dispatcher finish its in-flight streams.
                 continuation.finish()
             }
         }
     }
-
-    /// The most routed event batches a connection may hold before the oldest are dropped.
-    ///
-    /// Sized well above the engine's blocked-stream cap (RFC 9204 §2.1.2) so a conforming peer never
-    /// reaches it; it is a CWE-770 bound, not a working limit.
-    static var http3RoutedEventBudget: Int { 256 }
 
     /// Opens the server's unidirectional streams (writing each §6.2 preamble — the type byte, plus
     /// SETTINGS on the control stream) and holds them open until this connection's serving is cancelled.
@@ -255,7 +269,6 @@ extension HTTPServer {
         engine: Engine,
         quic: any QUICConnection,
         registry: HTTP3StreamRegistry,
-        routed: AsyncStream<HTTP3RoutedEvents>.Continuation,
         deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         var webSocket: WebSocketConnection?
@@ -265,62 +278,56 @@ extension HTTPServer {
         // A stream that opens and then stalls is bounded from its first read on (P0.5): the header
         // budget until something decodes, the idle budget between frames after that.
         var phase = HTTP3StreamPhase.header
+        // This loop waits on BOTH of the stream's work sources at once (audit REG-2): a reader task
+        // owns `stream.receive()` and feeds the inbox one chunk at a time, and the dispatcher signals
+        // the same inbox when a QPACK unblock (RFC 9204 §2.1.2) files routed events in our mailbox.
+        // Awaiting `receive()` alone parked an unblocked `fin:false` stream until its read deadline.
+        let inbox = HTTP3StreamInbox()
+        let reader = Task { await Self.pumpHTTP3Inbound(stream, into: inbox) }
+        defer {
+            reader.cancel()
+            inbox.close()
+        }
+        registry.attach(inbox, to: stream.id)
         armHTTP3(stream.id, phase: phase, on: deadlines)
         defer { deadlines.disarm(stream.id) }
-        while let chunk = try? await stream.receive() {
-            deadlines.disarm(stream.id)  // the read landed; handler time is not a read deadline
-            let (produced, actions) = await engine.receive(stream.id, chunk.bytes, fin: chunk.fin)
-            await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
-            // Engine output is addressed by stream id, not by which stream's bytes provoked it: hand
-            // every foreign-id event to the connection dispatcher and keep only our own (P0.3). The
-            // mailbox carries back the ones another task routed *to* us while we were parked.
-            let own =
-                registry.takeMailbox(stream.id)
-                + partitionHTTP3Events(produced, owner: stream.id, routed: routed)
-            for (index, event) in own.enumerated() {
-                switch event {
-                    case .request(let id, let request, let body):
-                        await answerHTTP3Request(
-                            id,
-                            request: request,
-                            body: body,
-                            stream: stream,
-                            engine: engine,
-                            quic: quic,
-                            registry: registry
-                        )
-                    case .requestHead(let id, let request):
-                        // A streaming route (Phase 1.4) takes over this stream for its lifetime: feed the
-                        // body off the wire into the handler's stream, then send its response.
-                        guard registry.claim(id) != nil else {
-                            return
-                        }
-                        await serveHTTP3StreamingRequest(
-                            id,
-                            request: request,
-                            buffered: Self.trailingBody(of: own, after: index),
-                            stream: stream,
-                            engine: engine,
-                            quic: quic,
-                            registry: registry,
-                            deadlines: deadlines
-                        )
-                        return
-                    case .requestBodyChunk, .requestEnd:
-                        break  // consumed by serveHTTP3StreamingRequest — never standalone here
-                    case .extendedConnect, .tunnelData, .tunnelClosed:
-                        await handleHTTP3TunnelEvent(
-                            event,
-                            stream: stream,
-                            engine: engine,
-                            webSocket: &webSocket,
-                            tunnelHandler: &tunnelHandler
-                        )
-                    case .goAway:
-                        break
-                }
+        reads: while true {
+            let own: [HTTP3Connection.Event]
+            var fin = false
+            switch await inbox.next() {
+                case .ended:
+                    break reads
+                case .routed:
+                    // Woken by a deposit, not by the wire: everything owed to us is in the mailbox.
+                    own = registry.takeMailbox(stream.id)
+                case .inbound(let bytes, let chunkFin):
+                    fin = chunkFin
+                    // The read landed; handler time is not charged to a read deadline.
+                    deadlines.disarm(stream.id)
+                    let (produced, actions) = await engine.receive(stream.id, bytes, fin: chunkFin)
+                    await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
+                    // Engine output is addressed by stream id, not by which stream's bytes provoked it:
+                    // hand every foreign-id event to the connection dispatcher and keep only our own
+                    // (P0.3). The mailbox carries back the ones another task routed *to* us.
+                    own =
+                        registry.takeMailbox(stream.id)
+                        + partitionHTTP3Events(produced, owner: stream.id, registry: registry)
             }
-            if chunk.fin || webSocket?.isClosing == true {
+            let handedOff = await applyHTTP3StreamEvents(
+                own,
+                stream: stream,
+                inbox: inbox,
+                engine: engine,
+                quic: quic,
+                registry: registry,
+                deadlines: deadlines,
+                webSocket: &webSocket,
+                tunnelHandler: &tunnelHandler
+            )
+            if handedOff {
+                return
+            }
+            if fin || webSocket?.isClosing == true {
                 break
             }
             // Anything decoded means the head is behind us: the next read is body/tunnel progress.

@@ -43,7 +43,9 @@ extension HTTPServer {
     /// serving is cancelled.
     func runHTTP3DeadlineWatchdog(
         deadlines: HTTP3StreamDeadlines<C.Instant>,
-        registry: HTTP3StreamRegistry
+        registry: HTTP3StreamRegistry,
+        engine: Engine,
+        quic: any QUICConnection
     ) async {
         while !Task.isCancelled {
             guard let next = deadlines.earliest() else {
@@ -54,21 +56,36 @@ extension HTTPServer {
             if clock.now < next {
                 try? await clock.sleep(until: next, tolerance: nil)
             }
-            reapLapsedHTTP3(deadlines: deadlines, registry: registry)
+            await reapLapsedHTTP3(
+                deadlines: deadlines, registry: registry, engine: engine, quic: quic
+            )
         }
     }
 
-    /// Resets each stream whose deadline has passed, untracking it.
+    /// Resets each stream whose deadline has passed, untracking it everywhere.
     ///
     /// The reset is what unblocks the stream's parked `receive` — a QUIC stream reset tears the
     /// underlying transport stream down, so its task unwinds instead of staying parked forever.
+    ///
+    /// It goes through ``resetHTTP3Stream(_:errorCode:registry:engine:quic:)`` so the *engine* is
+    /// retired too (audit REG-3). Resetting only the writer and the registry entry left the sans-I/O
+    /// engine holding every reaped stream's parser, QPACK and body state, and charged nothing against
+    /// the RFC 9114 §8.1 reset budget — so a peer could repeat the abandonment for free and grow the
+    /// connection's retained state without bound. On the deadline path of all places.
     private func reapLapsedHTTP3(
         deadlines: HTTP3StreamDeadlines<C.Instant>,
-        registry: HTTP3StreamRegistry
-    ) {
+        registry: HTTP3StreamRegistry,
+        engine: Engine,
+        quic: any QUICConnection
+    ) async {
         for lapse in deadlines.takeLapsed(at: clock.now) {
-            registry.writer(for: lapse.streamID)?.reset(errorCode: lapse.phase.errorCode)
-            registry.retire(lapse.streamID)
+            await resetHTTP3Stream(
+                lapse.streamID,
+                errorCode: lapse.phase.errorCode,
+                registry: registry,
+                engine: engine,
+                quic: quic
+            )
         }
     }
 }
