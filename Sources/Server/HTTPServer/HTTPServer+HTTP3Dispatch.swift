@@ -100,13 +100,18 @@ extension HTTPServer {
         _ routed: AsyncStream<HTTP3RoutedEvents>,
         registry: HTTP3StreamRegistry,
         engine: Engine,
-        quic: any QUICConnection
+        quic: any QUICConnection,
+        deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         await withDiscardingTaskGroup { group in
             for await batch in routed {
                 group.addTask {
                     await self.serveRoutedHTTP3(
-                        batch, registry: registry, engine: engine, quic: quic
+                        batch,
+                        registry: registry,
+                        engine: engine,
+                        quic: quic,
+                        deadlines: deadlines
                     )
                 }
             }
@@ -119,7 +124,8 @@ extension HTTPServer {
         _ batch: HTTP3RoutedEvents,
         registry: HTTP3StreamRegistry,
         engine: Engine,
-        quic: any QUICConnection
+        quic: any QUICConnection,
+        deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         switch registry.deposit(batch.events, for: batch.streamID) {
             case .queued, .unknown:
@@ -132,7 +138,12 @@ extension HTTPServer {
                 registry.retire(batch.streamID)
             case .orphaned(let stream):
                 await serveOrphanedHTTP3(
-                    batch, stream: stream, registry: registry, engine: engine, quic: quic
+                    batch,
+                    stream: stream,
+                    registry: registry,
+                    engine: engine,
+                    quic: quic,
+                    deadlines: deadlines
                 )
         }
     }
@@ -144,7 +155,8 @@ extension HTTPServer {
         stream: any QUICStream,
         registry: HTTP3StreamRegistry,
         engine: Engine,
-        quic: any QUICConnection
+        quic: any QUICConnection,
+        deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         for (index, event) in batch.events.enumerated() {
             switch event {
@@ -170,7 +182,8 @@ extension HTTPServer {
                         stream: stream,
                         engine: engine,
                         quic: quic,
-                        registry: registry
+                        registry: registry,
+                        deadlines: deadlines
                     )
                     return
                 case .extendedConnect, .tunnelData, .tunnelClosed:

@@ -35,7 +35,8 @@ extension HTTPServer {
         stream: any QUICStream,
         engine: Engine,
         quic: any QUICConnection,
-        registry: HTTP3StreamRegistry
+        registry: HTTP3StreamRegistry,
+        deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         let handoff = AsyncHandoff()
         let context = RequestContext(quic: quic, request: request)
@@ -53,7 +54,13 @@ extension HTTPServer {
         for chunk in buffered.chunks {
             await handoff.offer(chunk)
         }
+        // The body feed is a read loop of its own, so it carries the same idle bound (P0.5): a peer
+        // that sends HEADERS and then stalls mid-upload no longer holds the stream open forever. The
+        // watchdog resets the stream on a lapse, which is what unblocks the receive below.
+        defer { deadlines.disarm(id) }
+        armHTTP3(id, phase: .body, on: deadlines)
         while !ended, let chunk = try? await stream.receive() {
+            deadlines.disarm(id)  // the read landed; handler time is not a read deadline
             let (produced, actions) = await engine.receive(id, chunk.bytes, fin: chunk.fin)
             await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
             for event in produced where Self.owningStream(of: event) == id {
@@ -67,6 +74,7 @@ extension HTTPServer {
             if chunk.fin {
                 break
             }
+            armHTTP3(id, phase: .body, on: deadlines)
         }
         guard ended else {
             await abandonTruncatedHTTP3Request(

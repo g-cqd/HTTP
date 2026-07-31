@@ -170,6 +170,13 @@ extension HTTPServer {
             )
         // Visible to the drain for its whole life: GOAWAY on shutdown, forced close past the deadline
         // (audit addendum P0.5).
+        // ONE read-deadline watchdog for all of this connection's request streams (P0.5) — the same
+        // one-task-per-connection shape the HTTP/1.1 idle watchdog uses, not one task per stream.
+        let deadlines = HTTP3StreamDeadlines<C.Instant>()
+        let watchdog = Task {
+            await self.runHTTP3DeadlineWatchdog(deadlines: deadlines, registry: registry)
+        }
+        defer { watchdog.cancel() }
         let handle = registerHTTP3(
             HTTP3Handle(quic: quic, registry: registry, engine: engine)
         )
@@ -177,7 +184,11 @@ extension HTTPServer {
         await withDiscardingTaskGroup { group in
             group.addTask {
                 await self.drainRoutedHTTP3(
-                    routed, registry: registry, engine: engine, quic: quic
+                    routed,
+                    registry: registry,
+                    engine: engine,
+                    quic: quic,
+                    deadlines: deadlines
                 )
             }
             group.addTask {
@@ -190,7 +201,8 @@ extension HTTPServer {
                                 engine: engine,
                                 quic: quic,
                                 registry: registry,
-                                routed: continuation
+                                routed: continuation,
+                                deadlines: deadlines
                             )
                         }
                     }
@@ -240,13 +252,20 @@ extension HTTPServer {
         engine: Engine,
         quic: any QUICConnection,
         registry: HTTP3StreamRegistry,
-        routed: AsyncStream<HTTP3RoutedEvents>.Continuation
+        routed: AsyncStream<HTTP3RoutedEvents>.Continuation,
+        deadlines: HTTP3StreamDeadlines<C.Instant>
     ) async {
         var webSocket: WebSocketConnection?
         // The route handler resolved at this stream's Extended CONNECT (RFC 9220); tunnel DATA carries
         // only a stream id, so the handler is held here for the stream's lifetime rather than re-resolved.
         var tunnelHandler: (any WebSocketHandler)?
+        // A stream that opens and then stalls is bounded from its first read on (P0.5): the header
+        // budget until something decodes, the idle budget between frames after that.
+        var phase = HTTP3StreamPhase.header
+        armHTTP3(stream.id, phase: phase, on: deadlines)
+        defer { deadlines.disarm(stream.id) }
         while let chunk = try? await stream.receive() {
+            deadlines.disarm(stream.id)  // the read landed; handler time is not a read deadline
             let (produced, actions) = await engine.receive(stream.id, chunk.bytes, fin: chunk.fin)
             await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
             // Engine output is addressed by stream id, not by which stream's bytes provoked it: hand
@@ -280,7 +299,8 @@ extension HTTPServer {
                             stream: stream,
                             engine: engine,
                             quic: quic,
-                            registry: registry
+                            registry: registry,
+                            deadlines: deadlines
                         )
                         return
                     case .requestBodyChunk, .requestEnd:
@@ -300,6 +320,9 @@ extension HTTPServer {
             if chunk.fin || webSocket?.isClosing == true {
                 break
             }
+            // Anything decoded means the head is behind us: the next read is body/tunnel progress.
+            if !own.isEmpty { phase = .body }
+            armHTTP3(stream.id, phase: phase, on: deadlines)
         }
         // Lifecycle hook: the stream ended (FIN / EOF / reset) with the tunnel still open — every
         // ending funnels through exactly one `onClose` (the in-loop paths clear `tunnelHandler`).

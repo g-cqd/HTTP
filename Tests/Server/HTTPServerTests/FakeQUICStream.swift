@@ -104,8 +104,11 @@ final class FakeQUICStream: QUICStream, @unchecked Sendable {
         state.withLock { $0.sent.append((bytes, fin)) }
     }
 
+    /// Records the reset and tears the inbound side down, as a real RESET_STREAM does: the legacy
+    /// backbone's `reset` cancels the underlying `NWConnection`, so a parked `receive` unblocks.
     func reset(errorCode: UInt64) {
         state.withLock { $0.resets.append(errorCode) }
+        finishInbound()
     }
 
     /// Every octet written on this stream, concatenated in send order.
