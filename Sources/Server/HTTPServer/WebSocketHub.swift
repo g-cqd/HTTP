@@ -7,7 +7,7 @@
 //  per-connection send channel the server drives. The server registers a sink when a hub-backed
 //  WebSocket upgrades and removes it on disconnect; a handler publishes via the hub it captured.
 //
-//  This used to be one `actor` holding `[String: Set<UInt64>]` (2026-07-31 audit, finding 16). Two of
+//  This used to be one `actor` holding `[String: Set<UInt64>]` (2026-07-31 audit, finding 16). Three of
 //  that shape's defects are addressed here:
 //
 //    • Every topic, subscription, publication and removal serialized on ONE executor, so a hub was a
@@ -19,6 +19,11 @@
 //      storm against a hub with a large topic space was therefore a CPU-exhaustion amplifier (CWE-407,
 //      algorithmic complexity). A reverse token → topics index makes removal proportional to the
 //      connection's own subscriptions instead.
+//    • `publish` invoked every sink while holding actor isolation, so publication latency serialized
+//      against every concurrent register/subscribe/remove — and one connection with a wedged send
+//      channel froze fan-out on every unrelated topic in the process. Sinks are now snapshotted under
+//      the lock and invoked outside it; what that costs in atomicity is documented on the type rather
+//      than papered over.
 //
 
 internal import HTTPConcurrency
@@ -40,7 +45,23 @@ public import WebSocket
 /// | ``subscribe(_:to:)`` | subscriber, then topic (nested) |
 /// | ``unsubscribe(_:from:)`` | subscriber, then topic (nested) |
 /// | ``remove(_:)`` | subscriber, released, then each held topic in turn |
-/// | ``publish(_:to:)`` | topic only |
+/// | ``publish(_:to:)`` | topic only, and only to snapshot — never across delivery |
+///
+/// ## Delivery is not atomic with membership
+///
+/// ``publish(_:to:)`` snapshots the topic's sinks under the topic shard's lock and then invokes them
+/// *outside* it. That is deliberate: a sink is application-supplied — it may block on a full send
+/// channel, or re-enter the hub — and running it under the lock lets one wedged connection serialize
+/// every unrelated topic, which is the defect this type was rewritten to remove.
+///
+/// The consequence is stated rather than hidden: **a sink registered, subscribed, unsubscribed or
+/// removed concurrently with an in-flight publish may or may not receive that message.** Both
+/// properties cannot be held at once after delivery leaves the lock, and claiming an atomicity the
+/// type does not have would be worse than documenting the race. In particular a removed connection's
+/// sink can still be invoked once, from a snapshot taken just before the removal; a sink must
+/// therefore tolerate being called after ``remove(_:)`` (the server's does — it deposits into a
+/// per-connection mailbox nobody is reading any more). A subscriber that must not miss a message
+/// needs an acknowledged, replayable channel, not a fan-out hub.
 public final class WebSocketHub: Sendable {
     /// A per-connection delivery channel: a closure that sends one ``WebSocketMessage`` to a connection.
     public typealias Sink = @Sendable (WebSocketMessage) -> Void
@@ -128,14 +149,17 @@ public final class WebSocketHub: Sendable {
     }
 
     /// Publishes `message` to every connection subscribed to `topic` (RFC 6455 §5.6 fan-out).
+    ///
+    /// Snapshot under the lock, deliver outside it. The snapshot costs one array allocation per
+    /// publish, which buys the property that a slow, blocking, or hub-re-entrant sink cannot stall an
+    /// unrelated topic — see the type's *Delivery is not atomic with membership* note for what the
+    /// snapshot deliberately does **not** promise.
     public func publish(_ message: WebSocketMessage, to topic: String) {
-        topics.withLock(forKey: topic) { table in
-            guard let members = table[topic] else {
-                return
-            }
-            for sink in members.values {
-                sink(message)
-            }
+        let sinks = topics.withLock(forKey: topic) { table in
+            table[topic].map { Array($0.values) } ?? []
+        }
+        for sink in sinks {
+            sink(message)
         }
     }
 
