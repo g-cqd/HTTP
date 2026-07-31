@@ -153,6 +153,38 @@ public struct HTTPLimits: Sendable, Equatable {
     /// is reset with `ENHANCE_YOUR_CALM` (RFC 9113 §7) and its siblings continue.
     public var bodyConsumptionTimeout: Duration
 
+    // MARK: HTTP/1.1 streamed request bodies (backpressure + reclaim)
+
+    /// The fixed receive window a *streamed* HTTP/1.1 chunked request body is framed inside.
+    ///
+    /// HTTP/1.1 has no flow control of its own, so the backpressure is the reader parking: the body
+    /// producer suspends until the handler takes each decoded chunk, stops calling `receive`, and the
+    /// peer's TCP window closes. This bounds what one connection holds while that happens — the wire
+    /// octets not yet framed. A Content-Length body needs no window at all (its remaining length *is*
+    /// the bound), so this applies only to the chunked coding (RFC 9112 §7.1).
+    ///
+    /// Floored by ``effectiveRequestBodyWindow`` so a maximal chunk-size / chunk-extension / trailer
+    /// line always fits: a window smaller than one line could neither frame it nor refuse it.
+    public var requestBodyWindowSize: Int
+
+    /// The largest read-buffer capacity a persistent HTTP/1.1 connection keeps between requests.
+    ///
+    /// A *buffered* request body is accumulated in that buffer, so one large upload leaves an
+    /// upload-sized allocation behind — and `removeAll(keepingCapacity:)` would then hand that peak to
+    /// every later request on the connection, for as long as the peer keeps it open. Above this
+    /// working size the storage is dropped and re-reserved instead: one allocation on the rare large
+    /// request, against unbounded per-connection retention for the common small one (CWE-401-shaped).
+    public var keepAliveBufferCapacity: Int
+
+    /// The enforced streaming chunked receive window: ``requestBodyWindowSize``, floored so a maximal
+    /// framing line plus a full read always fits.
+    ///
+    /// The floor is what makes the window deadlock-free. `readLine` refuses a chunk-size / extension /
+    /// trailer line once the unframed octets pass ``maxFieldSize``, so with strictly more room than
+    /// that the decoder always either consumes or fails closed — it can never answer "need more" to a
+    /// window that has no more to give (RFC 9112 §7.1.1, §7.1.2).
+    public var effectiveRequestBodyWindow: Int { max(requestBodyWindowSize, maxFieldSize + 16_384) }
+
     // MARK: Timeouts (Slowloris / slow-read defenses)
 
     /// Maximum time to receive a complete header section (Slowloris; → `408`).
@@ -214,6 +246,8 @@ public struct HTTPLimits: Sendable, Equatable {
         streamReceiveWindow: Int = 256 * 1_024,
         connectionReceiveWindow: Int = 1 << 20,  // 1 MiB
         bodyConsumptionTimeout: Duration = .seconds(60),
+        requestBodyWindowSize: Int = 64 * 1_024,
+        keepAliveBufferCapacity: Int = 64 * 1_024,
         headerReadTimeout: Duration = .seconds(10),
         idleTimeout: Duration = .seconds(60),
         keepAliveTimeout: Duration = .seconds(15),
@@ -243,6 +277,8 @@ public struct HTTPLimits: Sendable, Equatable {
         self.streamReceiveWindow = streamReceiveWindow
         self.connectionReceiveWindow = connectionReceiveWindow
         self.bodyConsumptionTimeout = bodyConsumptionTimeout
+        self.requestBodyWindowSize = requestBodyWindowSize
+        self.keepAliveBufferCapacity = keepAliveBufferCapacity
         self.headerReadTimeout = headerReadTimeout
         self.idleTimeout = idleTimeout
         self.keepAliveTimeout = keepAliveTimeout
@@ -268,6 +304,8 @@ public struct HTTPLimits: Sendable, Equatable {
         maxQueuedBroadcasts: 256,
         streamReceiveWindow: 1 << 20,  // 1 MiB
         connectionReceiveWindow: 8 << 20,  // 8 MiB — ≈ 160 MB/s per connection at 50 ms RTT
+        requestBodyWindowSize: 256 * 1_024,
+        keepAliveBufferCapacity: 256 * 1_024,
         maxConnectionsPerClient: 1_048_576,
         maxConnections: 1_048_576
     )
@@ -290,6 +328,8 @@ public struct HTTPLimits: Sendable, Equatable {
         streamReceiveWindow: 64 * 1_024,
         connectionReceiveWindow: 256 * 1_024,
         bodyConsumptionTimeout: .seconds(30),
+        requestBodyWindowSize: 32 * 1_024,
+        keepAliveBufferCapacity: 32 * 1_024,
         headerReadTimeout: .seconds(5),
         idleTimeout: .seconds(30),
         keepAliveTimeout: .seconds(5),
