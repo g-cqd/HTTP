@@ -21,6 +21,16 @@ extension HTTPFieldName {
     public static let upgrade = HTTPFieldName(unchecked: "upgrade")
     /// `Expect` (RFC 9110 §10.1.1) — `100-continue` lets a client await approval before a body.
     public static let expect = HTTPFieldName(unchecked: "expect")
+    /// `Forwarded` (RFC 7239 §4) — the client, protocol and interface each proxy in the chain saw.
+    ///
+    /// Trustworthy only as far back as the last hop the server itself trusts (RFC 7239 §8.1): any
+    /// party may append to it, and a direct client may author the whole field. Read it through a
+    /// trust boundary, never as a fact.
+    public static let forwarded = HTTPFieldName(unchecked: "forwarded")
+    /// `X-Forwarded-For` — the client addresses a proxy chain observed, oldest first.
+    ///
+    /// A de-facto field superseded by ``forwarded``, and carrying exactly the same trust caveat.
+    public static let xForwardedFor = HTTPFieldName(unchecked: "x-forwarded-for")
 
     // MARK: Representation metadata
 

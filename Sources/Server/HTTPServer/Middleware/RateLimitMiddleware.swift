@@ -2,57 +2,80 @@
 //  RateLimitMiddleware.swift
 //  HTTPServer
 //
-//  A per-client request-rate limiter (RFC 6585 §4 / CWE-770). Each client key gets a ``RollingWindow``
+//  A per-client request-rate limiter (RFC 6585 §4 / CWE-770). Each client gets a ``RollingWindow``
 //  budget; once the count in the current window exceeds the limit the request is refused with
 //  `429 Too Many Requests` and a `Retry-After`, without reaching the responder. Time is an injected
 //  ``MonotonicNowProvider`` (monotonic, never the wall clock), so a test pins it with no real waiting.
-//  The tracking map is Mutex-guarded and bounded: when it grows past a cap, rolled-over (idle) clients
-//  are pruned, so a flood of distinct keys cannot grow it without bound (CWE-400).
+//
+//  Two things here are load-bearing and were previously wrong.
+//
+//  *Who a client is* is now ``RateLimitIdentity`` — by default the verified transport peer, not the
+//  `Host` header. See that type for why the old default was simultaneously a starvation bug for
+//  honest clients and a free bypass for a hostile one.
+//
+//  *How many clients can be tracked* is now a hard bound rather than an aspiration. The old admit
+//  path did "if the map is full, drop the idle entries" and then inserted unconditionally; when every
+//  entry was live — precisely what a flood produces — nothing was dropped and the map grew without
+//  limit (CWE-400). The table is a ``SharedBoundedLRU`` with ``BoundedLRU/Overflow/reject``, so
+//  admission and capacity are decided together under one lock, and a client the table has no room for
+//  is refused with 429 instead of allocated for. Fail-closed on purpose: allocating on behalf of an
+//  unknown identity is the attack, and evicting instead would be worse still — it would let an
+//  attacker push a legitimate client out of the table and reset its budget at will.
 //
 
 public import HTTPConcurrency
 public import HTTPCore
-private import Synchronization
 
 /// Refuses a client that exceeds `limit` requests per window with `429 Too Many Requests` (RFC 6585).
 public struct RateLimitMiddleware: HTTPMiddleware {
-    private struct Bucket {
+    /// One client's budget: when its window started, and how much of it has been spent.
+    private struct Bucket: Sendable {
         var window: RollingWindow
         var count: Int
     }
 
-    /// Mutex-guarded tracking state (a class because `Mutex` is non-copyable; mirrors ``DateCache``).
-    private final class Store: Sendable {
-        let buckets = Mutex<[String: Bucket]>([:])
-
-        deinit {
-            // No teardown beyond ARC; the Mutex releases with the instance.
-        }
-    }
+    /// How many of the most-idle budgets an admission sweeps before giving up on making room.
+    ///
+    /// Bounded so no single request is charged an O(*n*) scan of the whole table: the sweep is
+    /// amortized across admissions, and a table of genuinely live clients simply stays full.
+    private static let reclaimScan = 16
 
     private let limit: Int
     private let intervalNanos: MonotonicNanoseconds
     private let retryAfterSeconds: Int
-    private let maxTrackedClients: Int
-    private let key: @Sendable (HTTPRequest) -> String
+    private let identity: RateLimitIdentity
     private let now: MonotonicNowProvider
-    private let store = Store()
+    private let clients: SharedBoundedLRU<String, Bucket>
 
-    /// Creates the limiter: at most `limit` requests `per` window, keyed by `key` (default: the
-    /// request authority). `maxTrackedClients` bounds the tracking map; `now` is injectable for tests.
+    /// Creates the limiter: at most `limit` requests `per` window, per ``RateLimitIdentity``.
+    ///
+    /// `maxTrackedClients` is a hard cap on the tracking table — once it is full, a client not
+    /// already in it is refused. Size it above the number of distinct clients genuinely expected
+    /// within one window, or legitimate newcomers are turned away during a flood. `shards` trades a
+    /// little memory for lock contention; `now` is injectable for tests.
     public init(
         limit: Int,
         per interval: Duration,
+        identity: RateLimitIdentity = .peerAddress(),
         maxTrackedClients: Int = 100_000,
-        key: @escaping @Sendable (HTTPRequest) -> String = { $0.effectiveAuthority ?? "" },
+        shards: Int = 8,
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         self.limit = max(1, limit)
         self.intervalNanos = interval.monotonicNanoseconds
         self.retryAfterSeconds = max(1, Int(interval.components.seconds))
-        self.maxTrackedClients = max(1, maxTrackedClients)
-        self.key = key
+        self.identity = identity
         self.now = now
+        self.clients = SharedBoundedLRU(
+            capacity: max(1, maxTrackedClients),
+            overflow: .reject,
+            shards: max(1, shards)
+        )
+    }
+
+    /// How many clients the table is tracking — by construction never above `maxTrackedClients`.
+    var trackedClients: Int {
+        clients.totalCount
     }
 
     /// Admits the request, or refuses it with `429` + `Retry-After` when the client is over budget.
@@ -62,7 +85,7 @@ public struct RateLimitMiddleware: HTTPMiddleware {
         context: RequestContext,
         next: any HTTPResponder
     ) async -> ServerResponse {
-        guard admit(key(request)) else {
+        guard admit(identity.key(for: request, context: context)) else {
             var head = HTTPResponse(status: .tooManyRequests)
             _ = head.headerFields.setValue(String(retryAfterSeconds), for: .retryAfter)
             return ServerResponse(head)
@@ -73,31 +96,41 @@ public struct RateLimitMiddleware: HTTPMiddleware {
     /// Whether `client` is within budget for the current window; counts this request either way.
     private func admit(_ client: String) -> Bool {
         let instant = now()
-        return store.buckets.withLock { buckets in
-            if buckets.count >= maxTrackedClients {
-                Self.prune(&buckets, at: instant)
-            }
-            var bucket =
-                buckets[client]
-                ?? Bucket(
-                    window: RollingWindow(start: instant, interval: intervalNanos), count: 0
-                )
+        return clients.withShard(for: client) { budgets in
+            spend(for: client, in: &budgets, at: instant)
+        }
+    }
+
+    /// The whole admission decision, inside one shard lock: bump a tracked budget, or take a slot.
+    ///
+    /// One critical section on purpose — splitting "is there room?" from "insert" across two of them
+    /// is exactly how the previous implementation exceeded its own cap.
+    private func spend(
+        for client: String,
+        in budgets: inout BoundedLRU<String, Bucket>,
+        at instant: MonotonicNanoseconds
+    ) -> Bool {
+        let bumped = budgets.withValue(forKey: client) { bucket -> Bool in
             if bucket.window.rolledOver(at: instant) {
                 bucket.count = 0
             }
             bucket.count += 1
-            buckets[client] = bucket
             return bucket.count <= limit
         }
-    }
-
-    /// Drops clients whose window has rolled over (idle), bounding the map under a key flood.
-    private static func prune(_ buckets: inout [String: Bucket], at instant: MonotonicNanoseconds) {
-        for (client, bucket) in buckets {
-            var bucket = bucket
-            if bucket.window.rolledOver(at: instant) {
-                buckets[client] = nil
-            }
+        if let bumped {
+            return bumped
         }
+        budgets.reclaim(scanning: Self.reclaimScan) { _, bucket in
+            var window = bucket.window
+            return window.rolledOver(at: instant)  // idle: its window has already elapsed
+        }
+        let fresh = Bucket(
+            window: RollingWindow(start: instant, interval: intervalNanos),
+            count: 1
+        )
+        guard case .rejected = budgets.insert(fresh, forKey: client) else {
+            return true
+        }
+        return false  // no room to track this client — refuse rather than allocate for it
     }
 }
