@@ -124,6 +124,18 @@ public struct HTTPLimits: Sendable, Equatable {
     /// and the connection is closed with `1008` (RFC 6455 §7.4.1) rather than pretending it delivered.
     public var maxQueuedBroadcasts: Int
 
+    /// Undelivered broadcast *octets* one WebSocket connection queues before the oldest is dropped.
+    ///
+    /// A count bound says nothing about memory: at the default ``effectiveWebSocketMessageSize``,
+    /// ``maxQueuedBroadcasts`` messages is unbounded retention per connection (2026-07-31
+    /// performance addendum). This is the watermark that actually bounds it (CWE-770).
+    ///
+    /// Derived from ``maxQueuedInboundBytes`` rather than given its own knob, deliberately: the two
+    /// are the inbound and outbound halves of the same per-connection handoff, so one number keeps a
+    /// connection's total handoff retention bounded at 2× it and keeps the presets coherent without a
+    /// second dial nobody would remember to move.
+    public var maxQueuedBroadcastBytes: Int { maxQueuedInboundBytes }
+
     // MARK: HTTP/2 consumption-gated receive windows (backpressure)
 
     /// The advertised `SETTINGS_INITIAL_WINDOW_SIZE` — unconsumed octets one HTTP/2 stream may hold.

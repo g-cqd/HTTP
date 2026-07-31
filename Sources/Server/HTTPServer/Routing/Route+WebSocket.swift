@@ -54,7 +54,7 @@ extension Route {
     /// A WebSocket route at `pattern` bound to a broadcast `hub` (Phase 2.7).
     ///
     /// The server registers each connection with the hub and auto-subscribes it to `topic`, so a message
-    /// the handler publishes to that topic (`await hub.publish(…, to: topic)`) reaches every connection on
+    /// the handler publishes to that topic (`hub.publish(…, to: topic)`) reaches every connection on
     /// it. Declared as a `GET`, like ``webSocket(_:handler:)``; hub fan-out runs on the HTTP/1.1 path.
     public static func webSocket(
         _ pattern: String, hub: WebSocketHub, topic: String, handler: any WebSocketHandler
@@ -73,7 +73,7 @@ extension Route {
     /// A hub-backed WebSocket route built from closures — a convenience over
     /// ``webSocket(_:hub:topic:handler:)`` wrapping a ``ClosureWebSocketHandler`` (Phase 2.7).
     ///
-    /// The `handle` closure typically publishes to the hub (`await hub.publish(…, to: topic)`) and returns
+    /// The `handle` closure typically publishes to the hub (`hub.publish(…, to: topic)`) and returns
     /// `[]`.
     public static func webSocket(
         _ pattern: String,

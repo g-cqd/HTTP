@@ -40,14 +40,29 @@ public struct WebSocketCloseCode: Sendable, Equatable, Hashable {
     /// `1011` — the server hit an unexpected condition (RFC 6455 §7.4.1).
     public static let internalError = Self(rawValue: 1_011)
 
+    /// `1013` — the server is overloaded; the client should retry later (RFC 6455 §7.4.1).
+    ///
+    /// The honest code for a *capacity* refusal, as distinct from `1011`: nothing went wrong and
+    /// nothing about this request was invalid, so a client is right to come back rather than treat the
+    /// endpoint as broken. The server sends it when a bounded resource — currently the broadcast hub's
+    /// subscriber or topic budget — has no room for this connection.
+    public static let tryAgainLater = Self(rawValue: 1_013)
+
     /// Whether this code may legitimately appear in a Close frame on the wire (RFC 6455 §7.4.1).
     ///
-    /// The application range 1000–1003 and 1007–1011 is permitted, as is the registered (3000–3999)
-    /// and private (4000–4999) space; the rest — including the "no code present" sentinels 1005/1006
-    /// and the undefined 1004 — MUST NOT be sent and are rejected when received.
+    /// Permitted: 1000–1003 and 1007–1014, plus the registered (3000–3999) and private (4000–4999)
+    /// space. The rest — including the "no code present" sentinels 1005/1006, the undefined 1004 and
+    /// the TLS sentinel 1015 — MUST NOT be sent and are rejected when received.
+    ///
+    /// 1012–1014 are not in the §7.4.1 prose, which stops at 1011, but §7.4.2 reserves 1000–2999 for
+    /// the protocol and its registry and §11.7 establishes that registry; IANA has since assigned
+    /// 1012 Service Restart, 1013 Try Again Later and 1014 Bad Gateway. Treating them as unsendable —
+    /// as this did — meant a server with an honest "I am at capacity, come back" answer silently
+    /// emitted 1002 Protocol Error instead, telling the peer *it* was at fault. 1015 stays excluded:
+    /// the registry marks it reserved and it MUST NOT appear on the wire.
     public var isValidOnWire: Bool {
         switch rawValue {
-            case 1_000 ... 1_003, 1_007 ... 1_011, 3_000 ... 4_999:
+            case 1_000 ... 1_003, 1_007 ... 1_014, 3_000 ... 4_999:
                 true
             default:
                 false
