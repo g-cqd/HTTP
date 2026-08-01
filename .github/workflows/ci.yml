@@ -154,6 +154,36 @@ jobs:
           echo "every wire parser/decoder cites its standard"
 
   # ---------------------------------------------------------------------------
+  # SE-0458 strict memory safety — the STAGED gate (ADR 0009, superseding ADR 0002).
+  #
+  # CLAUDE.md asks for "strict memory". The package cannot turn `-strict-memory-safety` on globally:
+  # the census below counts 465 expressions that use unsafe constructs without an `unsafe` marker, and
+  # under warnings-as-errors every one of them is a build error. So the gate is staged in two halves.
+  #
+  #   • The HARD half is in the manifest, not here: `strictMemorySafeTargets` in Package.swift adds
+  #     `.strictMemorySafety()` to the targets already at zero (HTTPConcurrency, HPACK, QPACK,
+  #     HTTPObservability, HTTPAuth). `build-test` and `release-test` run with HTTP_WARNINGS_AS_ERRORS,
+  #     so a new un-annotated unsafe expression in one of those targets is a BUILD ERROR there.
+  #   • The RATCHET half is this job: a full `-strict-memory-safety` census of the remaining nine
+  #     targets, compared against `.github/strict-memory-safety-budget.tsv`. A count may fall freely;
+  #     if one rises, this job fails and names the target. A target that reaches 0 graduates into the
+  #     manifest list and stops being a number.
+  #
+  # Its own job (not folded into build-test) because it is a full rebuild under a different flag set,
+  # and because a ratchet breach should read as its own red X rather than as a build failure.
+  # ---------------------------------------------------------------------------
+  strict-memory-safety:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Toolchain
+        run: swift --version
+      - name: Census + ratchet (per-target unsafe-site budget)
+        run: python3 scripts/strict-memory-safety.py --verbose
+
+  # ---------------------------------------------------------------------------
   # Data-race & memory checks. Parsers must stay clean under ASan/TSan.
   # ---------------------------------------------------------------------------
   sanitizers:

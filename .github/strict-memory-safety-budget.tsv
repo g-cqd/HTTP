@@ -1,0 +1,19 @@
+# SE-0458 strict-memory-safety budget — the ratchet (ADR 0009).
+#
+# One row per target: the number of expressions that use unsafe constructs without an `unsafe`
+# marker, as counted by `scripts/strict-memory-safety.py`. The number may FALL freely; CI fails if
+# it RISES. A target reaching 0 graduates out of this file and into `strictMemorySafeTargets` in
+# Package.swift, where the compiler enforces it as a build error instead of a count.
+#
+# Regenerate after reducing a count:  scripts/strict-memory-safety.py --update
+# Targets absent from this file must be at 0 — a new target with unsafe sites fails the gate until
+# it is either annotated or added here deliberately.
+HTTPTransport	149
+HTTPServer	79
+HTTPCore	77
+HTTPTestSupport	75
+WebSocket	29
+HTTP1	23
+HTTP2	21
+HTTP3	8
+httpd-example	4

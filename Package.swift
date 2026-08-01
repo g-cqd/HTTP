@@ -41,6 +41,26 @@ let strictSwiftSettings: [SwiftSetting] = [
     .enableExperimentalFeature("Lifetimes")
 ]
 
+// SE-0458 strict memory safety — the STAGED gate (ADR 0009, superseding ADR 0002's all-or-nothing
+// deferral). The compiler flags every expression that "uses unsafe constructs but is not marked with
+// `unsafe`"; the package has 465 such sites, so flipping it on globally would not compile. Instead it is
+// enabled per target for the targets that are ALREADY at zero, where it costs nothing today and buys a
+// hard ratchet tomorrow: under `HTTP_WARNINGS_AS_ERRORS`, the first un-annotated unsafe expression added
+// to one of these targets is a BUILD ERROR, not a warning someone scrolls past.
+//
+// The remaining targets are held by a counted budget instead (`scripts/strict-memory-safety.py` +
+// `.github/strict-memory-safety-budget.tsv`, run by the `strict-memory-safety` CI job): their counts may
+// fall, never rise. A target reaches zero, moves into this list, and stops being a number.
+//
+// Adding a target here is a one-line change once its count hits 0 — that is the whole point of staging.
+let strictMemorySafeTargets: Set<String> = [
+    "HTTPConcurrency",  // 1 site annotated (the CLOCK_MONOTONIC read)
+    "HPACK",  // 2 sites annotated (RFC 7541 §5.2 string materialization)
+    "QPACK",  // 2 sites annotated (RFC 9204 §4.1.2 string materialization)
+    "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
+    "HTTPAuth"  // already 0 — pure crypto/middleware over swift-crypto
+]
+
 // G0 — the Darwin-only transport backbones are absent from the Linux build graph, where the portable
 // `POSIXEpoll` backbone takes over (the `POSIXSocket` floor, the `PortableTLS` seam, and the `Fake`
 // backbone stay cross-platform). `kqueue(2)`, Network.framework (and its QUIC), the Dispatch-sources and
@@ -484,6 +504,10 @@ let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != ni
 for target in package.targets
 where !["CHTTPTestMalloc", "CCRC32", "CEpoll", "CZlibCoding"].contains(target.name) {
     var settings = (target.swiftSettings ?? []) + strictSwiftSettings
+    // SE-0458, staged per `strictMemorySafeTargets` above.
+    if strictMemorySafeTargets.contains(target.name) {
+        settings.append(.strictMemorySafety())
+    }
     if treatWarningsAsErrors {
         settings.append(.treatAllWarnings(as: .error))
     }
