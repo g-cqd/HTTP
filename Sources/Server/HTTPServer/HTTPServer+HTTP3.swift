@@ -219,7 +219,17 @@ extension HTTPServer {
                 await withDiscardingTaskGroup { streams in
                     for await stream in quic.inboundStreams() {
                         registry.register(stream)
+                        // RFC 9000 §2.1 classifies the stream from its id, and RFC 9114 §6 gives the
+                        // two classes different lifetimes: a request stream is bounded by read
+                        // deadlines and retired when it ends, a peer unidirectional stream is
+                        // long-lived and its closure is a connection error (§6.2.1). They get
+                        // different loops so neither discipline can be applied to the other.
                         streams.addTask {
+                            guard stream.id.isBidirectional else {
+                                return await self.serveHTTP3PeerUniStream(
+                                    stream, engine: engine, quic: quic, registry: registry
+                                )
+                            }
                             await self.serveHTTP3Stream(
                                 stream,
                                 engine: engine,

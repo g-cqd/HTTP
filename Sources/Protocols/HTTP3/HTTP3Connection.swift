@@ -452,8 +452,15 @@ public struct HTTP3Connection {
             case .qpackDecoder:
                 try processQpackDecoderStream(streamID)
             case .reserved:
-                // §6.2 — an unknown unidirectional stream type: discard its buffered data.
+                // §6.2 — an unknown unidirectional stream type: discard its buffered data, and drop
+                // the record itself once the stream ends. Nothing more is expected on it, and a peer
+                // that opens reserved streams should not leave one record behind per stream for the
+                // life of the connection (CWE-770); what is open at any moment stays bounded by the
+                // transport's own concurrent-unidirectional-stream limit (RFC 9000 §4.6).
                 streams[streamID]?.discardBuffer()
+                if streams[streamID]?.finReceived == true {
+                    streams[streamID] = nil
+                }
             case .request:
                 try processRequestStream(streamID, into: &events)
         }

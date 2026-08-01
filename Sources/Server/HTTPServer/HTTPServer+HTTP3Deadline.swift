@@ -26,11 +26,21 @@ extension HTTPServer {
     /// The header phase gets ``HTTPLimits/headerReadTimeout`` (a stream that opens and never sends a
     /// complete HEADERS frame), the body phase ``HTTPLimits/idleTimeout`` (a stream that stalls
     /// between DATA frames, or never sends the FIN that ends the body).
+    ///
+    /// Only a **request** stream can be armed (RFC 9114 §4.1 / RFC 9000 §2.1 — client-initiated
+    /// bidirectional). The control and QPACK streams are long-lived by design (§6.2): they stay open
+    /// for the connection's life and are idle whenever no settings or table updates flow, so a read
+    /// budget aimed at a half-sent request reaps them — and with them the healthy connection. The
+    /// refusal lives here, not at the call sites, so the table *cannot* come to hold a stream whose
+    /// lapse would be reset as if it were a request.
     func armHTTP3(
         _ id: QUICStreamID,
         phase: HTTP3StreamPhase,
         on deadlines: HTTP3StreamDeadlines<C.Instant>
     ) {
+        guard id.kind == .clientBidirectional else {
+            return
+        }
         let budget = phase == .header ? limits.headerReadTimeout : limits.idleTimeout
         deadlines.arm(id, until: clock.now.advanced(by: budget), phase: phase)
     }
