@@ -175,6 +175,11 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
 
     private func runLoop() {
         var events = [KEvent](repeating: KEvent(), count: 256)
+        // The drain's double buffer, owned by the loop thread for its whole life. Swapped with the
+        // inbox's arrays under the lock so BOTH stay uniquely referenced and their capacity is
+        // genuinely reused — see ``drainInbox(jobs:control:until:)``.
+        var jobs: [UnownedJob] = []
+        var control: [@Sendable () -> Void] = []
         while registry.withLock(\.isRunning) {
             // Wait for readiness, but return at once (timeout 0) when work is already queued so pinned
             // continuations are not delayed behind the idle poll. The idle timeout (50 ms) only bounds
@@ -201,11 +206,16 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
                     dispatch(event)
                 }
             }
-            // Drain control + jobs until the loop is idle again: a read handler resumes a pinned
-            // continuation (→ a job), whose handler runs here and may chain straight into write / the
-            // next read, all inline on this thread, until the connection finally blocks on I/O.
+            // Drain control + jobs until the loop is idle again — or until the fairness quantum runs
+            // out: a read handler resumes a pinned continuation (→ a job), whose handler runs here and
+            // may chain straight into write / the next read, all inline on this thread, until the
+            // connection finally blocks on I/O. Unbounded, one saturating source starves every other
+            // socket on this reactor (PERF-1); the budget makes readiness wait at most one quantum.
+            let budget = ReactorQuantum.nanoseconds() &+ ReactorQuantum.drainNanoseconds
             while !inbox.withLock(\.isEmpty), registry.withLock(\.isRunning) {
-                drainInbox()
+                guard drainInbox(jobs: &jobs, control: &control, until: budget) else {
+                    break  // over quantum; the remainder is back in the inbox, readiness goes first
+                }
             }
         }
         // `isRunning` just went false (a concurrent `stop()`). The inner drain above is gated on
@@ -217,24 +227,61 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         // never returns). One final UNCONDITIONAL drain closes that window: anything enqueued up to this
         // point is guaranteed to run — fd closed, continuation resumed — before the loop thread exits.
         while !inbox.withLock(\.isEmpty) {
-            drainInbox()
+            // No budget on the teardown drain: its whole purpose is that nothing is left stranded.
+            _ = drainInbox(jobs: &jobs, control: &control, until: .max)
         }
         close(kq)
     }
 
-    private func drainInbox() {
-        let (jobs, control) = inbox.withLock { inbox -> ([UnownedJob], [@Sendable () -> Void]) in
-            let taken = (inbox.jobs, inbox.control)
-            inbox.jobs.removeAll(keepingCapacity: true)
-            inbox.control.removeAll(keepingCapacity: true)
-            return taken
+    /// Runs one batch of the inbox on the loop thread; returns whether it finished within `budget`.
+    ///
+    /// `jobs`/`control` are the caller's long-lived double buffer. Swapping them with the inbox's
+    /// arrays — rather than copying the arrays out and calling `removeAll(keepingCapacity:)` — is what
+    /// makes the drain allocation-free in steady state: a copy leaves both the inbox's `var` and the
+    /// local holding the same buffer, so the very next `removeAll` sees a non-unique reference and
+    /// reallocates, defeating `keepingCapacity` on every single drain.
+    ///
+    /// Control work always runs in full and is never deferred by the budget: a close or cancel held
+    /// back behind a job flood is a parked continuation left stranded, which is the teardown-drain hang
+    /// the unconditional final drain exists to prevent.
+    private func drainInbox(
+        jobs: inout [UnownedJob],
+        control: inout [@Sendable () -> Void],
+        until budget: UInt64
+    ) -> Bool {
+        inbox.withLock { inbox in
+            swap(&inbox.jobs, &jobs)
+            swap(&inbox.control, &control)
         }
         for closure in control {
             closure()
         }
-        for job in jobs {
-            job.runSynchronously(on: asUnownedTaskExecutor())
+        control.removeAll(keepingCapacity: true)
+
+        var index = 0
+        while index < jobs.count {
+            // The clock is read once per stride, not per job: a `clock_gettime_nsec_np` is ~11 ns
+            // against a ~19 us `kevent` round trip on this host, so the check is free at this
+            // granularity while still bounding readiness starvation to roughly one quantum.
+            let stride = min(jobs.count, index &+ ReactorQuantum.clockCheckStride)
+            while index < stride {
+                jobs[index].runSynchronously(on: asUnownedTaskExecutor())
+                index &+= 1
+            }
+            if index < jobs.count, ReactorQuantum.nanoseconds() >= budget {
+                break
+            }
         }
+        let finished = index == jobs.count
+        if !finished {
+            // Hand the tail back at the FRONT, so nothing is dropped and FIFO order holds across the
+            // readiness turn this yields to. Allocating here is deliberate: it happens only when a
+            // source is actually saturating the loop, which is the case the quantum exists to bound.
+            let remainder = Array(jobs[index...])
+            inbox.withLock { $0.jobs.insert(contentsOf: remainder, at: 0) }
+        }
+        jobs.removeAll(keepingCapacity: true)
+        return finished
     }
 
     private func dispatch(_ event: KEvent) {

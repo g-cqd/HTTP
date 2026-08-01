@@ -66,7 +66,7 @@ extension HTTPServer {
     /// error. See the file comment for the merged-mailbox design this loop implements.
     func serveHTTP2(
         _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         initialBytes: [UInt8]
     ) async {
         // Advertise Extended CONNECT (RFC 8441 §3) only when the responder declares a WebSocket route.
@@ -114,8 +114,11 @@ extension HTTPServer {
             coalescingBelow: 4 * 1_024
         )
         // See the file comment: a SECOND, LOCAL idle deadline guards only this function's sends, now
-        // that they run on a task separate from the reader.
-        let sendDeadline = IdleDeadline<C.Instant>()
+        // that they run on a task separate from the reader. It registers in the connection's existing
+        // wheel and reports through the mailbox, so it costs a heap slot rather than a watchdog task.
+        let sendDeadline = IdleDeadline(in: deadline.wheel, escalation: .keepWatching) {
+            continuation.yield(.localDeadlineLapsed)
+        }
 
         await withDiscardingTaskGroup { group in
             // The reader: continuous, decoupled from every handler/relay/tunnel pump (see the file
@@ -128,13 +131,6 @@ extension HTTPServer {
                     into: intake,
                     signalling: continuation
                 )
-            }
-            // This consumer's own send-side watchdog (FIX #1 parity for the write side): reports a lapse
-            // through the mailbox rather than calling `cancelAll()` directly (see the file comment).
-            group.addTask { [self] in
-                await runLocalIdleWatchdog(sendDeadline) {
-                    continuation.yield(.localDeadlineLapsed)
-                }
             }
             // The consumption gate's companion: bounds how long one non-consuming handler may hold the
             // connection's shared receive window shut against its siblings (see the sweeper's file

@@ -34,7 +34,7 @@ extension HTTPServer where C.Duration == Duration {
         into handoff: AsyncHandoff,
         buffer: inout [UInt8],
         from connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         bodyLimit: Int?
     ) async -> Int? {
         var window = RequestBodyWindow(
@@ -101,10 +101,10 @@ extension HTTPServer where C.Duration == Duration {
     private func replenish(
         _ window: inout RequestBodyWindow,
         from connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>
+        deadline: IdleDeadline
     ) async -> Bool {
         let room = window.makeRoom()
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+        deadline.arm(deadlineKey(after: limits.idleTimeout))
         let received = try? await connection.receive(maxLength: room)
         deadline.disarm()
         guard let received, !received.isEmpty else {

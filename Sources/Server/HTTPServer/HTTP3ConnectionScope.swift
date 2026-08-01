@@ -30,6 +30,6 @@ extension HTTPServer {
         /// The serialized sans-I/O connection engine.
         let engine: Engine
         /// The read deadlines armed for this connection's request streams (RFC 9112 §9.3 over §4.1).
-        let deadlines: HTTP3StreamDeadlines<C.Instant>
+        let deadlines: HTTP3StreamDeadlines
     }
 }

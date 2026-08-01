@@ -216,7 +216,7 @@ struct HTTP2TunnelRetirementTests {
                 intake: BoundedByteChannel(
                     highWatermark: 1_024, lowWatermark: 512, maxQueuedChunks: 4, coalescingBelow: 0
                 ),
-                sendDeadline: IdleDeadline<ContinuousClock.Instant>(),
+                sendDeadline: IdleDeadline(in: DeadlineWheel(), escalation: .keepWatching),
                 into: continuation
             )
             group.cancelAll()

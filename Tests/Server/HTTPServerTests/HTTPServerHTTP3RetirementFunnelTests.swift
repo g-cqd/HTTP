@@ -252,7 +252,7 @@ struct HTTPServerHTTP3RetirementFunnelTests {
                 enableConnectProtocol: false,
                 resolveRoute: unmatched
             ),
-            deadlines: HTTP3StreamDeadlines<TestClock.Instant>()
+            deadlines: HTTP3StreamDeadlines()
         )
     }
 

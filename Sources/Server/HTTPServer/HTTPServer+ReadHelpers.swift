@@ -16,7 +16,7 @@ extension HTTPServer {
     func receiveTimeout(
         _ buffer: [UInt8],
         headersParsed: Bool,
-        _ headerDeadline: inout C.Instant?
+        _ headerDeadline: inout Duration?
     ) -> Duration {
         if buffer.isEmpty {
             return limits.keepAliveTimeout  // idle, awaiting the next request
@@ -24,9 +24,11 @@ extension HTTPServer {
         if headersParsed {
             return limits.idleTimeout  // body phase
         }
-        let deadline = headerDeadline ?? clock.now.advanced(by: limits.headerReadTimeout)
+        // A ``DeadlineWheel`` key (elapsed since the server epoch), not an instant: the wheel orders
+        // by concrete `Duration` so the hot path never touches the clock's address-only `Instant`.
+        let deadline = headerDeadline ?? deadlineKey(after: limits.headerReadTimeout)
         headerDeadline = deadline  // cumulative across the whole header section
-        return max(.zero, clock.now.duration(to: deadline))
+        return max(.zero, deadline - deadlineNow)
     }
 
     /// Honors `Expect` before the body is read (RFC 9110 §10.1.1).

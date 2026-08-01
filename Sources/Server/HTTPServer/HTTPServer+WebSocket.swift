@@ -33,7 +33,7 @@ extension HTTPServer {
     /// malformed upgrade gets the rejection status (§4.4) and the connection is left to close.
     func serveWebSocket(
         _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         request: HTTPRequest,
         handler: any WebSocketHandler,
         hub: WebSocketHub?,
@@ -87,7 +87,7 @@ extension HTTPServer {
     /// with a counted drop. Only payload-free tickets travel on the ``WebSocketWakeup`` stream itself.
     private func driveWebSocket(
         _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         handler: any WebSocketHandler,
         hub: WebSocketHub?,
         topic: String?,
@@ -156,7 +156,7 @@ extension HTTPServer {
                 continuation.yield(.inboundReady)
             }
             while !Task.isCancelled {
-                deadline.arm(clock.now.advanced(by: limits.keepAliveTimeout))
+                deadline.arm(deadlineKey(after: limits.keepAliveTimeout))
                 let chunk = try? await connection.receive(maxLength: 16_384)
                 deadline.disarm()
                 guard let chunk, !chunk.isEmpty else {
@@ -166,7 +166,7 @@ extension HTTPServer {
                 // drain, no receive is outstanding, so without this the connection watchdog would nap
                 // and re-check forever and a permanently wedged handler would hold the connection
                 // open indefinitely. A merely *slow* handler re-arms on each chunk and is not reaped.
-                deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+                deadline.arm(deadlineKey(after: limits.idleTimeout))
                 let outcome = await intake.send(chunk)
                 deadline.disarm()
                 // One ticket per QUEUED item only: a coalesced send extended an item whose ticket is

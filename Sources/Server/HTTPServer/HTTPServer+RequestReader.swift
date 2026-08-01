@@ -24,7 +24,7 @@ extension HTTPServer where C.Duration == Duration {
     /// close (a parse error, a `Connection: close`, EOF, or a transport failure).
     func serveOne(
         _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         buffer: inout [UInt8],
         start: inout Int,
         responseBuffer: inout [UInt8]
@@ -155,7 +155,7 @@ extension HTTPServer where C.Duration == Duration {
         // slow-read). The buffered body is size-bounded (maxBody), so one idle-timeout window is the
         // right bound; a stalled send is reaped (the watchdog cancels this child task, unblocking the
         // send via the transport's per-call cancellation).
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+        deadline.arm(deadlineKey(after: limits.idleTimeout))
         do {
             if sendsBody {
                 try await connection.send(responseBuffer, response.body)
@@ -257,12 +257,12 @@ extension HTTPServer where C.Duration == Duration {
     /// while a body streams in (RFC 9112 §9.3; the limits are the defense-in-depth knobs).
     private func readRequest(
         from connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         into buffer: inout [UInt8],
         start: Int,
         following plan: inout DispatchPlan
     ) async throws -> ReadOutcome {
-        var headerDeadline: C.Instant?
+        var headerDeadline: Duration?
         // Resumable end-of-headers scan (keeps header framing O(n), not O(n²)); an absolute index into
         // `buffer`, so it begins at the request's start cursor, not 0 (audit L3 — keep-alive ring buffer).
         var scanOffset = start
@@ -300,8 +300,8 @@ extension HTTPServer where C.Duration == Duration {
                     throw error
             }
             deadline.arm(
-                clock.now.advanced(
-                    by: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
+                deadlineKey(
+                    after: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
                 )
             )
             let received: Int

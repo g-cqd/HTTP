@@ -28,7 +28,7 @@ extension HTTPServer {
     /// forever and hold the connection open. A merely slow consumer re-arms per chunk and is not reaped.
     func runHTTP2Reader(
         _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         initialBytes: [UInt8],
         into intake: BoundedByteChannel,
         signalling continuation: AsyncStream<HTTP2Wakeup>.Continuation
@@ -37,13 +37,13 @@ extension HTTPServer {
             continuation.yield(.inboundReady)
         }
         while !Task.isCancelled {
-            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            deadline.arm(deadlineKey(after: limits.idleTimeout))
             let chunk = try? await connection.receive(maxLength: 16_384)
             deadline.disarm()
             guard let chunk, !chunk.isEmpty else {
                 break  // EOF, idle timeout, or read failure
             }
-            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            deadline.arm(deadlineKey(after: limits.idleTimeout))
             let outcome = await intake.send(chunk)
             deadline.disarm()
             // Exactly one ticket per QUEUED item. A coalesced send extended an item whose ticket is

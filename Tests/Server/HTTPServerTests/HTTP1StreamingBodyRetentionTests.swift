@@ -68,9 +68,10 @@ struct HTTP1StreamingBodyRetentionTests {
         start: inout Int,
         responseBuffer: inout [UInt8]
     ) async -> Bool {
-        await server.serveOne(
+        let wheel = DeadlineWheel()
+        return await server.serveOne(
             connection,
-            deadline: IdleDeadline<ContinuousClock.Instant>(),
+            deadline: IdleDeadline(in: wheel, escalation: .stopWatching),
             buffer: &buffer,
             start: &start,
             responseBuffer: &responseBuffer
