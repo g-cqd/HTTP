@@ -340,11 +340,11 @@
             let hangup = ready & (EPOLLHUP.rawValue | EPOLLERR.rawValue) != 0
             let isReadable = hangup || (ready & EPOLLIN.rawValue != 0)
             let isWritable = hangup || (ready & EPOLLOUT.rawValue != 0)
-            let ready: [Waiter] = registry.withLock { registry in
+            let waiters: [Waiter] = registry.withLock { registry in
                 (isReadable ? registry.readHandlers.removeValue(forKey: fd) ?? [] : [])
                     + (isWritable ? registry.writeHandlers.removeValue(forKey: fd) ?? [] : [])
             }
-            for waiter in ready {
+            for waiter in waiters {
                 waiter.handler()
             }
             // `EPOLLONESHOT` disarmed the whole fd; re-arm if a handler in the other direction is still

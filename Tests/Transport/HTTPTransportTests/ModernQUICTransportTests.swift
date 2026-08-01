@@ -10,6 +10,8 @@
 //  backbone, covered by LegacyQUICTransportTests).
 //
 
+internal import Darwin
+
 import Foundation
 import HTTPCore
 import HTTPTestSupport
@@ -20,6 +22,32 @@ import Testing
 
 @Suite("Modern QUIC transport — loopback", .realNetwork)
 struct ModernQUICTransportTests {
+    @Test(
+        "the modern backbone binds the configured nonzero port",
+        .timeLimit(.minutes(1)))
+    func configuredPort() async throws {
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
+        let requestedPort = try Self.unusedUDPPort()
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let transport = ModernQUICTransport(
+            configuration: TransportConfiguration(
+                host: "127.0.0.1",
+                port: requestedPort,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        _ = try await transport.start()
+        defer { Task { await transport.shutdown() } }
+
+        #expect(
+            transport.boundPort == requestedPort,
+            "configured UDP port \(requestedPort), but modern QUIC bound \(transport.boundPort)"
+        )
+    }
+
     @Test(
         "a QUIC stream round-trips through the modern backbone over loopback",
         .timeLimit(.minutes(1)))
@@ -142,5 +170,40 @@ struct ModernQUICTransportTests {
                 }
             }
         }
+    }
+
+    /// Lets the kernel choose an unused loopback UDP port, then releases it for the listener under test.
+    private static func unusedUDPPort() throws -> UInt16 {
+        let descriptor = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard descriptor >= 0 else {
+            throw TransportError.bindFailed("socket() errno \(errno)")
+        }
+        defer { close(descriptor) }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let didBind = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0
+            }
+        }
+        guard didBind else {
+            throw TransportError.bindFailed("bind() errno \(errno)")
+        }
+
+        var bound = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let didReadPort = withUnsafeMutablePointer(to: &bound) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(descriptor, $0, &length) == 0
+            }
+        }
+        guard didReadPort else {
+            throw TransportError.bindFailed("getsockname() errno \(errno)")
+        }
+        return UInt16(bigEndian: bound.sin_port)
     }
 }

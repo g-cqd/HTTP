@@ -189,6 +189,72 @@
             _ = close(clientDescriptor)
         }
 
+        @Test(
+            "concurrent scratch receives cannot copy bytes decrypted by another caller",
+            .timeLimit(.minutes(1)))
+        func concurrentScratchReceivesPreserveEveryByteExactlyOnce() async throws {
+            let identity = try DevTLSIdentity.selfSigned()
+            let serverContext = try OpenSSLTLS.serverContext(identity)
+            defer { CHTTPBoringSSL_SSL_CTX_free(serverContext) }
+            let (serverDescriptor, clientDescriptor) = Self.makeSocketPair()
+            let loop = try TLSEventLoop()
+            loop.start()
+            defer { loop.stop() }
+            let connection = try Self.makeConnection(
+                serverContext,
+                descriptor: serverDescriptor,
+                loop: loop
+            )
+
+            let clientContext = try #require(
+                CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_client_method()))
+            CHTTPBoringSSL_SSL_CTX_set_verify(clientContext, SSL_VERIFY_NONE, nil)
+            #expect(CHTTPBoringSSLShims_set_client_alpn(clientContext) == 0)
+            nonisolated(unsafe) let clientSSL = try #require(CHTTPBoringSSL_SSL_new(clientContext))
+            CHTTPBoringSSL_SSL_set_fd(clientSSL, clientDescriptor)
+            defer {
+                CHTTPBoringSSL_SSL_free(clientSSL)
+                CHTTPBoringSSL_SSL_CTX_free(clientContext)
+                _ = close(clientDescriptor)
+            }
+
+            // Every byte value occurs equally often. Concurrent reads may complete in any order, so
+            // compare multisets; a scratch overwrite appears as one duplicated value and one missing
+            // value without relying on task scheduling order.
+            let payload = (0 ..< 8_192).map(UInt8.init(truncatingIfNeeded:))
+            let written = AsyncEventProbe<Int>()
+            DispatchQueue.global(qos: .userInitiated)
+                .async {
+                    guard CHTTPBoringSSL_SSL_connect(clientSSL) == 1 else {
+                        return written.record(-1)
+                    }
+                    let count = payload.withUnsafeBytes {
+                        Int(CHTTPBoringSSL_SSL_write(clientSSL, $0.baseAddress, Int32($0.count)))
+                    }
+                    written.record(count)
+                }
+
+            try await connection.performHandshake()
+            let received = try await withThrowingTaskGroup(of: UInt8.self) { group in
+                for _ in payload.indices {
+                    group.addTask {
+                        var byte: [UInt8] = []
+                        let count = try await connection.receive(into: &byte, maxLength: 1)
+                        return try #require(count == 1 ? byte.first : nil)
+                    }
+                }
+                var bytes: [UInt8] = []
+                bytes.reserveCapacity(payload.count)
+                for try await byte in group {
+                    bytes.append(byte)
+                }
+                return bytes
+            }
+            #expect(try await written.wait(forAtLeast: 1).first == payload.count)
+            #expect(Self.histogram(received) == Self.histogram(payload))
+            await connection.close()
+        }
+
         // MARK: - Harness
 
         /// A connected `SOCK_STREAM` pair with both directions' socket buffers shrunk, so a send of
@@ -264,6 +330,14 @@
                 collected.append(contentsOf: window[..<count])
             }
             return collected
+        }
+
+        private static func histogram(_ bytes: [UInt8]) -> [Int] {
+            var counts = [Int](repeating: 0, count: 256)
+            for byte in bytes {
+                counts[Int(byte)] += 1
+            }
+            return counts
         }
     }
 

@@ -29,6 +29,126 @@ struct BackboneConformanceTests {
     }
 
     @Test(
+        "the configured bind host does not expose the listener through another interface",
+        .timeLimit(.minutes(1)), arguments: [TransportBackbone.networkFramework, .posixKqueue])
+    func configuredHostIsHonored(_ backbone: TransportBackbone) async throws {
+        // A listener explicitly bound to loopback must reject a connection through an active
+        // non-loopback interface. The POSIX backbone is the control; Network.framework must honor the
+        // same public TransportConfiguration contract. Hosts without such an interface skip the case.
+        guard let exposedHost = Self.nonLoopbackIPv4Address() else {
+            return
+        }
+        let transport = try TransportFactory.make(
+            TransportConfiguration(host: "127.0.0.1", port: 0, backbone: backbone)
+        )
+        _ = try await transport.start()
+        defer { Task { await transport.shutdown() } }
+
+        let descriptor = Self.openIPv4Connection(host: exposedHost, port: transport.boundPort)
+        if descriptor >= 0 {
+            close(descriptor)
+        }
+        #expect(
+            descriptor == -1,
+            "\(backbone.rawValue) exposed a loopback-configured listener at \(exposedHost)"
+        )
+    }
+
+    @Test(
+        "binding a nonlocal configured host fails instead of silently selecting another interface",
+        .timeLimit(.minutes(1)), arguments: [TransportBackbone.networkFramework, .posixKqueue])
+    func nonlocalConfiguredHostFailsClosed(_ backbone: TransportBackbone) async throws {
+        // RFC 5737 TEST-NET-1 cannot be assigned to this host. Starting a listener configured for it
+        // must fail; success proves the backend silently ignored the public bind-host setting.
+        let transport = try TransportFactory.make(
+            TransportConfiguration(host: "192.0.2.1", port: 0, backbone: backbone)
+        )
+        do {
+            _ = try await transport.start()
+            await transport.shutdown()
+            Issue.record("\(backbone.rawValue) started despite the nonlocal configured bind host")
+        }
+        catch {
+            // Expected: the requested local endpoint is unavailable.
+        }
+    }
+
+    private static func nonLoopbackIPv4Address() -> String? {
+        var head: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&head) == 0, let head else {
+            return nil
+        }
+        defer { freeifaddrs(head) }
+
+        var cursor: UnsafeMutablePointer<ifaddrs>? = head
+        while let interface = cursor {
+            defer { cursor = interface.pointee.ifa_next }
+            let flags = Int32(interface.pointee.ifa_flags)
+            guard flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0,
+                let socketAddress = interface.pointee.ifa_addr,
+                Int32(socketAddress.pointee.sa_family) == AF_INET
+            else {
+                continue
+            }
+            var address = UnsafeRawPointer(socketAddress)
+                .assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr
+            var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+            guard inet_ntop(AF_INET, &address, &buffer, socklen_t(buffer.count)) != nil else {
+                continue
+            }
+            let end = buffer.firstIndex(of: 0) ?? buffer.endIndex
+            return String(
+                bytes: buffer[..<end].map(UInt8.init(bitPattern:)),
+                encoding: .utf8
+            )
+        }
+        return nil
+    }
+
+    private static func openIPv4Connection(host: String, port: UInt16) -> Int32 {
+        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        guard descriptor >= 0 else {
+            return -1
+        }
+        _ = fcntl(descriptor, F_SETFL, fcntl(descriptor, F_GETFL) | O_NONBLOCK)
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr.s_addr = inet_addr(host)
+        let result = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.connect(
+                    descriptor,
+                    $0,
+                    socklen_t(MemoryLayout<sockaddr_in>.size)
+                )
+            }
+        }
+        if result == 0 {
+            return descriptor
+        }
+        guard errno == EINPROGRESS else {
+            close(descriptor)
+            return -1
+        }
+        var readiness = pollfd(fd: descriptor, events: Int16(POLLOUT), revents: 0)
+        guard poll(&readiness, 1, 1_000) == 1 else {
+            close(descriptor)
+            return -1
+        }
+        var socketError: Int32 = 0
+        var width = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(descriptor, SOL_SOCKET, SO_ERROR, &socketError, &width) == 0,
+            socketError == 0
+        else {
+            close(descriptor)
+            return -1
+        }
+        return descriptor
+    }
+
+    @Test(
         "binds a non-zero ephemeral port after start",
         .timeLimit(.minutes(1)), arguments: socketBackbones)
     func bindsEphemeralPort(_ backbone: TransportBackbone) async throws {

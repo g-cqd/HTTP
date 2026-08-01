@@ -24,6 +24,8 @@
 //
 
 import Darwin
+internal import Dispatch
+
 import HTTPTestSupport
 import Testing
 
@@ -31,6 +33,108 @@ import Testing
 
 @Suite("Reactor — two waiters on one descriptor (audit FLAKE-1 follow-up)", .realNetwork)
 struct ReadinessWaiterCollisionTests {
+    @Test(
+        "two connection receives do not overwrite one another's cached continuation",
+        .timeLimit(.minutes(1)))
+    func connectionReceivesResumeIndependently() async throws {
+        let loop = try KqueueEventLoop()
+        loop.start()
+        defer { loop.stop() }
+        let pair = try Self.makeSocketPair()
+        defer { close(pair.client) }
+        let connection = POSIXKqueueConnection(
+            id: TransportConnectionID(1),
+            descriptor: pair.server,
+            peer: TransportAddress(host: "local", port: 0),
+            eventLoop: loop
+        )
+        defer { connection.cancel() }
+
+        let completed = AsyncEventProbe<UInt8>()
+        let first = Task {
+            if let byte = try? await connection.receive(maxLength: 1)?.first {
+                completed.record(byte)
+            }
+        }
+        // There is no public "read is parked" hook. As in the existing cancellation conformance
+        // probe, this delay sequences setup only; the completion oracle below is event-driven.
+        try await Task.sleep(for: .milliseconds(100))
+        let second = Task {
+            if let byte = try? await connection.receive(maxLength: 1)?.first {
+                completed.record(byte)
+            }
+        }
+        try await Task.sleep(for: .milliseconds(100))
+
+        var bytes: [UInt8] = [0x41, 0x42]
+        #expect(write(pair.client, &bytes, bytes.count) == bytes.count)
+        defer {
+            first.cancel()
+            second.cancel()
+        }
+
+        let received = try await completed.wait(forAtLeast: 2, timeout: .seconds(1))
+        #expect(received.sorted() == bytes)
+    }
+
+    @Test(
+        "two connection sends do not overwrite one another's cached continuation",
+        .timeLimit(.minutes(1)))
+    func connectionSendsResumeIndependently() async throws {
+        let loop = try KqueueEventLoop()
+        loop.start()
+        defer { loop.stop() }
+        let pair = try Self.makeSocketPair()
+        defer { close(pair.client) }
+        var small: Int32 = 2_048
+        let width = socklen_t(MemoryLayout<Int32>.size)
+        _ = setsockopt(pair.server, SOL_SOCKET, SO_SNDBUF, &small, width)
+        _ = setsockopt(pair.client, SOL_SOCKET, SO_RCVBUF, &small, width)
+        let connection = POSIXKqueueConnection(
+            id: TransportConnectionID(1),
+            descriptor: pair.server,
+            peer: TransportAddress(host: "local", port: 0),
+            eventLoop: loop
+        )
+        defer { connection.cancel() }
+
+        let payload = [UInt8](repeating: 0x41, count: 128 * 1_024)
+        let completed = AsyncEventProbe<Int>()
+        let first = Task {
+            try? await connection.send(payload)
+            completed.record(1)
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        let second = Task {
+            try? await connection.send(payload)
+            completed.record(2)
+        }
+        try await Task.sleep(for: .milliseconds(100))
+
+        // Both sends now exceed the deliberately tiny socket window and are parked. Drain the peer so
+        // every registered writability handler gets a chance to finish its own operation.
+        let drained = AsyncEventProbe<Int>()
+        DispatchQueue.global(qos: .userInitiated)
+            .async {
+                var total = 0
+                var buffer = [UInt8](repeating: 0, count: 16 * 1_024)
+                while total < payload.count * 2 {
+                    let count = read(pair.client, &buffer, buffer.count)
+                    guard count > 0 else { break }
+                    total += count
+                }
+                drained.record(total)
+            }
+        defer {
+            first.cancel()
+            second.cancel()
+        }
+
+        let senders = try await completed.wait(forAtLeast: 2, timeout: .seconds(2))
+        #expect(senders.sorted() == [1, 2])
+        #expect(try await drained.wait(forAtLeast: 1).first == payload.count * 2)
+    }
+
     @Test("both waiters parked on one descriptor's readability are resumed")
     func readabilityWakesEveryWaiter() async throws {
         let loop = try KqueueEventLoop()
@@ -81,6 +185,16 @@ struct ReadinessWaiterCollisionTests {
             pipe(buffer.baseAddress)
         }
         try #require(made == 0, "pipe(2) failed with errno \(errno)")
+        return (descriptors[0], descriptors[1])
+    }
+
+    private static func makeSocketPair() throws -> (server: Int32, client: Int32) {
+        var descriptors = [Int32](repeating: 0, count: 2)
+        let made = descriptors.withUnsafeMutableBufferPointer { buffer in
+            socketpair(AF_UNIX, SOCK_STREAM, 0, buffer.baseAddress)
+        }
+        try #require(made == 0, "socketpair(2) failed with errno \(errno)")
+        POSIXSocket.setNonBlocking(descriptors[0])
         return (descriptors[0], descriptors[1])
     }
 }
