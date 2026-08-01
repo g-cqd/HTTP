@@ -193,15 +193,13 @@ public struct RequestContext: Sendable {
     /// `request` with every ``HTTPFieldName/serverAsserted`` field removed (RFC 9110 §17.1).
     ///
     /// A handler reading one of these is reading a server assertion, so a value that arrived from the
-    /// wire must not survive to be mistaken for one (CWE-290). The mutation is guarded per field, so a
-    /// request carrying none of them — every ordinary request — triggers no copy-on-write of the field
-    /// storage and the strip costs one pointer compare per name.
+    /// wire must not survive to be mistaken for one (CWE-290).
+    ///
+    /// The strip itself lives in ``SanitizedRequest``, whose only initializer performs it — so the rule
+    /// is spelled exactly once and the WebSocket upgrade seam, which cannot route through this
+    /// function, still cannot be handed an unstripped request (audit R5-SEC1).
     private static func stripped(_ request: HTTPRequest) -> HTTPRequest {
-        var request = request
-        for name in HTTPFieldName.serverAsserted where request.headerFields[name] != nil {
-            request.headerFields.removeAll(named: name)
-        }
-        return request
+        SanitizedRequest(request).request
     }
 
     /// How long is left before ``deadline``.

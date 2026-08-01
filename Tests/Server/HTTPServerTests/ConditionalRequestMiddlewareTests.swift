@@ -67,10 +67,14 @@ struct ConditionalRequestMiddlewareTests {
 
     @Test("the weak prefix is ignored in comparison (RFC 9110 §8.8.3)")
     func weakComparison() async {
+        // REG-4b: the minted tag is now itself weak, so this asserts the comparison from the other
+        // side — a client presenting the bare opaque form still matches it under weak comparison
+        // (§13.1.2), which is what makes the `W/` transparent to revalidation.
         let first = await body("weak").respond(to: get(), body: [])
         let etag = first.head.headerFields[.etag] ?? ""
-        let weak = "W/\(etag)"
-        let response = await body("weak").respond(to: get(ifNoneMatch: weak), body: [])
+        #expect(etag.hasPrefix("W/"))
+        let opaque = String(etag.dropFirst(2))
+        let response = await body("weak").respond(to: get(ifNoneMatch: opaque), body: [])
         #expect(response.head.status == .notModified)
     }
 
@@ -81,13 +85,17 @@ struct ConditionalRequestMiddlewareTests {
         #expect(response.head.headerFields[.etag] == nil)
     }
 
-    @Test("If-Match with a matching validator serves the full response (RFC 9110 §13.1.1)")
-    func ifMatchMatches() async {
+    @Test("If-Match is 412 even against the tag we minted — it is weak (RFC 9110 §13.1.1, REG-4b)")
+    func ifMatchNeverMatchesAWeakTag() async {
+        // §13.1.1 mandates the STRONG comparison function, and the CRC-32 tag cannot be a strong
+        // validator (see EntityTagCollisionTests for the collision). Refusing is the point: the
+        // alternative is authorizing a state change against bytes the client may never have seen.
         let tagged = await body("payload").respond(to: get(), body: [])
         let etag = tagged.head.headerFields[.etag] ?? ""
+        #expect(etag.hasPrefix("W/"))
         let response = await body("payload").respond(to: get(ifMatch: etag), body: [])
-        #expect(response.head.status == .ok)
-        #expect(response.body == Array("payload".utf8))
+        #expect(response.head.status == .preconditionFailed)
+        #expect(response.body.isEmpty)
     }
 
     @Test("If-Match with a stale validator is 412 Precondition Failed (RFC 9110 §13.2.2)")

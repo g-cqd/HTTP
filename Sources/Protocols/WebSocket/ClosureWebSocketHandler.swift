@@ -12,15 +12,18 @@ public import HTTPCore
 
 /// A ``WebSocketHandler`` backed by closures.
 public struct ClosureWebSocketHandler: WebSocketHandler {
-    private let upgrade: @Sendable (HTTPRequest) -> Bool
+    private let upgrade: @Sendable (SanitizedRequest) -> Bool
     private let originAllowed: @Sendable (String?) -> Bool
     private let onEvent: @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
 
     /// Creates a handler from an optional upgrade predicate, an optional `Origin` allowlist predicate
     /// (defaults to the secure ``WebSocketHandler`` policy — admit only a no-`Origin` non-browser
     /// client; override to allowlist trusted browser origins, RFC 6455 §10.2), and an event handler.
+    ///
+    /// The upgrade predicate is handed a ``SanitizedRequest``: it is an authorization decision, so the
+    /// fields it reads must be ones a client could not have supplied (audit R5-SEC1).
     public init(
-        shouldUpgrade: @escaping @Sendable (HTTPRequest) -> Bool = { _ in true },
+        shouldUpgrade: @escaping @Sendable (SanitizedRequest) -> Bool = { _ in true },
         isOriginAllowed: @escaping @Sendable (String?) -> Bool = { $0 == nil },
         handle: @escaping @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
     ) {
@@ -30,7 +33,7 @@ public struct ClosureWebSocketHandler: WebSocketHandler {
     }
 
     /// Asks the upgrade predicate.
-    public func shouldUpgrade(_ request: HTTPRequest) -> Bool { upgrade(request) }
+    public func shouldUpgrade(_ request: SanitizedRequest) -> Bool { upgrade(request) }
 
     /// Asks the origin-allowlist predicate.
     public func isOriginAllowed(_ origin: String?) -> Bool { originAllowed(origin) }

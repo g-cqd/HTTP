@@ -22,6 +22,21 @@
 //  unknown identity is the attack, and evicting instead would be worse still — it would let an
 //  attacker push a legitimate client out of the table and reset its budget at will.
 //
+//  *How long the window is* is now repaired too (R5-VAL). A `RollingWindow` of zero — or of a negative
+//  duration — reports "rolled over" on every single call, so the budget was zeroed before each request
+//  and `count <= limit` was always true: one mistyped `per:` disabled rate limiting outright while the
+//  middleware went on reporting itself installed (CWE-1284, and it removes a control that exists for
+//  CWE-770). The repair is a *substitution*, not a clamp, and that distinction is the whole point.
+//  Every other knob here clamps with `max(1, ·)` because for those the nearest legal value is also the
+//  strictest one. A window has the opposite geometry: the nearest legal value above zero is one
+//  nanosecond, which is the most permissive window there is and leaves the control just as disabled as
+//  before — a clamp that launders the bug instead of fixing it. `HTTPLimits.Bounds` already names this
+//  exact case for `acceptResumeRatio` and NaN: when no clamp target preserves the property the field
+//  was configured for, substitute the documented default. So a non-positive window becomes
+//  ``substitutedInterval``, which is also the floor `retryAfterSeconds` already used, so the window
+//  enforced and the `Retry-After` advertised agree. A *positive* window is never touched, however
+//  short: a deliberate 100 ms budget is a real configuration, and only the incoherent case is repaired.
+//
 
 public import HTTPConcurrency
 public import HTTPCore
@@ -40,6 +55,13 @@ public struct RateLimitMiddleware: HTTPMiddleware {
     /// amortized across admissions, and a table of genuinely live clients simply stays full.
     private static let reclaimScan = 16
 
+    /// The window substituted for a non-positive `per:` interval (R5-VAL).
+    ///
+    /// One second: the smallest window this type can also advertise honestly, since `Retry-After` is
+    /// expressed in whole seconds (RFC 9110 §10.2.3) and already floored there. See the file comment
+    /// for why a non-positive window is *substituted* rather than clamped to the nearest legal value.
+    public static let substitutedInterval = Duration.seconds(1)
+
     private let limit: Int
     private let intervalNanos: MonotonicNanoseconds
     private let retryAfterSeconds: Int
@@ -53,6 +75,10 @@ public struct RateLimitMiddleware: HTTPMiddleware {
     /// already in it is refused. Size it above the number of distinct clients genuinely expected
     /// within one window, or legitimate newcomers are turned away during a flood. `shards` trades a
     /// little memory for lock contention; `now` is injectable for tests.
+    ///
+    /// A non-positive `interval` is replaced by ``substitutedInterval`` rather than clamped to the
+    /// nearest legal duration, because the nearest legal duration is the *most permissive* window and
+    /// would leave rate limiting disabled — see the file comment (R5-VAL).
     public init(
         limit: Int,
         per interval: Duration,
@@ -61,9 +87,11 @@ public struct RateLimitMiddleware: HTTPMiddleware {
         shards: Int = 8,
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
+        let window = interval > .zero ? interval : Self.substitutedInterval
         self.limit = max(1, limit)
-        self.intervalNanos = interval.monotonicNanoseconds
-        self.retryAfterSeconds = max(1, Int(interval.components.seconds))
+        self.intervalNanos = window.monotonicNanoseconds
+        // Derived from the repaired window, so the advertised retry never outruns the enforced one.
+        self.retryAfterSeconds = max(1, Int(window.components.seconds))
         self.identity = identity
         self.now = now
         self.clients = SharedBoundedLRU(

@@ -37,7 +37,7 @@ extension Route {
     /// trusted browser origins (RFC 6455 §10.2).
     public static func webSocket(
         _ pattern: String,
-        shouldUpgrade: @escaping @Sendable (HTTPRequest) -> Bool = { _ in true },
+        shouldUpgrade: @escaping @Sendable (SanitizedRequest) -> Bool = { _ in true },
         isOriginAllowed: @escaping @Sendable (String?) -> Bool = { $0 == nil },
         handle: @escaping @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
     ) -> Self {
@@ -79,7 +79,7 @@ extension Route {
         _ pattern: String,
         hub: WebSocketHub,
         topic: String,
-        shouldUpgrade: @escaping @Sendable (HTTPRequest) -> Bool = { _ in true },
+        shouldUpgrade: @escaping @Sendable (SanitizedRequest) -> Bool = { _ in true },
         isOriginAllowed: @escaping @Sendable (String?) -> Bool = { $0 == nil },
         handle: @escaping @Sendable (WebSocketConnection.Event) async -> [WebSocketAction]
     ) -> Self {
