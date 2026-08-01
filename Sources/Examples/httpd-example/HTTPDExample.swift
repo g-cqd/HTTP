@@ -69,27 +69,11 @@ enum HTTPDExample {
         // posture for the Bench/ comparison against logging-off reference servers.
         let quiet = ProcessInfo.processInfo.environment["HTTPD_QUIET"] != nil
         let metrics = ExampleMetrics()  // the HTTPMetrics seam, surfaced at GET /metrics below
-        var middlewares: [any HTTPMiddleware] = []
-        if !quiet {
-            middlewares.append(AccessLogMiddleware { print("httpd-example: \($0)") })
-        }
-        middlewares.append(MetricsMiddleware(metrics))  // RED signals over the whole chain
-        // Inbound: gunzip a gzip body (bomb-capped). The initializer is failable because it refuses a
-        // configuration that is not a bound; the shipped defaults are one, so this always succeeds.
-        if let decompression = DecompressionMiddleware() {
-            middlewares.append(decompression)
-        }
-        middlewares.append(
-            contentsOf: [
-                CompressionMiddleware(),  // gzip the outgoing body
-                ServerHeaderMiddleware("httpd-example"),
-                DateHeaderMiddleware(),
-                SecurityHeadersMiddleware(),
-                CORSMiddleware(),
-                ConditionalRequestMiddleware(),  // ETag on the raw body, If-None-Match → 304
-                RangeMiddleware()  // innermost: Range → 206 (§14)
-            ] as [any HTTPMiddleware]
-        )
+        // HTTPD_PROFILE=floor strips the chain to the router alone — the apples-to-apples posture for
+        // the comparative benchmark, where every peer runs a framework-floor handler. The default is,
+        // and stays, the full shipped stack; see ``BenchmarkProfile`` for why both are measured.
+        let profile = BenchmarkProfile.current
+        let middlewares = profile.middlewares(metrics: metrics, quiet: quiet)
         let responder = MiddlewareChain(middlewares, terminatingAt: makeRouter(metrics: metrics))
         // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
         // QUIC/TLS); the server advertises it via Alt-Svc (RFC 7838) on the h1/h2 responses so a
@@ -110,6 +94,11 @@ enum HTTPDExample {
             handlerExecution: ExecutionTopology.policy()
         )
 
+        if profile == .floor {
+            // Announced on every path (worker included) so a benchmark log proves which stack was
+            // measured — the confound that made every previous comparative round unreadable.
+            print("httpd-example: PROFILE=floor — router only, no middleware (benchmark posture)")
+        }
         if Prefork.isWorker {
             print("httpd-example: worker \(getpid()) serving on \(port) via \(backbone.rawValue)")
         }
@@ -174,21 +163,30 @@ enum HTTPDExample {
     /// seam. `HEAD` is served by the matching `GET` (RFC 9110 §9.3.2); an unknown path is 404 and a
     /// known path with the wrong method is 405 — both folded by the router.
     private static func makeRouter(metrics: ExampleMetrics) -> Router {
-        Router {
+        // The comparative-benchmark bodies are built ONCE and captured, because that is what every
+        // peer server in `Benchmarking/Bench/` does (hyper: a `LazyLock<Bytes>` cloned by refcount;
+        // Go: a `strings.Repeat` captured by the handler; Bun/Hummingbird/Vapor: a module constant).
+        // Building them per request — which `/payload` and `/json` previously did — charged this
+        // server an allocation and a 1 KiB copy that no peer paid, on the exact routes the
+        // comparison reports. See `Benchmarking/Bench/RESULTS.md`.
+        let plaintext = Array(BenchmarkParity.plaintextBody.utf8)
+        let json = Array(BenchmarkParity.jsonBody.utf8)
+        let payload = Array(BenchmarkParity.payloadBody.utf8)
+        return Router {
             Route.get("/") { _, _, _ in
                 .text("Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 + HTTP/3 server.\n")
             }
             Route.get("/health") { _, _, _ in .text("OK\n") }
+            // The framework-floor benchmark route. `/` cannot serve that purpose: every server in the
+            // comparison answers it with its own name, so the field returns DIFFERENT BYTES there and
+            // the byte-equivalence gate rejects it. `/plaintext` is identical on every server.
+            Route.get("/plaintext") { _, _, _ in BenchmarkParity.text(plaintext) }
             // JSON serialization (the comparative-benchmark `/json` scenario): a small object encoded
             // to `application/json`.
-            Route.get("/json") { _, _, _ in
-                .json(Array(#"{"message":"Hello, World!"}"#.utf8))
-            }
+            Route.get("/json") { _, _, _ in .json(json) }
             // ~1 KiB of compressible text (the `/payload` scenario): 32 × 32 B = 1024 B, mirroring the
             // other benchmark servers byte-for-byte (a body worth gzipping).
-            Route.get("/payload") { _, _, _ in
-                .text(String(repeating: "from-scratch swift http server. ", count: 32))
-            }
+            Route.get("/payload") { _, _, _ in BenchmarkParity.text(payload) }
             // A `:name` path parameter (RFC 3986 §3.3) plus an optional `?greeting=` query parameter.
             Route.get("/hello/:name") { request, _, context in
                 let greeting = request.query["greeting"] ?? "Hello"
