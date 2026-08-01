@@ -7,7 +7,7 @@
 //
 
 /// The `gzip` content coding (RFC 1952).
-public struct GzipEncoder: ContentEncoder {
+public struct GzipEncoder: StreamingContentEncoder {
     /// The `gzip` content-coding token (RFC 9110 §8.4.1).
     public let token = "gzip"
 
@@ -20,6 +20,20 @@ public struct GzipEncoder: ContentEncoder {
     public func encode(_ body: [UInt8]) -> [UInt8]? {
         #if canImport(Compression) || canImport(CZlibCoding)
             return Gzip.compress(body)
+        #else
+            return nil
+        #endif
+    }
+
+    /// An incremental gzip member on Darwin, nil elsewhere.
+    ///
+    /// The Linux backend is the `CZlibCoding` shim, whose only entry point is a one-shot
+    /// `czlib_gzip_compress` over a worst-case-bounded destination — there is no resumable form to
+    /// call, and zlib's own `deflate`/`deflateEnd` are not exposed through it. A streamed response
+    /// therefore goes out **uncoded** on Linux rather than being buffered whole to code it.
+    public func makeStream() -> (any ContentEncoderStream)? {
+        #if canImport(Compression)
+            return GzipEncoderStream()
         #else
             return nil
         #endif
