@@ -92,7 +92,7 @@
                     }
                 }
 
-            let echoes = try await echoed.wait(forAtLeast: 1, timeout: .seconds(15))
+            let echoes = try await echoed.wait(forAtLeast: 1)
             #expect(echoes.first == [UInt8]("ping".utf8))
             #expect(await server.value)
             #expect(serverALPN.withLock(\.self) == "h2")

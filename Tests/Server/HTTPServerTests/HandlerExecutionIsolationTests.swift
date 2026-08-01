@@ -90,7 +90,7 @@ struct HandlerExecutionIsolationTests {
         }
 
         Self.writeRequest(Self.request(for: "/block"), to: blocking)
-        _ = try await entered.wait(forAtLeast: 1, timeout: .seconds(20))
+        _ = try await entered.wait(forAtLeast: 1)
 
         // The handler on `blocking` is now holding a thread. Under `.inline` that thread is the only
         // reactor, so this request is never even read.

@@ -175,7 +175,7 @@ struct NetworkFrameworkMutualTLSTests {
 
         // A surfaced connection would record into the probe; its absence is proven by the timeout.
         await #expect(throws: AsyncEventProbeTimeoutError.self) {
-            _ = try await yielded.wait(forAtLeast: 1, timeout: .seconds(2))
+            _ = try await yielded.wait(forAtLeast: 1, timeout: TestLivenessBudget.absence)
         }
         await transport.shutdown()
     }

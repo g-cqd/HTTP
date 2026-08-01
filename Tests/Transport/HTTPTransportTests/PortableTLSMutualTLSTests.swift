@@ -117,7 +117,7 @@
             defer { accepting.cancel() }
 
             Self.connect(port: port, identity: nil)
-            let subjects = try await surfaced.wait(forAtLeast: 1, timeout: .seconds(15))
+            let subjects = try await surfaced.wait(forAtLeast: 1)
             #expect(subjects.first == .some(nil))  // surfaced, with no client-cert subject
             await transport.shutdown()
         }
@@ -201,7 +201,7 @@
 
             connect(port: port, identity: identity)
             await #expect(throws: AsyncEventProbeTimeoutError.self) {
-                _ = try await yielded.wait(forAtLeast: 1, timeout: .seconds(2))
+                _ = try await yielded.wait(forAtLeast: 1, timeout: TestLivenessBudget.absence)
             }
             await transport.shutdown()
         }

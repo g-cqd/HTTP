@@ -103,12 +103,24 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
         }
     }
 
-    /// Convenience over `ContinuousClock` with a generous real-time deadline.
+    /// Convenience over `ContinuousClock`, racing a ``TestLivenessBudget``-scaled deadline.
     ///
-    /// Prefer the clock-injectable overload under a ``TestClock``.
-    public func wait(forAtLeast count: Int, timeout: Duration = .seconds(2)) async throws -> [Event]
-    {
-        try await wait(forAtLeast: count, within: timeout, clock: ContinuousClock())
+    /// The deadline is a *liveness* guard, not a latency assertion: it exists to turn a hang into a
+    /// failure that names this probe. `timeout` is therefore widened by ``TestLivenessBudget/scale``
+    /// even when a caller states it explicitly — a caller asking for ten seconds is saying "longer
+    /// than usual", not "fail if this takes eleven". Under load, unscaled explicit budgets missed too
+    /// (audit FLAKE-1).
+    ///
+    /// Prefer the clock-injectable overload under a ``TestClock``, where no real-time deadline applies.
+    public func wait(
+        forAtLeast count: Int,
+        timeout: Duration = TestLivenessBudget.nominal
+    ) async throws -> [Event] {
+        try await wait(
+            forAtLeast: count,
+            within: TestLivenessBudget.scaled(timeout),
+            clock: ContinuousClock()
+        )
     }
 
     /// The boundary half: parks until `count` events exist, honoring cancellation (the timeout

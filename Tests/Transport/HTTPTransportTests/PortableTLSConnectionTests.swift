@@ -112,7 +112,7 @@
             #expect(received == [UInt8]("ping".utf8))
             try await connection.send(try #require(received))
 
-            let echoes = try await echoed.wait(forAtLeast: 1, timeout: .seconds(15))
+            let echoes = try await echoed.wait(forAtLeast: 1)
             #expect(echoes.first == [UInt8]("ping".utf8))
             #expect(connection.isSecure)
             await connection.close()
@@ -194,7 +194,7 @@
                 }
                 unblocked.record(())
             }
-            _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+            _ = try await unblocked.wait(forAtLeast: 1)
             await joiner.value
             await connection.close()
         }

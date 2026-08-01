@@ -158,7 +158,7 @@ struct BackboneConformanceTests {
             _ = try? await receiveTask.value
             unblocked.record(())
         }
-        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await unblocked.wait(forAtLeast: 1)
         await joiner.value
 
         await connection.close()
@@ -201,7 +201,7 @@ struct BackboneConformanceTests {
             }
             unblocked.record(())
         }
-        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await unblocked.wait(forAtLeast: 1)
         await joiner.value
 
         await connection.close()
@@ -239,7 +239,7 @@ struct BackboneConformanceTests {
             }
             unblocked.record(())
         }
-        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await unblocked.wait(forAtLeast: 1)
         await joiner.value
 
         await connection.close()
@@ -293,7 +293,7 @@ struct BackboneConformanceTests {
             }
             drained.record(())
         }
-        _ = try await drained.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await drained.wait(forAtLeast: 1)
         await drainer.value
     }
 }

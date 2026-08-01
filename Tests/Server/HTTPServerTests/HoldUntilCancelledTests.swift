@@ -33,7 +33,7 @@ struct HoldUntilCancelledTests {
 
         task.cancel()
         // Must resume on cancellation, not hang (the .timeLimit fails a hang).
-        _ = try? await finished.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try? await finished.wait(forAtLeast: 1)
         await task.value
         #expect(finished.count == 1)
     }
