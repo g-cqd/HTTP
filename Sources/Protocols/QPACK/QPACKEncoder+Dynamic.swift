@@ -77,10 +77,10 @@ extension QPACKEncoder {
         }
         // First sighting, or no room without evicting a still-referenced entry → leave it a candidate
         // (do not consume it from the window) so a later sighting can still insert it once room frees up.
-        guard isRepeatedField(field), makeRoom(for: field) else {
+        guard recentFields.recordSighting(of: field), makeRoom(for: field) else {
             return
         }
-        forgetRecentField(field)
+        recentFields.forget(field)  // it lives in the table now; stop tracking it as a candidate
         // Pass the `UTF8View`s straight to the instruction encoder (which takes `some Collection<UInt8>`)
         // — no `Array(field.*.utf8)` copy on the insert path.
         if let nameIndex = QPACKStaticTable.nameIndex[field.name] {
@@ -114,29 +114,6 @@ extension QPACKEncoder {
         }
         table = trial
         return true
-    }
-
-    /// Records `field` in the recent-sightings window and reports whether it had already been seen — a
-    /// repeat worth inserting.
-    ///
-    /// The field stays in the window until it is actually inserted, so a repeat whose insert is deferred
-    /// (no room yet) is not mistaken for a first sighting next time.
-    private mutating func isRepeatedField(_ field: HeaderField) -> Bool {
-        if recentFields.contains(field) {
-            return true
-        }
-        recentFields.append(field)
-        if recentFields.count > recentFieldLimit {
-            recentFields.removeFirst()
-        }
-        return false
-    }
-
-    /// Drops `field` from the recent-sightings window once it lives in the dynamic table.
-    private mutating func forgetRecentField(_ field: HeaderField) {
-        if let position = recentFields.firstIndex(of: field) {
-            recentFields.remove(at: position)
-        }
     }
 
     // MARK: Representation + blocking (RFC 9204 §4.5 / §2.1.2)

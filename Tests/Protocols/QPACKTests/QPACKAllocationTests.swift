@@ -2,11 +2,11 @@
 //  QPACKAllocationTests.swift
 //  QPACKTests
 //
-//  Allocation ceilings for the QPACK hot path (RFC 9204 §4.5). The 200k-rps target needs the
-//  per-request field-section decode to stay allocation-light, so `expectAllocations` (the libmalloc
-//  hook) trips deterministically if a re-introduced copy / box / un-reserved growth regresses the
-//  budget — a mutation-resistant guard that runs in the normal `swift test` CI gate and is
-//  machine-independent (allocation counts are exact, unlike wall-clock).
+//  Allocation ceilings for the QPACK hot path (RFC 9204 §4.5 decode, §4.3 encoder heuristic). The
+//  200k-rps target needs the per-request field-section decode to stay allocation-light, so
+//  `expectAllocations` (the libmalloc hook) trips deterministically if a re-introduced copy / box /
+//  un-reserved growth regresses the budget — a mutation-resistant guard that runs in the normal
+//  `swift test` CI gate and is machine-independent (allocation counts are exact, unlike wall-clock).
 //
 
 import HTTPCore
@@ -42,6 +42,23 @@ struct QPACKAllocationTests {
             block.withUnsafeBytes { raw in
                 _ = try? decoder.decode(raw.bytes)
             }
+        }
+    }
+
+    @Test("a sighting in the saturated insert-on-second-use window allocates nothing (§4.3)")
+    func recentFieldSightingAllocatesNothing() {
+        // The window saturates almost immediately on a real connection, because a unique per-response
+        // value (date, etag, content-length) is sighted once, never recurs, and is pushed out by the
+        // next one — so the saturated state IS the steady state, and it must cost no heap traffic.
+        // The ring is fixed-length and the position map churns keys within a reserved capacity, so a
+        // sighting neither grows nor reallocates either one.
+        var window = QPACKRecentFieldWindow(limit: 64)
+        for index in 0 ..< 200 {
+            _ = window.recordSighting(of: HeaderField(name: "etag", value: "\"tag-\(index)\""))
+        }
+        let novel = HeaderField(name: "etag", value: "\"tag-novel\"")
+        expectAllocations(noMoreThan: 0) {
+            _ = window.recordSighting(of: novel)
         }
     }
 }
