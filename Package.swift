@@ -82,6 +82,10 @@ let strictMemorySafeTargets: Set<String> = [
         "Quic/ModernQUICConnection.swift",
         "Quic/ModernQUICStream.swift",
         "Quic/ModernQUICTransport.swift",
+        // The `NWEndpoint` -> `TransportAddress` mapping only. `Quic/QUICPeer.swift` — the
+        // `unattributed` sentinel the admission gate and `RateLimitIdentity` key on (ADD-P0.5b) — is
+        // platform-neutral and deliberately STAYS in the Linux graph.
+        "Quic/QUICPeer+Network.swift",
         "Quic/QUICTransportFactory.swift"
     ]
     // The outbound/inbound codings built on Apple's `Compression` framework (Brotli RFC 7932, gzip
@@ -104,6 +108,11 @@ let strictMemorySafeTargets: Set<String> = [
         "ModernQUICTransportTests.swift",
         "NetworkFrameworkMutualTLSTests.swift",
         "NetworkFrameworkTLSTests.swift",
+        // Network.framework QUIC listeners + `NWConnection` h3 clients + the `NWEndpoint` overload
+        // of `QUICPeer.address(of:)`. The platform-neutral half of the same contract — the shared,
+        // capped bucket every unattributable peer folds into — is `QUICPeerAdmissionTests.swift`,
+        // which is NOT excluded and keeps ADD-P0.5b covered on Linux.
+        "QUICPeerAttributionTests.swift",
         // raw BSD-socket options; SO_NOSIGPIPE is Darwin-only (the epoll tests cover Linux)
         "POSIXSocketTests.swift"
     ]
