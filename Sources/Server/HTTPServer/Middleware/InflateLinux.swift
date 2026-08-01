@@ -44,35 +44,19 @@
             }
         }
 
-        /// The first destination size tried, in octets — see ``decode(_:maxOutput:raw:)``.
-        private static let window = 64 * 1_024
-
-        /// The shared bounded decode: zlib reaches `Z_STREAM_END` only when the whole stream fits, so
-        /// the shim returns 0 for a destination that is too small. `raw` selects raw DEFLATE (no
+        /// The bounded decode: zlib reaches `Z_STREAM_END` only when the whole stream fits, so the
+        /// shim returns 0 for a destination that is too small. `raw` selects raw DEFLATE (no
         /// zlib/gzip header) over the auto-detecting path.
         ///
-        /// The destination grows geometrically from ``window`` rather than being sized to the cap.
-        /// Sizing to the cap made every request pay the cap — a small coded body under a default-scale
-        /// limit allocated hundreds of megabytes — and `maxOutput + 1` overflowed at `Int.max`. The
-        /// trade is CPU: the shim is one-shot, so unlike the Darwin path (`Inflate.swift`, which
-        /// enforces the bound *during* an incremental decode) each growth step re-inflates from the
-        /// start, costing about twice the decode of the final size across at most `log2(cap / window)`
-        /// attempts. Note also that the final attempt is sized to `maxOutput` exactly, so an over-cap
-        /// body simply never fits — which is the fail-closed signal, with no `+ 1` to overflow.
+        /// The retry schedule and the CWE-409 cap live in ``BoundedGrowthDecode``, shared with the
+        /// libbrotli shim — the rationale for growing geometrically rather than sizing to the cap is
+        /// documented there, once, and tested by `BoundedGrowthDecodeTests`.
         private static func decode(_ input: [UInt8], maxOutput: Int, raw: Bool) -> [UInt8]? {
-            guard maxOutput > 0, !input.isEmpty else {
+            guard !input.isEmpty else {
                 return nil
             }
-            var capacity = min(window, maxOutput)
-            while true {
-                if let output = attempt(input, capacity: capacity, raw: raw) {
-                    return output
-                }
-                guard capacity < maxOutput else {
-                    return nil
-                }
-                // `capacity * 2` only where it provably stays within the cap, so it cannot overflow.
-                capacity = capacity <= maxOutput / 2 ? capacity * 2 : maxOutput
+            return BoundedGrowthDecode.run(maxOutput: maxOutput) {
+                attempt(input, capacity: $0, raw: raw)
             }
         }
 

@@ -49,7 +49,11 @@ public enum HPACKString {
             do { return try Huffman.decode(payload) }
             catch { throw .invalidHuffman }
         }
-        return payload.withUnsafeBytes { Array($0) }
+        // SE-0458: the materialization boundary. `payload` is a `RawSpan` the compiler has already
+        // lifetime-checked against `reader`'s buffer and whose extent `parseHeader` bounded against
+        // `maxEncodedLength`; `withUnsafeBytes` narrows that checked span to a pointer that lives for
+        // exactly the closure body, which copies out and lets it die. Nothing escapes.
+        return payload.withUnsafeBytes { unsafe Array($0) }
     }
 
     /// Decodes a string literal straight into a `String` (RFC 7541 §5.2).
@@ -66,7 +70,9 @@ public enum HPACKString {
             do { return try Huffman.decodeString(payload) }
             catch { throw .invalidHuffman }
         }
-        return payload.withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
+        // SE-0458: the same bounded materialization as `decode(_:maxEncodedLength:)` above, into a
+        // `String` instead of an `[UInt8]`.
+        return payload.withUnsafeBytes { unsafe String(decoding: $0, as: Unicode.UTF8.self) }
     }
 
     /// Parses the §5.2 string header (H flag + 7-bit length), bounds the declared length against

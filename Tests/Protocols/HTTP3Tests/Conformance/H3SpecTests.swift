@@ -29,8 +29,21 @@ struct H3SpecTests: HTTP3WireFixtures {
             #expect(!check.title.isEmpty, "every check describes the behavior under test")
             #expect(!check.expect.isEmpty, "every check states the expected reaction")
         }
-        // h3spec contributes 49 active checks: 27 transport + 7 TLS + 11 HTTP/3 + 4 QPACK.
-        #expect(checks.filter { $0.source == .h3spec }.count == 49)
+        // h3spec contributes 49 active checks. The per-LAYER split is pinned, not just the total,
+        // because it is what makes this suite the gate the external `h3spec` job cannot be (see
+        // docs/standards/CONFORMANCE.md): h3spec groups its own 49 cases as 34 under
+        // `describe "QUIC servers"` (27 RFC 9000 transport + 7 RFC 9001 TLS) and 15 under
+        // `describe "HTTP/3 servers"` (11 RFC 9114 + 4 RFC 9204) — counted from a v0.1.13 run,
+        // 2026-07-31. Those 15 are the cases that exercise code in this repository, and each must
+        // appear here as an engine-driven `.supported` row. Drift in a number means the mirror
+        // stopped mirroring, and the gate quietly narrowed.
+        let fromH3Spec = checks.filter { $0.source == .h3spec }
+        #expect(fromH3Spec.count == 49)
+        let byLayer = Dictionary(grouping: fromH3Spec, by: \.layer).mapValues(\.count)
+        #expect(byLayer[.quicTransport] == 27)  // h3spec "QUIC servers", RFC 9000 — excluded
+        #expect(byLayer[.quicTLS] == 7)  // h3spec "QUIC servers", RFC 9001 — excluded
+        #expect(byLayer[.http3] == 11)  // h3spec "HTTP/3 servers", RFC 9114 — GATED here
+        #expect(byLayer[.qpack] == 4)  // h3spec "HTTP/3 servers", RFC 9204 — GATED here
         // The Swift engine implements the HTTP/3 + QPACK layers; QUIC transport/TLS are platform-enforced.
         for check in checks {
             switch check.layer {
@@ -40,6 +53,9 @@ struct H3SpecTests: HTTP3WireFixtures {
                     #expect(check.status == .platform, "\(check.title) is platform-enforced")
             }
         }
+        // Nothing may sit in `.pending`. A staged row is a check that does not run, and this suite is
+        // a gate: a new RFC MUST arrives `.supported` with its driver, or it does not arrive.
+        #expect(checks.allSatisfy { $0.status != .pending })
     }
 
     @Test("the HTTP/3 and QPACK error-code registries match the RFC wire values")

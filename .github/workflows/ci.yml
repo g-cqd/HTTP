@@ -108,6 +108,32 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # Dependency reproducibility. `ADFoundation` is first-party and UNVERSIONED, and it used to be
+  # taken from `branch: "main"`. A moving branch means two checkouts of the same HTTP commit can
+  # resolve different dependency code — so a build is not reproducible, a benchmark number is not
+  # attributable to a commit, and a green CI run is not evidence about any particular input. It is
+  # pinned to an exact revision in the manifest instead.
+  #
+  # `Package.resolved` stays GITIGNORED on purpose: this is a reusable library, and committing a
+  # lockfile would publish one resolution of the whole graph to every consumer, who must resolve
+  # their own. That is precisely why the manifest pin has to be exact — with no committed lockfile,
+  # the manifest is the only thing making this package's own builds deterministic.
+  #
+  # Both halves were already in place; nothing enforced either. This job does: the pin must be a
+  # 40-hex revision (no branch, no version range), Package.resolved must stay untracked, and
+  # resolving the graph must actually land on the pinned revision with no branch or version
+  # attached. Verified red in both directions (branch pin; committed lockfile) before landing.
+  # ---------------------------------------------------------------------------
+  dependency-pinning:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Assert ADFoundation is pinned to an exact revision
+        run: python3 scripts/dependency-pinning.py
+
+  # ---------------------------------------------------------------------------
   # Trap-surface gate. The request path must stay free of process-aborting traps, so one bad request
   # can never crash the whole server (the in-process half of crash defense; prefork covers app traps).
   # SwiftLint already gates try!/as!/force-unwrap; this covers fatalError/precondition/assertionFailure
@@ -152,6 +178,36 @@ jobs:
             exit 1
           fi
           echo "every wire parser/decoder cites its standard"
+
+  # ---------------------------------------------------------------------------
+  # SE-0458 strict memory safety — the STAGED gate (ADR 0009, superseding ADR 0002).
+  #
+  # CLAUDE.md asks for "strict memory". The package cannot turn `-strict-memory-safety` on globally:
+  # the census below counts 465 expressions that use unsafe constructs without an `unsafe` marker, and
+  # under warnings-as-errors every one of them is a build error. So the gate is staged in two halves.
+  #
+  #   • The HARD half is in the manifest, not here: `strictMemorySafeTargets` in Package.swift adds
+  #     `.strictMemorySafety()` to the targets already at zero (HTTPConcurrency, HPACK, QPACK,
+  #     HTTPObservability, HTTPAuth). `build-test` and `release-test` run with HTTP_WARNINGS_AS_ERRORS,
+  #     so a new un-annotated unsafe expression in one of those targets is a BUILD ERROR there.
+  #   • The RATCHET half is this job: a full `-strict-memory-safety` census of the remaining nine
+  #     targets, compared against `.github/strict-memory-safety-budget.tsv`. A count may fall freely;
+  #     if one rises, this job fails and names the target. A target that reaches 0 graduates into the
+  #     manifest list and stops being a number.
+  #
+  # Its own job (not folded into build-test) because it is a full rebuild under a different flag set,
+  # and because a ratchet breach should read as its own red X rather than as a build failure.
+  # ---------------------------------------------------------------------------
+  strict-memory-safety:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Toolchain
+        run: swift --version
+      - name: Census + ratchet (per-target unsafe-site budget)
+        run: python3 scripts/strict-memory-safety.py --verbose
 
   # ---------------------------------------------------------------------------
   # Data-race & memory checks. Parsers must stay clean under ASan/TSan.
@@ -414,23 +470,71 @@ jobs:
         run: docker rm -f httpd || true
 
   # ---------------------------------------------------------------------------
-  # HTTP/3 conformance — h3spec (RFC 9114 / QUIC v1) against httpd-example serving h3 over
-  # Network.framework QUIC. Darwin-only (QUIC is Network.framework here), hence a macOS job; the
-  # `tls` argument mints a throwaway self-signed identity and `-n` skips client-side validation.
+  # HTTP/3 conformance (RFC 9114 / RFC 9204) — THE GATE. Required; no continue-on-error.
   #
-  # ADVISORY (continue-on-error) — the attempt is documented, per P10's no-silent-omission gate:
-  # validated locally 2026-07-02 on arm64 macOS with h3spec v0.1.13 (h3spec-mac-arm64). The server
-  # comes up (h1/h2 probe 200, QUIC listener + Alt-Svc advertised), but h3spec reports 48/49
-  # failures — every one a QUIC-TRANSPORT-layer expectation (TRANSPORT_PARAMETER_ERROR /
-  # PROTOCOL_VIOLATION / STREAM_STATE_ERROR / FLOW_CONTROL_ERROR …) aimed at the peer's QUIC
-  # stack. That stack is Apple's CLOSED Network.framework implementation, which h3spec's Haskell
-  # quic client cannot drive into those states (it expects the behaviors of its own quic library
-  # as the peer). The RFC 9114/9204 layer this package actually owns is covered by the in-repo
-  # HTTP3 conformance + QPACK suites in `build-test`. Promote this job if h3spec grows a mode that
-  # exercises the h3 layer independently of transport internals, or Apple's QUIC exposes the
-  # needed transport behaviors. The report uploads as an artifact either way.
+  # This replaces the advisory external-`h3spec` job as the thing that fails on an HTTP/3 regression.
+  # The reasoning is measured, not assumed (2026-07-31, arm64 macOS, h3spec v0.1.13, release build):
+  #
+  #   • h3spec CAN split its suite — it takes hspec's `-m/--match` and `-s/--skip`, and its 49 cases
+  #     are grouped `describe "QUIC servers"` (34: 27 RFC 9000 transport + 7 RFC 9001 TLS) and
+  #     `describe "HTTP/3 servers"` (15: 11 RFC 9114 + 4 RFC 9204). So `-m "HTTP/3 servers"` selects
+  #     exactly the subset that exercises our code. The split is mechanically available.
+  #   • It still cannot gate. Re-running the full suite reproduces 49 examples / 48 failures, and
+  #     ALL 48 carry the identical message `did not get expected exception: QUICException`; with
+  #     `-d` the cause is `ConnectionIsTimeout "Client Handshaking"`. The HTTP/3-layer cases fail for
+  #     exactly the reason the transport ones do — the client never completes a QUIC handshake, so
+  #     nothing ever reaches the h3 layer. An intentionally broken H3 engine would produce a
+  #     byte-identical report. Zero discriminating power.
+  #   • The previously documented cause ("Apple's closed QUIC rejects h3spec's Haskell client") does
+  #     not survive measurement. `ModernQUICTransport.start` builds its `Network.NetworkListener`
+  #     without a port, so the QUIC listener binds an EPHEMERAL UDP port and only announces it via
+  #     Alt-Svc (observed `alt-svc: h3=":50649"` while this job dialed 14433). h3spec has no Alt-Svc
+  #     discovery. The job has been dialing a UDP port with nothing on it. See
+  #     docs/standards/CONFORMANCE.md; the listener fix is transport work, tracked there.
+  #
+  # So the gate is built from the in-repo suites, which drive the same 15 RFC 9114/9204 MUSTs against
+  # the real engine: `H3SpecTests` mirrors h3spec's catalog row-for-row (its `catalogIsWellFormed`
+  # pins the 27/7/11/4 layer split, so the mirror cannot silently narrow) and
+  # `endpointClosesWithMandatedError` drives each `.supported` row and asserts the mandated error
+  # code. Release configuration, because that is where an optimizer-visible engine regression shows.
   # ---------------------------------------------------------------------------
-  h3spec:
+  h3-conformance:
+    runs-on: macos-26
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Toolchain
+        run: swift --version
+      - name: RFC 9114 / RFC 9204 conformance (release)
+        run: |
+          swift test -c release --scratch-path "$SCRATCH" \
+            --filter 'HTTP3Tests' --filter 'QPACKTests'
+      - name: HTTP/3 over real QUIC — loopback integration (release)
+        run: |
+          swift test -c release --scratch-path "$SCRATCH" \
+            --filter 'HTTPServerHTTP3Tests' --filter 'HTTPServerWebSocketHTTP3Tests'
+
+  # ---------------------------------------------------------------------------
+  # External h3spec — EVIDENCE, not a gate, and dispatch-only so it never contributes a red X that
+  # everyone learns to ignore. That is the failure mode this job was in: `continue-on-error: true`,
+  # 48/49 red on every run, gating nothing and proving nothing.
+  #
+  # The two steps below encode the split the moment it becomes runnable. Step 1 is the subset that
+  # would gate (`-m "HTTP/3 servers"`, RFC 9114 §4/§6.2/§7.2 + RFC 9204 §3.1/§4.1.3/§4.2/§4.4.3).
+  # Step 2 is the excluded subset, run only to keep observing it. The excluded cases are listed BY
+  # NAME with their expected error codes in the in-repo catalog — `H3Catalog+Transport.swift` (27
+  # RFC 9000 rows) and the `quicTLS` block of `H3ConformanceCatalog.swift` (7 RFC 9001 rows) — each
+  # `.platform`-stamped, i.e. enforced by Apple's QUIC/TLS stack rather than by any code here. That
+  # file is the authoritative exclusion list; it is asserted complete by `H3SpecTests`.
+  #
+  # Promote step 1 to a required job when its cases stop failing on the handshake — the blocker is
+  # the ephemeral QUIC listener port, not the h3 engine (see docs/standards/CONFORMANCE.md).
+  # ---------------------------------------------------------------------------
+  h3spec-observation:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     continue-on-error: true
     steps:
@@ -445,28 +549,38 @@ jobs:
           chmod +x /tmp/h3spec
       - name: Build example server (release)
         run: swift build -c release --product httpd-example --scratch-path "$SCRATCH"
-      - name: h3spec against httpd-example (QUIC + self-signed TLS)
+      - name: Start httpd-example (QUIC + self-signed TLS)
         run: |
           BIN="$(swift build -c release --product httpd-example --scratch-path "$SCRATCH" --show-bin-path)/httpd-example"
           "$BIN" 14433 networkFramework tls quiet >/tmp/httpd-h3.log 2>&1 &
-          PID=$!
-          # Wait for the TLS listener (the h1/h2 side of the same port).
+          echo $! > /tmp/httpd-h3.pid
+          # Wait for the TLS listener (the h1/h2 side of the same TCP port).
           for _ in $(seq 1 40); do
             curl -sk --max-time 1 -o /dev/null https://127.0.0.1:14433/ && break
             sleep 0.5
           done
-          set +e
-          /tmp/h3spec 127.0.0.1 14433 -n -t 4000 2>&1 | tee /tmp/h3spec-report.txt
-          rc=$?
-          set -e
-          kill "$PID" 2>/dev/null || true
-          exit $rc
-      - name: Upload h3spec report
+          # Record which UDP port the QUIC listener actually bound — this is the discrepancy that
+          # makes the run vacuous, so surface it rather than letting it hide in the failures.
+          curl -skI --max-time 4 https://127.0.0.1:14433/ | grep -i alt-svc || true
+      - name: h3spec — the RFC 9114/9204 subset (the gating candidate)
+        run: |
+          /tmp/h3spec 127.0.0.1 14433 -n -t 4000 -m "HTTP/3 servers" \
+            2>&1 | tee /tmp/h3spec-http3.txt || true
+      - name: h3spec — the QUIC transport/TLS subset (excluded; see the in-repo catalog)
+        run: |
+          /tmp/h3spec 127.0.0.1 14433 -n -t 4000 -m "QUIC servers" \
+            2>&1 | tee /tmp/h3spec-quic.txt || true
+      - name: Stop the server
+        if: always()
+        run: kill "$(cat /tmp/httpd-h3.pid)" 2>/dev/null || true
+      - name: Upload h3spec reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: h3spec-report
-          path: /tmp/h3spec-report.txt
+          name: h3spec-reports
+          path: |
+            /tmp/h3spec-http3.txt
+            /tmp/h3spec-quic.txt
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
@@ -524,8 +638,12 @@ jobs:
 #     are fixed. Only generic/http2-3 stay out, for the invalid-preface GOAWAY (a benign ambiguity).
 #   • Autobahn (WebSocket, RFC 6455) — PROMOTED to a required gate (P10, 2026-07-02) after
 #     consecutive green runs; the fuzzingclient report gate blocks on any FAILED case.
-#   • h3spec — job added but ADVISORY: 48/49 failures are transport-layer expectations Apple's
-#     closed Network.framework QUIC cannot be driven into by h3spec's client; see the job comment.
+#   • HTTP/3 (RFC 9114 / RFC 9204) — REQUIRED as `h3-conformance`, driven from the in-repo suites
+#     that mirror h3spec's catalog row-for-row. The external tool moved to `h3spec-observation`
+#     (dispatch-only, non-gating): a re-run showed its 48 failures are one QUIC handshake timeout
+#     reported 48 times, not 48 findings, so it cannot tell a correct engine from a broken one. The
+#     blocker to promoting it is that the QUIC listener binds an EPHEMERAL UDP port rather than the
+#     one it was given, so h3spec dials a dead port. See docs/standards/CONFORMANCE.md.
 #   • Benchmark baseline gate — harness health is REQUIRED now; the low-noise drift check
 #     (malloc zero-delta + instructions ±5%) activates when a runner-class baseline is committed
 #     under Benchmarking/Benchmarks/.benchmarkBaselines/ (capture via dispatch update_baseline).

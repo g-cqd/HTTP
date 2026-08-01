@@ -30,7 +30,11 @@ public enum LiveMonotonicClock {
     /// Monotonic nanoseconds (`CLOCK_MONOTONIC`) for elapsed-time measurement.
     public static let now: MonotonicNowProvider = {
         var ts = timespec()
-        clock_gettime(CLOCK_MONOTONIC, &ts)
+        // SE-0458: `clock_gettime` is an imported C function taking a pointer, so it is unsafe by
+        // import. The safety argument is local and total — `ts` is a fresh stack `timespec` whose
+        // address is valid for exactly the duration of this call, and the kernel writes only the
+        // two fields the type declares. Nothing escapes the statement.
+        unsafe clock_gettime(CLOCK_MONOTONIC, &ts)
         return Int64(ts.tv_sec) &* 1_000_000_000 &+ Int64(ts.tv_nsec)
     }
 }
