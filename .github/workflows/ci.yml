@@ -302,6 +302,26 @@ jobs:
   # activates automatically once a runner-class baseline is committed under
   # Benchmarking/Benchmarks/.benchmarkBaselines/. Capture one via workflow_dispatch with
   # update_baseline=true, download the artifact, and commit it.
+  #
+  # WHY NO BASELINE IS COMMITTED YET (PERF-2, 2026-08-01). The gate has never activated, and the
+  # tempting fix — capture one on a developer machine and commit it — was measured and rejected.
+  # The `.instructions` threshold gates p90 and p99 at ±5 %. Instruction COUNTS are deterministic,
+  # but the p90/p99 of a sampled distribution are not: preemption inflates the counter on a busy
+  # box. Measured on the PERF-2 host at load ~30 on 10 cores, p99 instructions ran 0–75 % above p0
+  # across the routing suite (median ~11 %, four benchmarks above 18 %) — i.e. the noise floor
+  # exceeded the gate's own threshold by up to 15x.
+  #
+  # A baseline captured under that noise is PADDED by it. It would not cry wolf; it would do the
+  # quieter and worse thing and never fire, because every real regression smaller than the padding
+  # would fit underneath it. `.mallocCountTotal` at absolute zero-delta would survive the transfer
+  # (mallocs are flat regardless of load), but that is the one metric already locked deterministically
+  # by `expectAllocations` in the `swift test` gate, so it would add nothing.
+  #
+  # A meaningful baseline therefore has to come from this runner class, which is what the dispatch
+  # path below exists for — and it must PROVE it is quiet enough to be worth committing. The capture
+  # path now re-runs the suite against the baseline it just took: a runner that cannot reproduce its
+  # own numbers back to back cannot gate anyone else's, and its artifact must be discarded rather
+  # than committed.
   # ---------------------------------------------------------------------------
   benchmarks:
     runs-on: macos-26
@@ -322,13 +342,28 @@ jobs:
           else
             # No baseline yet: the harness-health half of the gate (build + every benchmark runs).
             swift package --package-path Benchmarking/Benchmarks --disable-sandbox benchmark
-            echo "::notice::no committed benchmark baseline — low-noise drift gate pending capture (dispatch with update_baseline=true)"
+            echo "::notice::no committed benchmark baseline — drift gate inactive by decision, not by omission. A baseline must be captured on THIS runner class (dispatch with update_baseline=true) and must pass the self-reproduction check; see the comment above this job."
           fi
       - name: Capture baseline (manual dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
         run: |
           swift package --package-path Benchmarking/Benchmarks --disable-sandbox \
             --allow-writing-to-package-directory benchmark baseline update main
+      # Qualify the baseline before anyone commits it. A second run of the same code on the same
+      # runner must pass the same thresholds the baseline will later enforce; if it does not, the
+      # runner's noise is larger than the gate's tolerance and the artifact is not fit to gate a PR.
+      # This step is allowed to fail — it reports fitness, it does not block the capture — but a
+      # FAILING result means: do not commit the artifact.
+      - name: Qualify baseline (self-reproduction on the capturing runner)
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        continue-on-error: true
+        run: |
+          if swift package --package-path Benchmarking/Benchmarks --disable-sandbox \
+              benchmark baseline check main; then
+            echo "::notice::baseline qualified — this runner reproduced its own numbers within the pinned thresholds; the artifact is fit to commit"
+          else
+            echo "::warning::baseline NOT qualified — this runner could not reproduce its own numbers within the pinned thresholds. Its noise floor exceeds the gate's tolerance, so committing this artifact would produce a gate that either fires spuriously or is padded blind. Discard it and re-capture on a quieter runner."
+          fi
       - name: Upload baseline artifact (manual dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
         uses: actions/upload-artifact@v4
