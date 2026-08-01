@@ -3,9 +3,10 @@
 //  CCRC32
 //
 //  Hardware/SWAR backends for the gzip CRC-32 (RFC 1952 §8; reflected polynomial 0xEDB88320), behind
-//  the pure-Swift `CRC32` facade. Every function is a one-shot that returns the *final* checksum (the
-//  value gzip appends) of `buf[0..<len]`, and all agree bit-for-bit with the portable reference; the
-//  CPU-specific ones fall back to the table when their feature is unavailable.
+//  the pure-Swift `CRC32` facade. Every function returns the *final* checksum (the value gzip appends)
+//  of `buf[0..<len]`, and all agree bit-for-bit with the portable reference; the CPU-specific ones fall
+//  back to the table when their feature is unavailable. All are one-shots except `ccrc32_update`, the
+//  seeded form a streaming encoder folds chunk by chunk.
 //
 
 #ifndef CCRC32_H
@@ -16,6 +17,15 @@
 
 /// The fastest backend available on this CPU (ARM CRC32 / zlib-on-x86 / slicing-by-8 table).
 uint32_t ccrc32(const uint8_t *buf, size_t len);
+
+/// Folds `buf[0..<len]` into a running checksum and returns the checksum *so far*.
+///
+/// The seeded form of ``ccrc32``: start at 0, feed each chunk in order, and the last return is the
+/// value gzip appends — so `ccrc32_update(0, buf, len) == ccrc32(buf, len)`. A streaming encoder
+/// cannot hold its payload to checksum it at the end, which is the only reason this exists. The
+/// running value carries the same final conditioning as the one-shots (not the inverted intermediate),
+/// so any prefix of the fold is itself a valid checksum of that prefix.
+uint32_t ccrc32_update(uint32_t crc, const uint8_t *buf, size_t len);
 
 /// Portable slicing-by-8 table (always available) — the cross-check reference.
 uint32_t ccrc32_slice8(const uint8_t *buf, size_t len);

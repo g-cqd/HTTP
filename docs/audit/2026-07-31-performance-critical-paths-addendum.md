@@ -528,6 +528,20 @@ blocking-I/O pool and a metadata/descriptor cache with explicit invalidation bou
 retain `sendfile`; TLS/H2/H3 need pooled owned buffers or a platform-specific zero-copy facility where
 the security layer supports it.
 
+**Resolution (ADR 0008).** Measured rather than inferred, and the inference was half wrong. Every one
+of these sites except the streaming `pread` is inside the `respond` call, so it already rides
+`HandlerExecutionPolicy` and leaves the reactor under `.concurrent` — no second executor is needed for
+it. The streaming `pread` is on the reactor because the seam *ends at* `respond`, not because it lacks
+a pool, so a pool would not have fixed it either. Both placements are pinned by
+`StaticFileExecutionPlacementTests`; the remaining gap and its pre-registered closing rule are in
+ADR 0008. The metadata/descriptor cache is not attempted — it needs an invalidation design of its own.
+
+The `FileRegionStreamer` copy in the list above was also measured: `Array(chunk[..<count])` already
+allocated nothing for a full chunk, because `Array.init(ArraySlice)` is identity-preserving when the
+slice covers the whole array. The real copy was the ragged tail and any short read, one per response
+rather than one per chunk. The pump now resizes one buffer in place, which removes that and stops the
+zero-copy property from resting on an unspecified stdlib fast path.
+
 Fallback file streaming copies each 64 KiB slice into a new array. Pass ownership of a pooled chunk or
 write from a borrowed buffer before reuse.
 

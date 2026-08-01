@@ -32,6 +32,47 @@ public enum CRC32 {
         case x86
     }
 
+    /// A CRC-32 folded incrementally over chunks (RFC 1952 §8).
+    ///
+    /// The seeded form of ``CRC32/checksum(_:backend:)``, for a producer that never holds the whole
+    /// payload: a streaming gzip encoder has to emit the trailer without having retained the octets it
+    /// checksummed. ``checksum`` after the last ``update(_:)`` equals the one-shot checksum of the
+    /// concatenation, and after *any* prefix it equals the checksum of that prefix.
+    ///
+    /// Nested here rather than given its own file because it folds through this type's portable table
+    /// on the non-contiguous path, exactly as ``Backend`` shares its dispatch.
+    public struct Running: Sendable {
+        /// The checksum of everything folded in so far — the value gzip appends once the input ends.
+        public private(set) var checksum: UInt32 = 0
+
+        /// Creates a running checksum positioned at the empty input.
+        public init() {
+            // The CRC-32 of the empty input is 0, which is the property's initial value.
+        }
+
+        /// Folds `bytes` into the running checksum.
+        ///
+        /// Contiguous input goes to the same accelerated backend ``CRC32/checksum(_:backend:)`` picks
+        /// by default; a non-contiguous sequence folds through the portable byte-at-a-time table.
+        public mutating func update<Bytes: Sequence>(_ bytes: Bytes) where Bytes.Element == UInt8 {
+            let folded = bytes.withContiguousStorageIfAvailable { buffer -> UInt32 in
+                guard let base = buffer.baseAddress else {
+                    return checksum
+                }
+                return ccrc32_update(checksum, base, buffer.count)
+            }
+            if let folded {
+                checksum = folded
+                return
+            }
+            var crc = checksum ^ 0xFFFF_FFFF
+            for byte in bytes {
+                crc = CRC32.referenceTable[Int((crc ^ UInt32(byte)) & 0xFF)] ^ (crc >> 8)
+            }
+            checksum = crc ^ 0xFFFF_FFFF
+        }
+    }
+
     /// The CRC-32 of `bytes` (RFC 1952 §8).
     ///
     /// The standard check value of `"123456789"` is `0xCBF43926`. Contiguous input uses the chosen
