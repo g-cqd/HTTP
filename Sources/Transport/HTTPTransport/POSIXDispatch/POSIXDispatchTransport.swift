@@ -40,8 +40,14 @@ public final class POSIXDispatchTransport: ServerTransport {
     /// Whether the read source is currently suspended for admission saturation.
     ///
     /// `DispatchSource` **traps** on an unbalanced `resume()`, so suspend/resume must be strictly 1:1;
-    /// this flag is the balance, and both transitions run on ``acceptQueue`` so they are serialized
+    /// this flag is the balance, and *every* transition runs on ``acceptQueue`` so they are serialized
     /// against each other and against the accept handler that suspends (audit F8).
+    ///
+    /// "Every" is load-bearing and was not always true: ``shutdown()`` issues the balancing `resume()`
+    /// too, and it used to do so on whatever thread awaited it. The three helpers below assert their
+    /// queue with `dispatchPrecondition`, so the discipline is enforced rather than described — the
+    /// previous version of this comment claimed serialization that one caller did not honour, and the
+    /// result was an intermittent SIGTRAP (audit FLAKE-1).
     private let isSuspendedForAdmission = Mutex<Bool>(false)
 
     private struct State {
@@ -130,15 +136,45 @@ public final class POSIXDispatchTransport: ServerTransport {
         }
         // Finish the connection stream so a consumer's `for await` completes instead of hanging.
         continuation?.finish()
-        // A suspended source never delivers its cancel handler (and deallocating it would trap), so
-        // balance the admission suspend before cancelling.
+        guard let source else {
+            return
+        }
+        // Balance and cancel ON `acceptQueue`, which is what makes the 1:1 discipline hold.
+        //
+        // This used to run wherever `shutdown()` was awaited. The flag and the source live under two
+        // *different* mutexes and the `suspend()`/`resume()` calls happen outside both, so an accept
+        // handler that had set the flag and not yet suspended could be overtaken here: this side read
+        // "suspended", issued the balancing `resume()` against a source that was still running — an
+        // unbalanced resume, which traps — and then cancelled, leaving the handler to suspend a source
+        // about to be released, which traps in `_dispatch_queue_xref_dispose`.
+        //
+        // Observed as an intermittent SIGTRAP in `AcceptBackpressureTests` under `--parallel` (audit
+        // FLAKE-1), roughly once in six full-suite runs, and unreproducible in isolation. The three
+        // transitions already ran here and the comments already claimed serialization; only shutdown
+        // did not honour it. `suspend()` stops the *source*, never the queue, so this block still runs.
+        await withCheckedContinuation { resumed in
+            acceptQueue.async { [self] in
+                balanceAndCancel(source)
+                resumed.resume()
+            }
+        }
+    }
+
+    /// Balances any outstanding admission suspend and cancels `source`.
+    ///
+    /// Extracted so the queue requirement is *checked* rather than commented. Moving this call back
+    /// off ``acceptQueue`` — the shape that produced the SIGTRAP — trips the precondition on the very
+    /// first shutdown, deterministically, instead of resurfacing as a one-in-six crash somewhere else.
+    private func balanceAndCancel(_ source: any DispatchSourceRead) {
+        dispatchPrecondition(condition: .onQueue(acceptQueue))
+        // A suspended source never delivers its cancel handler, and deallocating one traps.
         if isSuspendedForAdmission.withLock({ suspended -> Bool in
             defer { suspended = false }
             return suspended
         }) {
-            source?.resume()
+            source.resume()
         }
-        source?.cancel()
+        source.cancel()
     }
 
     // MARK: - Internals
@@ -240,6 +276,7 @@ public final class POSIXDispatchTransport: ServerTransport {
     /// unbalanced `resume()` traps. Both run on ``acceptQueue``: this one from inside the accept
     /// handler, the resume as a block enqueued behind it, so the pair can never invert.
     private func suspendAcceptForAdmission() {
+        dispatchPrecondition(condition: .onQueue(acceptQueue))
         let shouldSuspend = isSuspendedForAdmission.withLock { suspended -> Bool in
             guard !suspended else {
                 return false
@@ -255,6 +292,7 @@ public final class POSIXDispatchTransport: ServerTransport {
 
     /// Resumes accept readiness once the gate's live count falls back to its hysteresis watermark.
     private func resumeAcceptAfterAdmission() {
+        dispatchPrecondition(condition: .onQueue(acceptQueue))
         let shouldResume = isSuspendedForAdmission.withLock { suspended -> Bool in
             guard suspended else {
                 return false
@@ -275,6 +313,7 @@ public final class POSIXDispatchTransport: ServerTransport {
     /// resuming a source that ``shutdown()`` has since cancelled is harmless. While suspended the
     /// source delivers no readiness, so the accept queue idles instead of busy-retrying `EMFILE`.
     private func suspendAcceptForBackoff() {
+        dispatchPrecondition(condition: .onQueue(acceptQueue))
         guard let source = state.withLock(\.acceptSource) else {
             return
         }

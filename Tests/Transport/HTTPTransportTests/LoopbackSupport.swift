@@ -6,10 +6,37 @@
 //  validated against real sockets through the same client.
 //
 
+internal import Darwin
 internal import Network
 import Testing
 
 @testable import HTTPTransport
+
+/// Opens a blocking loopback TCP connection to `port`, returning its descriptor (`-1` on failure).
+///
+/// A raw descriptor rather than a `TransportConnection`: the accept-path tests need a client the
+/// server has *not* accepted yet, which is the state the admission ceiling is about.
+func openLoopbackConnection(to port: UInt16) -> Int32 {
+    let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+    guard descriptor >= 0 else {
+        return -1
+    }
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = port.bigEndian
+    address.sin_addr.s_addr = inet_addr("127.0.0.1")
+    let connected = withUnsafePointer(to: &address) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+            Darwin.connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0
+        }
+    }
+    guard connected else {
+        Darwin.close(descriptor)
+        return -1
+    }
+    return descriptor
+}
 
 /// Drives a loopback echo against a started transport's connection `stream` on `port`.
 ///

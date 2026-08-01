@@ -56,7 +56,7 @@ struct AcceptBackpressureTests {
         let collector = Task { await accepted.drain(stream) }
         // Three times the ceiling, so there is still a backlog to drain after the resume even if the
         // backbone refused a connection or two at the moment it saturated.
-        let clients = (0 ..< capacity * 3).map { _ in Self.connect(to: port) }
+        let clients = (0 ..< capacity * 3).map { _ in openLoopbackConnection(to: port) }
         defer {
             for client in clients {
                 Darwin.close(client)
@@ -101,7 +101,7 @@ struct AcceptBackpressureTests {
 
         let accepted = AcceptCollector()
         let collector = Task { await accepted.drain(stream) }
-        let clients = (0 ..< capacity * 2).map { _ in Self.connect(to: port) }
+        let clients = (0 ..< capacity * 2).map { _ in openLoopbackConnection(to: port) }
         defer {
             for client in clients {
                 Darwin.close(client)
@@ -130,29 +130,6 @@ struct AcceptBackpressureTests {
         try TransportFactory.make(
             TransportConfiguration(port: 0, backbone: backbone, eventLoopCount: 1)
         )
-    }
-
-    /// Opens a blocking loopback TCP connection to `port`, returning its descriptor (`-1` on failure).
-    private static func connect(to port: UInt16) -> Int32 {
-        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
-        guard descriptor >= 0 else {
-            return -1
-        }
-        var address = sockaddr_in()
-        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        address.sin_family = sa_family_t(AF_INET)
-        address.sin_port = port.bigEndian
-        address.sin_addr.s_addr = inet_addr("127.0.0.1")
-        let connected = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                Darwin.connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0
-            }
-        }
-        guard connected else {
-            Darwin.close(descriptor)
-            return -1
-        }
-        return descriptor
     }
 
     /// Whether `descriptor` reads end-of-stream within a short receive timeout.
