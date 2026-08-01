@@ -88,19 +88,58 @@ its own container against it, and `.github/conformance/autobahn/check.py` fails 
 case (config: `.github/conformance/autobahn/fuzzingclient.json`). The in-house WebSocket suites + `WebSocketFuzzTests`
 (framing, masking, fragmentation, close codes, UTF-8) remain the always-on coverage.
 
-## HTTP/3 / QUIC — h3spec (RFC 9114 / RFC 9000)
+## HTTP/3 / QUIC — RFC 9114 / RFC 9204 (and what h3spec can and cannot do)
 
-**Wired, advisory (Darwin-only).** The `h3spec` job runs on macOS against `httpd-example` serving h3 over
-the Network.framework QUIC transport, using a pinned prebuilt arm64 binary of Kazu Yamamoto's suite. It is
-`continue-on-error: true` and **must stay that way for now**, for a reason that is not a to-do: h3spec
-reports 48 of 49 cases as failures, and every one of them is a QUIC-TRANSPORT-layer expectation (RFC 9000)
-aimed at the peer's QUIC stack — which here is Apple's closed Network.framework implementation, not code in
-this repository. Promoting the job as-is would gate the build on behavior we neither own nor can change.
+**Gated in-repo (`h3-conformance`, required); external h3spec is dispatch-only evidence.**
 
-Making it a real gate therefore means splitting the suite: assert the HTTP/3-layer subset (RFC 9114) and
-record the transport-layer subset as structurally unreachable rather than merely unfixed. Until that split
-lands, the sans-I/O HTTP/3 + QPACK engines are covered by the in-house `HTTP3Tests` / `QPACKTests`
-(RFC 9114 §4 framing, §6 streams, QPACK RFC 9204) and the real-QUIC loopback in `HTTPServerHTTP3Tests`.
+The gate is the `HTTP3Tests` / `QPACKTests` suites plus the real-QUIC loopback in
+`HTTPServerHTTP3Tests`, run in release by the `h3-conformance` job. `H3SpecTests` mirrors h3spec's
+catalog row-for-row: `catalogIsWellFormed` pins the per-layer split (27 RFC 9000 + 7 RFC 9001 +
+11 RFC 9114 + 4 RFC 9204 = 49) so the mirror cannot silently narrow, and
+`endpointClosesWithMandatedError` drives each engine-layer row against a fresh `HTTP3Connection` and
+asserts the mandated error code (honoring the RFC 9114 §8 generic-error tolerance). An HTTP/3
+regression fails that job.
+
+### Why the external tool is not the gate — measured, 2026-07-31
+
+Earlier revisions of this document said the 48/49 failures were "every one a QUIC-transport-layer
+expectation aimed at Apple's closed Network.framework stack". That did not survive re-measurement
+(arm64 macOS, h3spec v0.1.13 `h3spec-mac-arm64`, release `httpd-example`):
+
+- **h3spec *can* be split.** It accepts hspec's `-m/--match` and `-s/--skip`, and its 49 cases are
+  grouped `describe "QUIC servers"` (34 — 27 RFC 9000 transport + 7 RFC 9001 TLS) and
+  `describe "HTTP/3 servers"` (15 — 11 RFC 9114 + 4 RFC 9204). `-m "HTTP/3 servers"` selects exactly
+  the subset that exercises this repository's code. The split is mechanically available.
+- **The split still cannot gate.** A full re-run reproduces 49 examples / 48 failures, and every one
+  of the 48 carries the *identical* message `did not get expected exception: QUICException`. The 15
+  HTTP/3-layer cases fail for the same reason as the 34 transport ones. Under `-d` the cause is
+  `ConnectionIsTimeout "Client Handshaking"` — nothing ever reaches the HTTP/3 layer. A deliberately
+  broken H3 engine would produce a byte-identical report: zero discriminating power.
+- **The cause is not Apple's QUIC stack.** `ModernQUICTransport.start` constructs its
+  `Network.NetworkListener` with no port, so the QUIC listener binds an **ephemeral UDP port** and
+  only announces it through `Alt-Svc` (observed `alt-svc: h3=":50649"` while the job dialed 14433).
+  h3spec has no `Alt-Svc` discovery — it dials the UDP port you give it. The job has been probing a
+  port with no listener on it. Dialing the bound port directly does not rescue the run either: a real
+  h3 client (curl 8.21, ngtcp2/nghttp3, `--http3-only`) also fails to connect to it, so the QUIC
+  listener is not currently reachable from an external client on this host. That is a transport
+  defect, and it is also why `bench-h3load` has never produced a number.
+
+### The excluded checks, by name
+
+The 34 excluded cases are listed individually — section, behavior, and expected error code — in
+`Tests/Protocols/HTTP3Tests/Conformance/H3Catalog+Transport.swift` (the 27 RFC 9000 rows) and the
+`quicTLS` block of `H3ConformanceCatalog.swift` (the 7 RFC 9001 rows). Each is `.platform`-stamped:
+enforced by Apple's QUIC/TLS implementation beneath the engine, with no code in this repository able
+to affect the outcome. `H3SpecTests` asserts that stamping is exhaustive, so a case cannot be
+excluded by forgetting it.
+
+### Promotion trigger
+
+Fix the QUIC listener to bind the port it is given, then re-run
+`h3spec … -m "HTTP/3 servers"`. If those 15 cases become meaningful, promote that step of
+`h3spec-observation` to a required job alongside `h3-conformance` — the two would then check the
+same MUSTs from opposite sides (in-process engine vs. over-the-wire), which is worth having. The
+34 transport/TLS cases stay excluded regardless; they test code this project does not own.
 
 ## HTTP/3 load (h3load)
 
