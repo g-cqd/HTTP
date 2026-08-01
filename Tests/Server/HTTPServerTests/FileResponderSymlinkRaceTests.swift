@@ -44,8 +44,8 @@ struct FileResponderSymlinkRaceTests {
         defer { try? FileManager.default.removeItem(atPath: base) }
         let manager = FileManager.default
         let expected = [UInt8](repeating: 0x41, count: 4_096)
-        manager.createFile(atPath: base + "/docroot/big.bin", contents: Data(expected))
-        manager.createFile(
+        _ = manager.createFile(atPath: base + "/docroot/big.bin", contents: Data(expected))
+        _ = manager.createFile(
             atPath: base + "/secret/big.bin",
             contents: Data([UInt8](repeating: 0x5A, count: 4_096))
         )
@@ -100,7 +100,7 @@ struct FileResponderSymlinkRaceTests {
         try? manager.createDirectory(
             atPath: base + "/docroot/dir", withIntermediateDirectories: true
         )
-        manager.createFile(
+        _ = manager.createFile(
             atPath: base + "/docroot/dir/ok.txt", contents: Data(Self.served.utf8)
         )
 
@@ -137,7 +137,7 @@ struct FileResponderSymlinkRaceTests {
             try? manager.createDirectory(
                 atPath: base + "/docroot/dir", withIntermediateDirectories: true
             )
-            manager.createFile(
+            _ = manager.createFile(
                 atPath: base + "/docroot/dir/ok.txt", contents: Data(Self.served.utf8)
             )
             try? manager.createSymbolicLink(
@@ -169,7 +169,7 @@ struct FileResponderSymlinkRaceTests {
         for child in ["/docroot", "/secret", "/stage"] {
             try? manager.createDirectory(atPath: base + child, withIntermediateDirectories: true)
         }
-        manager.createFile(atPath: base + "/secret/ok.txt", contents: Data(secret.utf8))
+        _ = manager.createFile(atPath: base + "/secret/ok.txt", contents: Data(secret.utf8))
         return base
     }
 

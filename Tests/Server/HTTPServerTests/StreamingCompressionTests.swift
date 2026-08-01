@@ -13,7 +13,6 @@
 //  mid-stream releases the codec at a point the code names rather than whenever ARC gets to it.
 //
 
-internal import Compression
 internal import HTTPCore
 internal import HTTPTransport
 import Testing
@@ -263,21 +262,17 @@ private func dechunk(_ body: [UInt8]) throws -> [UInt8] {
     }
 }
 
-/// Inflates a gzip member by stripping its 10-octet header and 8-octet trailer.
-private func gunzip(_ member: [UInt8]) -> [UInt8] {
-    let deflated = Array(member[10 ..< (member.count - 8)])
-    var destination = [UInt8](repeating: 0, count: 1 << 20)
-    let written = deflated.withUnsafeBufferPointer { source in
-        destination.withUnsafeMutableBufferPointer { destination -> Int in
-            guard let source = source.baseAddress, let destination = destination.baseAddress else {
-                return 0
-            }
-            return compression_decode_buffer(
-                destination, 1 << 20, source, deflated.count, nil, COMPRESSION_ZLIB
-            )
-        }
-    }
-    return Array(destination.prefix(written))
+/// Inflates a gzip member (RFC 1952) through the server's own inverse coding, or nil if it is not one.
+///
+/// This deliberately does NOT hand-roll the envelope. The previous version sliced off the 10-octet
+/// header and the 8-octet trailer and inflated the middle with Apple's `compression_decode_buffer`,
+/// which pinned the whole suite to Darwin for the sake of one assertion — and which, by discarding
+/// the trailer, could not have noticed a truncated or corrupt member at all. ``Inflate`` is vended
+/// with this exact signature on both platforms (Apple `Compression` in `Inflate.swift`, zlib via the
+/// `CZlibCoding` shim in `InflateLinux.swift`), and its gzip path validates the header, the CRC-32
+/// and the ISIZE trailer. So the oracle got stronger and portable in the same move.
+private func gunzip(_ member: [UInt8]) -> [UInt8]? {
+    Inflate.decompress(member, encoding: "gzip", maxOutput: 1 << 20)
 }
 
 @Test("RFC 9112 §7.1 — a coded stream goes out chunked, with no Content-Length beside it")
@@ -302,5 +297,5 @@ func codedStreamIsFramedChunkedOnTheWire() async throws {
     // Both together is the RFC 9112 §6.1 smuggling shape, and the h1 engine does not strip one.
     #expect(!headers.contains("content-length:"))
     #expect(headers.contains("vary: accept-encoding\r\n"))
-    #expect(gunzip(try dechunk(body)) == payload)
+    #expect(try gunzip(dechunk(body)) == payload)
 }

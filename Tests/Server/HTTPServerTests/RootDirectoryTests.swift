@@ -31,7 +31,7 @@ struct RootDirectoryTests {
             .appendingPathComponent("rootdirectory-\(UUID().uuidString)").path
         try? manager.createDirectory(atPath: base + "/docroot", withIntermediateDirectories: true)
         try? manager.createDirectory(atPath: base + "/secret", withIntermediateDirectories: true)
-        manager.createFile(atPath: base + "/secret/ok.txt", contents: Data(Self.secret.utf8))
+        _ = manager.createFile(atPath: base + "/secret/ok.txt", contents: Data(Self.secret.utf8))
         return base
     }
 
@@ -39,7 +39,8 @@ struct RootDirectoryTests {
     func resolvesRegularFile() throws {
         let base = stage()
         defer { try? FileManager.default.removeItem(atPath: base) }
-        FileManager.default.createFile(atPath: base + "/docroot/ok.txt", contents: Data("ok".utf8))
+        let okFile = base + "/docroot/ok.txt"
+        _ = FileManager.default.createFile(atPath: okFile, contents: Data("ok".utf8))
 
         let root = try #require(RootDirectory(path: base + "/docroot"))
         guard case .file(let file, _) = root.resolve(["ok.txt"]) else {
@@ -56,7 +57,7 @@ struct RootDirectoryTests {
         let base = stage()
         defer { try? FileManager.default.removeItem(atPath: base) }
         let manager = FileManager.default
-        manager.createFile(atPath: base + "/docroot/ok.txt", contents: Data("ok".utf8))
+        _ = manager.createFile(atPath: base + "/docroot/ok.txt", contents: Data("ok".utf8))
 
         let root = try #require(RootDirectory(path: base + "/docroot"))
         guard case .file(let file, _) = root.resolve(["ok.txt"]) else {
@@ -78,8 +79,8 @@ struct RootDirectoryTests {
         let base = stage()
         defer { try? FileManager.default.removeItem(atPath: base) }
         let manager = FileManager.default
-        manager.createFile(atPath: base + "/docroot/ok.txt", contents: Data("ok".utf8))
-        manager.createFile(atPath: base + "/secret/ok.txt", contents: Data(Self.secret.utf8))
+        _ = manager.createFile(atPath: base + "/docroot/ok.txt", contents: Data("ok".utf8))
+        _ = manager.createFile(atPath: base + "/secret/ok.txt", contents: Data(Self.secret.utf8))
 
         let root = try #require(RootDirectory(path: base + "/docroot"))
         // Move the real root aside and put a symlink to the secret directory in its place.
@@ -157,7 +158,8 @@ struct RootDirectoryTests {
     func missingResolutions() throws {
         let base = stage()
         defer { try? FileManager.default.removeItem(atPath: base) }
-        FileManager.default.createFile(atPath: base + "/docroot/ok.txt", contents: Data("ok".utf8))
+        let okFile = base + "/docroot/ok.txt"
+        _ = FileManager.default.createFile(atPath: okFile, contents: Data("ok".utf8))
         let root = try #require(RootDirectory(path: base + "/docroot"))
         guard case .missing = root.resolve(["nope.txt"]) else {
             Issue.record("an absent name did not resolve to missing")
@@ -173,7 +175,8 @@ struct RootDirectoryTests {
     func emptyComponentsResolveToTheRoot() throws {
         let base = stage()
         defer { try? FileManager.default.removeItem(atPath: base) }
-        FileManager.default.createFile(atPath: base + "/docroot/ok.txt", contents: Data("ok".utf8))
+        let okFile = base + "/docroot/ok.txt"
+        _ = FileManager.default.createFile(atPath: okFile, contents: Data("ok".utf8))
         let root = try #require(RootDirectory(path: base + "/docroot"))
         guard case .directory(let directory) = root.resolve([]) else {
             Issue.record("the empty component list did not resolve to a directory")
@@ -188,7 +191,7 @@ struct RootDirectoryTests {
     func shortReadFailsClosed() throws {
         let base = stage()
         defer { try? FileManager.default.removeItem(atPath: base) }
-        FileManager.default.createFile(
+        _ = FileManager.default.createFile(
             atPath: base + "/docroot/ok.txt", contents: Data("0123456789".utf8)
         )
         let root = try #require(RootDirectory(path: base + "/docroot"))
@@ -205,7 +208,7 @@ struct RootDirectoryTests {
     func unopenableRoot() {
         let base = stage()
         defer { try? FileManager.default.removeItem(atPath: base) }
-        FileManager.default.createFile(atPath: base + "/plain", contents: Data("x".utf8))
+        _ = FileManager.default.createFile(atPath: base + "/plain", contents: Data("x".utf8))
         #expect(RootDirectory(path: base + "/plain") == nil)  // a regular file is not a root
         #expect(RootDirectory(path: base + "/absent") == nil)
     }

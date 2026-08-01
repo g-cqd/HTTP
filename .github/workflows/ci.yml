@@ -287,28 +287,60 @@ jobs:
             --product ours-bench --scratch-path "$SCRATCH/django-bench"
 
   # ---------------------------------------------------------------------------
-  # Linux (G0). The sans-I/O engines + server runtime run on Linux over the epoll backbone; these jobs
-  # build and run the full suite in the official Swift container on ubuntu-latest (locally reproduced by
-  # scripts/linux-test.sh via apple/container). HTTP_WARNINGS_AS_ERRORS is intentionally off here:
-  # swift-crypto's NIST-curve keys are not Sendable on Linux (CryptoKit's are), so HTTPAuth emits
-  # @preconcurrency warnings the Apple build does not — re-enable once those are addressed. HTTP/3/QUIC is
-  # Network.framework-provided, so it (and its tests) is excluded from the Linux build graph.
+  # Linux (G0) — REQUIRED, and the `linux-required` gate at the end of this group is the check to
+  # protect the branch with. The sans-I/O engines + server runtime run on Linux over the epoll
+  # backbone; these jobs build and run the full suite in the official Swift container (locally
+  # reproduced by scripts/linux-test.sh via apple/container, on the SAME image — see below).
+  #
+  # WHY THIS IS REQUIRED RATHER THAN ADVISORY (F-01). Darwin compiles the epoll backbone to NOTHING,
+  # so every gate above passes vacuously on it. That mirror has now taken four changes it never
+  # built under — the reactor fairness quantum, the adaptive receive scratch, the multi-waiter
+  # readiness tables, and the `ready` redeclaration those introduced. The redeclaration was FILED as
+  # a hazard ("the epoll mirror is three unbuilt changes deep") and was a hard build break under an
+  # hour later, found by an external Linux build rather than by anything here. A platform that ships
+  # in the source tree and is not built by CI is not a supported platform, it is a guess.
+  #
+  # WARNINGS-AS-ERRORS IS ON HERE NOW. It used to be off with this note: "swift-crypto's NIST-curve
+  # keys are not Sendable on Linux (CryptoKit's are), so HTTPAuth emits @preconcurrency warnings the
+  # Apple build does not — re-enable once those are addressed." Addressed: swift-crypto 4.x conforms
+  # SymmetricKey / P256 / _RSA keys upstream, so the Linux build is clean at the same strictness as
+  # the Apple one. Anything less would leave Linux held to a weaker standard than the platform whose
+  # gates already cannot see it, which is how the four changes above accumulated.
+  #
+  # IMAGE. Pinned to the same tag scripts/linux-test.sh defaults to, so "it passes locally" and "it
+  # passes in CI" are statements about one toolchain. nightly-6.4.x-jammy tracks the 6.4 RELEASE
+  # branch, which is the language mode this package targets (swift-tools-version 6.4); the previous
+  # nightly-noble tracks main, so it could break the build for reasons that have nothing to do with a
+  # change under review — the failure mode that makes a required gate get switched back to advisory.
+  #
+  # HTTP/3/QUIC is Network.framework-provided, so it (and its tests) is excluded from the Linux build
+  # graph; the exclusion list and the coverage debt each entry represents are documented in
+  # Package.swift next to the entries themselves.
   # ---------------------------------------------------------------------------
   build-test-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
         run: swift --version
-      - name: Build
+      - name: Build (warnings as errors)
         run: swift build --scratch-path "$SCRATCH"
+      - name: Build tests (warnings as errors)
+        # Explicit, and not redundant with the run below: a test-target-only break (a bare
+        # `import Darwin`, a Glibc `SOCK_STREAM` mismatch) should fail as a COMPILE error against
+        # this step rather than as an inscrutable failure inside the test runner.
+        run: swift build --build-tests --scratch-path "$SCRATCH"
       - name: Test (full suite)
-        run: swift test --scratch-path "$SCRATCH"
+        run: swift test --parallel --scratch-path "$SCRATCH"
 
   release-test-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -318,7 +350,7 @@ jobs:
 
   sanitizers-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
     strategy:
       fail-fast: false
       matrix:
@@ -335,18 +367,50 @@ jobs:
   # ---------------------------------------------------------------------------
   codings-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
     env:
       HTTP_BROTLI: "1"
       HTTP_BROTLI_PREFIX: /usr
       HTTP_ZSTD: "1"
       HTTP_ZSTD_PREFIX: /usr
+      HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Install libbrotli + libzstd
         run: apt-get update -qq && apt-get install -y -qq libbrotli-dev libzstd-dev
       - name: Coding round-trips (Brotli + zstd + Linux gzip/inflate)
         run: swift test --scratch-path "$SCRATCH" --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+
+  # ---------------------------------------------------------------------------
+  # The single REQUIRED check for the Linux platform — this is the one to name in branch protection.
+  #
+  # It exists because the four jobs above are separately skippable and separately nameable, and a
+  # required-checks list that enumerates them drifts the moment one is renamed or a matrix leg is
+  # added. Depending on them here means the branch rule names ONE check that cannot silently lose
+  # coverage: add a Linux job, add it to `needs`, and protection follows automatically.
+  #
+  # `if: always()` plus an explicit result test is deliberate. Without it a SKIPPED or CANCELLED
+  # dependency would let this job be skipped too, and GitHub reports a skipped required check as
+  # PASSING — the exact failure mode that would restore the "Linux is advisory" status quo while
+  # looking green. Only `success` is accepted.
+  # ---------------------------------------------------------------------------
+  linux-required:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build-test-linux, release-test-linux, sanitizers-linux, codings-linux]
+    steps:
+      - name: Every Linux job must have succeeded
+        run: |
+          set -euo pipefail
+          results='${{ join(needs.*.result, " ") }}'
+          echo "Linux job results: $results"
+          for r in $results; do
+            if [ "$r" != "success" ]; then
+              echo "::error::A required Linux job did not succeed (saw '$r'). Linux is a supported platform: it builds, it tests, and it gates."
+              exit 1
+            fi
+          done
+          echo "All Linux jobs succeeded."
 
   # ---------------------------------------------------------------------------
   # Benchmarks (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). REQUIRED for
