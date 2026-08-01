@@ -55,8 +55,18 @@ public enum TestLivenessBudget {
     /// The budget a polling helper should use between re-checks.
     ///
     /// Unscaled — widening the *interval* would only make a stalled test slower to diagnose. It is the
-    /// total budget that has to absorb host load, which ``default`` does.
+    /// total budget that has to absorb host load, which ``nominal`` does.
     public static let pollInterval = Duration.milliseconds(5)
+
+    /// How many ``pollInterval`` re-checks fit in the resolved ``nominal`` budget.
+    ///
+    /// Derived rather than written down, so raising the budget or the scale cannot leave a poll loop
+    /// still counting to a number chosen for the old one — which is exactly how seventeen copies of
+    /// the same loop ended up with three different budgets.
+    public static let pollCount: Int = {
+        let total = scaled(nominal) / pollInterval
+        return max(1, Int(total.rounded(.up)))
+    }()
 
     /// The multiplier read once from `HTTP_TEST_TIMEOUT_SCALE`, clamped to at least `1`.
     ///

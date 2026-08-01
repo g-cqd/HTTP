@@ -34,10 +34,10 @@ struct HTTPServerHTTP3AdmissionTests {
         let first = FakeQUICConnection()
         let second = FakeQUICConnection()
         transport.accept(first)
-        try await Self.settle { server.admission.counts.total == 1 }
+        try await settle { server.admission.counts.total == 1 }
         transport.accept(second)
 
-        try await Self.settle { !second.closeCodes.isEmpty }
+        try await settle { !second.closeCodes.isEmpty }
         #expect(second.closeCodes == [HTTP3ErrorCode.h3ExcessiveLoad.rawValue])
         #expect(first.closeCodes.isEmpty)
         #expect(server.admission.counts.total == 1)  // the refusal charged nothing
@@ -57,10 +57,10 @@ struct HTTPServerHTTP3AdmissionTests {
         let first = FakeQUICConnection(peer: peer)
         let second = FakeQUICConnection(peer: peer)
         transport.accept(first)
-        try await Self.settle { server.admission.counts.total == 1 }
+        try await settle { server.admission.counts.total == 1 }
         transport.accept(second)
 
-        try await Self.settle { !second.closeCodes.isEmpty }
+        try await settle { !second.closeCodes.isEmpty }
         #expect(second.closeCodes == [HTTP3ErrorCode.h3ExcessiveLoad.rawValue])
         #expect(server.admission.counts.total == 1)
     }
@@ -76,7 +76,7 @@ struct HTTPServerHTTP3AdmissionTests {
         defer { running.cancel() }
 
         transport.accept(FakeQUICConnection())
-        try await Self.settle { server.admission.counts.total >= 1 }
+        try await settle { server.admission.counts.total >= 1 }
         // One connection, one slot — the server adopted the listener's ticket rather than charging
         // a second for the same peer.
         #expect(server.admission.counts.total == 1)
@@ -94,10 +94,10 @@ struct HTTPServerHTTP3AdmissionTests {
         defer { running.cancel() }
 
         transport.accept(FakeQUICConnection())
-        try await Self.settle { server.admission.counts.total == 1 }
+        try await settle { server.admission.counts.total == 1 }
         transport.accept(FakeQUICConnection())
 
-        try await Self.settle { transport.refusalCount == 1 }
+        try await settle { transport.refusalCount == 1 }
         #expect(transport.refusalCount == 1)
         #expect(server.admission.counts.total == 1)
     }
@@ -112,7 +112,7 @@ struct HTTPServerHTTP3AdmissionTests {
         let quic = FakeQUICConnection()
         transport.accept(quic)
         // The server's own control + QPACK streams are open once it has three of them (§6.2).
-        try await Self.settle { quic.openedStreams.count == 3 }
+        try await settle { quic.openedStreams.count == 3 }
 
         await server.shutdown(within: .milliseconds(1))
 
@@ -145,13 +145,6 @@ struct HTTPServerHTTP3AdmissionTests {
         HTTPLimits.default.with {
             $0.maxConnections = total
             $0.maxConnectionsPerClient = perHost
-        }
-    }
-
-    /// Polls `condition` on the cooperative pool until it holds or the budget runs out.
-    private static func settle(until condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
         }
     }
 }

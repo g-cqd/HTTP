@@ -51,7 +51,7 @@ struct HTTPServerHTTP3CriticalStreamTests {
         let engine = try await Self.engine(of: server)
         // All three are classified and tracked before the clock moves, so the advance below really is
         // an *idle* critical stream and not a race with its first octets.
-        try await Self.settle { await engine.census().trackedStreams == critical.count }
+        try await settle { await engine.census().trackedStreams == critical.count }
 
         // Well past `headerReadTimeout` and `idleTimeout` both, in the same steps the watchdog wakes on.
         try await Self.advance(clock, by: .seconds(31), times: 20)
@@ -69,11 +69,11 @@ struct HTTPServerHTTP3CriticalStreamTests {
             inbound: [(Self.headersFrame(Self.blockedFieldSection), true)]
         )
         quic.accept(request)
-        try await Self.settle { await engine.census().blockedSections == 1 }
+        try await settle { await engine.census().blockedSections == 1 }
         critical[1].deliver(Self.insertAuthority, fin: false)
 
         _ = try await handled.wait(forAtLeast: 1)
-        try await Self.settle { request.sendCount > 0 }
+        try await settle { request.sendCount > 0 }
         #expect(handled.count == 1)
     }
 
@@ -87,13 +87,13 @@ struct HTTPServerHTTP3CriticalStreamTests {
 
         let critical = Self.acceptCriticalStreams(on: quic)
         let engine = try await Self.engine(of: server)
-        try await Self.settle { await engine.census().trackedStreams == critical.count }
+        try await settle { await engine.census().trackedStreams == critical.count }
 
         // RFC 9114 §6.2.1 — "If either control stream is closed at any point, this MUST be treated as a
         // connection error of type H3_CLOSED_CRITICAL_STREAM."
         critical[0].deliver([], fin: true)
 
-        try await Self.settle { !quic.closeCodes.isEmpty }
+        try await settle { !quic.closeCodes.isEmpty }
         #expect(quic.closeCodes == [HTTP3ErrorCode.h3ClosedCriticalStream.rawValue])
         #expect(
             critical[0].resetCodes.isEmpty,
@@ -111,12 +111,12 @@ struct HTTPServerHTTP3CriticalStreamTests {
 
         let critical = Self.acceptCriticalStreams(on: quic)
         let engine = try await Self.engine(of: server)
-        try await Self.settle { await engine.census().trackedStreams == critical.count }
+        try await settle { await engine.census().trackedStreams == critical.count }
 
         // A transport EOF is a closure too: §6.2.1 does not distinguish how the stream ended.
         critical[0].finishInbound()
 
-        try await Self.settle { !quic.closeCodes.isEmpty }
+        try await settle { !quic.closeCodes.isEmpty }
         #expect(quic.closeCodes == [HTTP3ErrorCode.h3ClosedCriticalStream.rawValue])
     }
 
@@ -196,7 +196,7 @@ struct HTTPServerHTTP3CriticalStreamTests {
 
     /// The engine of the one connection this server is serving.
     private static func engine(of server: Server) async throws -> Server.Engine {
-        try await Self.settle { server.liveHTTP3ConnectionCount == 1 }
+        try await settle { server.liveHTTP3ConnectionCount == 1 }
         let scope = server.activeQUICConnections.withLock(\.values.first)
         return try #require(scope).engine
     }
@@ -207,17 +207,5 @@ struct HTTPServerHTTP3CriticalStreamTests {
             clock.advance(by: step)
             try await Task.sleep(for: .milliseconds(5))
         }
-    }
-
-    /// Polls an async `condition` until it holds, failing the test if the budget runs out.
-    private static func settle(until condition: @Sendable () async -> Bool) async throws {
-        for _ in 0 ..< 200 {
-            if await condition() {
-                return
-            }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        let satisfied = await condition()
-        #expect(satisfied, "settle budget exhausted with the condition still false")
     }
 }

@@ -91,7 +91,7 @@ struct WebSocketUpgradeIngressTests {
         let serving = Task { await server.serveHTTP3(quic) }
         defer { serving.cancel() }
         quic.accept(stream)
-        try await Self.settle { seen.wasAsked }
+        try await settle { seen.wasAsked }
         #expect(seen.wasAsked)
         #expect(seen.recorded == nil)
     }
@@ -148,12 +148,5 @@ struct WebSocketUpgradeIngressTests {
         QUICVarint.encode(UInt64(section.count), into: &out)
         out.append(contentsOf: section)
         return out
-    }
-
-    /// Polls `condition` on the cooperative pool until it holds or the budget runs out.
-    private static func settle(until condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 }

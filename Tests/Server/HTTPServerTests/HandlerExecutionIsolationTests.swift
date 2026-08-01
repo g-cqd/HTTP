@@ -79,7 +79,7 @@ struct HandlerExecutionIsolationTests {
             running.cancel()
             released.open()
         }
-        try await Self.settleUntil { transport.boundPort != 0 }
+        try await settle { transport.boundPort != 0 }
         let port = transport.boundPort
 
         let blocking = try Self.openSocket(to: port)
@@ -160,12 +160,5 @@ struct HandlerExecutionIsolationTests {
             out.append(contentsOf: scratch[0 ..< count])
         }
         return String(decoding: out, as: Unicode.UTF8.self)
-    }
-
-    private static func settleUntil(_ condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 300 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        try #require(condition(), "the transport never bound a port")
     }
 }

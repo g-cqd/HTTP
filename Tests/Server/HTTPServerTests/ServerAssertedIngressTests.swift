@@ -108,7 +108,7 @@ struct ServerAssertedIngressTests {
         let serving = Task { await server.serveHTTP3(quic) }
         defer { serving.cancel() }
         quic.accept(stream)
-        try await Self.settle { stream.sendCount > 0 }
+        try await settle { stream.sendCount > 0 }
         let (status, body) = try Self.decodeHTTP3(stream.sentBytes)
         #expect(status == "200")
         #expect(String(decoding: body, as: Unicode.UTF8.self) == "<none>")
@@ -230,13 +230,6 @@ struct ServerAssertedIngressTests {
             }
             let start = reader.position
             return (type, Array(bytes[start ..< (start + Int(length))]), start + Int(length))
-        }
-    }
-
-    /// Polls `condition` on the cooperative pool until it holds or the budget runs out.
-    private static func settle(until condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
         }
     }
 }

@@ -77,11 +77,11 @@ struct HTTPServerHTTP3RetirementFunnelTests {
             case .receiveFailure, .eofMidBody, .deadlineLapse:
                 // The stream really is loaded before it is abandoned — otherwise a census that is
                 // already empty proves nothing at all.
-                try await Self.settle { await engine.census().trackedStreams == 1 }
+                try await settle { await engine.census().trackedStreams == 1 }
                 if exit == .receiveFailure { stream.failInbound() }
                 if exit == .eofMidBody { stream.finishInbound() }
                 if exit == .deadlineLapse {
-                    try await Self.advance(clock, by: .seconds(31), times: 40) {
+                    try await advance(clock, by: .seconds(31)) {
                         !stream.resetCodes.isEmpty
                     }
                 }
@@ -89,10 +89,10 @@ struct HTTPServerHTTP3RetirementFunnelTests {
                 // The refusal follows the CONNECT within one engine step, so there is no window in
                 // which the tunnel record is observable; the reset is what says it was recorded and
                 // then given up on (RFC 9220 §3).
-                try await Self.settle { !stream.resetCodes.isEmpty }
+                try await settle { !stream.resetCodes.isEmpty }
         }
 
-        try await Self.settle { await engine.census().trackedStreams == 0 }
+        try await settle { await engine.census().trackedStreams == 0 }
         let retired = await engine.census()
         #expect(retired.trackedStreams == baseline.trackedStreams)
         #expect(retired.blockedSections == baseline.blockedSections)
@@ -172,10 +172,10 @@ struct HTTPServerHTTP3RetirementFunnelTests {
             inbound: [(Self.partialRequest(), false)]
         )
         quic.accept(stream)
-        try await Self.settle { await engine.census().trackedStreams == 1 }
+        try await settle { await engine.census().trackedStreams == 1 }
 
-        try await Self.advance(clock, by: .seconds(31), times: 40) { !stream.resetCodes.isEmpty }
-        try await Self.settle { await engine.census().trackedStreams == 0 }
+        try await advance(clock, by: .seconds(31)) { !stream.resetCodes.isEmpty }
+        try await settle { await engine.census().trackedStreams == 0 }
         let charged = await engine.census().chargedStreamResets
 
         // The octets that were still in flight when the reaper fired now reach the engine. A record
@@ -261,7 +261,7 @@ struct HTTPServerHTTP3RetirementFunnelTests {
     }
 
     private static func engine(of server: Server) async throws -> Server.Engine {
-        try await Self.settle { server.liveHTTP3ConnectionCount == 1 }
+        try await settle { server.liveHTTP3ConnectionCount == 1 }
         return try #require(Self.scope(of: server)).engine
     }
 
@@ -312,29 +312,5 @@ struct HTTPServerHTTP3RetirementFunnelTests {
         QUICVarint.encode(UInt64(section.count), into: &out)
         out.append(contentsOf: section)
         return out
-    }
-
-    private static func advance(
-        _ clock: TestClock,
-        by step: Duration,
-        times: Int,
-        until condition: @Sendable () -> Bool
-    ) async throws {
-        for _ in 0 ..< times where !condition() {
-            clock.advance(by: step)
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        #expect(condition(), "advance budget exhausted with the condition still false")
-    }
-
-    private static func settle(until condition: @Sendable () async -> Bool) async throws {
-        for _ in 0 ..< 200 {
-            if await condition() {
-                return
-            }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        let satisfied = await condition()
-        #expect(satisfied, "settle budget exhausted with the condition still false")
     }
 }

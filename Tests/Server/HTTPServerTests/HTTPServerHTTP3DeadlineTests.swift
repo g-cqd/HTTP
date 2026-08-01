@@ -33,7 +33,7 @@ struct HTTPServerHTTP3DeadlineTests {
         let silent = FakeQUICStream(id: QUICStreamID(0), direction: .bidirectional)
         quic.accept(silent)
         // Advancing past the header budget is what fires the deadline — nothing waits in real time.
-        try await Self.advance(clock, by: .seconds(31)) { !silent.resetCodes.isEmpty }
+        try await advance(clock, by: .seconds(31)) { !silent.resetCodes.isEmpty }
 
         #expect(silent.resetCodes == [HTTP3ErrorCode.h3RequestRejected.rawValue])
         #expect(silent.sendCount == 0)
@@ -68,7 +68,7 @@ struct HTTPServerHTTP3DeadlineTests {
         // one this case is about. The header budget is also far wider than the body budget in this
         // fixture, so the phase a lapse belongs to is unambiguous either way.
         _ = try await consumed.wait(forAtLeast: 1)
-        try await Self.advance(clock, by: .seconds(121)) { !stalled.resetCodes.isEmpty }
+        try await advance(clock, by: .seconds(121)) { !stalled.resetCodes.isEmpty }
 
         #expect(!stalled.resetCodes.isEmpty)
         #expect(
@@ -92,7 +92,7 @@ struct HTTPServerHTTP3DeadlineTests {
         )
         quic.accept(prompt)
 
-        try await Self.settle { prompt.sendCount > 0 }
+        try await settle { prompt.sendCount > 0 }
         #expect(prompt.resetCodes.isEmpty)
         #expect(prompt.sendCount > 0)
     }
@@ -142,30 +142,5 @@ struct HTTPServerHTTP3DeadlineTests {
         QUICVarint.encode(UInt64(section.count), into: &out)
         out.append(contentsOf: section)
         return out
-    }
-
-    /// Advances `clock` by `step` until `condition` holds, so the test never has to guess whether the
-    /// serve tasks have parked on their deadline yet.
-    private static func advance(
-        _ clock: TestClock,
-        by step: Duration,
-        until condition: @Sendable () -> Bool
-    ) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            clock.advance(by: step)
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
-    /// Polls `condition` until it holds, failing the test if the budget runs out.
-    ///
-    /// The budget exhausting is a *failure*, not a quiet return. Falling out of the loop with the
-    /// condition still false let the test carry on and either pass vacuously or fail later at a
-    /// confusing assertion — which is how a genuinely unmet condition could read as a green run.
-    private static func settle(until condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        #expect(condition(), "settle budget exhausted with the condition still false")
     }
 }

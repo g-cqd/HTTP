@@ -55,16 +55,16 @@ struct HTTPServerHTTP3EngineRetirementTests {
         }
 
         let engine = try await Self.engine(of: server)
-        try await Self.settle { await engine.census().trackedStreams == Self.partialStreams }
+        try await settle { await engine.census().trackedStreams == Self.partialStreams }
         let loaded = await engine.census()
         #expect(loaded.trackedStreams == Self.partialStreams)
         #expect(loaded.bufferedRequestBodyBytes > 0)  // the DATA prefix really is retained
         #expect(loaded.chargedStreamResets == 0)
 
-        try await Self.advance(clock, by: .seconds(31)) {
+        try await advance(clock, by: .seconds(31)) {
             streams.allSatisfy { !$0.resetCodes.isEmpty }
         }
-        try await Self.settle { await engine.census().trackedStreams == 0 }
+        try await settle { await engine.census().trackedStreams == 0 }
 
         let reaped = await engine.census()
         #expect(streams.allSatisfy { !$0.resetCodes.isEmpty })
@@ -94,10 +94,10 @@ struct HTTPServerHTTP3EngineRetirementTests {
         quic.accept(upload)
 
         let engine = try await Self.engine(of: server)
-        try await Self.settle { await engine.census().trackedStreams == 1 }
+        try await settle { await engine.census().trackedStreams == 1 }
         upload.finishInbound()  // peer EOF mid-upload
 
-        try await Self.settle { await engine.census().trackedStreams == 0 }
+        try await settle { await engine.census().trackedStreams == 0 }
         #expect(upload.resetCodes == [HTTP3ErrorCode.h3RequestIncomplete.rawValue])
         #expect(await engine.census().chargedStreamResets == 1)
     }
@@ -106,7 +106,7 @@ struct HTTPServerHTTP3EngineRetirementTests {
 
     /// The engine of the one connection this server is serving.
     private static func engine(of server: Server) async throws -> Server.Engine {
-        try await Self.settle { server.liveHTTP3ConnectionCount == 1 }
+        try await settle { server.liveHTTP3ConnectionCount == 1 }
         let handle = server.activeQUICConnections.withLock(\.values.first)
         return try #require(handle).engine
     }
@@ -156,31 +156,5 @@ struct HTTPServerHTTP3EngineRetirementTests {
         QUICVarint.encode(UInt64(body.count), into: &out)
         out.append(contentsOf: body)
         return out
-    }
-
-    /// Advances `clock` by `step` until `condition` holds, so the test never has to guess whether the
-    /// serve tasks have parked on their deadline yet.
-    private static func advance(
-        _ clock: TestClock,
-        by step: Duration,
-        until condition: @Sendable () -> Bool
-    ) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            clock.advance(by: step)
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        #expect(condition(), "advance budget exhausted with the condition still false")
-    }
-
-    /// Polls an async `condition` until it holds, failing the test if the budget runs out.
-    private static func settle(until condition: @Sendable () async -> Bool) async throws {
-        for _ in 0 ..< 200 {
-            if await condition() {
-                return
-            }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        let satisfied = await condition()
-        #expect(satisfied, "settle budget exhausted with the condition still false")
     }
 }

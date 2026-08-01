@@ -46,7 +46,7 @@ struct HTTPServerHTTP3TruncationTests {
         _ = try await entered.wait(forAtLeast: 1)  // the handler is running on the partial body
         request.finishInbound()  // EOF without FIN — the body is truncated
 
-        try await Self.settle { !request.resetCodes.isEmpty }
+        try await settle { !request.resetCodes.isEmpty }
         #expect(request.resetCodes == [HTTP3ErrorCode.h3RequestIncomplete.rawValue])
         #expect(request.sendCount == 0)  // no response head, no body, no FIN
     }
@@ -67,7 +67,7 @@ struct HTTPServerHTTP3TruncationTests {
         defer { serving.cancel() }
         quic.accept(request)
 
-        try await Self.settle { request.sendCount > 0 }
+        try await settle { request.sendCount > 0 }
         #expect(request.resetCodes.isEmpty)
         #expect(request.sendCount > 0)
     }
@@ -116,12 +116,5 @@ struct HTTPServerHTTP3TruncationTests {
         QUICVarint.encode(UInt64(payload.count), into: &out)
         out.append(contentsOf: payload)
         return out
-    }
-
-    /// Polls `condition` on the cooperative pool until it holds or the budget runs out.
-    private static func settle(until condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 }

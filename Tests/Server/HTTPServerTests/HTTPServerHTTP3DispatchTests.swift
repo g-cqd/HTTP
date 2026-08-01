@@ -57,7 +57,7 @@ struct HTTPServerHTTP3DispatchTests {
         encoder.deliver([0x02] + Self.insertAuthority, fin: false)
 
         _ = try await handled.wait(forAtLeast: 1)
-        try await Self.settle { request.sendCount > 0 }
+        try await settle { request.sendCount > 0 }
 
         #expect(handled.count == 1)  // the handler ran exactly once, for the request stream
         #expect(encoder.sendCount == 0)  // and nothing was written on the encoder stream
@@ -101,7 +101,7 @@ struct HTTPServerHTTP3DispatchTests {
         encoder.deliver([0x02] + Self.insertAuthority, fin: false)
 
         _ = try await handled.wait(forAtLeast: 2)
-        try await Self.settle { first.sendCount > 0 && second.sendCount > 0 }
+        try await settle { first.sendCount > 0 && second.sendCount > 0 }
 
         #expect(handled.count == 2)  // exactly once per stream, never twice for either
         #expect(encoder.sendCount == 0)
@@ -147,7 +147,7 @@ struct HTTPServerHTTP3DispatchTests {
 
         // And the response lands on the request stream once the body ends.
         request.deliver([], fin: true)
-        try await Self.settle { request.sendCount > 0 }
+        try await settle { request.sendCount > 0 }
         #expect(try Self.decodeResponse(request.sentBytes).0 == "200")
         #expect(encoder.sendCount == 0)
     }
@@ -254,17 +254,5 @@ struct HTTPServerHTTP3DispatchTests {
             let start = reader.position
             return (type, Array(bytes[start ..< (start + Int(length))]), start + Int(length))
         }
-    }
-
-    /// Polls `condition` until it holds, failing the test if the budget runs out.
-    ///
-    /// The budget exhausting is a *failure*, not a quiet return. Falling out of the loop with the
-    /// condition still false let the test carry on and either pass vacuously or fail later at a
-    /// confusing assertion — which is how a genuinely unmet condition could read as a green run.
-    private static func settle(until condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(condition(), "settle budget exhausted with the condition still false")
     }
 }

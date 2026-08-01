@@ -27,7 +27,7 @@ struct HTTP3StreamInboxTests {
         defer { consumer.cancel() }
 
         // Nothing is offered on the inbound side — this is exactly the `fin:false` blocked-QPACK case.
-        try await Self.settle { inbox.isConsumerParked }
+        try await settle { inbox.isConsumerParked }
         inbox.signalRouted()
 
         let woken = try await parked.wait(forAtLeast: 1)
@@ -57,7 +57,7 @@ struct HTTP3StreamInboxTests {
         }
         defer { producer.cancel() }
 
-        try await Self.settle { inbox.isProducerParked }
+        try await settle { inbox.isProducerParked }
         #expect(offered.isEmpty)  // parked: the loop still holds chunk 1
 
         #expect(await inbox.next() == .inbound(bytes: [0x01], fin: false))
@@ -82,7 +82,7 @@ struct HTTP3StreamInboxTests {
         let woken = AsyncEventProbe<HTTP3StreamInbox.Wakeup>()
         let consumer = Task { woken.record(await inbox.next()) }
 
-        try await Self.settle { inbox.isConsumerParked }
+        try await settle { inbox.isConsumerParked }
         consumer.cancel()  // connection teardown, with nothing ever arriving
 
         #expect(try await woken.wait(forAtLeast: 1) == [.ended])
@@ -95,20 +95,9 @@ struct HTTP3StreamInboxTests {
         #expect(await inbox.offer([0x01], fin: false))
 
         let producer = Task { finished.record(await inbox.offer([0x02], fin: false)) }
-        try await Self.settle { inbox.isProducerParked }
+        try await settle { inbox.isProducerParked }
         producer.cancel()
 
         #expect(try await finished.wait(forAtLeast: 1) == [false])
-    }
-
-    /// Polls `condition` until it holds, failing the test if the budget runs out.
-    ///
-    /// The budget exhausting is a *failure*, not a quiet return: a vacuously satisfied precondition
-    /// would let the assertions below pass without ever exercising the parked path.
-    private static func settle(until condition: @Sendable () -> Bool) async throws {
-        for _ in 0 ..< 200 where !condition() {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        #expect(condition(), "settle budget exhausted with the condition still false")
     }
 }
