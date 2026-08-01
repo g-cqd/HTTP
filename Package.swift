@@ -101,6 +101,16 @@ let strictMemorySafeTargets: Set<String> = [
     // the Linux test build, like the backbones they cover. The sans-I/O engine tests, the portable-backbone
     // tests, and the gated PortableTLS suite stay cross-platform.
     let darwinOnlyTransportTestSources = [
+        // Every backbone in its `gatedBackbones` (kqueue/dispatch/swift-system/Network) is excluded
+        // above, and it drives them through `LoopbackSupport`, which is excluded too. COVERAGE DEBT,
+        // and the honest kind: the `AcceptGate` it pins is SHARED with `.posixEpoll`, so the Linux
+        // accept-backpressure path (global ceiling suspends the listener, per-host ceiling does not)
+        // is currently untested rather than absent. An epoll mirror is the follow-up.
+        "AcceptBackpressureTests.swift",
+        // FLAKE-1's `_dispatch_queue_xref_dispose` trap, which is a property of
+        // `POSIXDispatchTransport` — itself Darwin-only and excluded above. No debt: there is no
+        // libdispatch accept source on Linux to get this wrong.
+        "AcceptShutdownRaceTests.swift",
         "BackboneConformanceTests.swift",
         "CertificateReloadTests.swift",
         "LegacyQUICTransportTests.swift",
@@ -114,7 +124,16 @@ let strictMemorySafeTargets: Set<String> = [
         // which is NOT excluded and keeps ADD-P0.5b covered on Linux.
         "QUICPeerAttributionTests.swift",
         // raw BSD-socket options; SO_NOSIGPIPE is Darwin-only (the epoll tests cover Linux)
-        "POSIXSocketTests.swift"
+        "POSIXSocketTests.swift",
+        // Built on `KqueueEventLoop` + `POSIXKqueueConnection`, both excluded above, so it cannot
+        // compile here. THE LARGEST COVERAGE DEBT IN THIS LIST, and it must not be quiet: the
+        // single-slot-waiter defect it proves is not a kqueue defect. `POSIXEpollConnection` carries
+        // the same `OnceResumer` shape and `EpollEventLoop` the same readiness tables, so the two red
+        // cases here (`connectionReceivesResumeIndependently` /
+        // `connectionSendsResumeIndependently`) describe a live Linux defect that no Linux test
+        // currently observes. An epoll mirror of this suite is the follow-up — and it is the one that
+        // would have caught the `ready` redeclaration this Linux-restoration work exists because of.
+        "ReadinessWaiterCollisionTests.swift"
     ]
     let darwinOnlyServerTestSources = [
         "HTTPServerHTTP3Tests.swift",

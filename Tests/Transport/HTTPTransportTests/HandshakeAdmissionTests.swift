@@ -81,7 +81,12 @@
 
         /// Opens a blocking loopback TCP connection to `port` and sends nothing.
         private static func openStalledConnection(to port: UInt16) -> Int32 {
-            let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+            // Glibc vends SOCK_STREAM as the C enum `__socket_type` while `socket` takes Int32.
+            #if canImport(Glibc)
+                let descriptor = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
+            #else
+                let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+            #endif
             guard descriptor >= 0 else {
                 return -1
             }
