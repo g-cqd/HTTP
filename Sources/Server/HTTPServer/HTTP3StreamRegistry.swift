@@ -342,22 +342,33 @@ final class HTTP3StreamRegistry: Sendable {
     /// A retained entry keeps whatever is already in its mailbox and hands it to the dispatcher
     /// (audit REG-1): a deposit can land in the instant between the last drain and this call, and
     /// clearing the queue here — as it used to — would drop exactly that batch.
-    func endDriving(_ id: QUICStreamID, retain: Bool) {
-        let wakeup = entries.withLock { current -> Wakeup in
-            guard retain else {
-                current[id] = nil
-                return .none
-            }
+    ///
+    /// `retain` is *not* the whole decision (R5-P0b). A non-empty mailbox is retained whatever the
+    /// caller asks, because mail that has already been deposited is by definition owed to somebody:
+    /// unblocking a field section clears the very engine state `retain` is computed from, so a caller
+    /// that read it a moment earlier can be asking to drop an entry that has since been filled. The
+    /// queue is what decides, and it decides inside this lock — the same lock a deposit takes — so the
+    /// two cannot interleave into a state where both say "nothing is owed".
+    ///
+    /// - Returns: whether the entry was kept for the connection dispatcher.
+    @discardableResult
+    func endDriving(_ id: QUICStreamID, retain: Bool) -> Bool {
+        let (kept, wakeup) = entries.withLock { current -> (Bool, Wakeup) in
             guard var entry = current[id] else {
-                return .none
+                return (false, .none)
+            }
+            guard retain || !entry.mailbox.isEmpty else {
+                current[id] = nil
+                return (false, .none)
             }
             entry.isDriving = false
             entry.inbox = nil  // its serve loop is gone; the dispatcher owns the stream now
             let owed = entry.mailbox.isEmpty ? Wakeup.none : entry.claimWakeup(id)
             current[id] = entry
-            return owed
+            return (true, owed)
         }
         deliver(wakeup)
+        return kept
     }
 
     /// Drops `id` — its response was written, or it was reset.

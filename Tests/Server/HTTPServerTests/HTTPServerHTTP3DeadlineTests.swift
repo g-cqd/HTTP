@@ -43,19 +43,31 @@ struct HTTPServerHTTP3DeadlineTests {
     func bodyDeadlineResetsAStalledUpload() async throws {
         let clock = TestClock()
         let quic = FakeQUICConnection()
-        let server = try Self.makeServer(clock: clock, streamingUploads: true)
+        let server = try Self.makeServer(
+            clock: clock,
+            streamingUploads: true,
+            headerReadTimeout: .seconds(3_600)
+        )
         let serving = Task { await server.serveHTTP3(quic) }
         defer { serving.cancel() }
 
         // A streaming route surfaces its head as soon as HEADERS decode, so the *body* budget applies
         // from there on — and the peer is told the request was incomplete, not that it was never
         // processed, because the head did reach the responder.
+        let consumed = AsyncEventProbe<QUICStreamID>()
         let stalled = FakeQUICStream(
             id: QUICStreamID(0),
             direction: .bidirectional,
-            inbound: [(Self.headersFrame(method: "POST", path: "/upload"), false)]
+            inbound: [(Self.headersFrame(method: "POST", path: "/upload"), false)],
+            consumed: consumed
         )
         quic.accept(stalled)
+        // The clock must not jump until the HEADERS have actually reached the driver. Advancing first
+        // races the serve task's very first read: the header budget is armed at t0, so a single jump
+        // past it reaps the stream in the *header* phase and the reset code under test is never the
+        // one this case is about. The header budget is also far wider than the body budget in this
+        // fixture, so the phase a lapse belongs to is unambiguous either way.
+        _ = try await consumed.wait(forAtLeast: 1)
         try await Self.advance(clock, by: .seconds(121)) { !stalled.resetCodes.isEmpty }
 
         #expect(!stalled.resetCodes.isEmpty)
@@ -87,14 +99,15 @@ struct HTTPServerHTTP3DeadlineTests {
 
     // MARK: - Fixtures
 
-    /// A server on `clock` with a 30 s header budget and a 120 s idle budget, so the two phases are
-    /// distinguishable by how far the test advances time.
+    /// A server on `clock` with a 120 s idle budget and a header budget the caller picks, so which
+    /// phase a lapse belongs to is decided by the fixture rather than by which task ran first.
     private static func makeServer(
         clock: TestClock,
-        streamingUploads: Bool = false
+        streamingUploads: Bool = false,
+        headerReadTimeout: Duration = .seconds(30)
     ) throws -> HTTPServer<TestClock> {
         let limits = HTTPLimits.default.with {
-            $0.headerReadTimeout = .seconds(30)
+            $0.headerReadTimeout = headerReadTimeout
             $0.idleTimeout = .seconds(120)
             $0.keepAliveTimeout = .seconds(30)
         }

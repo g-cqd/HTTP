@@ -49,76 +49,53 @@ extension HTTPServer {
         }
     }
 
-    /// Splits an engine event batch into the events belonging to `owner` and the ones that do not,
-    /// depositing the latter in the stream they name; returns the caller's own events.
+    /// Feeds one stream's octets to the engine and performs everything the engine asked for.
     ///
-    /// Connection-scoped events (GOAWAY, whose id is a *limit*, not a stream) stay with the caller.
-    ///
-    /// Audit REG-1: a foreign batch goes straight into that stream's bounded mailbox and the outcome is
-    /// *inspected*. This used to yield into an `AsyncStream` with `.bufferingOldest(256)` and discard
-    /// the result, so past the budget the oldest batches — requests and body chunks — were silently
-    /// dropped. There is no lossy hop left: the mailbox either takes the batch, or refuses it and the
-    /// stream is reset with H3_EXCESSIVE_LOAD (RFC 9114 §8.1).
-    func partitionHTTP3Events(
-        _ events: [HTTP3Connection.Event],
-        owner: QUICStreamID,
-        registry: HTTP3StreamRegistry
-    ) -> [HTTP3Connection.Event] {
-        var own: [HTTP3Connection.Event] = []
-        var foreign: [QUICStreamID: [HTTP3Connection.Event]] = [:]
-        var order: [QUICStreamID] = []
-        for event in events {
-            guard let id = Self.owningStream(of: event), id != owner else {
-                own.append(event)
-                continue
-            }
-            if foreign[id] == nil { order.append(id) }
-            foreign[id, default: []].append(event)
+    /// The single seam every read path shares (R5-P0b): the engine files each foreign event against the
+    /// stream it names *inside its own isolation*, so the caller can never hold a batch across a
+    /// suspension point while another task decides that stream no longer needs an entry. What comes
+    /// back is only what belongs to the caller, plus the streams whose mailbox refused their batch and
+    /// must therefore be retired (RFC 9114 §8.1 H3_EXCESSIVE_LOAD, CWE-770).
+    func receiveHTTP3(
+        _ id: QUICStreamID,
+        _ bytes: [UInt8],
+        fin: Bool,
+        registry: HTTP3StreamRegistry,
+        engine: Engine,
+        quic: any QUICConnection
+    ) async -> [HTTP3Connection.Event] {
+        let reception = await engine.receive(id, bytes, fin: fin, routingInto: registry)
+        await applyHTTP3(reception.actions, registry: registry, engine: engine, quic: quic)
+        for overflowed in reception.overflowed {
+            await resetHTTP3Stream(
+                overflowed,
+                errorCode: HTTP3ErrorCode.h3ExcessiveLoad.rawValue,
+                registry: registry,
+                engine: engine,
+                quic: quic
+            )
         }
-        for id in order {
-            routeHTTP3Events(foreign[id] ?? [], to: id, registry: registry)
-        }
-        return own
+        return reception.own
     }
 
-    /// Deposits one foreign batch, escalating a refusal to a stream reset rather than dropping it.
+    /// Ends the driving phase for `id`, now that the task reading it has stopped.
     ///
-    /// The deposit cannot park: this runs on a stream task one statement after its own `engine.receive`
-    /// returned, so waiting on another stream's application progress would be cross-stream head-of-line
-    /// blocking and could deadlock against a peer task depositing back. Failing closed is the
-    /// requirement here, exactly as it is for ``BoundedByteChannel/trySend(_:)`` on the HTTP/2 side.
-    private func routeHTTP3Events(
-        _ events: [HTTP3Connection.Event],
-        to id: QUICStreamID,
-        registry: HTTP3StreamRegistry
-    ) {
-        switch registry.deposit(events, for: id) {
-            case .queued:
-                break  // the owner's inbox, or the dispatcher's ticket, has been signalled
-            case .unknown:
-                break  // the stream was reset or retired; QUIC has no way to deliver on it
-            case .overflow(let stream):
-                // A peer growing an unbounded routed queue is refused, not buffered (CWE-770).
-                stream.reset(errorCode: HTTP3ErrorCode.h3ExcessiveLoad.rawValue)
-                registry.retire(id)
-        }
-    }
-
-    /// The request stream an event belongs to, or nil when it is connection-scoped (RFC 9114 §5.2 —
-    /// GOAWAY carries a stream *limit*, not a stream to act on).
-    static func owningStream(of event: HTTP3Connection.Event) -> QUICStreamID? {
-        switch event {
-            case .request(let id, _, _),
-                .requestHead(let id, _),
-                .requestBodyChunk(let id, _),
-                .requestEnd(let id),
-                .extendedConnect(let id, _, _),
-                .tunnelData(let id, _),
-                .tunnelClosed(let id):
-                id
-            case .goAway:
-                nil
-        }
+    /// Decides whether anything is still owed on the stream, and keeps its registry entry if so.
+    ///
+    /// Delegated whole to the engine actor rather than assembled here out of an `isBlocked` read and a
+    /// registry call. Those were two isolation hops with a gap between them, and the gap is exactly
+    /// where a QPACK unblock lands: the engine cleared the blocked state, this read said "nothing
+    /// owed", the entry was dropped, and the routed request then arrived for a stream the registry no
+    /// longer knew (RFC 9204 §2.1.2).
+    ///
+    /// - Returns: whether the entry was kept, for the connection dispatcher to answer on.
+    @discardableResult
+    func concludeHTTP3Driving(
+        _ id: QUICStreamID,
+        registry: HTTP3StreamRegistry,
+        engine: Engine
+    ) async -> Bool {
+        await engine.endDriving(id, registry: registry)
     }
 
     /// Drains the connection's dispatcher ticket channel, serving each named stream's mailbox.

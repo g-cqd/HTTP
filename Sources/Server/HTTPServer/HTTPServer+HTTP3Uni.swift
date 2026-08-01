@@ -74,8 +74,12 @@ extension HTTPServer {
     /// Feeds one unidirectional chunk to the engine and flushes what it queues.
     ///
     /// A connection error — a second control stream, a closed critical stream, a QPACK fault — is
-    /// swallowed by ``Engine/receive(_:_:fin:)`` and surfaces as the CONNECTION_CLOSE it queued, which
-    /// is what ``applyHTTP3(_:registry:engine:quic:)`` then performs (RFC 9000 §19.19).
+    /// swallowed by the engine and surfaces as the CONNECTION_CLOSE it queued, which
+    /// ``receiveHTTP3(_:_:fin:registry:engine:quic:)`` then performs (RFC 9000 §19.19).
+    ///
+    /// Everything such a receive surfaces belongs to some *other* stream and has already been filed
+    /// against it; the only event that could come back here is the connection-scoped GOAWAY
+    /// (RFC 9114 §5.2), which needs no action on this stream.
     private func feedHTTP3Uni(
         _ id: QUICStreamID,
         _ bytes: [UInt8],
@@ -84,10 +88,13 @@ extension HTTPServer {
         quic: any QUICConnection,
         registry: HTTP3StreamRegistry
     ) async {
-        let (produced, actions) = await engine.receive(id, bytes, fin: fin)
-        await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
-        // Everything a unidirectional receive surfaces belongs to some *other* stream; the only event
-        // that could stay here is the connection-scoped GOAWAY (RFC 9114 §5.2), which needs no action.
-        _ = partitionHTTP3Events(produced, owner: id, registry: registry)
+        _ = await receiveHTTP3(
+            id,
+            bytes,
+            fin: fin,
+            registry: registry,
+            engine: engine,
+            quic: quic
+        )
     }
 }

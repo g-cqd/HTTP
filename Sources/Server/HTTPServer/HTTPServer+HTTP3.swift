@@ -58,12 +58,33 @@ extension HTTPServer {
             connection.outbound()
         }
 
-        /// Feeds one stream's bytes (a connection error is swallowed; its CONNECTION_CLOSE is queued).
+        /// Feeds one stream's bytes and files everything they surfaced for *other* streams (R5-P0b).
+        ///
+        /// A connection error is swallowed; its CONNECTION_CLOSE is queued among the returned actions.
+        ///
+        /// The routing happens here, inside the actor, rather than in the caller after this returns.
+        /// Engine output is addressed by stream id and need not belong to the stream whose bytes
+        /// provoked it — RFC 9204 §2.1.2, where an encoder-stream insert unblocks a *request* stream's
+        /// field section — and clearing that stream's blocked state is part of the very call that
+        /// produces its `request` event. Handing the batch back for the caller to file left those two
+        /// facts separated by a suspension point, so a concurrent
+        /// ``endDriving(_:registry:)`` could observe "no longer blocked" while the event was still in
+        /// flight and retire the entry it was about to be delivered to. Filing under the same isolation
+        /// makes the ordering a property of *where* the code runs rather than of how two tasks
+        /// interleaved: no third state exists between the two.
         func receive(
-            _ id: QUICStreamID, _ bytes: [UInt8], fin: Bool
-        ) -> (events: [HTTP3Connection.Event], actions: [HTTP3Connection.Action]) {
-            let events = (try? connection.receive(id, bytes, fin: fin)) ?? []
-            return (events, connection.outbound())
+            _ id: QUICStreamID,
+            _ bytes: [UInt8],
+            fin: Bool,
+            routingInto registry: HTTP3StreamRegistry
+        ) -> HTTP3Reception {
+            let produced = (try? connection.receive(id, bytes, fin: fin)) ?? []
+            let routed = registry.route(produced, owner: id)
+            return HTTP3Reception(
+                own: routed.own,
+                actions: connection.outbound(),
+                overflowed: routed.overflowed
+            )
         }
 
         /// Encodes a response on `id` and returns the queued send/close actions.
@@ -99,10 +120,18 @@ extension HTTPServer {
             connection.closeTunnel(id)
         }
 
-        /// Whether `id` still holds a QPACK-blocked field section (RFC 9204 §2.1.2) — its request has
-        /// not surfaced and will do so from another stream's receive (audit addendum P0.3).
-        func isBlocked(_ id: QUICStreamID) -> Bool {
-            connection.isBlocked(id)
+        /// Ends the driving phase for `id`, keeping its entry only while something is owed.
+        ///
+        /// The two halves of that decision — "does the engine still hold a QPACK-blocked field section
+        /// for this stream" (RFC 9204 §2.1.2) and "is the registry about to drop the entry" — are made
+        /// in one actor-isolated step, and every routed deposit is made in the *same* isolation by
+        /// ``receive(_:_:fin:routingInto:)``. So the check and the delivery cannot interleave: either
+        /// the deposit ran first and the registry sees a non-empty mailbox, or it has not run yet and
+        /// the engine still reports the section blocked. There is no window in which both say no.
+        ///
+        /// - Returns: whether the entry was kept, for the connection dispatcher to answer on.
+        func endDriving(_ id: QUICStreamID, registry: HTTP3StreamRegistry) -> Bool {
+            registry.endDriving(id, retain: connection.isBlocked(id))
         }
 
         /// Retires the engine state behind `id` and returns the actions to flush (audit REG-3).
@@ -314,14 +343,19 @@ extension HTTPServer {
                     fin = chunkFin
                     // The read landed; handler time is not charged to a read deadline.
                     deadlines.disarm(stream.id)
-                    let (produced, actions) = await engine.receive(stream.id, bytes, fin: chunkFin)
-                    await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
                     // Engine output is addressed by stream id, not by which stream's bytes provoked it:
-                    // hand every foreign-id event to the connection dispatcher and keep only our own
-                    // (P0.3). The mailbox carries back the ones another task routed *to* us.
-                    own =
-                        registry.takeMailbox(stream.id)
-                        + partitionHTTP3Events(produced, owner: stream.id, registry: registry)
+                    // every foreign-id event is filed against its own stream inside the engine's
+                    // isolation, and only ours comes back (P0.3 / R5-P0b). The mailbox carries the ones
+                    // another task routed *to* us.
+                    let produced = await receiveHTTP3(
+                        stream.id,
+                        bytes,
+                        fin: chunkFin,
+                        registry: registry,
+                        engine: engine,
+                        quic: quic
+                    )
+                    own = registry.takeMailbox(stream.id) + produced
             }
             let handedOff = await applyHTTP3StreamEvents(
                 own,
@@ -349,10 +383,10 @@ extension HTTPServer {
         if let handler = tunnelHandler {
             await handler.onClose()
         }
-        // Keep the writer reachable only while the engine still owes this stream a request: a blocked
-        // field section surfaces later, from the encoder stream's receive (RFC 9204 §2.1.2), and the
+        // Keep the writer reachable only while something is still owed on this stream: a blocked field
+        // section surfaces later, from the encoder stream's receive (RFC 9204 §2.1.2), and the
         // dispatcher must still be able to answer on it.
-        registry.endDriving(stream.id, retain: await engine.isBlocked(stream.id))
+        await concludeHTTP3Driving(stream.id, registry: registry, engine: engine)
     }
 
     /// Answers a buffered request exactly once, on the stream its id names.

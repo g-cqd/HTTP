@@ -24,8 +24,7 @@ struct HTTPServerHTTP3RoutedBoundTests {
     private static let target = QUICStreamID(4)
 
     @Test("every routed event is delivered — the count out equals the count in")
-    func noRoutedEventIsSilentlyDropped() async throws {
-        let server = try Self.makeServer()
+    func noRoutedEventIsSilentlyDropped() async {
         let registry = HTTP3StreamRegistry(mailboxByteBudget: 1 << 20)
         let stream = FakeQUICStream(id: Self.target, direction: .bidirectional)
         registry.register(stream)
@@ -36,11 +35,8 @@ struct HTTPServerHTTP3RoutedBoundTests {
         let batches = 1_024
         var delivered = 0
         for index in 0 ..< batches {
-            _ = server.partitionHTTP3Events(
-                [.requestEnd(streamID: Self.target)],
-                owner: Self.owner,
-                registry: registry
-            )
+            let routed = registry.route([.requestEnd(streamID: Self.target)], owner: Self.owner)
+            #expect(routed.overflowed.isEmpty)
             if index.isMultiple(of: 2) {
                 delivered += registry.takeMailbox(Self.target).count
             }
@@ -52,31 +48,27 @@ struct HTTPServerHTTP3RoutedBoundTests {
     }
 
     @Test("a mailbox past its bound fails closed with H3_EXCESSIVE_LOAD, never trimmed")
-    func anOverflowingMailboxFailsClosed() async throws {
-        let server = try Self.makeServer()
+    func anOverflowingMailboxFailsClosed() async {
         let registry = HTTP3StreamRegistry(mailboxByteBudget: 1 << 20)
         let stream = FakeQUICStream(id: Self.target, direction: .bidirectional)
         registry.register(stream)
 
-        // Nothing drains, so the mailbox fills; past the bound the stream must be reset rather than
-        // have its oldest entries discarded.
+        // Nothing drains, so the mailbox fills; past the bound the batch must be *refused* — named back
+        // to the caller for retirement — rather than have the mailbox's oldest entries discarded.
+        var refused: [QUICStreamID] = []
         for _ in 0 ..< (HTTP3StreamRegistry.mailboxCapacity * 4) {
-            _ = server.partitionHTTP3Events(
-                [.requestEnd(streamID: Self.target)],
-                owner: Self.owner,
-                registry: registry
-            )
+            let routed = registry.route([.requestEnd(streamID: Self.target)], owner: Self.owner)
+            refused += routed.overflowed
         }
 
-        #expect(!stream.resetCodes.isEmpty, "the overflow must fail closed, not drop")
-        #expect(stream.resetCodes.allSatisfy { $0 == HTTP3ErrorCode.h3ExcessiveLoad.rawValue })
+        #expect(!refused.isEmpty, "the overflow must fail closed, not drop")
+        #expect(refused.allSatisfy { $0 == Self.target })
         // Everything accepted before the refusal is still exactly what the mailbox holds.
         #expect(registry.takeMailbox(Self.target).count <= HTTP3StreamRegistry.mailboxCapacity)
     }
 
     @Test("an accepted batch is delivered whole — the count out equals the count in")
-    func acceptedBatchesAreDeliveredWhole() async throws {
-        let server = try Self.makeServer()
+    func acceptedBatchesAreDeliveredWhole() async {
         let registry = HTTP3StreamRegistry(mailboxByteBudget: 1 << 20)
         let stream = FakeQUICStream(id: Self.target, direction: .bidirectional)
         registry.register(stream)
@@ -84,11 +76,28 @@ struct HTTPServerHTTP3RoutedBoundTests {
         // Well inside both bounds: every single event must come back out.
         let events = (0 ..< 8).map { _ in HTTP3Connection.Event.requestEnd(streamID: Self.target) }
         for event in events {
-            _ = server.partitionHTTP3Events([event], owner: Self.owner, registry: registry)
+            #expect(registry.route([event], owner: Self.owner).overflowed.isEmpty)
         }
 
         #expect(registry.takeMailbox(Self.target).count == events.count)
         #expect(stream.resetCodes.isEmpty)
+    }
+
+    @Test("the caller's own events come back and are never filed against it")
+    func theOwnersEventsAreReturnedNotFiled() async {
+        let registry = HTTP3StreamRegistry(mailboxByteBudget: 1 << 20)
+        registry.register(FakeQUICStream(id: Self.owner, direction: .bidirectional))
+
+        // GOAWAY is connection-scoped (RFC 9114 §5.2) and has no owning stream, so it stays with the
+        // caller alongside the events the caller's own id names.
+        let routed = registry.route(
+            [.requestEnd(streamID: Self.owner), .goAway(streamID: QUICStreamID(0))],
+            owner: Self.owner
+        )
+
+        #expect(routed.own.count == 2)
+        #expect(routed.overflowed.isEmpty)
+        #expect(registry.takeMailbox(Self.owner).isEmpty)
     }
 
     @Test("the bound is in retained octets, not messages")

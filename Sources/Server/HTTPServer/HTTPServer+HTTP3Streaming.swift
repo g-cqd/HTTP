@@ -78,12 +78,17 @@ extension HTTPServer {
                     ended = await absorbHTTP3Body(registry.takeMailbox(id), into: handoff) || ended
                 case .inbound(let bytes, let fin):
                     deadlines.disarm(id)  // the read landed; handler time is not a read deadline
-                    let (produced, actions) = await engine.receive(id, bytes, fin: fin)
-                    await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
                     // Foreign events are routed here too (audit REG-1): this loop used to *filter*
                     // them out, which is the same silent drop one layer down — a sibling stream's
                     // QPACK section can unblock while this one is still uploading.
-                    let own = partitionHTTP3Events(produced, owner: id, registry: registry)
+                    let own = await receiveHTTP3(
+                        id,
+                        bytes,
+                        fin: fin,
+                        registry: registry,
+                        engine: engine,
+                        quic: quic
+                    )
                     ended = await absorbHTTP3Body(own, into: handoff) || ended
                     if fin {
                         break feed
