@@ -134,6 +134,15 @@ struct ReceiveScratch {
             window = Self.grown(window: window, ceiling: ceiling)
             return
         }
+        // A non-positive count is not a read at all: it is an end of stream, a zero-length ceiling,
+        // or — on the TLS backbone, where `body` is `SSL_read` — a `WANT_READ` to be retried once
+        // more ciphertext has been pumped in. It says nothing either way about how much room the peer
+        // needs, so it is neutral: it neither counts toward a shrink run nor clears one. Clearing
+        // would be just as wrong as counting, because the TLS decrypt loop interleaves a retry with
+        // every real read, and a run that resets on each retry could never complete.
+        guard produced > 0 else {
+            return
+        }
         guard produced <= size / 4 else {
             smallReads = 0
             return

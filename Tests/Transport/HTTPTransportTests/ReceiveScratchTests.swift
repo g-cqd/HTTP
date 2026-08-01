@@ -216,6 +216,33 @@ struct ReceiveScratchTests {
         #expect(ReceiveScratch.grown(window: window, ceiling: ceiling) == expected)
     }
 
+    @Test(
+        "a non-positive read is not a small read and cannot shrink the window",
+        arguments: [0, -1, -3])
+    func aNonPositiveReadDoesNotShrinkTheWindow(produced: Int) {
+        // `SSL_read` reports `WANT_READ` as a non-positive return, and the TLS backbone retries it
+        // once it has pumped more ciphertext in. Counting those retries as quiet reads would shrink an
+        // active connection's window under it.
+        var scratch = ReceiveScratch()
+        Self.saturate(&scratch, ceiling: Self.serverCeiling, reads: 8)
+        for _ in 0 ..< (4 * ReceiveScratch.shrinkRun) {
+            _ = scratch.read(ceiling: Self.serverCeiling) { _ in produced }
+        }
+        #expect(scratch.residentBytes == Self.serverCeiling)
+    }
+
+    @Test("a retry that precedes a real read still lets a quiet connection shrink")
+    func aRetryBeforeARealReadStillShrinks() {
+        var scratch = ReceiveScratch()
+        Self.saturate(&scratch, ceiling: Self.serverCeiling, reads: 8)
+        // The TLS decrypt loop's shape: some `WANT_READ` retries, then the read that succeeds.
+        for _ in 0 ..< (3 * ReceiveScratch.shrinkRun) {
+            _ = scratch.read(ceiling: Self.serverCeiling) { _ in -1 }
+            Self.feed(&scratch, ceiling: Self.serverCeiling, produced: 1)
+        }
+        #expect(scratch.residentBytes == ReceiveScratch.floorWindow)
+    }
+
     @Test("a zero-length read allocates nothing")
     func aZeroCeilingAllocatesNothing() {
         var scratch = ReceiveScratch()
