@@ -34,8 +34,9 @@ struct HTTP2ConnectionState {
     /// In-flight streaming-route requests (Phase 1.4), each feeding a body stream its handler consumes.
     var streaming: [HTTP2StreamID: HTTP2StreamingRequest] = [:]
 
-    /// Active native-streaming responses (P6b): each relay's pull-permission gate, keyed by stream.
-    var relays: [HTTP2StreamID: HTTP2StreamPermit] = [:]
+    /// Active native-streaming responses (P6b): each relay's pull-permission gate and producer
+    /// handoff, keyed by stream — the two places a reset response's tasks can be parked.
+    var relays: [HTTP2StreamID: HTTP2ResponseRelay] = [:]
 
     /// Consumption reports from every *gated* stream — streaming-route requests and tunnels alike.
     ///
@@ -45,19 +46,19 @@ struct HTTP2ConnectionState {
     /// not at the arbitrary moment the body happened to end (RFC 9113 §6.9, ADR 0006).
     var consumption: [HTTP2StreamID: HTTP2ConsumptionSignal] = [:]
 
-    /// Streams whose handler task has been dispatched and has not yet reported back (buffered and
-    /// streaming-route alike).
+    /// Streams whose work has been dispatched and has not yet reported back — buffered requests,
+    /// streaming-route requests and tunnel pumps alike.
     ///
     /// A request already fully received needs no more inbound data to finish, only the chance to run, so
-    /// EOF drains these rather than cancelling them out from under itself.
+    /// EOF drains these rather than cancelling them out from under itself. It is also the handle a peer
+    /// RST_STREAM cancels: one table covers all three dispatch paths, so a stream ending cannot forget
+    /// one of them (2026-07-31 fifth review, R5-P0d).
     ///
-    /// A set of stream ids rather than a counter (audit F6): it is bounded by `maxConcurrentStreams`
-    /// either way, and "the accounting came back to zero" is then directly assertable — which is what a
-    /// counter silently getting out of step on the reset path cost.
-    var dispatched: Set<HTTP2StreamID> = []
-
-    /// Dispatched-but-not-yet-`.tunnelEnded` tunnel pump tasks — the tunnel half of `dispatched`.
-    var pendingTunnels = 0
+    /// A table of stream ids rather than the counters it replaces (`dispatched: Set` plus
+    /// `pendingTunnels: Int`): it is bounded by `maxConcurrentStreams` either way, and "the accounting
+    /// came back to zero" is then a single assertion — which is what a counter silently getting out of
+    /// step on the reset path cost (audit F6).
+    let tasks = HTTP2StreamTasks()
 
     /// Whether graceful shutdown has already queued its GOAWAY (RFC 9113 §6.8 — queue it once).
     var sentGoAway = false
@@ -70,7 +71,7 @@ struct HTTP2ConnectionState {
     /// Checked only once the reader has actually closed: while it has not, more octets keep arriving and
     /// the connection has no reason to close regardless of this being transiently true.
     var isDrained: Bool {
-        readerClosed && dispatched.isEmpty && pendingTunnels == 0 && relays.isEmpty
+        readerClosed && tasks.isEmpty && relays.isEmpty
     }
 
     /// Consecutive sweeps a gated stream has held receive credit without reporting any consumption.

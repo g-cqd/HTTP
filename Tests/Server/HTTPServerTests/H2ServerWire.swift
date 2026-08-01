@@ -91,6 +91,19 @@ enum H2ServerWire {
         return wire
     }
 
+    /// A WINDOW_UPDATE frame granting `increment` octets on `streamID` (0 = the connection, §6.9).
+    static func windowUpdate(streamID: UInt32, increment: UInt32) -> [UInt8] {
+        frame(
+            type: 0x08,
+            flags: 0,
+            streamID: streamID,
+            payload: [
+                UInt8(increment >> 24 & 0xFF), UInt8(increment >> 16 & 0xFF),
+                UInt8(increment >> 8 & 0xFF), UInt8(increment & 0xFF)
+            ]
+        )
+    }
+
     /// An RST_STREAM frame carrying `code` (§6.4).
     static func rstStream(streamID: UInt32, code: UInt32) -> [UInt8] {
         frame(

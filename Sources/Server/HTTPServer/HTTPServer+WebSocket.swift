@@ -321,14 +321,13 @@ extension HTTPServer {
     /// longer head-of-line-blocks any other stream multiplexed on this connection (this path was not
     /// covered by the existing FIX #3, which only dispatched buffered-request handlers).
     ///
-    /// `pendingTunnels` counts dispatched-but-not-yet-`.tunnelEnded` pump tasks, incremented here on
-    /// dispatch — the consumer's EOF drain check (``HTTPServer/serveHTTP2(_:deadline:initialBytes:)``'s
-    /// `.closed` case) reads it to know whether a tunnel might still have in-flight work worth letting
-    /// finish before the connection actually closes.
+    /// The pump task is registered in ``HTTP2StreamTasks`` on dispatch — the consumer's EOF drain reads
+    /// that table to know whether a tunnel might still have in-flight work worth letting finish before
+    /// the connection actually closes, a peer RST_STREAM cancels through it, and connection teardown
+    /// joins on it.
     func handleHTTP2Tunnel(
         _ event: HTTP2Connection.Event,
         state: inout HTTP2ConnectionState,
-        group: inout DiscardingTaskGroup,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
         switch event {
@@ -358,33 +357,24 @@ extension HTTPServer {
                 // only as the pump reports what it has processed.
                 let channel = makeHTTP2GatedChannel()
                 let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
-                let canceller = HTTP2StreamCanceller()
                 state.consumption[streamID] = signal
                 state.webSockets[streamID] = HTTP2WebSocketTunnel(
-                    channel: channel, signal: signal, canceller: canceller
+                    channel: channel, signal: signal
                 )
-                state.pendingTunnels += 1
-                group.addTask { [self] in
-                    // As on the streaming-request path: the group child owns the lifetime, and the inner
-                    // `Task` exists only so a peer RST_STREAM can stop a pump parked inside the route's
-                    // handler — somewhere abandoning the channel cannot reach (audit F6).
-                    let work = Task { [self] in
-                        await runHTTP2Tunnel(
-                            streamID: streamID,
-                            handler: handler,
-                            permessageDeflate: permessageDeflate,
-                            channel: channel,
-                            signal: signal,
-                            into: continuation
-                        )
-                    }
-                    canceller.adopt(work)
-                    await withTaskCancellationHandler {
-                        await work.value
-                    } onCancel: {
-                        work.cancel()
-                    }
+                // As on the request paths: an unstructured task so a peer RST_STREAM can stop a pump
+                // parked inside the route's handler — somewhere abandoning the channel cannot reach
+                // (audit F6) — and ``HTTP2StreamTasks/shutdown()` owns the join (R5-P0d).
+                let work = Task { [self] in
+                    await runHTTP2Tunnel(
+                        streamID: streamID,
+                        handler: handler,
+                        permessageDeflate: permessageDeflate,
+                        channel: channel,
+                        signal: signal,
+                        into: continuation
+                    )
                 }
+                state.tasks.register(work, for: streamID)
             case .tunnelData(let streamID, let bytes):
                 await pushHTTP2TunnelData(streamID, bytes: bytes, state: &state)
             case .tunnelClosed(let streamID):

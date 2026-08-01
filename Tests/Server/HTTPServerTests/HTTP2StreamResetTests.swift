@@ -226,15 +226,20 @@ struct HTTP2StreamResetTests {
         state.consumption[streamID] = HTTP2ConsumptionSignal {
             // No mailbox in this unit test; only the ledger is under assertion.
         }
-        state.dispatched.insert(streamID)
+        state.tasks.register(
+            Task {
+                // A stand-in for a dispatched handler: only the ledger is under assertion.
+            },
+            for: streamID
+        )
         _ = try state.engine.receive(H2Gate.openAndFill(streamID: streamID, count: 1_024))
         #expect(state.engine.outstandingReceiveCredit == 1_024)
 
         _ = try state.engine.receive(H2ServerWire.rstStream(streamID: 1, code: 0x08))
         // The handler's late `.requestReady`, dropped by `beginHTTP2Response`'s open-stream guard.
-        state.dispatched.remove(streamID)
+        state.tasks.release(streamID)
         state.retire(streamID)
-        #expect(state.dispatched.isEmpty)
+        #expect(state.tasks.isEmpty)
         #expect(state.engine.outstandingReceiveCredit == 0)
         #expect(state.consumption.isEmpty)
         #expect(state.stalls.isEmpty)

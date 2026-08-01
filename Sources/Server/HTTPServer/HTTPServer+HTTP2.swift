@@ -154,18 +154,24 @@ extension HTTPServer {
                     into: continuation
                 )
                 if shouldClose {
-                    group.cancelAll()
                     break
                 }
             }
+            // Teardown, in the order the parked positions depend on each other (R5-P0d).
+            //
+            // The reader, the watchdogs and every native-streaming relay are structured children, so
+            // `cancelAll` reaps them. Handler and tunnel-pump tasks are NOT: each needs a handle a peer
+            // RST_STREAM can cancel, and Swift offers no way to cancel one child of a group. This
+            // function owns them instead, and joins on them explicitly right here — abandoning what
+            // they might be parked reading first, so cancellation is not racing a channel that could
+            // still deliver, and awaiting them before returning, because the connection's admission
+            // slot is released the moment it does (audit F8).
+            group.cancelAll()
+            await state.finishAllStreaming()
+            await state.endAllTunnels()
+            await state.tasks.shutdown()
             // Unblocks a reader parked in `send` so its task actually exits.
             await intake.abandon()
         }
-        // Connection closed: abandon every in-flight body channel so no handler stays parked reading one
-        // that will never receive another chunk. The handler TASKS themselves are structured children of
-        // the task group above, already reaped by its teardown by the time this runs — this is a
-        // defensive mirror of that. It follows the group rather than sitting in a `defer` because
-        // abandoning a channel is `async`, which a `defer` cannot be.
-        await state.finishAllStreaming()
     }
 }

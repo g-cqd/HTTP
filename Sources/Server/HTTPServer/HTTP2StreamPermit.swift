@@ -18,6 +18,12 @@
 /// A one-shot, level-triggered pull permission from the HTTP/2 consumer to one native-streaming relay.
 actor HTTP2StreamPermit {
     private var granted = false
+    /// Set once the stream is gone: no further grant will ever come, so the relay must stop asking.
+    ///
+    /// Without it, dropping a reset stream's relay entry left the relay parked in ``waitForGrant()``
+    /// for the rest of the connection's life — and its producer parked on an offer nobody would take
+    /// (2026-07-31 fifth review, R5-P0d).
+    private var revoked = false
     private var waiter: CheckedContinuation<Void, Never>?
 
     /// Consumer: grant permission to pull the next chunk.
@@ -36,15 +42,34 @@ actor HTTP2StreamPermit {
         }
     }
 
+    /// Consumer: withdraws permission for good — this stream is gone (RFC 9113 §6.4).
+    ///
+    /// Resumes a relay parked in ``waitForGrant()`` so it observes the withdrawal at once. Idempotent,
+    /// and deliberately terminal: a revoked permit can never be granted again, because the engine no
+    /// longer has a stream to send the pulled chunk on.
+    func revoke() {
+        revoked = true
+        if let waiter {
+            self.waiter = nil
+            waiter.resume()
+        }
+    }
+
     /// Relay: wait for permission — consumes a banked grant at once, else parks until ``grant()``.
     ///
     /// Cancellation-aware (mirrors ``AsyncHandoff/next()``): a relay parked here when the connection
     /// tears down resumes promptly instead of leaking a continuation, so the merged-mailbox consumer's
     /// teardown (`group.cancelAll()`) unwinds this relay too.
-    func waitForGrant() async {
+    ///
+    /// - Returns: whether the relay may pull; `false` once ``revoke()`` has run, which is the relay's
+    ///   signal to stop pumping and let its task group child unwind the producer behind it.
+    func waitForGrant() async -> Bool {
+        if revoked {
+            return false
+        }
         if granted {
             granted = false
-            return
+            return true
         }
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -58,6 +83,7 @@ actor HTTP2StreamPermit {
         } onCancel: {
             Task { await self.resumeWaiterOnCancel() }
         }
+        return !revoked
     }
 
     /// Resumes a relay parked in ``waitForGrant()`` when its task is cancelled (a plain wake, not a

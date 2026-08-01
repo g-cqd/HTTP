@@ -35,7 +35,6 @@ extension HTTPServer {
             case .inboundReady:
                 await applyInboundReady(
                     state: &state,
-                    group: &group,
                     connection: connection,
                     intake: intake,
                     sendDeadline: sendDeadline,
@@ -103,7 +102,6 @@ extension HTTPServer {
     /// mailbox and was only accidentally ordered correctly.
     private func applyInboundReady(
         state: inout HTTP2ConnectionState,
-        group: inout DiscardingTaskGroup,
         connection: any TransportConnection,
         intake: BoundedByteChannel,
         sendDeadline: IdleDeadline<C.Instant>,
@@ -114,7 +112,6 @@ extension HTTPServer {
                 return await applyInboundChunk(
                     bytes,
                     state: &state,
-                    group: &group,
                     connection: connection,
                     sendDeadline: sendDeadline,
                     into: continuation
@@ -134,7 +131,6 @@ extension HTTPServer {
     private func applyInboundChunk(
         _ bytes: [UInt8],
         state: inout HTTP2ConnectionState,
-        group: inout DiscardingTaskGroup,
         connection: any TransportConnection,
         sendDeadline: IdleDeadline<C.Instant>,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
@@ -154,7 +150,6 @@ extension HTTPServer {
                 event,
                 state: &state,
                 connection: connection,
-                group: &group,
                 into: continuation
             )
         }
@@ -227,7 +222,7 @@ extension HTTPServer {
         sendDeadline: IdleDeadline<C.Instant>,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async -> Bool {
-        state.dispatched.remove(streamID)
+        state.tasks.release(streamID)
         // The handler has returned, so nothing more will ever consume this stream's body. Hand back
         // whatever it left untaken BEFORE responding — `engine.respond` may close and drop the stream,
         // and credit not returned by then is credit the connection loses for good (§6.9.1).
@@ -247,6 +242,16 @@ extension HTTPServer {
         return state.isDrained
     }
 
+    /// Applies one native-streaming relay's pulled item to the engine (P6b / RFC 9113 §8.1).
+    ///
+    /// The open-stream guard is the *continuation* half of the one ``beginHTTP2Response`` applies to a
+    /// late response (audit F6). A relay reports from its own task, so its chunk can already be queued
+    /// in the mailbox when the RST_STREAM that drops the stream is applied — and `sendBodyChunk` on a
+    /// stream the engine no longer tracks throws `internalError`, which is CONNECTION-scoped (RFC 9113
+    /// §5.4.1). The consumer would then close and `cancelAll()` every sibling stream: exactly the
+    /// connection-kill finding 6 fixed for the *first* frame of a response and left open for every
+    /// frame after it (2026-07-31 fifth review, R5-P0d). Drop the late item instead, and end the relay
+    /// so it stops pulling for a stream that no longer exists.
     private func applyStreamChunk(
         _ streamID: HTTP2StreamID,
         item: AsyncHandoff.Item,
@@ -254,6 +259,12 @@ extension HTTPServer {
         connection: any TransportConnection,
         sendDeadline: IdleDeadline<C.Instant>
     ) async -> Bool {
+        guard state.engine.isStreamOpen(streamID) else {
+            if let relay = state.relays.removeValue(forKey: streamID) {
+                await relay.abandon()
+            }
+            return state.isDrained
+        }
         var fatal = false
         switch item {
             case .chunk(let bytes):
@@ -304,7 +315,7 @@ extension HTTPServer {
         connection: any TransportConnection,
         sendDeadline: IdleDeadline<C.Instant>
     ) async -> Bool {
-        state.pendingTunnels -= 1
+        state.tasks.release(streamID)
         // A peer-driven or connection-closing end already removed this tunnel from the map and told the
         // engine nothing further (RFC 9113 §5.1 lets a closed/reset stream's id go); only a SELF-
         // initiated close still needs `engine.closeTunnel` here.
