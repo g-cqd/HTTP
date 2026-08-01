@@ -5,7 +5,8 @@
 //  Content coding (RFC 9110 §8.4.1 / §12.5.3): the client's preferred coding is chosen from
 //  `Accept-Encoding` by q-value (preferring `br` over `gzip` on a tie), the body is encoded, and the
 //  member round-trips back to the original — gzip (RFC 1952) and Brotli (RFC 7932). Negotiation edge
-//  cases (q=0 refusal, the `*` wildcard, identity) and the streaming-response skip are covered too.
+//  cases (q=0 refusal, the `*` wildcard, identity) are covered too; the streaming path's own
+//  properties live in `StreamingCompressionTests`.
 //
 
 import Compression
@@ -130,11 +131,16 @@ struct CompressionMiddlewareTests {
         #expect(response.head.headerFields[.contentEncoding] == nil)
     }
 
-    @Test("a streaming response is not compressed even when br is accepted")
-    func skipsStreamingResponse() async {
+    /// Was `skipsStreamingResponse`, which pinned the gap rather than a requirement.
+    ///
+    /// A streamed body went out uncoded whatever the client offered. It is now coded incrementally —
+    /// see `StreamingCompressionTests` for the retention, decline and cancellation properties.
+    @Test("a streaming response is compressed, and framed without a Content-Length")
+    func compressesStreamingResponse() async {
         let response = await wrappedStreaming().respond(to: get("br"), body: [])
         #expect(response.stream != nil)
-        #expect(response.head.headerFields[.contentEncoding] == nil)
+        #expect(response.head.headerFields[.contentEncoding] == "br")
+        #expect(response.head.headerFields[.contentLength] == nil)
     }
 
     @Test("honors gzip;q=0 as a refusal (RFC 9110 §12.5.3)")

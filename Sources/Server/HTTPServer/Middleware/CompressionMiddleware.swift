@@ -11,6 +11,11 @@
 //  the default graph and guarded by `#if canImport(CZstd)`. The body-transform shape of
 //  ``HTTPMiddleware``.
 //
+//  A streamed body is coded incrementally through a ``CompressingBodyWriter`` interposed between the
+//  producer and the engine's writer, so nothing is buffered to code it; `Content-Length` is removed
+//  (the coded length is not knowable ahead of the body) and h1 frames it chunked. A coding whose
+//  backend has no incremental form declines rather than buffering — see ``StreamingContentEncoder``.
+//
 
 internal import Foundation
 public import HTTPCore
@@ -68,23 +73,59 @@ public struct CompressionMiddleware: HTTPMiddleware {
         next: any HTTPResponder
     ) async -> ServerResponse {
         var response = await next.respond(to: request, body: body, context: context)
-        // A streamed body is not transformed here (no streaming compression yet, P6).
-        guard response.stream == nil else {
-            return response
-        }
         guard let encoder = negotiatedEncoder(request) else {
             return response
         }
         // The representation now depends on Accept-Encoding (RFC 9110 §12.5.5), even if we skip below.
+        // Set before either path branches, so a streamed and a buffered representation of the same
+        // resource carry byte-identical `Vary` and a cache cannot key them differently.
         addVary(&response)
-        guard isEligible(response), let encoded = encoder.encode(response.body),
-            encoded.count < response.body.count
+        if let stream = response.stream {
+            return coded(response, stream: stream, with: encoder)
+        }
+        guard isEligible(response), response.body.count >= minimumSize,
+            let encoded = encoder.encode(response.body), encoded.count < response.body.count
         else {
             return response
         }
         response.body = encoded
         _ = response.head.headerFields.setValue(encoder.token, for: .contentEncoding)
         _ = response.head.headerFields.setValue(String(encoded.count), for: .contentLength)
+        return response
+    }
+
+    /// `response` with its streamed body coded incrementally, or unchanged when it cannot be.
+    ///
+    /// Three ways to decline, each leaving the body streaming uncoded rather than buffering it: the
+    /// coding has no incremental backend on this build, the representation is not transformable, or the
+    /// body announces a length below ``minimumSize``. A body of *unknown* length is coded — not knowing
+    /// how big it is, is the reason it is streaming.
+    private func coded(
+        _ response: ServerResponse,
+        stream: ResponseStream,
+        with encoder: any ContentEncoder
+    ) -> ServerResponse {
+        guard let streaming = encoder as? any StreamingContentEncoder,
+            isEligible(response), stream.contentLength.map({ $0 >= minimumSize }) ?? true,
+            let coder = streaming.makeStream()
+        else {
+            return response
+        }
+        var response = response
+        let coding = ContentCodingSession(coder)
+        response.stream = ResponseStream { writer in
+            // Runs on every exit, so a client that disconnects mid-body frees the codec here rather
+            // than whenever the last reference to this closure happens to go.
+            defer { coding.release() }
+            let compressing = CompressingBodyWriter(coding: coding, downstream: writer)
+            try await stream.produce(compressing)
+            try await compressing.finish()
+        }
+        _ = response.head.headerFields.setValue(encoder.token, for: .contentEncoding)
+        // The coded length is not knowable ahead of the body, and the h1 engine frames a stream chunked
+        // precisely when `contentLength` is nil — but it does *not* strip a stale `Content-Length`, and
+        // a response carrying both is the RFC 9112 §6.1 request-smuggling shape. Remove it here.
+        response.head.headerFields.removeAll(named: .contentLength)
         return response
     }
 
@@ -145,11 +186,13 @@ public struct CompressionMiddleware: HTTPMiddleware {
         return 1.0
     }
 
-    /// Whether `response` is worth compressing: large enough, not already encoded, not already-compressed media.
+    /// Whether the representation carried by `response` may be re-encoded at all.
+    ///
+    /// Not already coded, not `no-transform`, and not an already-compressed media type.
+    ///
+    /// Size is deliberately not checked here — a streamed body may not know its own length, so each
+    /// path applies ``minimumSize`` to whatever length it actually has.
     private func isEligible(_ response: ServerResponse) -> Bool {
-        guard response.body.count >= minimumSize else {
-            return false
-        }
         guard !response.head.headerFields.contains(.contentEncoding) else {
             return false
         }

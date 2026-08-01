@@ -71,7 +71,7 @@ uint32_t ccrc32_slice1(const uint8_t *buf, size_t len) {
 // MARK: - zlib (correct polynomial; internally hardware-accelerated)
 
 uint32_t ccrc32_zlib(const uint8_t *buf, size_t len) {
-    return ccrc32_update(crc32(0L, Z_NULL, 0), buf, len);
+    return ccrc32_update((uint32_t)crc32(0L, Z_NULL, 0), buf, len);
 }
 
 uint32_t ccrc32_update(uint32_t crc, const uint8_t *buf, size_t len) {
