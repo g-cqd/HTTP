@@ -27,16 +27,15 @@ struct DispatchPlanLifetimeTests {
         )
     }
 
-    private static func state() throws -> HTTP2ConnectionState {
-        HTTP2ConnectionState(
-            engine: try H2Gate.handshaked(limits: .default, streaming: false),
-            plans: HTTP2DispatchPlans()
+    private static func server() -> HTTPServer<ContinuousClock> {
+        HTTPServer(
+            transport: FakeTransport(), responder: ClosureResponder { _, _, _ in .text("x") }
         )
     }
 
     @Test("retiring a stream drops the plan its head filed")
     func retireDropsThePlan() throws {
-        var state = try Self.state()
+        var state = try H2Gate.state(for: Self.server())
         let stream = HTTP2StreamID(1)
         state.plans.file(Self.plan(), for: stream)
         #expect(state.plans.count == 1)
@@ -46,12 +45,10 @@ struct DispatchPlanLifetimeTests {
 
     @Test("a peer reset drops the plan too — the reset path funnels through retire (audit F6)")
     func resetDropsThePlan() async throws {
-        var state = try Self.state()
+        let server = Self.server()
+        var state = try H2Gate.state(for: server)
         let stream = HTTP2StreamID(1)
         state.plans.file(Self.plan(), for: stream)
-        let server = HTTPServer(
-            transport: FakeTransport(), responder: ClosureResponder { _, _, _ in .text("x") }
-        )
         await server.resetHTTP2Stream(stream, state: &state)
         #expect(state.plans.isEmpty)
     }

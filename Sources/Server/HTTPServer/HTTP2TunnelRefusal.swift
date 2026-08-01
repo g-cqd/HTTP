@@ -28,8 +28,16 @@ enum HTTP2TunnelRefusal: Error, Sendable {
     /// The `:protocol` pseudo-header named something other than `websocket` (RFC 8441 §4 / RFC 9220).
     case unsupportedProtocol
 
-    /// No route on the current responder snapshot declares a WebSocket handler for this path.
+    /// No route on this request's own responder generation declares a WebSocket handler for the path.
     case noRoute
+
+    /// This stream's head filed no ``DispatchPlan``, so which generation is serving it is unknown.
+    ///
+    /// The upgrade resolves its handler from the plan the HEADERS filed, never from the live snapshot
+    /// (audit R5-SEC1b). A missing plan is therefore not a routing outcome — it is the server having
+    /// lost track of which table this request belongs to — and falling back to the live snapshot is
+    /// exactly the split-generation bug the plan exists to prevent (2026-07-31 audit, finding 12).
+    case unresolvedPlan
 
     /// The route's handler declined the upgrade for this request (`shouldUpgrade`).
     case declined
@@ -51,6 +59,10 @@ enum HTTP2TunnelRefusal: Error, Sendable {
                 .notFound  // §15.5.5 — no target resource here
             case .declined, .forbiddenOrigin:
                 .forbidden  // §15.5.4 — understood, and refused
+            case .unresolvedPlan:
+                // §15.6.1 — an unexpected condition on the server's side, not a fault in the request.
+                // Not 404: the path may well route; the server simply cannot say which table to ask.
+                .internalServerError
         }
     }
 }

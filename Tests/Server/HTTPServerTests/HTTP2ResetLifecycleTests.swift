@@ -68,10 +68,7 @@ struct HTTP2ResetLifecycleTests {
             responder: ClosureResponder { _, _, _ in .text("unused") },
             limits: Self.limits
         )
-        var state = HTTP2ConnectionState(
-            engine: try H2Gate.handshaked(limits: Self.limits, streaming: false),
-            plans: HTTP2DispatchPlans()
-        )
+        var state = try H2Gate.state(for: server)
         let streamID = HTTP2StreamID(1)
         let (wakeups, continuation) = AsyncStream.makeStream(
             of: HTTP2Wakeup.self, bufferingPolicy: .unbounded

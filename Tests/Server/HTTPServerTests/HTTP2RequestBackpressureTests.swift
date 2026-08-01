@@ -221,10 +221,12 @@ struct HTTP2RequestBackpressureTests {
     /// exercised here with no clock at all.
     @Test("a stream holding credit with no byte progress is over budget after two sweeps")
     func sweepDecisionIsByteProgressBased() throws {
-        var state = HTTP2ConnectionState(
-            engine: try H2Gate.handshaked(limits: Self.limits, streaming: true),
-            plans: HTTP2DispatchPlans()
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: ClosureResponder { _, _, _ in .text("unused") },
+            limits: Self.limits
         )
+        var state = try H2Gate.state(for: server, streaming: true)
         let stalled = HTTP2StreamID(1)
         let live = HTTP2StreamID(3)
         for streamID in [stalled, live] {

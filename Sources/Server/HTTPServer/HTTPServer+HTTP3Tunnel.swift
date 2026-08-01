@@ -74,6 +74,17 @@ extension HTTPServer {
     /// On success it sends the engine's `200` (no FIN) and returns the per-stream ``WebSocketConnection``
     /// paired with the route's handler; a path with no WebSocket route, a disallowed origin, a declined
     /// upgrade, or a framing error resets the stream and returns nil.
+    ///
+    /// The handler is resolved from the ``DispatchPlan`` this stream's HEADERS filed in the registry,
+    /// never from the live snapshot (audit R5-SEC1b) — the h3 half of the same fix the HTTP/2 tunnel
+    /// takes in ``resolveHTTP2Tunnel(_:protocol:following:)``. An h3 connection outlives many
+    /// ``reloadResponder(_:)`` calls, and the head and the accept are separated by actor hops, so
+    /// rereading the mutex here let a reload hand the upgrade a different generation than the one whose
+    /// table admitted the request (2026-07-31 audit, finding 12).
+    ///
+    /// The plan's own ``DispatchPlan/match`` is not reused: `serveHTTP3`'s `resolveRoute` matches every
+    /// head with `isUpgrade: false`, so it never carries the WebSocket route. The *snapshot* is what
+    /// carries over, and the table is walked again against that generation's resolver.
     private func acceptHTTP3Tunnel(
         _ id: QUICStreamID,
         request: HTTPRequest,
@@ -81,10 +92,25 @@ extension HTTPServer {
         on stream: any QUICStream,
         in scope: HTTP3ConnectionScope
     ) async -> (socket: WebSocketConnection, handler: any WebSocketHandler)? {
-        // Resolve the WebSocket route for this path; CSWSH defense (RFC 6455 §10.2): a disallowed Origin
-        // refuses the tunnel, as on the h1/h2 paths.
+        // Refused rather than re-resolved against `currentSnapshot`: a silent fallback IS the bug
+        // (R5-SEC1b). The engine calls `resolveRoute` when the field section decodes, before it emits
+        // `.extendedConnect` (HTTP3Connection+Request.swift), so a plan is filed on every real path and
+        // this is a fail-closed answer to an impossible state. H3_INTERNAL_ERROR rather than
+        // H3_REQUEST_REJECTED (RFC 9114 §8.1): the request was not rejected on its merits, the server
+        // lost track of which table owns it — and §8.1 reserves "rejected" for a request the peer may
+        // safely retry, which this one is.
+        guard let plan = scope.registry.plan(for: id) else {
+            await retireHTTP3Stream(
+                id,
+                errorCode: HTTP3ErrorCode.h3InternalError.rawValue,
+                in: scope
+            )
+            return nil
+        }
+        // Resolve the WebSocket route for this path against that generation; CSWSH defense
+        // (RFC 6455 §10.2): a disallowed Origin refuses the tunnel, as on the h1/h2 paths.
         guard proto == "websocket",
-            let handler = currentSnapshot.resolver?
+            let handler = plan.snapshot.resolver?
                 .match(method: request.method, path: request.path, isUpgrade: true)?
                 .route.webSocketHandler,
             handler.shouldUpgrade(request),
