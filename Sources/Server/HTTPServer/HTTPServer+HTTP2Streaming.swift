@@ -40,7 +40,7 @@ extension HTTPServer {
         response: ServerResponse,
         engine: inout HTTP2Connection,
         group: inout DiscardingTaskGroup,
-        relays: inout [HTTP2StreamID: HTTP2StreamPermit],
+        relays: inout [HTTP2StreamID: HTTP2ResponseRelay],
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) -> Bool {
         // The handler ran off the loop, so its stream may have been reset (RFC 9113 §6.4) or cleanly
@@ -72,7 +72,7 @@ extension HTTPServer {
         }
         let handoff = AsyncHandoff()
         let permit = HTTP2StreamPermit()
-        relays[streamID] = permit
+        relays[streamID] = HTTP2ResponseRelay(permit: permit, handoff: handoff)
         group.addTask { [self] in
             let producer = Task { [handoff] in
                 do {
@@ -110,6 +110,10 @@ extension HTTPServer {
     /// several concurrent relays instead of the sole stream that could exist before) rather than
     /// surgically resetting only this one stream — resetting just this stream would need the relay to
     /// mutate `engine` itself, which is exactly what it must never do.
+    ///
+    /// A revoked permit ends the pump (R5-P0d). The stream is gone, so there is nowhere left to send a
+    /// pulled chunk; returning hands control to the task group child's tail, which cancels the producer
+    /// and fails the handoff, so neither task stays parked for the rest of the connection's life.
     private func runHTTP2StreamRelay(
         streamID: HTTP2StreamID,
         handoff: AsyncHandoff,
@@ -124,7 +128,9 @@ extension HTTPServer {
             continuation.yield(.localDeadlineLapsed)
         }
         while true {
-            await permit.waitForGrant()
+            guard await permit.waitForGrant() else {
+                return  // the stream was retired out from under this relay
+            }
             localDeadline.arm(clock.now.advanced(by: limits.idleTimeout))
             let item = await handoff.next()
             localDeadline.disarm()
@@ -143,10 +149,10 @@ extension HTTPServer {
     /// relay never reads the engine itself. Cheap to call unconditionally: the relay count is bounded by
     /// how many responses are concurrently streaming, not by request rate.
     func releaseDrainedRelays(
-        _ relays: [HTTP2StreamID: HTTP2StreamPermit], engine: inout HTTP2Connection
+        _ relays: [HTTP2StreamID: HTTP2ResponseRelay], engine: inout HTTP2Connection
     ) async {
-        for (streamID, permit) in relays where engine.pendingBacklog(of: streamID) == 0 {
-            await permit.grant()
+        for (streamID, relay) in relays where engine.pendingBacklog(of: streamID) == 0 {
+            await relay.permit.grant()
         }
     }
 

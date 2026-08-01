@@ -310,80 +310,44 @@ extension HTTPServer {
 
     // MARK: WebSocket over HTTP/2 (RFC 8441 / RFC 9220)
 
-    /// Dispatches a tunnel event from the HTTP/2 engine for a WebSocket-over-HTTP/2 stream: accept an
-    /// Extended CONNECT (RFC 8441 §4) and spin up this tunnel's dedicated pump task, relay tunnel DATA to
-    /// it, or tell it the peer ended the tunnel.
+    /// Dispatches a tunnel event from the HTTP/2 engine for a WebSocket-over-HTTP/2 stream: accept or
+    /// refuse an Extended CONNECT (RFC 8441 §4), relay tunnel DATA to its pump, or tell it the peer
+    /// ended the tunnel.
     ///
-    /// Every ENGINE mutation (`acceptTunnel` here; `sendTunnelData` / `closeTunnel` later, when the
-    /// consumer processes this tunnel's `.tunnelOutbound` / `.tunnelEnded` wakeup) stays on the consumer.
-    /// The pump task — spun up below — only ever touches its OWN per-tunnel WebSocket engine and the
-    /// route handler, reporting back through `continuation`, so a slow WebSocket-over-h2 handler no
-    /// longer head-of-line-blocks any other stream multiplexed on this connection (this path was not
-    /// covered by the existing FIX #3, which only dispatched buffered-request handlers).
+    /// Every ENGINE mutation (`acceptTunnel` / the refusal's `respond` here; `sendTunnelData` /
+    /// `closeTunnel` later, when the consumer processes this tunnel's `.tunnelOutbound` /
+    /// `.tunnelEnded` wakeup) stays on the consumer. The pump task only ever touches its OWN per-tunnel
+    /// WebSocket engine and the route handler, reporting back through `continuation`, so a slow
+    /// WebSocket-over-h2 handler no longer head-of-line-blocks any other stream multiplexed on this
+    /// connection (this path was not covered by the existing FIX #3, which only dispatched
+    /// buffered-request handlers).
     ///
-    /// `pendingTunnels` counts dispatched-but-not-yet-`.tunnelEnded` pump tasks, incremented here on
-    /// dispatch — the consumer's EOF drain check (``HTTPServer/serveHTTP2(_:deadline:initialBytes:)``'s
-    /// `.closed` case) reads it to know whether a tunnel might still have in-flight work worth letting
-    /// finish before the connection actually closes.
+    /// The pump task is registered in ``HTTP2StreamTasks`` on dispatch — the consumer's EOF drain reads
+    /// that table to know whether a tunnel might still have in-flight work worth letting finish before
+    /// the connection actually closes, a peer RST_STREAM cancels through it, and connection teardown
+    /// joins on it.
+    ///
+    /// The switch is EXHAUSTIVE over `HTTP2Connection.Event` for the same reason ``handleHTTP2Event``'s
+    /// is: it used to end in `default:`, and a `default:` is what let `.streamReset` be routed here
+    /// silently (audit finding 6).
     func handleHTTP2Tunnel(
         _ event: HTTP2Connection.Event,
         state: inout HTTP2ConnectionState,
-        group: inout DiscardingTaskGroup,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
         switch event {
             case .extendedConnect(let streamID, let request, let proto):
-                // Resolve the WebSocket route for this stream's path; an Extended CONNECT to a path the
-                // responder does not declare a WebSocket route for is refused (no tunnel opened). Same
-                // CSWSH defense as the h1 path (RFC 6455 §10.2): a disallowed Origin refuses the tunnel,
-                // treated like a declined upgrade.
-                guard proto == "websocket",
-                    let handler = currentSnapshot.resolver?
-                        .match(method: request.method, path: request.path, isUpgrade: true)?
-                        .route.webSocketHandler,
-                    handler.shouldUpgrade(request),
-                    handler.isOriginAllowed(request.headerFields[.origin])
-                else { return }
-                // Negotiate permessage-deflate over the RFC 8441 tunnel: echo it on the 200 and enable
-                // it on the engine when the Extended CONNECT offered it (RFC 7692 §5.1 / RFC 9220).
-                let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(
-                    request.headerFields
-                )
-                try? state.engine.acceptTunnel(  // 200, no END_STREAM (RFC 8441 §5)
-                    streamID,
-                    secWebSocketExtensions: permessageDeflate?.headerValue
-                )
-                // Consumption-gated, exactly like a streaming-route body (audit F2): the peer may run at
-                // most one `streamReceiveWindow` ahead of this tunnel's handler, and the window re-opens
-                // only as the pump reports what it has processed.
-                let channel = makeHTTP2GatedChannel()
-                let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
-                let canceller = HTTP2StreamCanceller()
-                state.consumption[streamID] = signal
-                state.webSockets[streamID] = HTTP2WebSocketTunnel(
-                    channel: channel, signal: signal, canceller: canceller
-                )
-                state.pendingTunnels += 1
-                group.addTask { [self] in
-                    // As on the streaming-request path: the group child owns the lifetime, and the inner
-                    // `Task` exists only so a peer RST_STREAM can stop a pump parked inside the route's
-                    // handler — somewhere abandoning the channel cannot reach (audit F6).
-                    let work = Task { [self] in
-                        await runHTTP2Tunnel(
-                            streamID: streamID,
+                switch resolveHTTP2Tunnel(request, protocol: proto) {
+                    case .failure(let refusal):
+                        await refuseHTTP2Tunnel(streamID, refusal, state: &state)
+                    case .success(let handler):
+                        acceptHTTP2Tunnel(
+                            streamID,
+                            request: request,
                             handler: handler,
-                            permessageDeflate: permessageDeflate,
-                            channel: channel,
-                            signal: signal,
+                            state: &state,
                             into: continuation
                         )
-                    }
-                    canceller.adopt(work)
-                    await withTaskCancellationHandler {
-                        await work.value
-                    } onCancel: {
-                        work.cancel()
-                    }
                 }
             case .tunnelData(let streamID, let bytes):
                 await pushHTTP2TunnelData(streamID, bytes: bytes, state: &state)
@@ -391,14 +355,108 @@ extension HTTPServer {
                 // Exactly-once: only a tunnel still tracked is ended here (a self-closed removal — see
                 // `.tunnelEnded` in HTTPServer+HTTP2Wakeups.swift — has already removed it). `finish()`
                 // rather than `abandon()`, so frames already in flight are still delivered before the
-                // pump sees the end. The pump reports back via `.tunnelEnded`, so `pendingTunnels` (not
+                // pump sees the end. The pump reports back via `.tunnelEnded`, so `state.tasks` (not
                 // this map) is what the EOF drain check waits on.
                 if let tunnel = state.webSockets.removeValue(forKey: streamID) {
                     await tunnel.channel.finish()
                 }
-            default:
+            case .request, .requestHead, .requestBodyChunk, .requestEnd, .streamReset:
+                // Routed by `handleHTTP2Event`; listed so a new event cannot land here silently.
                 break
         }
+    }
+
+    /// Resolves the WebSocket handler an Extended CONNECT asks for, or why it cannot be served.
+    ///
+    /// Every denial is a VALUE rather than an early return, which is the whole point: the caller
+    /// cannot reach the accept path without one, and cannot discard one without answering it. Before
+    /// this, each denial was a `guard … else { return }` and the peer got silence (R5-P0e).
+    private func resolveHTTP2Tunnel(
+        _ request: HTTPRequest,
+        protocol proto: String
+    ) -> Result<any WebSocketHandler, HTTP2TunnelRefusal> {
+        guard proto == "websocket" else {
+            return .failure(.unsupportedProtocol)
+        }
+        guard
+            let handler = currentSnapshot.resolver?
+                .match(method: request.method, path: request.path, isUpgrade: true)?
+                .route.webSocketHandler
+        else {
+            return .failure(.noRoute)
+        }
+        guard handler.shouldUpgrade(request) else {
+            return .failure(.declined)
+        }
+        // Cross-site WebSocket hijacking defense (RFC 6455 §10.2, CWE-1385), same policy as the h1
+        // path: the handshake is exempt from the Same-Origin Policy and CORS, so a disallowed Origin
+        // is refused before any tunnel exists.
+        guard handler.isOriginAllowed(request.headerFields[.origin]) else {
+            return .failure(.forbiddenOrigin)
+        }
+        return .success(handler)
+    }
+
+    /// Answers a denied Extended CONNECT and retires its stream (RFC 9113 §8.1 / RFC 8441 §5).
+    ///
+    /// A complete response — HEADERS with END_STREAM — then RST_STREAM with NO_ERROR, which §8.1 names
+    /// exactly: "a server MAY request that the client abort transmission of a request without error by
+    /// sending a RST_STREAM with an error code of NO_ERROR after sending a complete response". A
+    /// refused CONNECT is that case — the answer does not depend on the tunnel bytes the peer has not
+    /// sent — and §8.1 also says clients MUST NOT discard the response because of it, so the peer
+    /// learns the status rather than merely that the stream went away. NO_ERROR rather than RFC 8441
+    /// §5's CANCEL because nothing was cancelled: the request was answered.
+    ///
+    /// Routed through ``endHTTP2Stream(_:resettingWith:state:)`` rather than resetting here, so a
+    /// refusal retires by the same path as every other stream ending and cannot skip a step. It is
+    /// also what charges the reset against the abuse budget, which matters: a flood of bogus Extended
+    /// CONNECTs is unbounded server work the peer never has to acknowledge otherwise (CVE-2023-44487 /
+    /// CVE-2025-8671), and it is the same convention the concurrency-cap refusal already follows.
+    private func refuseHTTP2Tunnel(
+        _ streamID: HTTP2StreamID,
+        _ refusal: HTTP2TunnelRefusal,
+        state: inout HTTP2ConnectionState
+    ) async {
+        try? state.engine.respond(to: streamID, HTTPResponse(status: refusal.status))
+        await endHTTP2Stream(streamID, resettingWith: .noError, state: &state)
+    }
+
+    /// Accepts an Extended CONNECT and starts this tunnel's dedicated pump (RFC 8441 §5).
+    private func acceptHTTP2Tunnel(
+        _ streamID: HTTP2StreamID,
+        request: HTTPRequest,
+        handler: any WebSocketHandler,
+        state: inout HTTP2ConnectionState,
+        into continuation: AsyncStream<HTTP2Wakeup>.Continuation
+    ) {
+        // Negotiate permessage-deflate over the RFC 8441 tunnel: echo it on the 200 and enable it on
+        // the engine when the Extended CONNECT offered it (RFC 7692 §5.1 / RFC 9220).
+        let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(request.headerFields)
+        try? state.engine.acceptTunnel(  // 200, no END_STREAM (RFC 8441 §5)
+            streamID,
+            secWebSocketExtensions: permessageDeflate?.headerValue
+        )
+        // Consumption-gated, exactly like a streaming-route body (audit F2): the peer may run at most
+        // one `streamReceiveWindow` ahead of this tunnel's handler, and the window re-opens only as the
+        // pump reports what it has processed.
+        let channel = makeHTTP2GatedChannel()
+        let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
+        state.consumption[streamID] = signal
+        state.webSockets[streamID] = HTTP2WebSocketTunnel(channel: channel, signal: signal)
+        // As on the request paths: an unstructured task so a peer RST_STREAM can stop a pump parked
+        // inside the route's handler — somewhere abandoning the channel cannot reach (audit F6) — and
+        // ``HTTP2StreamTasks/shutdown()`` owns the join (R5-P0d).
+        let work = Task { [self] in
+            await runHTTP2Tunnel(
+                streamID: streamID,
+                handler: handler,
+                permessageDeflate: permessageDeflate,
+                channel: channel,
+                signal: signal,
+                into: continuation
+            )
+        }
+        state.tasks.register(work, for: streamID)
     }
 
     /// Hands one decoded tunnel DATA chunk to its pump — never blocking the consumer (RFC 8441 §5).
@@ -460,7 +518,6 @@ extension HTTPServer {
         let greeting = socket.outboundBytes()
         if !greeting.isEmpty { continuation.yield(.tunnelOutbound(streamID, greeting)) }
 
-        var selfClosed = false
         while case .chunk(let bytes) = await channel.next() {
             // A violation leaves a queued Close and sets `isClosing`; handled below.
             let events = (try? socket.receive(bytes)) ?? []
@@ -473,11 +530,10 @@ extension HTTPServer {
             // and the peer may be given that much window back (RFC 9113 §6.9).
             signal.record(bytes.count)
             if socket.isClosing {
-                selfClosed = true
                 break
             }
         }
         await handler.onClose()  // lifecycle hook — the session is over, exactly once
-        continuation.yield(.tunnelEnded(streamID, selfClosed: selfClosed))
+        continuation.yield(.tunnelEnded(streamID))
     }
 }

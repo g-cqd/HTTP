@@ -24,14 +24,15 @@ internal import HTTPTransport
 
 extension HTTPServer {
     /// Handles one engine event: dispatches a request's (buffered or streaming-route) handler and a
-    /// tunnel's pump off the consumer, entirely through task-group children and the shared mailbox —
+    /// tunnel's pump off the consumer, entirely through ``HTTP2StreamTasks`` and the shared mailbox —
     /// every engine mutation (`respond`/`acceptTunnel`/etc.) happens only when this consumer later
     /// processes the resulting wakeup, keeping the engine and `connection.send` single-owner throughout.
     ///
-    /// `dispatched` records the streams whose handler task has started and not yet reported back
-    /// (buffered AND streaming-route). The consumer's EOF drain reads it to know whether a request that
-    /// was already fully received might still be mid-flight and worth letting finish, rather than
-    /// cancelling it out from under itself.
+    /// `state.tasks` records the streams whose work has started and not yet reported back (buffered,
+    /// streaming-route, and tunnel alike). The consumer's EOF drain reads it to know whether a request
+    /// that was already fully received might still be mid-flight and worth letting finish, rather than
+    /// cancelling it out from under itself; ``resetHTTP2Stream(_:state:)`` cancels through it; and
+    /// ``HTTP2StreamTasks/shutdown()`` joins on it when the connection closes.
     ///
     /// The switch is deliberately EXHAUSTIVE over `HTTP2Connection.Event`. It used to end in `default:`,
     /// which silently routed `.streamReset` into the tunnel handler — the whole of audit finding 6.
@@ -40,7 +41,6 @@ extension HTTPServer {
         _ event: HTTP2Connection.Event,
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
-        group: inout DiscardingTaskGroup,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
         switch event {
@@ -52,24 +52,20 @@ extension HTTPServer {
                 let plan =
                     state.plans.plan(for: streamID) ?? DispatchPlan(snapshot: currentSnapshot)
                 // The ingress seam (audit CR-F13): both halves are bound `let` here so the sanitized
-                // request — never the inbound one — is what the dispatch child captures.
+                // request — never the inbound one — is what the dispatched task captures.
                 let (request, context) = RequestContext.ingress(
                     inbound, over: connection, matching: plan.match
                 )
-                state.dispatched.insert(streamID)
-                group.addTask { [self] in
-                    // Seam 3 of 6 (audit CR-F7). The `.requestReady` yield below is the pre-existing
-                    // return-to-owner mechanism: the response is APPLIED to the engine only when the
-                    // single mailbox consumer processes that wakeup, so HPACK state, flow control and
-                    // `connection.send` keep one owner whatever executor this handler ran on.
-                    let response = await respond(
-                        to: request,
-                        body: requestBody(body, following: plan),
-                        context: context,
-                        following: plan
-                    )
-                    continuation.yield(.requestReady(streamID, response))
-                }
+                dispatchHTTP2Request(
+                    request,
+                    body: requestBody(body, following: plan),
+                    context: context,
+                    streamID: streamID,
+                    plan: plan,
+                    connection: connection,
+                    tasks: state.tasks,
+                    into: continuation
+                )
             case .requestHead(let streamID, let request):
                 state.streaming[streamID] = beginHTTP2StreamingRequest(
                     request: request,
@@ -77,9 +73,8 @@ extension HTTPServer {
                     connection: connection,
                     plan: state.plans.plan(for: streamID)
                         ?? DispatchPlan(snapshot: currentSnapshot),
-                    group: &group,
                     reporting: &state.consumption,
-                    dispatched: &state.dispatched,
+                    tasks: state.tasks,
                     into: continuation
                 )
             case .requestBodyChunk(let streamID, let bytes):
@@ -89,8 +84,58 @@ extension HTTPServer {
             case .streamReset(let streamID, _):
                 await resetHTTP2Stream(streamID, state: &state)
             case .extendedConnect, .tunnelData, .tunnelClosed:
-                await handleHTTP2Tunnel(event, state: &state, group: &group, into: continuation)
+                await handleHTTP2Tunnel(event, state: &state, into: continuation)
         }
+    }
+
+    /// Dispatches a BUFFERED request's handler off the consumer, with a handle the peer can cancel.
+    ///
+    /// Seam 3 of 6 (audit CR-F7). The `.requestReady` yield is the pre-existing return-to-owner
+    /// mechanism: the response is APPLIED to the engine only when the single mailbox consumer processes
+    /// that wakeup, so HPACK state, flow control and `connection.send` keep one owner whatever executor
+    /// this handler ran on. It is yielded from inside the task, unconditionally, so a cancelled handler
+    /// still reports back and the accounting still returns to zero.
+    ///
+    /// An unstructured `Task` *instead of* a task-group child, not inside one (R5-P0d). Swift offers no
+    /// way to cancel one child of a group, so a per-stream cancel handle needs an unstructured task
+    /// somewhere; nesting one inside a child — finding 6's shape, and the shape whose cost that finding
+    /// cited when it deferred this path — pays for two tasks per request. Dispatching one measures
+    /// identical to no cancellation at all (`http2/dispatch/buffered-*`). The lifetime is not lost:
+    /// ``HTTP2StreamTasks/shutdown()`` cancels and awaits every one of these before `serveHTTP2`
+    /// returns, which is the join the group used to perform.
+    ///
+    /// The executor preference is restored explicitly because an unstructured `Task` does not inherit
+    /// it (ADR 0007): without it, giving this seam a cancel handle would silently move every buffered
+    /// HTTP/2 handler off the connection's reactor and quietly turn `.inline` into `.concurrent` here.
+    /// It is skipped when the backbone has no preference, which is documented to be a no-op anyway, so
+    /// the guarantee costs nothing on the backbones that cannot use it. The scope is the handler call
+    /// alone, so `.concurrent` and `.adaptive` still hop from inside `respond` exactly as before.
+    private func dispatchHTTP2Request(
+        _ request: HTTPRequest,
+        body: RequestBody,
+        context: RequestContext,
+        streamID: HTTP2StreamID,
+        plan: DispatchPlan,
+        connection: any TransportConnection,
+        tasks: HTTP2StreamTasks,
+        into continuation: AsyncStream<HTTP2Wakeup>.Continuation
+    ) {
+        let work = Task { [self] in
+            // Two spelled-out calls rather than one closure handed to a helper: an async closure
+            // capturing the four request values costs a context box per request, and this is the
+            // 200k-rps path. Measured — that box is the whole difference between +1 malloc and zero.
+            let response: ServerResponse
+            if let executor = connection.preferredTaskExecutor {
+                response = await withTaskExecutorPreference(executor) {
+                    await respond(to: request, body: body, context: context, following: plan)
+                }
+            }
+            else {
+                response = await respond(to: request, body: body, context: context, following: plan)
+            }
+            continuation.yield(.requestReady(streamID, response))
+        }
+        tasks.register(work, for: streamID)
     }
 
     /// Retires every per-stream obligation after the peer reset `streamID` (RFC 9113 §6.4).
@@ -145,6 +190,10 @@ extension HTTPServer {
     ///
     /// `abandon` rather than `finish`: the stream is being reset, so the handler must observe truncation
     /// rather than a clean end of body.
+    ///
+    /// The RESPONSE side is retired here too (R5-P0d). Dropping a native-streaming relay's entry told
+    /// neither its pump nor its producer anything, so both stayed parked for the rest of the
+    /// connection's life; ``HTTP2ResponseRelay/abandon()`` reaches both parked positions.
     func endHTTP2Stream(
         _ streamID: HTTP2StreamID,
         resettingWith code: HTTP2ErrorCode?,
@@ -152,13 +201,16 @@ extension HTTPServer {
     ) async {
         if let pending = state.streaming.removeValue(forKey: streamID) {
             await pending.channel.abandon()  // the handler's `for await` returns nil: truncation
-            pending.canceller.cancel()  // ...and it stops even if it was parked elsewhere
         }
         if let tunnel = state.webSockets.removeValue(forKey: streamID) {
             await tunnel.channel.abandon()
-            tunnel.canceller.cancel()
         }
-        state.relays.removeValue(forKey: streamID)
+        if let relay = state.relays.removeValue(forKey: streamID) {
+            await relay.abandon()
+        }
+        // ...and whatever this stream dispatched stops even if it was parked somewhere no channel
+        // teardown reaches: a database call, a sleep, a lock, or a buffered handler with no channel.
+        state.tasks.cancel(streamID)
         if let code {
             // Best-effort: a reset-budget overflow (MadeYouReset, CVE-2025-8671) has already queued the
             // engine's own GOAWAY, and this stream is going away either way.
@@ -176,46 +228,37 @@ extension HTTPServer {
         streamID: HTTP2StreamID,
         connection: any TransportConnection,
         plan: DispatchPlan,
-        group: inout DiscardingTaskGroup,
         reporting consumption: inout [HTTP2StreamID: HTTP2ConsumptionSignal],
-        dispatched: inout Set<HTTP2StreamID>,
+        tasks: HTTP2StreamTasks,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) -> HTTP2StreamingRequest {
         let channel = makeHTTP2GatedChannel()
         let signal = HTTP2ConsumptionSignal { continuation.yield(.consumed(streamID)) }
-        let canceller = HTTP2StreamCanceller()
         consumption[streamID] = signal
-        // The ingress seam (audit CR-F13) — the sanitized request is what the handler child captures.
+        // The ingress seam (audit CR-F13) — the sanitized request is what the handler task captures.
         let (request, context) = RequestContext.ingress(
             inbound, over: connection, matching: plan.match
         )
-        dispatched.insert(streamID)
-        group.addTask { [self] in
-            // The group child still owns the lifetime; the inner `Task` exists only so a peer
-            // RST_STREAM has a handle to cancel (audit F6). The cancellation handler composes the two
-            // paths, so `group.cancelAll()` still reaps this exactly as before.
+        let work = Task { [self] in
+            // Seam 4 of 6 (audit CR-F7). `plan` carries this request's generation (CR-F12), so the
+            // responder is still the one its HEADERS resolved; the policy only decides which executor
+            // runs it. Consumption signalling and the `.requestReady` yield are unaffected — both are
+            // lock-free and executor-agnostic by construction.
+            //
+            // No executor preference is restored here, unlike the buffered path: this seam has run off
+            // the reactor since finding 6 dispatched it through an unstructured task, and ADR 0007
+            // pins that.
             let body = HTTPRequestBodyStream(channel: channel, signal: signal)
-            let work = Task {
-                // Seam 4 of 6 (audit CR-F7). `plan` carries this request's generation (CR-F12), so
-                // the responder is still the one its HEADERS resolved; the policy only decides which
-                // executor runs it. Consumption signalling and the `.requestReady` yield are
-                // unaffected — both are lock-free and executor-agnostic by construction.
-                await respond(
-                    to: request,
-                    body: .stream(body),
-                    context: context,
-                    following: plan
-                )
-            }
-            canceller.adopt(work)
-            let response = await withTaskCancellationHandler {
-                await work.value
-            } onCancel: {
-                work.cancel()
-            }
+            let response = await respond(
+                to: request,
+                body: .stream(body),
+                context: context,
+                following: plan
+            )
             continuation.yield(.requestReady(streamID, response))
         }
-        return HTTP2StreamingRequest(channel: channel, signal: signal, canceller: canceller)
+        tasks.register(work, for: streamID)
+        return HTTP2StreamingRequest(channel: channel, signal: signal)
     }
 
     /// Ends a streaming request's body stream; its handler's response arrives later as a `.requestReady`

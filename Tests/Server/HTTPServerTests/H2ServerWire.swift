@@ -60,14 +60,16 @@ enum H2ServerWire {
         )
     }
 
-    /// An Extended CONNECT HEADERS frame opening a WebSocket tunnel (RFC 8441 §4).
-    static func extendedConnect(streamID: UInt32, path: String) -> [UInt8] {
-        headers(
-            streamID: streamID,
-            method: "CONNECT",
-            path: path,
-            extra: [HPACKField(name: ":protocol", value: "websocket")]
-        )
+    /// An Extended CONNECT HEADERS frame opening a tunnel for `proto` (RFC 8441 §4).
+    static func extendedConnect(
+        streamID: UInt32,
+        path: String,
+        proto: String = "websocket",
+        origin: String? = nil
+    ) -> [UInt8] {
+        var extra = [HPACKField(name: ":protocol", value: proto)]
+        if let origin { extra.append(HPACKField(name: "origin", value: origin)) }
+        return headers(streamID: streamID, method: "CONNECT", path: path, extra: extra)
     }
 
     /// A DATA frame carrying `payload` (§6.1).
@@ -89,6 +91,19 @@ enum H2ServerWire {
             )
         }
         return wire
+    }
+
+    /// A WINDOW_UPDATE frame granting `increment` octets on `streamID` (0 = the connection, §6.9).
+    static func windowUpdate(streamID: UInt32, increment: UInt32) -> [UInt8] {
+        frame(
+            type: 0x08,
+            flags: 0,
+            streamID: streamID,
+            payload: [
+                UInt8(increment >> 24 & 0xFF), UInt8(increment >> 16 & 0xFF),
+                UInt8(increment >> 8 & 0xFF), UInt8(increment & 0xFF)
+            ]
+        )
     }
 
     /// An RST_STREAM frame carrying `code` (§6.4).
@@ -176,6 +191,24 @@ enum H2ServerWire {
                 | UInt32(frame.payload[2]) << 8 | UInt32(frame.payload[3])
         }
         return nil
+    }
+
+    /// The `:status` the server sent on `streamID`, decoded from the outbound HEADERS (RFC 9113 §8.3.2).
+    ///
+    /// Every HEADERS block is fed to one decoder in wire order, because HPACK is connection-scoped and
+    /// order-dependent (§4.3) — decoding one block in isolation would desynchronize the dynamic table.
+    static func status(onStream streamID: UInt32, in bytes: [UInt8]) -> String? {
+        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
+        var status: String?
+        for frame in frames(bytes) where frame.type == 0x01 {
+            guard let fields = try? frame.payload.withUnsafeBytes({ try decoder.decode($0.bytes) })
+            else {
+                return status
+            }
+            guard frame.streamID == streamID else { continue }
+            for field in fields where field.name == ":status" { status = field.value }
+        }
+        return status
     }
 
     /// The concatenated DATA payload the server wrote on `streamID`.
