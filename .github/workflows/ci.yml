@@ -108,6 +108,32 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # Dependency reproducibility. `ADFoundation` is first-party and UNVERSIONED, and it used to be
+  # taken from `branch: "main"`. A moving branch means two checkouts of the same HTTP commit can
+  # resolve different dependency code — so a build is not reproducible, a benchmark number is not
+  # attributable to a commit, and a green CI run is not evidence about any particular input. It is
+  # pinned to an exact revision in the manifest instead.
+  #
+  # `Package.resolved` stays GITIGNORED on purpose: this is a reusable library, and committing a
+  # lockfile would publish one resolution of the whole graph to every consumer, who must resolve
+  # their own. That is precisely why the manifest pin has to be exact — with no committed lockfile,
+  # the manifest is the only thing making this package's own builds deterministic.
+  #
+  # Both halves were already in place; nothing enforced either. This job does: the pin must be a
+  # 40-hex revision (no branch, no version range), Package.resolved must stay untracked, and
+  # resolving the graph must actually land on the pinned revision with no branch or version
+  # attached. Verified red in both directions (branch pin; committed lockfile) before landing.
+  # ---------------------------------------------------------------------------
+  dependency-pinning:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Assert ADFoundation is pinned to an exact revision
+        run: python3 scripts/dependency-pinning.py
+
+  # ---------------------------------------------------------------------------
   # Trap-surface gate. The request path must stay free of process-aborting traps, so one bad request
   # can never crash the whole server (the in-process half of crash defense; prefork covers app traps).
   # SwiftLint already gates try!/as!/force-unwrap; this covers fatalError/precondition/assertionFailure
