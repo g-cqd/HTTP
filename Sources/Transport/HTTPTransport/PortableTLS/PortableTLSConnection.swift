@@ -8,9 +8,28 @@
 //  per-connection serial `DispatchQueue` (a thread per in-flight TLS op); this drives `SSL` through a
 //  pair of memory `BIO`s instead: `SSL_read`/`SSL_write` move *plaintext* to/from the BIOs, and the
 //  connection pumps *ciphertext* between those BIOs and a **non-blocking** socket using the shared
-//  readiness loop — `SSL_ERROR_WANT_READ`/`WANT_WRITE` become "await more socket bytes / flush". The
-//  serve task is pinned to the loop (``preferredTaskExecutor``), so handshake, decrypt, encrypt and the
-//  raw socket I/O all run inline on the loop thread with no hop and no thread-per-connection.
+//  readiness loop — `SSL_ERROR_WANT_READ`/`WANT_WRITE` become "await more socket bytes / flush".
+//
+//  Two tasks share one connection by design, so nothing here may assume a single caller. Every HTTP/2
+//  connection runs a continuous reader task alongside a sole writer, and an HTTP/1 WebSocket session
+//  runs a reader task alongside its pump; the reader receives while the pump sends. The engine state
+//  they both drive — one `SSL`, two memory BIOs, the ciphertext buffers — is therefore serialized
+//  explicitly rather than by convention:
+//
+//  - ``engine`` is a `Mutex`-owned ``PortableTLSEngine``. BoringSSL's `ssl.h` states that "an |SSL| is
+//    not thread-safe and may only be used on one thread at a time", with no reader/writer split, so
+//    this is ONE lock over both directions. It is never held across an `await`.
+//  - ``sendPump`` is an ``AsyncExclusion`` held for the whole of ``send(_:)`` and the whole outbound
+//    drain, *including* the writability parks inside it. TLS records must reach the socket in BIO
+//    order and unspliced (RFC 8446 §5.1), and `SSL_write` commits to a buffer across a retry, so this
+//    exclusion has to survive a suspension — which is why a `Mutex` cannot serve.
+//  - ``receivePump`` is the same for the read direction, so a second receiver cannot decrypt over the
+//    plaintext scratch a first one is about to copy out.
+//
+//  A park on *readability* holds only ``receivePump``, so a receive waiting on a silent peer never
+//  blocks a send. A park on *writability* holds ``sendPump``, which a receive needs only when
+//  ciphertext is actually owed to the socket; that wait is bounded by the peer draining TCP, and the
+//  connection's idle watchdog reaps a peer that never does.
 //
 //  Gated `#if canImport(CHTTPBoringSSLShims)` (the opt-in `HTTP_PORTABLE_TLS` build).
 //
@@ -22,11 +41,7 @@
 
     internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
-    #if canImport(Darwin)
-        internal import Darwin
-    #elseif canImport(Glibc)
-        internal import Glibc
-    #endif
+    internal import HTTPConcurrency
     internal import Synchronization
 
     /// The platform readiness loop the TLS connection rides — kqueue on Darwin, epoll on Linux. Both are
@@ -40,8 +55,10 @@
     /// A ``TransportConnection`` backed by a libssl `SSL` driven through memory BIOs on a shared
     /// readiness loop (audit R4).
     ///
-    /// `SSL`/BIO access is confined to the loop thread (the serve task is pinned and I/O is serial per
-    /// connection), so the type is safe to share — `@unchecked Sendable`.
+    /// `@unchecked Sendable` because the `SSL`, its BIOs and their buffers live behind ``engine``'s
+    /// `Mutex` and the two direction exclusions — see the file comment for which covers what. The
+    /// earlier justification ("I/O is serial per connection") was not true of any HTTP/2 or WebSocket
+    /// connection, which is what this serialization replaces.
     final class PortableTLSConnection: TransportConnection, @unchecked Sendable {
         let id: TransportConnectionID
         let peer: TransportAddress
@@ -60,29 +77,22 @@
         /// inline on the loop thread (audit R4).
         var preferredTaskExecutor: (any TaskExecutor)? { eventLoop }
 
-        private let ssl: OpaquePointer
-        /// Ciphertext IN: raw socket bytes are `BIO_write`-fed here for `SSL_read` to decrypt.
-        private let readBIO: UnsafeMutablePointer<BIO>
-        /// Ciphertext OUT: `SSL_write`/handshake leave ciphertext here for us to drain to the socket.
-        private let writeBIO: UnsafeMutablePointer<BIO>
+        /// The `SSL` and both memory BIOs, with every call that touches them.
+        ///
+        /// One lock, both directions — see ``PortableTLSEngine`` for BoringSSL's own wording on why.
+        private let engine: Mutex<PortableTLSEngine>
+        /// Serializes the outbound direction across suspension points: one encrypter, one drainer.
+        private let sendPump = AsyncExclusion()
+        /// Serializes the inbound direction across suspension points: one decrypter, one copy-out.
+        private let receivePump = AsyncExclusion()
         private let descriptor: Int32
         private let eventLoop: TLSEventLoop
         private let clientAuth: TransportTLS.ClientAuth
         private let verifyPeer: (@Sendable ([[UInt8]]) -> Bool)?
         private let isClosed = Atomic<Bool>(false)
-        /// `true` once the `SSL` (and its BIOs) have been freed — once-only across ``deinit`` paths.
-        private let freed = Mutex<Bool>(false)
         private let negotiated = Mutex<String?>(nil)
         /// The verified client-certificate identity (G3), captured once at handshake completion.
         private let peerIdentity = Mutex<TLSPeerIdentity?>(nil)
-        /// Reused plaintext receive buffer (`SSL_read` decrypts into it) — audit P1, sized to what this
-        /// peer has shown it needs rather than to the caller's ceiling (ADD-P2, ``ReceiveScratch``).
-        private let scratch = Mutex(ReceiveScratch())
-        /// Reused ciphertext pump buffer (raw socket ↔ BIO), sized once.
-        private let cipher = Mutex<[UInt8]>([UInt8](repeating: 0, count: 16_384))
-
-        /// A non-blocking socket read/write reported it would block — await readiness and retry.
-        private struct WouldBlock: Error {}
 
         init(
             id: TransportConnectionID,
@@ -98,9 +108,7 @@
         ) {
             self.id = id
             self.peer = peer
-            self.ssl = ssl
-            self.readBIO = readBIO
-            self.writeBIO = writeBIO
+            engine = Mutex(PortableTLSEngine(ssl: ssl, readBIO: readBIO, writeBIO: writeBIO))
             self.descriptor = descriptor
             self.eventLoop = eventLoop
             self.clientAuth = clientAuth
@@ -110,14 +118,9 @@
 
         deinit {
             // Free the SSL (and, since `SSL_set_bio` transferred ownership, both memory BIOs) exactly
-            // once. Safe on any thread: at deinit no reference remains, so nothing can race the free.
-            let firstFree = freed.withLock { wasFreed -> Bool in
-                defer { wasFreed = true }
-                return !wasFreed
-            }
-            if firstFree {
-                CHTTPBoringSSL_SSL_free(ssl)
-            }
+            // once — `release()` is idempotent. Safe on any thread: at deinit no reference remains, so
+            // nothing can race the free.
+            engine.withLock { $0.release() }
         }
 
         // MARK: - Handshake
@@ -125,34 +128,45 @@
         /// Drives the TLS handshake to completion through the memory BIOs, then captures the negotiated
         /// ALPN protocol and applies the client-auth (mutual TLS) trust policy — throwing on failure.
         func performHandshake() async throws {
+            // The handshake drives both directions, so it holds the read exclusion for its duration and
+            // takes the write exclusion per flush. Uncontended in practice (the transport handshakes
+            // before publishing the connection), but the discipline is the same one every other path
+            // follows rather than an assumption about the caller.
+            try await receivePump.withExclusiveAccess { try await self.driveHandshake() }
+            try applyHandshakeIdentity()
+        }
+
+        /// The `SSL_accept` loop of ``performHandshake()``.
+        private func driveHandshake() async throws {
             while true {
-                // `SSL_accept` (not `SSL_do_handshake`) so the session enters server accept-state on the
-                // first call; subsequent calls continue the handshake after each BIO pump.
-                let result = CHTTPBoringSSL_SSL_accept(ssl)
+                let outcome = engine.withLock { $0.acceptHandshake() }
                 try await flushCiphertext()  // push any handshake records SSL produced
-                if result == 1 {
-                    break
-                }
-                let status = CHTTPBoringSSL_SSL_get_error(ssl, result)
-                switch status {
-                    case SSL_ERROR_WANT_READ:
+                switch outcome {
+                    case .produced:
+                        return
+                    case .wantRead:
                         guard try await fillCiphertext() else {
                             throw TransportError.tlsConfigurationFailed("handshake EOF")
                         }
-                    case SSL_ERROR_WANT_WRITE:
+                    case .wantWrite:
                         try await awaitWritable()
-                    default:
+                    case .closedByPeer, .transportEnded:
+                        throw TransportError.tlsConfigurationFailed("handshake EOF")
+                    case .failed(let status):
                         throw TransportError.tlsConfigurationFailed("SSL_accept error \(status)")
                 }
             }
+        }
 
-            negotiated.withLock { $0 = OpenSSLTLS.negotiatedApplicationProtocol(of: ssl) }
+        /// Captures ALPN and applies the client-auth trust policy once the handshake has completed.
+        private func applyHandshakeIdentity() throws {
+            negotiated.withLock { $0 = engine.withLock { $0.negotiatedProtocol() } }
             // Client-auth (G3): the TLS layer is permissive (`permissive_verify` always accepts), so the
             // `verifyPeer` hook is the *sole* validator of a presented chain. RFC 8446 §4.4.2.4 requires a
             // presented certificate to be validated — so a nil hook (no validator) **fails closed**:
             // an unvalidated chain MUST NOT be trusted (audit F4). An absent chain is allowed under
             // `.optional`/`.none` and unreachable under `.required` (the handshake already failed).
-            let chain = OpenSSLTLS.peerDERChain(of: ssl)
+            let chain = engine.withLock { $0.peerChainDER() }
             let accepted =
                 chain.isEmpty
                 ? (clientAuth != .required)
@@ -162,50 +176,73 @@
                     "the client certificate was rejected by verifyPeer"
                 )
             }
-            if !chain.isEmpty {
-                // The full verified identity (G3): DER chain + leaf subject + leaf SANs, captured
-                // once here — off the byte path — and surfaced as request-scoped context.
-                let identity = TLSPeerIdentity(
-                    chainDER: chain, subject: OpenSSLTLS.peerSubject(of: ssl)
-                )
-                peerIdentity.withLock { $0 = identity }
+            guard !chain.isEmpty else {
+                return
             }
+            // The full verified identity (G3): DER chain + leaf subject + leaf SANs, captured once
+            // here — off the byte path — and surfaced as request-scoped context.
+            let subject = engine.withLock { $0.peerSubject() }
+            peerIdentity.withLock { $0 = TLSPeerIdentity(chainDER: chain, subject: subject) }
         }
 
         // MARK: - Receive
 
         /// Receives up to `maxLength` decrypted bytes, or `nil` once the peer closes (TLS close-notify).
         func receive(maxLength: Int) async throws -> [UInt8]? {
-            let count = try await readPlaintext(maxLength: maxLength)
-            guard count > 0 else {
-                return nil
+            try await receivePump.withExclusiveAccess {
+                let count = try await self.readPlaintext(maxLength: maxLength)
+                guard count > 0 else {
+                    return nil
+                }
+                return self.engine.withLock { Array($0.decrypted(count)) }
             }
-            return scratch.withLock { Array($0.received(count)) }
         }
 
         /// Reads up to `maxLength` decrypted bytes into the reused scratch and appends them to `buffer`
         /// (audit P1), returning the count appended (`0` once the peer closes).
+        ///
+        /// `buffer` is filled after the exclusion is released rather than inside it, because an `inout`
+        /// parameter cannot be captured by a closure that spans a suspension point. That is sound for
+        /// the same reason ``PortableTLSEngine/decrypted(_:)`` is: the copy-out reads scratch only this
+        /// call's `SSL_read` wrote, and no other decrypt can have run in between.
         func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-            let count = try await readPlaintext(maxLength: maxLength)
+            let count = try await receivePump.withExclusiveAccess {
+                try await self.readPlaintext(maxLength: maxLength)
+            }
             if count > 0 {
-                scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
+                engine.withLock { buffer.append(contentsOf: $0.decrypted(count)) }
             }
             return count
         }
 
         /// The octets this connection's plaintext scratch currently holds — the residency oracle.
         ///
-        /// ADD-P2. The ciphertext pump buffer (``cipher``) is separate and still fixed at 16 KiB.
+        /// ADD-P2. ``ciphertextScratchBytes`` is the ciphertext pump's separate figure.
         var receiveScratchBytes: Int {
-            scratch.withLock(\.residentBytes)
+            engine.withLock { $0.plaintextResidentBytes() }
         }
+
+        /// The octets this connection's two ciphertext pump buffers hold — `0` for a connection that
+        /// has neither read nor written.
+        var ciphertextScratchBytes: Int {
+            engine.withLock { $0.ciphertextResidentBytes() }
+        }
+
+        /// Whether the outbound direction is currently claimed — the serialization oracle.
+        ///
+        /// Paired with ``isReceivePumpHeld``, this is how a caller checks that a completed exchange
+        /// handed both directions back rather than stranding one, which no amount of commentary can.
+        var isSendPumpHeld: Bool { sendPump.isHeld }
+
+        /// Whether the inbound direction is currently claimed — see ``isSendPumpHeld``.
+        var isReceivePumpHeld: Bool { receivePump.isHeld }
 
         /// `SSL_read` into the scratch, pumping ciphertext from the socket on `WANT_READ` — the shared
         /// decrypt loop.
         ///
         /// Returns the plaintext byte count, or `0` at end of stream. A read torn down by its own
         /// task's cancellation (the ``TransportConnection`` receive contract — see ``awaitReadable()``)
-        /// surfaces as `CancellationError`.
+        /// surfaces as `CancellationError`. The caller holds ``receivePump``.
         private func readPlaintext(maxLength: Int) async throws -> Int {
             do {
                 return try await decryptLoop(maxLength: maxLength)
@@ -220,37 +257,23 @@
         /// The decrypt loop body of ``readPlaintext(maxLength:)``.
         private func decryptLoop(maxLength: Int) async throws -> Int {
             while true {
-                let count = scratch.withLock { (b: inout ReceiveScratch) -> Int in
-                    // `max(1, ...)`: `SSL_read` with a zero-length buffer is not a read, it is an
-                    // error report. The window is `raw.count`, never `maxLength` (ADD-P2), and
-                    // `clamping` because `SSL_read` takes an `int` — a window past `Int32.max` would
-                    // trap the conversion, where a shorter read is always legal.
-                    // SE-0458 (ADR 0009): the call is unsafe by the closure's pointer parameter. The
-                    // buffer is sized by ``ReceiveScratch`` immediately before the call and is valid
-                    // for exactly `raw.count` octets; it does not escape this closure.
-                    unsafe b.read(ceiling: max(1, maxLength)) { raw in
-                        let room = Int32(clamping: raw.count)
-                        return Int(CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, room))
-                    }
-                }
-                if count > 0 {
-                    return count
-                }
-                let status = CHTTPBoringSSL_SSL_get_error(ssl, Int32(clamping: count))
-                switch status {
-                    case SSL_ERROR_ZERO_RETURN:
+                let outcome = engine.withLock { $0.decrypt(ceiling: maxLength) }
+                switch outcome {
+                    case .produced(let count):
+                        return count
+                    case .closedByPeer:
                         return 0  // clean TLS close-notify
-                    case SSL_ERROR_WANT_READ:
+                    case .transportEnded:
+                        return 0  // abrupt peer EOF with nothing queued
+                    case .wantRead:
                         // A renegotiation may owe the peer records first.
                         try await flushCiphertext()
                         guard try await fillCiphertext() else {
                             return 0  // socket EOF before close-notify — treat as end of stream
                         }
-                    case SSL_ERROR_WANT_WRITE:
+                    case .wantWrite:
                         try await awaitWritable()
-                    case SSL_ERROR_SYSCALL:
-                        return 0  // abrupt peer EOF with nothing queued
-                    default:
+                    case .failed(let status):
                         throw TransportError.ioFailed("SSL_read error \(status)")
                 }
             }
@@ -259,38 +282,47 @@
         // MARK: - Send
 
         /// Encrypts and sends all of `bytes`, draining the produced ciphertext to the socket.
+        ///
+        /// The whole call runs under ``sendPump``. That is not belt-and-braces: `SSL_write` commits to
+        /// its buffer when it cannot complete, and a retry that arrives with a *different* pointer is
+        /// rejected with `SSL_R_BAD_WRITE_RETRY`, so a second sender interleaving here would fail one
+        /// of the two — quite apart from the record splicing an interleaved drain would cause.
         func send(_ bytes: [UInt8]) async throws {
             guard !bytes.isEmpty else {
                 return
             }
+            try await sendPump.withExclusiveAccess { try await self.encryptAndDrain(bytes) }
+        }
+
+        /// The `SSL_write` loop of ``send(_:)``.
+        ///
+        /// The caller holds ``sendPump``.
+        private func encryptAndDrain(_ bytes: [UInt8]) async throws {
             var offset = 0
             while offset < bytes.count {
-                // `SSL_write` synchronously (no `await` may span `withUnsafeBytes`); `bytes` is immutable,
-                // so the pointer is stable across the loop's suspension points.
-                let written = bytes.withUnsafeBytes { raw -> Int32 in
-                    CHTTPBoringSSL_SSL_write(
-                        ssl,
-                        raw.baseAddress?.advanced(by: offset),
-                        Int32(raw.count - offset)
-                    )
-                }
-                if written > 0 {
-                    offset += Int(written)
-                    try await flushCiphertext()  // push this record out before the next
-                    continue
-                }
-                let status = CHTTPBoringSSL_SSL_get_error(ssl, written)
-                switch status {
-                    case SSL_ERROR_WANT_WRITE:
-                        try await flushCiphertext()
-                    case SSL_ERROR_WANT_READ:
-                        try await flushCiphertext()
+                let outcome = engine.withLock { $0.encrypt(bytes, from: offset) }
+                switch outcome {
+                    case .produced(let written):
+                        offset += written
+                        try await drainCiphertext()  // push this record out before the next
+                    case .wantWrite:
+                        try await drainCiphertext()
+                    case .wantRead:
+                        // TLS 1.2 renegotiation only; unreachable on the TLS 1.3 default (RFC 8446
+                        // §4.6.3 removed renegotiation). It parks on READABILITY while holding the
+                        // send exclusion, which BoringSSL's committed-write contract requires and
+                        // which no other sender can shortcut.
+                        try await drainCiphertext()
                         _ = try await fillCiphertext()
-                    default:
+                    case .closedByPeer:
+                        throw TransportError.ioFailed("SSL_write error \(SSL_ERROR_ZERO_RETURN)")
+                    case .transportEnded:
+                        throw TransportError.ioFailed("SSL_write error \(SSL_ERROR_SYSCALL)")
+                    case .failed(let status):
                         throw TransportError.ioFailed("SSL_write error \(status)")
                 }
             }
-            try await flushCiphertext()
+            try await drainCiphertext()
         }
 
         // MARK: - Close
@@ -317,114 +349,66 @@
 
         // MARK: - Ciphertext pump (raw socket ↔ memory BIOs)
 
-        /// Drains all ciphertext `SSL` has queued in ``writeBIO`` to the socket, awaiting writability on
-        /// a full send buffer.
+        /// Drains all ciphertext `SSL` has queued to the socket, under ``sendPump``.
+        ///
+        /// The exclusion is skipped entirely when nothing is owed, which is the common case on the read
+        /// path: a receive only reaches here to clear records a renegotiation produced. When something
+        /// *is* owed the wait is real, and bounded by the peer draining its TCP receive window.
+        private func flushCiphertext() async throws {
+            let owed = engine.withLock { $0.hasUnsentCiphertext() }
+            guard owed else {
+                return
+            }
+            try await sendPump.withExclusiveAccess { try await self.drainCiphertext() }
+        }
+
+        /// The ungated core of ``flushCiphertext()`` — the caller MUST already hold ``sendPump``.
+        ///
+        /// Split out because ``AsyncExclusion`` is not reentrant (CWE-833): ``send(_:)`` holds the
+        /// exclusion for its whole body and calls this directly, where taking it again would deadlock.
+        /// The `precondition` is the point of the split — the discipline is checked on every ordinary
+        /// send rather than described in a comment that cannot fail.
         ///
         /// The close-flag guard keeps a pump resumed after ``cancel()``/``close()`` from touching the
         /// descriptor *number*, which the kernel may already have reused for another connection.
-        private func flushCiphertext() async throws {
-            while CHTTPBoringSSL_BIO_ctrl_pending(writeBIO) > 0 {
+        private func drainCiphertext() async throws {
+            precondition(
+                sendPump.isHeld,
+                "the TLS ciphertext drain requires the send exclusion; records would splice without it"
+            )
+            while true {
                 guard !isClosed.load(ordering: .acquiring) else {
                     throw TransportError.closed
                 }
-                let chunk = cipher.withLock { (buffer: inout [UInt8]) -> Int in
-                    Int(
-                        buffer.withUnsafeMutableBytes { raw in
-                            CHTTPBoringSSL_BIO_read(writeBIO, raw.baseAddress, Int32(raw.count))
-                        }
-                    )
-                }
-                guard chunk > 0 else {
-                    return
-                }
-                var offset = 0
-                while offset < chunk {
-                    do {
-                        offset += try cipher.withLock { (buffer: inout [UInt8]) -> Int in
-                            try buffer.withUnsafeBytes { raw -> Int in
-                                let slice = UnsafeRawBufferPointer(rebasing: raw[offset ..< chunk])
-                                return try Self.writeOnce(descriptor, slice)
-                            }
-                        }
+                do {
+                    guard try engine.withLock({ try $0.pumpOutbound(to: descriptor) }) else {
+                        return
                     }
-                    catch is WouldBlock {
-                        try await awaitWritable()
-                    }
+                }
+                catch is PortableTLSEngine.WouldBlock {
+                    try await awaitWritable()
                 }
             }
         }
 
-        /// Reads one batch of ciphertext from the socket into ``readBIO`` for `SSL_read` to decrypt,
+        /// Reads one batch of ciphertext from the socket into the read BIO for `SSL_read` to decrypt,
         /// awaiting readability on `EAGAIN`.
         ///
-        /// Returns `false` at socket EOF. The close-flag guard mirrors ``flushCiphertext()``: never
-        /// touch a since-closed (possibly reused) descriptor number.
+        /// Returns `false` at socket EOF. Nothing is held across the park: the `read(2)` and the
+        /// `BIO_write` that follows it are one critical section inside the engine, and a park happens
+        /// only when the `read(2)` produced nothing at all. The close-flag guard mirrors
+        /// ``drainCiphertext()``: never touch a since-closed (possibly reused) descriptor number.
         private func fillCiphertext() async throws -> Bool {
             while true {
                 guard !isClosed.load(ordering: .acquiring) else {
                     throw TransportError.closed
                 }
                 do {
-                    let count = try cipher.withLock { (buffer: inout [UInt8]) -> Int in
-                        try buffer.withUnsafeMutableBytes { raw in
-                            try Self.readOnce(descriptor, raw.baseAddress, raw.count)
-                        }
-                    }
-                    if count == 0 {
-                        return false  // EOF
-                    }
-                    cipher.withLock { buffer in
-                        _ = buffer.withUnsafeBytes { raw in
-                            CHTTPBoringSSL_BIO_write(readBIO, raw.baseAddress, Int32(count))
-                        }
-                    }
-                    return true
+                    return try engine.withLock { try $0.ingestCiphertext(from: descriptor) }
                 }
-                catch is WouldBlock {
+                catch is PortableTLSEngine.WouldBlock {
                     try await awaitReadable()
                 }
-            }
-        }
-
-        /// One non-blocking `read`, retrying `EINTR`, mapping `EAGAIN`/`EWOULDBLOCK` to ``WouldBlock``.
-        private static func readOnce(
-            _ descriptor: Int32,
-            _ base: UnsafeMutableRawPointer?,
-            _ capacity: Int
-        ) throws -> Int {
-            while true {
-                let count = read(descriptor, base, capacity)
-                if count >= 0 {
-                    return count
-                }
-                if errno == EINTR { continue }
-                if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlock() }
-                throw TransportError.ioFailed("read errno \(errno)")
-            }
-        }
-
-        /// One non-blocking `write`/`send`, retrying `EINTR`, mapping `EAGAIN` to ``WouldBlock``.
-        private static func writeOnce(
-            _ descriptor: Int32,
-            _ buffer: UnsafeRawBufferPointer
-        ) throws -> Int {
-            while true {
-                let base = buffer.baseAddress
-                let count = buffer.count
-                // SO_NOSIGPIPE (Darwin) / MSG_NOSIGNAL (Linux) suppress SIGPIPE on a peer RST.
-                // `Glibc.send` qualified: the unqualified name resolves to the connection's `send(_:)`
-                // instance method (and errors) even in this static context.
-                #if canImport(Darwin)
-                    let written = write(descriptor, base, count)
-                #else
-                    let written = Glibc.send(descriptor, base, count, Int32(MSG_NOSIGNAL))
-                #endif
-                if written >= 0 {
-                    return written
-                }
-                if errno == EINTR { continue }
-                if errno == EAGAIN || errno == EWOULDBLOCK { throw WouldBlock() }
-                throw TransportError.ioFailed("write errno \(errno)")
             }
         }
 
