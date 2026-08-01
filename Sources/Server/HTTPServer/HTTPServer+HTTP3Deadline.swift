@@ -49,25 +49,18 @@ extension HTTPServer {
             return
         }
         let budget = phase == .header ? limits.headerReadTimeout : limits.idleTimeout
-        scope.deadlines.arm(id, until: clock.now.advanced(by: budget), phase: phase)
+        scope.deadlines.arm(id, until: deadlineKey(after: budget), phase: phase)
     }
 
     /// The connection's deadline watchdog: reset every request stream whose read deadline lapses.
     ///
-    /// Sleeps to the earliest armed instant; with nothing armed it naps the shortest read-deadline
-    /// knob and re-checks, the same shape ``runIdleWatchdog(_:)`` uses for HTTP/1.1 — so a deadline
-    /// armed during the nap is still enforced near its intended bound. Returns when the connection's
-    /// serving is cancelled.
+    /// The same ``runDeadlineWatchdog(_:afterLapses:)`` every other deadline in the server uses, with
+    /// retirement as its `afterLapses` step because retiring a stream must `await` the connection
+    /// engine. It previously had its own copy of the loop, including the poll-while-nothing-is-armed
+    /// nap that could not be woken by an earlier arm. Returns when the connection's serving is
+    /// cancelled.
     func runHTTP3DeadlineWatchdog(in scope: HTTP3ConnectionScope) async {
-        while !Task.isCancelled {
-            guard let next = scope.deadlines.earliest() else {
-                let nap = min(limits.headerReadTimeout, limits.idleTimeout, limits.keepAliveTimeout)
-                try? await clock.sleep(for: nap, tolerance: nil)
-                continue
-            }
-            if clock.now < next {
-                try? await clock.sleep(until: next, tolerance: nil)
-            }
+        await runDeadlineWatchdog(scope.deadlines.wheel) { [self] in
             await reapLapsedHTTP3(in: scope)
         }
     }
@@ -83,7 +76,7 @@ extension HTTPServer {
     /// the RFC 9114 §8.1 reset budget — so a peer could repeat the abandonment for free and grow the
     /// connection's retained state without bound. On the deadline path of all places.
     private func reapLapsedHTTP3(in scope: HTTP3ConnectionScope) async {
-        for lapse in scope.deadlines.takeLapsed(at: clock.now) {
+        for lapse in scope.deadlines.takeLapsed() {
             await retireHTTP3Stream(lapse.streamID, errorCode: lapse.phase.errorCode, in: scope)
         }
     }

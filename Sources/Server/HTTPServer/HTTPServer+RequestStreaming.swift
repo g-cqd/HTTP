@@ -38,7 +38,7 @@ extension HTTPServer where C.Duration == Duration {
     /// one (CWE-444), and a pipelined follow-up must never be framed from mid-body octets.
     func serveStreaming(
         _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         pending: PendingRequest,
         buffer: inout [UInt8],
         start: inout Int,
@@ -115,7 +115,7 @@ extension HTTPServer where C.Duration == Duration {
         _ response: ServerResponse,
         to pending: PendingRequest,
         on connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         responseBuffer: inout [UInt8]
     ) async -> Bool {
         let request = pending.head.request
@@ -143,7 +143,7 @@ extension HTTPServer where C.Duration == Duration {
             into: &responseBuffer
         )
         // Bound the buffered response send by the idle deadline (FIX #1) — see ``serveOne``.
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+        deadline.arm(deadlineKey(after: limits.idleTimeout))
         do {
             if sendsBody {
                 try await connection.send(responseBuffer, response.body)
@@ -171,7 +171,7 @@ extension HTTPServer where C.Duration == Duration {
         into handoff: AsyncHandoff,
         buffer: inout [UInt8],
         from connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         bodyLimit: Int?
     ) async -> Int? {
         switch pending.head.framing {
@@ -212,7 +212,7 @@ extension HTTPServer where C.Duration == Duration {
         into handoff: AsyncHandoff,
         buffer: inout [UInt8],
         from connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>
+        deadline: IdleDeadline
     ) async -> Int? {
         let carried = min(buffer.count - bodyStart, length)
         if carried > 0 {
@@ -223,7 +223,7 @@ extension HTTPServer where C.Duration == Duration {
         var remaining = length - carried
         let window = limits.effectiveRequestBodyWindow
         while remaining > 0 {
-            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            deadline.arm(deadlineKey(after: limits.idleTimeout))
             let chunk = try? await connection.receive(maxLength: min(remaining, window))
             deadline.disarm()
             guard let chunk, !chunk.isEmpty else {

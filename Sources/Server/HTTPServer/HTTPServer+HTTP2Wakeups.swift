@@ -28,7 +28,7 @@ extension HTTPServer {
         group: inout DiscardingTaskGroup,
         connection: any TransportConnection,
         intake: BoundedByteChannel,
-        sendDeadline: IdleDeadline<C.Instant>,
+        sendDeadline: IdleDeadline,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async -> Bool {
         switch wakeup {
@@ -103,7 +103,7 @@ extension HTTPServer {
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
         intake: BoundedByteChannel,
-        sendDeadline: IdleDeadline<C.Instant>,
+        sendDeadline: IdleDeadline,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async -> Bool {
         switch await intake.next() {
@@ -131,7 +131,7 @@ extension HTTPServer {
         _ bytes: [UInt8],
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
-        sendDeadline: IdleDeadline<C.Instant>,
+        sendDeadline: IdleDeadline,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async -> Bool {
         let events: [HTTP2Connection.Event]
@@ -171,7 +171,7 @@ extension HTTPServer {
         _ streamID: HTTP2StreamID,
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
-        sendDeadline: IdleDeadline<C.Instant>
+        sendDeadline: IdleDeadline
     ) async -> Bool {
         // A report can outlive its stream (the handler drained a last chunk as the peer reset it); the
         // credit was already returned wholesale by `retire`, so there is nothing left to do.
@@ -197,7 +197,7 @@ extension HTTPServer {
     private func applySweepStalls(
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
-        sendDeadline: IdleDeadline<C.Instant>
+        sendDeadline: IdleDeadline
     ) async -> Bool {
         let stalled = state.sweepStalls()
         guard !stalled.isEmpty else {
@@ -218,7 +218,7 @@ extension HTTPServer {
         state: inout HTTP2ConnectionState,
         group: inout DiscardingTaskGroup,
         connection: any TransportConnection,
-        sendDeadline: IdleDeadline<C.Instant>,
+        sendDeadline: IdleDeadline,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async -> Bool {
         state.tasks.release(streamID)
@@ -232,6 +232,7 @@ extension HTTPServer {
             engine: &state.engine,
             group: &group,
             relays: &state.relays,
+            timers: sendDeadline.wheel,
             into: continuation
         )
         if await flushHTTP2(&state.engine, to: connection, deadline: sendDeadline) || fatal {
@@ -256,7 +257,7 @@ extension HTTPServer {
         item: AsyncHandoff.Item,
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
-        sendDeadline: IdleDeadline<C.Instant>
+        sendDeadline: IdleDeadline
     ) async -> Bool {
         guard state.engine.isStreamOpen(streamID) else {
             if let relay = state.relays.removeValue(forKey: streamID) {
@@ -301,7 +302,7 @@ extension HTTPServer {
         bytes: [UInt8],
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
-        sendDeadline: IdleDeadline<C.Instant>
+        sendDeadline: IdleDeadline
     ) async -> Bool {
         state.engine.sendTunnelData(streamID, bytes)
         return await flushHTTP2(&state.engine, to: connection, deadline: sendDeadline)
@@ -319,7 +320,7 @@ extension HTTPServer {
         _ streamID: HTTP2StreamID,
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
-        sendDeadline: IdleDeadline<C.Instant>
+        sendDeadline: IdleDeadline
     ) async -> Bool {
         state.tasks.release(streamID)
         state.webSockets.removeValue(forKey: streamID)

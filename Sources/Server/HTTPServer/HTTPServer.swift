@@ -49,6 +49,12 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     let handlerGate: HandlerExecutionGate?
 
     let clock: C
+
+    /// The instant every deadline key is measured from — see `HTTPServer+DeadlineClock.swift`.
+    ///
+    /// Captured once at construction so the ``DeadlineWheel`` can order by a concrete `Duration`
+    /// instead of by the injected clock's address-only `Instant`.
+    let epoch: C.Instant
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
     let altSvc = Mutex<String?>(nil)
 
@@ -110,6 +116,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             self.handlerGate = nil
         }
         self.clock = clock
+        self.epoch = clock.now
         self.admission = ConnectionAdmission(
             capacity: ConnectionAdmission.Capacity(
                 total: limits.maxConnections,
@@ -269,7 +276,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             var buffer: [UInt8] = []
             // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).
             while buffer.count < Self.http2MarkerLength, Self.couldBeHTTP2Preface(buffer) {
-                deadline.arm(self.clock.now.advanced(by: self.limits.keepAliveTimeout))
+                deadline.arm(self.deadlineKey(after: self.limits.keepAliveTimeout))
                 let chunk = try? await connection.receive(maxLength: 16_384)
                 deadline.disarm()
                 guard let chunk, !chunk.isEmpty else { break }

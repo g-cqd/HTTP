@@ -107,7 +107,7 @@ struct HTTP2ResetLifecycleTests {
                 group: &group,
                 connection: connection,
                 intake: Self.makeIntake(),
-                sendDeadline: IdleDeadline<ContinuousClock.Instant>(),
+                sendDeadline: IdleDeadline(in: DeadlineWheel(), escalation: .keepWatching),
                 into: continuation
             )
             group.cancelAll()
@@ -262,6 +262,7 @@ struct HTTP2ResetLifecycleTests {
             engine: &state.engine,
             group: &group,
             relays: &state.relays,
+            timers: DeadlineWheel(),
             into: continuation
         )
     }

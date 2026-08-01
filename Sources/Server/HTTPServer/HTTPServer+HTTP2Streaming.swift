@@ -41,6 +41,7 @@ extension HTTPServer {
         engine: inout HTTP2Connection,
         group: inout DiscardingTaskGroup,
         relays: inout [HTTP2StreamID: HTTP2ResponseRelay],
+        timers: DeadlineWheel,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) -> Bool {
         // The handler ran off the loop, so its stream may have been reset (RFC 9113 §6.4) or cleanly
@@ -84,7 +85,11 @@ extension HTTPServer {
                 }
             }
             await runHTTP2StreamRelay(
-                streamID: streamID, handoff: handoff, permit: permit, into: continuation
+                streamID: streamID,
+                handoff: handoff,
+                permit: permit,
+                timers: timers,
+                into: continuation
             )
             producer.cancel()
             // Unblock a producer still parked on an offer (a no-op once it has ended).
@@ -118,20 +123,21 @@ extension HTTPServer {
         streamID: HTTP2StreamID,
         handoff: AsyncHandoff,
         permit: HTTP2StreamPermit,
+        timers: DeadlineWheel,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
-        let localDeadline = IdleDeadline<C.Instant>()
-        // Auto-cancelled and awaited the moment this function returns (an un-named `async let` binding
-        // is still a fully structured child task) — however it returns, so a finished relay never leaves
-        // a lingering napping watchdog task for the rest of the connection's life.
-        async let _: Void = runLocalIdleWatchdog(localDeadline) {
+        let localDeadline = IdleDeadline(in: timers, escalation: .keepWatching) {
             continuation.yield(.localDeadlineLapsed)
         }
+        // Released however this function returns, so a finished relay never leaves an entry that could
+        // fire against whichever relay next lands on its recycled slot (the ``DeadlineHandle``
+        // generation token makes that final).
+        defer { localDeadline.release() }
         while true {
             guard await permit.waitForGrant() else {
                 return  // the stream was retired out from under this relay
             }
-            localDeadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            localDeadline.arm(deadlineKey(after: limits.idleTimeout))
             let item = await handoff.next()
             localDeadline.disarm()
             continuation.yield(.streamChunk(streamID, item))
@@ -168,13 +174,13 @@ extension HTTPServer {
     func flushHTTP2(
         _ engine: inout HTTP2Connection,
         to connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>
+        deadline: IdleDeadline
     ) async -> Bool {
         let outbound = engine.outboundBytes()
         guard !outbound.isEmpty else {
             return false
         }
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+        deadline.arm(deadlineKey(after: limits.idleTimeout))
         defer { deadline.disarm() }
         do {
             try await connection.send(outbound)

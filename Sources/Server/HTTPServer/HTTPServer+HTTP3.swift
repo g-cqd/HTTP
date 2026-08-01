@@ -223,7 +223,7 @@ extension HTTPServer {
         // (audit addendum P0.5).
         // ONE read-deadline watchdog for all of this connection's request streams (P0.5) — the same
         // one-task-per-connection shape the HTTP/1.1 idle watchdog uses, not one task per stream.
-        let deadlines = HTTP3StreamDeadlines<C.Instant>()
+        let deadlines = HTTP3StreamDeadlines()
         // One value carrying every place this connection holds per-stream state, so retiring a stream
         // reaches all four of them or none (R5-P0c).
         let scope = HTTP3ConnectionScope(

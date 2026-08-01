@@ -34,7 +34,7 @@ extension HTTPServer {
         stream: ResponseStream,
         omitBody: Bool,
         on connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>
+        deadline: IdleDeadline
     ) async -> Bool {
         var head = head
         let chunked = stream.contentLength == nil
@@ -46,7 +46,7 @@ extension HTTPServer {
         }
         defer { deadline.disarm() }
         do {
-            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            deadline.arm(deadlineKey(after: limits.idleTimeout))
             try await connection.send(ResponseSerializer.serialize(head, body: [], omitBody: false))
             guard !omitBody else {
                 return true  // HEAD: the header section only (RFC 9112 §6.3)
@@ -59,11 +59,12 @@ extension HTTPServer {
                     chunked: chunked,
                     deadline: deadline,
                     clock: clock,
+                    epoch: epoch,
                     idleTimeout: limits.idleTimeout
                 )
             )
             if chunked {
-                deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+                deadline.arm(deadlineKey(after: limits.idleTimeout))
                 try await connection.send(Array("0\r\n\r\n".utf8))  // last-chunk (RFC 9112 §7.1)
             }
             return true
@@ -80,8 +81,10 @@ extension HTTPServer {
         /// The per-connection idle deadline, re-armed before each chunk send so progress resets it.
         ///
         /// FIX #1. Shared with the serve loop + its watchdog.
-        let deadline: IdleDeadline<C.Instant>
+        let deadline: IdleDeadline
         let clock: C
+        /// The instant ``DeadlineWheel`` keys are measured from — see `HTTPServer+DeadlineClock.swift`.
+        let epoch: C.Instant
         let idleTimeout: Duration
 
         func write(_ chunk: [UInt8]) async throws {
@@ -91,7 +94,7 @@ extension HTTPServer {
             // Progress-based reset: a chunk about to go on the wire pushes the deadline to
             // now + idleTimeout, so a slow-but-progressing transfer is not reaped while a stalled send
             // (a slow-reading peer) is (FIX #1).
-            deadline.arm(clock.now.advanced(by: idleTimeout))
+            deadline.arm(epoch.duration(to: clock.now) + idleTimeout)
             guard chunked else {
                 try await connection.send(chunk)
                 return

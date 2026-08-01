@@ -103,7 +103,9 @@ extension HTTPServer {
         guard id.kind == .clientBidirectional else {
             return
         }
-        scope.deadlines.disarm(id)
+        // `release`, not `disarm`: this stream is being given up, so its timer slot goes back with a
+        // bumped generation rather than staying registered for a stream nothing will ever arm again.
+        scope.deadlines.release(id)
         scope.registry.writer(for: id)?.reset(errorCode: errorCode)
         scope.registry.retire(id)
         let actions = await scope.engine.retire(id, errorCode: errorCode)
