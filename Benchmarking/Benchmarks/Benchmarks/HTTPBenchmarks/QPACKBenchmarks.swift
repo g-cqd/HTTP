@@ -2,9 +2,15 @@
 //  QPACKBenchmarks.swift
 //  HTTPBenchmarks
 //
-//  QPACK (RFC 9204) — the prefix-integer and string-literal codecs, the static-table lookup, and a
-//  full static-only field-section encode/decode round-trip. The HTTP/3 mirror of HPACKBenchmarks; the
-//  dynamic table is disabled in v1, so encode and decode are inherently the cold (literal) path.
+//  QPACK (RFC 9204) — the prefix-integer and string-literal codecs, the static-table lookup, a full
+//  static-only field-section encode/decode round-trip, and the §3.2 dynamic-table structures. The
+//  HTTP/3 mirror of HPACKBenchmarks.
+//
+//  The dynamic-table pair is deliberately run at two capacities. Absolute timings vary with the host,
+//  but the SHAPE across the pair is the claim under test: a steady-state insert and an encoder lookup
+//  are O(1), so a 16x larger table must cost the same, not 16x. Under the superseded newest-first
+//  array both scaled with the table — insertion shifted every live entry, and the exact-match lookup
+//  scanned all of them — and that capacity is chosen by the PEER via SETTINGS_QPACK_MAX_TABLE_CAPACITY.
 //
 
 import Benchmark
@@ -65,6 +71,64 @@ func registerQPACKBenchmarks() {
             }
         }
     }
+
+    // RFC 9204 §3.2.2 — a STEADY-STATE insert: the table is already full, so each one evicts the
+    // oldest entry and writes the newest. The table is warmed outside the loop so this measures the
+    // recurring cost, not the one-off ring growth.
+    for capacity in qpackTableCapacities {
+        Benchmark("qpack/DynamicTable/insert-\(capacity / 1_024)k") { benchmark in
+            var table = warmedQPACKTable(capacity: capacity)
+            var counter = 0
+            for _ in benchmark.scaledIterations {
+                counter &+= 1
+                table.insert(qpackTableEntry(counter))
+                blackHole(table.count)
+            }
+        }
+    }
+
+    // RFC 9204 §3.2.4 / §4.5.4 — the encoder's exact and name lookups, the per-field cost of every
+    // section it encodes against the dynamic table.
+    for capacity in qpackTableCapacities {
+        Benchmark("qpack/DynamicTable/lookup-\(capacity / 1_024)k") { benchmark in
+            let table = warmedQPACKTable(capacity: capacity)
+            // The newest live entry, and one never inserted (the encoder's novel-field path).
+            let hit = qpackTableEntry(qpackWarmupInserts(capacity: capacity) - 1)
+            let miss = qpackTableEntry(-1)
+            for _ in benchmark.scaledIterations {
+                blackHole(table.absoluteIndex(of: hit))
+                blackHole(table.absoluteIndex(forName: hit.name))
+                blackHole(table.absoluteIndex(of: miss))
+            }
+        }
+    }
+}
+
+/// A realistic negotiated capacity and one 16x larger, so each dynamic-table benchmark reports a pair
+/// whose ratio is the O(1) claim (RFC 9204 §3.2.3 `SETTINGS_QPACK_MAX_TABLE_CAPACITY`).
+private let qpackTableCapacities = [4_096, 65_536]
+
+/// A uniformly sized table entry: a fixed-width 10-octet name, empty value, plus the §3.2.1 constant.
+private func qpackTableEntry(_ index: Int) -> HeaderField {
+    var digits = String(index)
+    while digits.count < 4 {
+        digits = "0" + digits
+    }
+    return HeaderField(name: "field-" + digits, value: "")
+}
+
+/// How many inserts saturate a table of `capacity`, with margin so the ring reaches its high-water mark.
+private func qpackWarmupInserts(capacity: Int) -> Int {
+    (capacity / 42) * 3
+}
+
+/// A table churned well past its capacity — the state a long-lived HTTP/3 connection's encoder runs in.
+private func warmedQPACKTable(capacity: Int) -> QPACKDynamicTable {
+    var table = QPACKDynamicTable(capacity: capacity)
+    for index in 0 ..< qpackWarmupInserts(capacity: capacity) {
+        table.insert(qpackTableEntry(index))
+    }
+    return table
 }
 
 /// A realistic browser request as a QPACK field section (RFC 9204) — the static-only analog of the
