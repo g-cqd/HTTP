@@ -73,10 +73,9 @@ extension HTTPServer {
                     connection: connection,
                     sendDeadline: sendDeadline
                 )
-            case .tunnelEnded(let streamID, let selfClosed):
+            case .tunnelEnded(let streamID):
                 await applyTunnelEnded(
                     streamID,
-                    selfClosed: selfClosed,
                     state: &state,
                     connection: connection,
                     sendDeadline: sendDeadline
@@ -308,24 +307,26 @@ extension HTTPServer {
         return await flushHTTP2(&state.engine, to: connection, deadline: sendDeadline)
     }
 
+    /// Retires a tunnel whose pump has finished, however it finished (RFC 8441 §5).
+    ///
+    /// `closeTunnel` runs UNCONDITIONALLY. It used to run only when the tunnel's own engine had decided
+    /// to close, on the reasoning that a peer-driven end needed nothing further from the engine — but a
+    /// peer's END_STREAM only half-closes the stream, and RFC 9113 §5.1 closes it when the server sends
+    /// one back. Skipping that left the record, and so the `maxConcurrentStreams` slot, charged for the
+    /// rest of the connection's life (R5-P0e). It is a no-op for a stream the engine has already
+    /// dropped (a peer RST_STREAM), which is the third way a pump can end.
     private func applyTunnelEnded(
         _ streamID: HTTP2StreamID,
-        selfClosed: Bool,
         state: inout HTTP2ConnectionState,
         connection: any TransportConnection,
         sendDeadline: IdleDeadline<C.Instant>
     ) async -> Bool {
         state.tasks.release(streamID)
-        // A peer-driven or connection-closing end already removed this tunnel from the map and told the
-        // engine nothing further (RFC 9113 §5.1 lets a closed/reset stream's id go); only a SELF-
-        // initiated close still needs `engine.closeTunnel` here.
         state.webSockets.removeValue(forKey: streamID)
         // The pump has finished, so nothing more will ever consume this tunnel's inbound: give back any
         // credit it was still holding before the engine drops the stream (RFC 9113 §6.9.1).
         state.retire(streamID)
-        if selfClosed {
-            try? state.engine.closeTunnel(streamID)
-        }
+        try? state.engine.closeTunnel(streamID)  // our END_STREAM — the §5 orderly close
         if await flushHTTP2(&state.engine, to: connection, deadline: sendDeadline) {
             return true
         }

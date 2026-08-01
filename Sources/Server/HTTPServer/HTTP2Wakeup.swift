@@ -64,12 +64,15 @@ enum HTTP2Wakeup: Sendable {
     case tunnelOutbound(HTTP2StreamID, [UInt8])
 
     /// A tunnel pump's task has finished — for every ending: its own WebSocket engine decided to close,
-    /// the peer ended the tunnel, or the connection is tearing down. `selfClosed` distinguishes the first
-    /// case (the consumer must still tell the HTTP/2 engine to end the stream, `engine.closeTunnel`) from
-    /// the other two (the engine/consumer already knows, via `.tunnelClosed` / `.streamReset` or the
-    /// reader closing). The consumer tracks this so it can tell whether a tunnel is still doing
-    /// meaningful work before closing the connection on EOF (see `.closed` below).
-    case tunnelEnded(HTTP2StreamID, selfClosed: Bool)
+    /// the peer ended the tunnel, or the connection is tearing down.
+    ///
+    /// It used to carry `selfClosed`, on the reasoning that only a LOCALLY decided close still needed
+    /// `engine.closeTunnel`. That was the leak: a peer's END_STREAM leaves the stream half-closed
+    /// (remote), and RFC 9113 §5.1 closes it only when the server sends END_STREAM in return — which
+    /// is also exactly what RFC 8441 §5 means by a tunnel's orderly close. Without it the record, and
+    /// so the `maxConcurrentStreams` slot, stayed charged for the rest of the connection's life
+    /// (R5-P0e). The two cases need the same call, so the distinction is gone.
+    case tunnelEnded(HTTP2StreamID)
 
     /// A local watchdog lapsed: the consumer's own send-deadline, or a relay's producer-pull deadline
     /// (see HTTPServer+HTTP2.swift's file comment on the local-``IdleDeadline`` design) — connection-

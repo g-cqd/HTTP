@@ -15,8 +15,16 @@ import HTTPCore
 /// Sans-I/O scaffolding for the ``HTTP2ConnectionState`` unit tests.
 enum H2Gate {
     /// A connection past the preface + SETTINGS handshake, with its outbound preface drained.
-    static func handshaked(limits: HTTPLimits, streaming: Bool) throws -> HTTP2Connection {
+    ///
+    /// `connectProtocol` advertises SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441 §3), without which the
+    /// engine rejects an Extended CONNECT instead of surfacing it.
+    static func handshaked(
+        limits: HTTPLimits,
+        streaming: Bool,
+        connectProtocol: Bool = false
+    ) throws -> HTTP2Connection {
         var settings = HTTP2Settings()
+        settings.enableConnectProtocol = connectProtocol
         settings.initialWindowSize = limits.streamReceiveWindow
         let policy = RequestBodyPolicy(isStreaming: streaming)
         let resolveRoute: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = { _, _ in
