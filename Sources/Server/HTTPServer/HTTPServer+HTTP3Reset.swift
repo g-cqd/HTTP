@@ -24,8 +24,13 @@
 //  refused tunnel each doing their own partial cleanup. So the funnel is no longer something a caller
 //  opts into. ``withHTTP3RequestStream(_:in:_:)`` wraps every driver of a request stream and its body
 //  must *return* an ``HTTP3StreamExit``: there is no way to leave without naming an ending, and every
-//  ending goes through the same sweep. A `defer` would have been the obvious tool and cannot be used —
-//  retirement is `async`, and Swift's `defer` cannot await.
+//  ending goes through the same sweep.
+//
+//  Not a `defer`, though not for the reason first recorded here: `defer` *can* await on this toolchain
+//  (Swift 6.4 — verified, not assumed). The reason is that a `defer` cannot make the body NAME its
+//  ending. It would need a `var exit` assigned before each return, which is precisely the convention
+//  this shape exists to remove — and the four exits that skipped cleanup did so by forgetting exactly
+//  that kind of step.
 //
 
 internal import HTTP3
