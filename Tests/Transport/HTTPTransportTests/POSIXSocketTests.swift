@@ -11,11 +11,12 @@
 //
 
 import Darwin
+import HTTPTestSupport
 import Testing
 
 @testable import HTTPTransport
 
-@Suite("POSIXSocket per-connection options — SO_NOSIGPIPE (T-F1) and TCP_NODELAY")
+@Suite("POSIXSocket per-connection options — SO_NOSIGPIPE (T-F1) and TCP_NODELAY", .realNetwork)
 struct POSIXSocketTests {
     @Test("setNoSIGPIPE: write() to a closed peer returns EPIPE, never SIGPIPE")
     func writeAfterPeerCloseReturnsEPIPE() {

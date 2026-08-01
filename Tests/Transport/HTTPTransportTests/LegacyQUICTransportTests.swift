@@ -12,12 +12,13 @@
 
 import Foundation
 import HTTPCore
+import HTTPTestSupport
 import Network
 import Testing
 
 @testable import HTTPTransport
 
-@Suite("Legacy QUIC transport — loopback")
+@Suite("Legacy QUIC transport — loopback", .realNetwork)
 struct LegacyQUICTransportTests {
     @Test(
         "a QUIC stream round-trips through the abstraction over loopback", .timeLimit(.minutes(1)))

@@ -28,7 +28,7 @@
 
     @testable import HTTPTransport
 
-    @Suite("Handshaking connections count against the ceiling (audit F8)")
+    @Suite("Handshaking connections count against the ceiling (audit F8)", .realNetwork)
     struct HandshakeAdmissionTests {
         @Test(
             "a peer that connects and never sends a ClientHello still holds its slot",

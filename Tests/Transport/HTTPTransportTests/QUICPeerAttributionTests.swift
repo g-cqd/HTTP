@@ -19,12 +19,13 @@
 
 import Foundation
 import HTTPCore
+import HTTPTestSupport
 import Network
 import Testing
 
 @testable import HTTPTransport
 
-@Suite("QUIC peer attribution")
+@Suite("QUIC peer attribution", .realNetwork)
 struct QUICPeerAttributionTests {
     /// The two loopback peers the dual-stack listener can tell apart.
     private static let peerHosts = ["127.0.0.1", "::1"]

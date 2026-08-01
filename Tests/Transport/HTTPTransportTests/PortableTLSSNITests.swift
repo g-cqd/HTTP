@@ -21,11 +21,12 @@
         internal import Glibc
     #endif
     internal import Dispatch
+    import HTTPTestSupport
     import Testing
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — SNI multi-cert (Phase 5, ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — SNI multi-cert (Phase 5, ADR 0004)", .realNetwork)
     struct PortableTLSSNITests {
         @Test(
             "the handshake's server_name selects the matching certificate, else the default",

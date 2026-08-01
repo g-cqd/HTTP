@@ -12,12 +12,13 @@
 
 import Foundation
 import HTTPCore
+import HTTPTestSupport
 import Network
 import Testing
 
 @testable import HTTPTransport
 
-@Suite("Modern QUIC transport — loopback")
+@Suite("Modern QUIC transport — loopback", .realNetwork)
 struct ModernQUICTransportTests {
     @Test(
         "a QUIC stream round-trips through the modern backbone over loopback",

@@ -20,11 +20,15 @@
         internal import Glibc
     #endif
     internal import Dispatch
+    import HTTPTestSupport
     import Testing
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — hot certificate reload (G4b, ADR 0004)")
+    @Suite(
+        "Portable TLS (vendored BoringSSL) — hot certificate reload (G4b, ADR 0004)",
+        .realNetwork
+    )
     struct PortableTLSReloadTests {
         @Test(
             "reload swaps the served certificate for new connections",

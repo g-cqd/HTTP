@@ -9,6 +9,7 @@
 //  with it every live connection's I/O) on the way to a retry.
 //
 
+import HTTPTestSupport
 import Testing
 
 @testable import HTTPTransport
@@ -19,7 +20,7 @@ import Testing
     import Glibc
 #endif
 
-@Suite("POSIXSocket accept-error classification (audit F-EMFILE)")
+@Suite("POSIXSocket accept-error classification (audit F-EMFILE)", .realNetwork)
 struct POSIXAcceptErrorTests {
     @Test("each accept() errno maps to the action its loop takes — and the helper never sleeps")
     func classifyAcceptError() {

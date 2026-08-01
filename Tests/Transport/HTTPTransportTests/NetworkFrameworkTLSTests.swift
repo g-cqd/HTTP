@@ -15,7 +15,7 @@ import Testing
 
 @testable import HTTPTransport
 
-@Suite("Network.framework backbone — TLS + ALPN")
+@Suite("Network.framework backbone — TLS + ALPN", .realNetwork)
 struct NetworkFrameworkTLSTests {
     @Test("a dev self-signed identity imports through SecPKCS12Import (PKCS#12 round-trip)")
     func devIdentityImports() throws {

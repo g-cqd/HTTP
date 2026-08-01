@@ -19,7 +19,7 @@ import Testing
 
 @testable import HTTPTransport
 
-@Suite("Network.framework backbone — mutual TLS (client certificates)")
+@Suite("Network.framework backbone — mutual TLS (client certificates)", .realNetwork)
 struct NetworkFrameworkMutualTLSTests {
     @Test(
         "required client-auth surfaces the presented client certificate subject",

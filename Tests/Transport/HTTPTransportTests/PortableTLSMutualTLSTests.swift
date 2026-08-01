@@ -28,7 +28,10 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — mutual TLS, incl. .optional (Phase 4, ADR 0004)")
+    @Suite(
+        "Portable TLS (vendored BoringSSL) — mutual TLS, incl. .optional (Phase 4, ADR 0004)",
+        .realNetwork
+    )
     struct PortableTLSMutualTLSTests {
         @Test(
             "required client-auth surfaces the presented client certificate subject",

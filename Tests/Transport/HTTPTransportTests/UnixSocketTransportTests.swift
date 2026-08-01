@@ -20,7 +20,7 @@ import Testing
     internal import Glibc
 #endif
 
-@Suite("Transport — UNIX-domain-socket backbone (AF_UNIX)")
+@Suite("Transport — UNIX-domain-socket backbone (AF_UNIX)", .realNetwork)
 struct UnixSocketTransportTests {
     @Test("accepts a connection at a socket path and round-trips bytes", .timeLimit(.minutes(1)))
     func roundTripsOverSocketPath() async throws {

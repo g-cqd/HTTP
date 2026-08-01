@@ -25,7 +25,7 @@ import Testing
 
 @testable import HTTPTransport
 
-@Suite("Accept backpressure — the ceiling bites at accept(2) (audit F8)")
+@Suite("Accept backpressure — the ceiling bites at accept(2) (audit F8)", .realNetwork)
 struct AcceptBackpressureTests {
     /// The backbones whose accept paths route through the shared `AcceptGate` on this platform.
     ///

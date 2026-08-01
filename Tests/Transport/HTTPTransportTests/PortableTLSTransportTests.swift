@@ -28,7 +28,7 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — Phase 3 transport (ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — Phase 3 transport (ADR 0004)", .realNetwork)
     struct PortableTLSTransportTests {
         @Test(
             "the transport accepts a libssl client, negotiates ALPN h2, and round-trips bytes",

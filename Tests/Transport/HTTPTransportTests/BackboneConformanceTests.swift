@@ -17,7 +17,7 @@ import Testing
 
 @testable import HTTPTransport
 
-@Suite("Transport backbone conformance — every socket backbone, the same battery")
+@Suite("Transport backbone conformance — every socket backbone, the same battery", .realNetwork)
 struct BackboneConformanceTests {
     /// Every real socket backbone (the fake binds no port; the QUIC backbones are a separate protocol).
     static let socketBackbones: [TransportBackbone] = [

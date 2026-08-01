@@ -17,11 +17,12 @@
 
     import CHTTPBoringSSL
     import CHTTPBoringSSLShims
+    import HTTPTestSupport
     import Testing
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — Phase 1 plumbing (ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — Phase 1 plumbing (ADR 0004)", .realNetwork)
     struct PortableTLSPlumbingTests {
         @Test("the CHTTPBoringSSLShims shim links libssl and its macro wrappers are callable")
         func shimLinksAndImports() throws {
