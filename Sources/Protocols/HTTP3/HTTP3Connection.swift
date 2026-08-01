@@ -273,9 +273,31 @@ public struct HTTP3Connection {
             maxTableCapacity: advertised.qpackMaxTableCapacity, limits: limits
         )
         self.encoder = QPACKEncoder()
-        // Bound a single frame's payload; HEADERS is bounded by the field-section size, and DATA is
-        // streamed in +Streams, so the header-list size is a safe ceiling for the control plane.
-        self.frameDecoder = HTTP3FrameDecoder(maxFrameSize: limits.maxHeaderListSize)
+        // Two ceilings, because RFC 9114 gives the two frame classes different meanings.
+        //
+        // The control plane — a field section, SETTINGS, GOAWAY, an unknown or reserved type whose
+        // payload must still be skipped (§7.2.8) — rides `maxHeaderListSize`, which is what §4.2.2 and
+        // §7.2.4.1 actually bound: a *field section*, on the uncompressed name + value + 32 sizing.
+        // (For HEADERS that is a conservative pre-decode filter — the QPACK block on the wire is never
+        // larger than the list it decodes to — with QPACKDecoder enforcing the real bound after.)
+        //
+        // DATA rides the body budget. §7.2.1 defines DATA as "arbitrary, variable-length sequences of
+        // bytes associated with HTTP request or response content" and gives it no ceiling; HTTP/3 has
+        // no analogue of HTTP/2's SETTINGS_MAX_FRAME_SIZE (§7.1), because QUIC flow control
+        // (RFC 9000 §4) is what bounds inbound data. So a peer is entitled to put a whole 16 MiB body
+        // in one DATA frame, and charging that against the *header* limit rejected legitimate content
+        // with a CONNECTION error (H3_EXCESSIVE_LOAD, §8.1) at 64 KiB — a limit whose own
+        // documentation says "decoded header-list size". The bound is the larger of the request-body
+        // ceiling and the WebSocket message ceiling, since RFC 9220 tunnel DATA is opaque WebSocket
+        // octets governed by the latter and not by the body limit at all.
+        //
+        // This is a resource guard on ONE buffered frame, not the enforcement: a request body is still
+        // bounded per stream by the matched route's `effectiveBodyLimit` and connection-wide by the
+        // aggregate check in +Request, and a tunnel payload by the WebSocket engine's `maxMessageSize`.
+        self.frameDecoder = HTTP3FrameDecoder(
+            maxFrameSize: limits.maxHeaderListSize,
+            maxDataFrameSize: max(limits.maxBodySize, limits.effectiveWebSocketMessageSize)
+        )
         self.now = now
         self.budgetWindow = RollingWindow(
             start: now(), interval: limits.streamResetInterval.monotonicNanoseconds

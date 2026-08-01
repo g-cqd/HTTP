@@ -104,12 +104,7 @@ struct HTTP2TunnelRetirementTests {
             responder: Self.router,
             limits: Self.limits
         )
-        var state = HTTP2ConnectionState(
-            engine: try H2Gate.handshaked(
-                limits: Self.limits, streaming: false, connectProtocol: true
-            ),
-            plans: HTTP2DispatchPlans()
-        )
+        var state = try H2Gate.state(for: server, connectProtocol: true)
         let (wakeups, continuation) = AsyncStream.makeStream(
             of: HTTP2Wakeup.self, bufferingPolicy: .unbounded
         )
@@ -147,10 +142,7 @@ struct HTTP2TunnelRetirementTests {
         // CONNECT must not stop the next stream being admitted (RFC 9113 §5.1.2).
         let capped = HTTPLimits.default.with { $0.maxConcurrentStreams = 1 }
         let server = HTTPServer(transport: FakeTransport(), responder: Self.router, limits: capped)
-        var state = HTTP2ConnectionState(
-            engine: try H2Gate.handshaked(limits: capped, streaming: false, connectProtocol: true),
-            plans: HTTP2DispatchPlans()
-        )
+        var state = try H2Gate.state(for: server, connectProtocol: true)
         let (wakeups, continuation) = AsyncStream.makeStream(
             of: HTTP2Wakeup.self, bufferingPolicy: .unbounded
         )
@@ -182,12 +174,7 @@ struct HTTP2TunnelRetirementTests {
             responder: Self.router,
             limits: Self.limits
         )
-        var state = HTTP2ConnectionState(
-            engine: try H2Gate.handshaked(
-                limits: Self.limits, streaming: false, connectProtocol: true
-            ),
-            plans: HTTP2DispatchPlans()
-        )
+        var state = try H2Gate.state(for: server, connectProtocol: true)
         let (wakeups, continuation) = AsyncStream.makeStream(
             of: HTTP2Wakeup.self, bufferingPolicy: .unbounded
         )

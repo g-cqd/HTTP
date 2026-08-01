@@ -38,9 +38,7 @@ struct FileResponderNegotiationTests {
             .appendingPathComponent("filenegotiation-\(UUID().uuidString)")
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: root) }
-        for (name, bytes) in files {
-            manager.createFile(atPath: root.path + "/" + name, contents: Data(bytes))
-        }
+        FileTree.write(files, into: root)
         await body(FileResponder(root: root.path, precompressed: precompressed))
     }
 

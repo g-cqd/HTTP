@@ -201,6 +201,36 @@ jobs:
           swift build --scratch-path "$SCRATCH/opt-zstd"
 
   # ---------------------------------------------------------------------------
+  # The Django comparison's "ours" subject (Benchmarking/Django/ours) is its OWN package, so nothing in
+  # the default graph compiles it — and it silently stopped compiling against two breaking library
+  # changes (HTTPLimits' properties becoming `let`, TransportFactory.make becoming throwing) with every
+  # other gate green. It is the only out-of-graph package that consumes this library's API and is not
+  # already gated (Benchmarking/Benchmarks has the `benchmarks` job; Bench/vapor and Bench/hummingbird
+  # depend on third-party frameworks only and cannot rot against us).
+  #
+  # Build-only, and deliberately so: running the comparison needs `oha`, a Python venv and a quiet box,
+  # none of which a shared runner has. What this gates is the thing that actually broke — that the
+  # harness still compiles against the library it measures. Release, because that is the only
+  # configuration the harness ever builds (debug benchmark numbers are fiction) and it is where the
+  # optimizer-visible API breaks surface.
+  #
+  # BENCH_ADJSON is deliberately NOT set: the ADJSON backend is an unpublished local sibling checkout,
+  # so the default graph is this repository alone. That is what makes this job possible at all.
+  # ---------------------------------------------------------------------------
+  django-bench:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Toolchain
+        run: swift --version
+      - name: Build — Django comparison subject (release)
+        run: |
+          swift build -c release --package-path Benchmarking/Django/ours \
+            --product ours-bench --scratch-path "$SCRATCH/django-bench"
+
+  # ---------------------------------------------------------------------------
   # Linux (G0). The sans-I/O engines + server runtime run on Linux over the epoll backbone; these jobs
   # build and run the full suite in the official Swift container on ubuntu-latest (locally reproduced by
   # scripts/linux-test.sh via apple/container). HTTP_WARNINGS_AS_ERRORS is intentionally off here:

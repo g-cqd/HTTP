@@ -130,7 +130,14 @@ func adFoundationDependency() -> Package.Dependency {
 let package = Package(
     name: "HTTP",
     platforms: [
-        .macOS(.v15),  // floor per CLAUDE.md; Synchronization (Mutex/Atomic) needs macOS 15+
+        // 15.6, not `.v15`. CLAUDE.md, README.md ("macOS 15.6+ / iOS 18+") and
+        // Benchmarking/Benchmarks/Package.swift (`.macOS("15.6")`) all say 15.6; this manifest was the
+        // only place claiming 15.0, and it is the one place a consumer actually reads. A manifest that
+        // advertises a floor nothing builds or tests against is a promise the project has not made:
+        // resolution would succeed on 15.0 and the failure would land at the consumer's build, not
+        // here. Synchronization (Mutex/Atomic) needs 15.0 at minimum, so this is a raise, not a claim
+        // about what the code strictly requires — the documented, tested floor is what ships.
+        .macOS("15.6"),  // floor per CLAUDE.md
         .iOS(.v18)  // floor per CLAUDE.md
     ],
     products: [

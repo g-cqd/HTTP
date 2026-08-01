@@ -218,10 +218,12 @@ struct HTTP2StreamResetTests {
     func resetReturnsAccountingToZero() async throws {
         // Directly assertable now that the dispatch count is a set of stream ids rather than a counter,
         // and the credit ledger is exposed. Both were silently wrong on the reset path before.
-        var state = HTTP2ConnectionState(
-            engine: try H2Gate.handshaked(limits: Self.limits, streaming: true),
-            plans: HTTP2DispatchPlans()
+        let server = HTTPServer(
+            transport: FakeTransport(),
+            responder: ClosureResponder { _, _, _ in .text("unused") },
+            limits: Self.limits
         )
+        var state = try H2Gate.state(for: server, streaming: true)
         let streamID = HTTP2StreamID(1)
         state.consumption[streamID] = HTTP2ConsumptionSignal {
             // No mailbox in this unit test; only the ledger is under assertion.

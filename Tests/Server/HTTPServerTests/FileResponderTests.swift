@@ -29,11 +29,7 @@ struct FileResponderTests {
             .appendingPathComponent("fileresponder-\(UUID().uuidString)")
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: root) }
-        for (name, bytes) in files {
-            manager.createFile(
-                atPath: root.appendingPathComponent(name).path, contents: Data(bytes)
-            )
-        }
+        FileTree.write(files, into: root)
         await body(FileResponder(root: root.path, streamingThreshold: streamingThreshold))
     }
 
@@ -228,6 +224,35 @@ struct FileResponderTests {
         }
     }
 
+    @Test("one whole second of staleness is enough — the granularity, not just the direction")
+    func oneSecondOlderSidecarIsStale() async {
+        // `FileResponder+Precompressed.sidecar` compares `st_mtimespec.tv_sec`: WHOLE SECONDS, with the
+        // nanosecond field deliberately unused. `staleSidecarSkipped` above shows the *direction* with a
+        // two-minute gap; this shows the *granularity*, which is the load-bearing part — one tick of the
+        // clock between writing a sidecar and writing its identity file is enough to make the sidecar
+        // stale. That is precisely why the test trees are now written in sorted key order (`FileTree`):
+        // with dictionary order a sidecar could be written first, and a scheduling stall across a second
+        // boundary then turned every negotiated assertion in the suite into a rare, unexplained failure.
+        let identity = Array("html { }".utf8)
+        await withTree(["a.css": identity, "a.css.br": Array("OLD".utf8)]) { responder, root in
+            let attributes = try? FileManager.default.attributesOfItem(
+                atPath: root.path + "/a.css"
+            )
+            guard let written = attributes?[.modificationDate] as? Date else {
+                Issue.record("the identity file has no modification date")
+                return
+            }
+            try? FileManager.default.setAttributes(
+                [.modificationDate: written.addingTimeInterval(-1)],
+                ofItemAtPath: root.path + "/a.css.br"
+            )
+            let request = get("/a.css", headers: [(.acceptEncoding, "br")])
+            let response = await responder.respond(to: request, body: [])
+            #expect(response.head.headerFields[.contentEncoding] == nil)
+            #expect(response.body == identity)
+        }
+    }
+
     @Test("a Range request serves identity bytes, never the precompressed sidecar")
     func rangeIgnoresSidecar() async {
         await withTree(["a.css": Array("0123456789".utf8), "a.css.br": Array("BR".utf8)]) {
@@ -288,9 +313,7 @@ struct FileResponderTests {
             .appendingPathComponent("fileresponder-\(UUID().uuidString)")
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: root) }
-        for (name, bytes) in files {
-            manager.createFile(atPath: root.path + "/" + name, contents: Data(bytes))
-        }
+        FileTree.write(files, into: root)
         let responder = FileResponder(
             root: root.path,
             streamingThreshold: streamingThreshold,

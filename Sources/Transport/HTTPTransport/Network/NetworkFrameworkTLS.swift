@@ -192,14 +192,47 @@ enum NetworkFrameworkTLS {
 
     /// The ALPN-negotiated application protocol of a ready `connection` (RFC 7301), or `nil` when the
     /// connection is cleartext, the handshake has not completed, or no protocol was selected.
+    ///
+    /// Two spellings because the two floors disagree. `sec_protocol_metadata_get_negotiated_protocol`
+    /// was deprecated in macOS 15.5 / iOS 18.5 in favour of a `copy` variant that hands ownership to
+    /// the caller — and this package's macOS floor is *past* that (15.6) while its iOS floor is not
+    /// (18.0). So the replacement is taken behind `#available` and the deprecated spelling stays for
+    /// the iOS 18.0–18.4 window, quarantined in a helper that declares the same deprecation so the
+    /// diagnostic is stated once, here, rather than suppressed.
     static func negotiatedApplicationProtocol(of connection: NWConnection) -> String? {
         guard
             let metadata = connection.metadata(definition: NWProtocolTLS.definition)
-                as? NWProtocolTLS.Metadata,
-            let raw = sec_protocol_metadata_get_negotiated_protocol(
-                metadata.securityProtocolMetadata
-            )
+                as? NWProtocolTLS.Metadata
         else {
+            return nil
+        }
+        let security = metadata.securityProtocolMetadata
+        guard #available(macOS 15.5, iOS 18.5, tvOS 18.5, watchOS 11.5, *) else {
+            return legacyNegotiatedApplicationProtocol(of: security)
+        }
+        guard let raw = sec_protocol_metadata_copy_negotiated_protocol(security) else {
+            return nil
+        }
+        // "The caller is expected to `free` the output string when no longer needed" — the whole
+        // difference between the two spellings, and the reason this cannot be a one-word rename.
+        defer { free(UnsafeMutableRawPointer(mutating: raw)) }
+        return String(cString: raw)
+    }
+
+    /// The ALPN-negotiated protocol read through the pre-15.5 borrowed-pointer API (RFC 7301).
+    ///
+    /// Reached only below macOS 15.5 / iOS 18.5, which this package can still deploy to on iOS. The
+    /// `@available(…, deprecated:)` attributes are what let the deprecated call be made *deliberately*
+    /// on the versions where it is the only API there is, instead of being silenced with a blanket
+    /// suppression that would also hide the next deprecation added to this file.
+    @available(macOS, deprecated: 15.5)
+    @available(iOS, deprecated: 18.5)
+    @available(tvOS, deprecated: 18.5)
+    @available(watchOS, deprecated: 11.5)
+    private static func legacyNegotiatedApplicationProtocol(
+        of metadata: sec_protocol_metadata_t
+    ) -> String? {
+        guard let raw = sec_protocol_metadata_get_negotiated_protocol(metadata) else {
             return nil
         }
         return String(cString: raw)

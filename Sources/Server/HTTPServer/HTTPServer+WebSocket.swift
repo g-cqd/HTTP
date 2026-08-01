@@ -337,7 +337,10 @@ extension HTTPServer {
     ) async {
         switch event {
             case .extendedConnect(let streamID, let request, let proto):
-                switch resolveHTTP2Tunnel(request, protocol: proto) {
+                // The plan this stream's HEADERS filed, not the live snapshot: see
+                // ``resolveHTTP2Tunnel(_:protocol:following:)`` (audit R5-SEC1b).
+                let plan = state.plans.plan(for: streamID)
+                switch resolveHTTP2Tunnel(request, protocol: proto, following: plan) {
                     case .failure(let refusal):
                         await refuseHTTP2Tunnel(streamID, refusal, state: &state)
                     case .success(let handler):
@@ -371,15 +374,37 @@ extension HTTPServer {
     /// Every denial is a VALUE rather than an early return, which is the whole point: the caller
     /// cannot reach the accept path without one, and cannot discard one without answering it. Before
     /// this, each denial was a `guard … else { return }` and the peer got silence (R5-P0e).
+    ///
+    /// The handler comes from `plan` — the ``DispatchPlan`` this stream's HEADERS filed — and never
+    /// from the live snapshot (audit R5-SEC1b). An HTTP/2 connection outlives many
+    /// ``reloadResponder(_:)`` calls, and an Extended CONNECT resolves in two moments: the engine
+    /// decodes the HEADERS (filing the plan, `HTTPServer+HTTP2.swift`'s `resolveRoute`) and the
+    /// consumer accepts the tunnel an arbitrary interval later. Reading the mutex again in the second
+    /// moment let a reload landing between them hand the upgrade a *different* generation's handler
+    /// than the one whose table admitted the request — the 2026-07-31 audit's finding 12, surviving on
+    /// the one path that skipped the plan.
+    ///
+    /// The plan's own ``DispatchPlan/match`` is deliberately NOT reused: `resolveRoute` resolves every
+    /// head with `isUpgrade: false`, so it never carries the WebSocket route. What is reused is the
+    /// plan's ``ResponderSnapshot`` — the generation — and the table walk is redone against *that*
+    /// snapshot's resolver with `isUpgrade: true`. One generation, the right table.
     private func resolveHTTP2Tunnel(
         _ request: HTTPRequest,
-        protocol proto: String
+        protocol proto: String,
+        following plan: DispatchPlan?
     ) -> Result<any WebSocketHandler, HTTP2TunnelRefusal> {
         guard proto == "websocket" else {
             return .failure(.unsupportedProtocol)
         }
+        // Refused, not silently re-resolved against `currentSnapshot`: a fallback is precisely the bug
+        // (R5-SEC1b). Every real path files one — the engine calls `resolveRoute` when the HEADERS
+        // decode, before it emits `.extendedConnect` (HTTP2Connection+Headers.swift) — so this is a
+        // fail-closed answer to an impossible state, not a routine branch.
+        guard let plan else {
+            return .failure(.unresolvedPlan)
+        }
         guard
-            let handler = currentSnapshot.resolver?
+            let handler = plan.snapshot.resolver?
                 .match(method: request.method, path: request.path, isUpgrade: true)?
                 .route.webSocketHandler
         else {
