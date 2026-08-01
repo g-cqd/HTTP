@@ -17,7 +17,7 @@ struct CountingWebSocketHandler: WebSocketHandler {
     let counter: CloseCounter
     let report: @Sendable () -> Void
 
-    func shouldUpgrade(_ request: HTTPRequest) -> Bool { base.shouldUpgrade(request) }
+    func shouldUpgrade(_ request: SanitizedRequest) -> Bool { base.shouldUpgrade(request) }
 
     func isOriginAllowed(_ origin: String?) -> Bool { base.isOriginAllowed(origin) }
 

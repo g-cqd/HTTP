@@ -87,6 +87,10 @@ extension HTTPServer where C.Duration == Duration {
         // This is the one extra table walk a request can still cost, and only an upgrade pays it: the
         // handshake is method-agnostic (RFC 6455 §4.1) while the plan above was matched under the
         // request's own method, so the two are genuinely different questions of the same table.
+        //
+        // `shouldUpgrade` takes a `SanitizedRequest`; the raw-request overload it resolves to here
+        // sanitizes on the way in, so the strip holds on this path even though `request` above has
+        // already been through it. Belt and braces by construction rather than by ordering (R5-SEC1).
         if Self.isWebSocketUpgrade(request),
             let matched = plan.snapshot.resolver?
                 .match(method: request.method, path: request.path, isUpgrade: true),
