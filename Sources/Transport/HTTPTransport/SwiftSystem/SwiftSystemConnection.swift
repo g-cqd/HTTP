@@ -43,11 +43,12 @@ public final class SwiftSystemConnection: TransportConnection {
     private let descriptor: FileDescriptor
     private let eventLoop: KqueueEventLoop
     private let isClosed = Atomic<Bool>(false)
-    /// A reusable receive buffer, sized to `maxLength` on first use and overwritten each read, so the hot
-    /// read path allocates no fresh chunk per `recv` (audit P1). `Mutex`-guarded because `read(2)` runs on
-    /// the loop thread while the copy-out runs on the awaiting (pinned) task; reads on one connection are
-    /// serial, so the lock is uncontended.
-    private let scratch = Mutex<[UInt8]>([])
+    /// A reusable receive buffer, overwritten each read, so the hot read path allocates no fresh chunk
+    /// per `recv` (audit P1) and holds only what this peer has shown it needs (ADD-P2 — see
+    /// ``ReceiveScratch``). `Mutex`-guarded because `read(2)` runs on the loop thread while the copy-out
+    /// runs on the awaiting (pinned) task; reads on one connection are serial, so the lock is
+    /// uncontended.
+    private let scratch = Mutex(ReceiveScratch())
     /// Cached resumer for the shared scratch read core (both `receive` overloads).
     ///
     /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
@@ -98,7 +99,7 @@ public final class SwiftSystemConnection: TransportConnection {
         guard count > 0 else {
             return nil  // 0 == EOF
         }
-        return scratch.withLock { Array($0[..<count]) }
+        return scratch.withLock { Array($0.received(count)) }
     }
 
     /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
@@ -106,9 +107,14 @@ public final class SwiftSystemConnection: TransportConnection {
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
         let count = try await readIntoScratch(maxLength: maxLength)
         if count > 0 {
-            scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+            scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
         }
         return count
+    }
+
+    /// The octets this connection's receive scratch currently holds — the residency oracle (ADD-P2).
+    var receiveScratchBytes: Int {
+        scratch.withLock(\.residentBytes)
     }
 
     /// Writes all of `bytes`, re-arming on writability whenever the socket buffer is full.
@@ -247,15 +253,13 @@ public final class SwiftSystemConnection: TransportConnection {
             throw TransportError.closed
         }
         do {
-            return try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
-                if buffer.count < maxLength {
-                    buffer = [UInt8](repeating: 0, count: maxLength)  // sized once, then reused
-                }
-                return try buffer.withUnsafeMutableBytes { raw -> Int in
-                    try Self.readOnce(
-                        descriptor,
-                        UnsafeMutableRawBufferPointer(rebasing: raw[..<maxLength])
-                    )
+            return try scratch.withLock { (buffer: inout ReceiveScratch) throws -> Int in
+                // The window is what this peer has shown it needs, not the caller's ceiling (ADD-P2).
+                // SE-0458 (ADR 0009): the call is unsafe by the closure's pointer parameter. The
+                // buffer is sized by ``ReceiveScratch`` immediately before the call and is valid for
+                // exactly `raw.count` octets; it does not escape this closure.
+                try unsafe buffer.read(ceiling: maxLength) { raw -> Int in
+                    try Self.readOnce(descriptor, raw)
                 }
             }
         }

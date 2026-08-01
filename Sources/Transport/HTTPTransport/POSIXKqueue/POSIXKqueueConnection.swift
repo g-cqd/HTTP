@@ -40,11 +40,12 @@ public final class POSIXKqueueConnection: TransportConnection {
     private let descriptor: Int32
     private let eventLoop: KqueueEventLoop
     private let isClosed = Atomic<Bool>(false)
-    /// A reusable receive buffer, sized to `maxLength` on first use and overwritten each read, so the hot
-    /// read path allocates no fresh chunk per `recv` (audit P1). `Mutex`-guarded because `read(2)` runs on
-    /// the event-loop thread while the copy-out runs on the awaiting task; reads on one connection are
-    /// serial (the server awaits each before the next), so the lock is always uncontended.
-    private let scratch = Mutex<[UInt8]>([])
+    /// A reusable receive buffer, overwritten each read, so the hot read path allocates no fresh chunk
+    /// per `recv` (audit P1) and holds only what this peer has shown it needs (ADD-P2 — see
+    /// ``ReceiveScratch``). `Mutex`-guarded because `read(2)` runs on the event-loop thread while the
+    /// copy-out runs on the awaiting task; reads on one connection are serial (the server awaits each
+    /// before the next), so the lock is always uncontended.
+    private let scratch = Mutex(ReceiveScratch())
     /// Cached resumer for the shared scratch read core (both `receive` overloads).
     ///
     /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
@@ -95,7 +96,7 @@ public final class POSIXKqueueConnection: TransportConnection {
         guard count > 0 else {
             return nil  // 0 == EOF (a zero-length read)
         }
-        return scratch.withLock { Array($0[..<count]) }
+        return scratch.withLock { Array($0.received(count)) }
     }
 
     /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
@@ -105,9 +106,14 @@ public final class POSIXKqueueConnection: TransportConnection {
         // The scratch holds the bytes `read(2)` produced (reads are serial, so it is undisturbed until
         // this copy); take just those into the caller's accumulator. `Mutex` borrows in place — no copy.
         if count > 0 {
-            scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+            scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
         }
         return count
+    }
+
+    /// The octets this connection's receive scratch currently holds — the residency oracle (ADD-P2).
+    var receiveScratchBytes: Int {
+        scratch.withLock(\.residentBytes)
     }
 
     /// The shared scratch read core: one opportunistic non-blocking `read(2)`, then — only when the
@@ -142,14 +148,15 @@ public final class POSIXKqueueConnection: TransportConnection {
             throw TransportError.closed
         }
         do {
-            return try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
-                if buffer.count < maxLength {
-                    // Sized once on first use, then reused for the connection's lifetime.
-                    buffer = [UInt8](repeating: 0, count: maxLength)
-                }
-                return try buffer.withUnsafeMutableBytes { raw -> Int in
+            return try scratch.withLock { (buffer: inout ReceiveScratch) throws -> Int in
+                // `raw.count`, never `maxLength`: the window is what this peer has shown it needs, and
+                // a short read is indistinguishable to the caller from a peer that sent less (ADD-P2).
+                // SE-0458 (ADR 0009): the call is unsafe by the closure's pointer parameter. The
+                // buffer is sized by ``ReceiveScratch`` immediately before the call and is valid for
+                // exactly `raw.count` octets; it does not escape this closure.
+                try unsafe buffer.read(ceiling: maxLength) { raw -> Int in
                     while true {
-                        let count = read(descriptor, raw.baseAddress, maxLength)
+                        let count = read(descriptor, raw.baseAddress, raw.count)
                         if count >= 0 {
                             return count
                         }
