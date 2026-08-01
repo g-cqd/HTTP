@@ -74,7 +74,7 @@ extension HTTP3Connection {
         }
         guard !state.finReceived else {
             events.append(.tunnelClosed(streamID: streamID))
-            streams[streamID] = nil
+            retireRecord(streamID)
             return
         }
         streams[streamID] = state
@@ -412,7 +412,7 @@ extension HTTP3Connection {
             catch {
                 guard error.isConnectionError else {
                     actions.append(.resetStream(streamID: streamID, errorCode: error.code))
-                    streams[streamID] = nil
+                    retireRecord(streamID)
                     chargeStreamReset()
                     continue
                 }

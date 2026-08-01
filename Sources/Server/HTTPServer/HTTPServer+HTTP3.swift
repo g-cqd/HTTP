@@ -58,12 +58,33 @@ extension HTTPServer {
             connection.outbound()
         }
 
-        /// Feeds one stream's bytes (a connection error is swallowed; its CONNECTION_CLOSE is queued).
+        /// Feeds one stream's bytes and files everything they surfaced for *other* streams (R5-P0b).
+        ///
+        /// A connection error is swallowed; its CONNECTION_CLOSE is queued among the returned actions.
+        ///
+        /// The routing happens here, inside the actor, rather than in the caller after this returns.
+        /// Engine output is addressed by stream id and need not belong to the stream whose bytes
+        /// provoked it — RFC 9204 §2.1.2, where an encoder-stream insert unblocks a *request* stream's
+        /// field section — and clearing that stream's blocked state is part of the very call that
+        /// produces its `request` event. Handing the batch back for the caller to file left those two
+        /// facts separated by a suspension point, so a concurrent
+        /// ``endDriving(_:registry:)`` could observe "no longer blocked" while the event was still in
+        /// flight and retire the entry it was about to be delivered to. Filing under the same isolation
+        /// makes the ordering a property of *where* the code runs rather than of how two tasks
+        /// interleaved: no third state exists between the two.
         func receive(
-            _ id: QUICStreamID, _ bytes: [UInt8], fin: Bool
-        ) -> (events: [HTTP3Connection.Event], actions: [HTTP3Connection.Action]) {
-            let events = (try? connection.receive(id, bytes, fin: fin)) ?? []
-            return (events, connection.outbound())
+            _ id: QUICStreamID,
+            _ bytes: [UInt8],
+            fin: Bool,
+            routingInto registry: HTTP3StreamRegistry
+        ) -> HTTP3Reception {
+            let produced = (try? connection.receive(id, bytes, fin: fin)) ?? []
+            let routed = registry.route(produced, owner: id)
+            return HTTP3Reception(
+                own: routed.own,
+                actions: connection.outbound(),
+                overflowed: routed.overflowed
+            )
         }
 
         /// Encodes a response on `id` and returns the queued send/close actions.
@@ -99,10 +120,18 @@ extension HTTPServer {
             connection.closeTunnel(id)
         }
 
-        /// Whether `id` still holds a QPACK-blocked field section (RFC 9204 §2.1.2) — its request has
-        /// not surfaced and will do so from another stream's receive (audit addendum P0.3).
-        func isBlocked(_ id: QUICStreamID) -> Bool {
-            connection.isBlocked(id)
+        /// Ends the driving phase for `id`, keeping its entry only while something is owed.
+        ///
+        /// The two halves of that decision — "does the engine still hold a QPACK-blocked field section
+        /// for this stream" (RFC 9204 §2.1.2) and "is the registry about to drop the entry" — are made
+        /// in one actor-isolated step, and every routed deposit is made in the *same* isolation by
+        /// ``receive(_:_:fin:routingInto:)``. So the check and the delivery cannot interleave: either
+        /// the deposit ran first and the registry sees a non-empty mailbox, or it has not run yet and
+        /// the engine still reports the section blocked. There is no window in which both say no.
+        ///
+        /// - Returns: whether the entry was kept, for the connection dispatcher to answer on.
+        func endDriving(_ id: QUICStreamID, registry: HTTP3StreamRegistry) -> Bool {
+            registry.endDriving(id, retain: connection.isBlocked(id))
         }
 
         /// Retires the engine state behind `id` and returns the actions to flush (audit REG-3).
@@ -195,38 +224,34 @@ extension HTTPServer {
         // ONE read-deadline watchdog for all of this connection's request streams (P0.5) — the same
         // one-task-per-connection shape the HTTP/1.1 idle watchdog uses, not one task per stream.
         let deadlines = HTTP3StreamDeadlines<C.Instant>()
-        let watchdog = Task {
-            await self.runHTTP3DeadlineWatchdog(
-                deadlines: deadlines, registry: registry, engine: engine, quic: quic
-            )
-        }
-        defer { watchdog.cancel() }
-        let handle = registerHTTP3(
-            HTTP3Handle(quic: quic, registry: registry, engine: engine)
+        // One value carrying every place this connection holds per-stream state, so retiring a stream
+        // reaches all four of them or none (R5-P0c).
+        let scope = HTTP3ConnectionScope(
+            quic: quic,
+            registry: registry,
+            engine: engine,
+            deadlines: deadlines
         )
+        let watchdog = Task { await self.runHTTP3DeadlineWatchdog(in: scope) }
+        defer { watchdog.cancel() }
+        let handle = registerHTTP3(scope)
         defer { unregisterHTTP3(handle) }
         await withDiscardingTaskGroup { group in
-            group.addTask {
-                await self.drainRoutedHTTP3(
-                    tickets,
-                    registry: registry,
-                    engine: engine,
-                    quic: quic,
-                    deadlines: deadlines
-                )
-            }
+            group.addTask { await self.drainRoutedHTTP3(tickets, in: scope) }
             group.addTask {
                 await withDiscardingTaskGroup { streams in
                     for await stream in quic.inboundStreams() {
                         registry.register(stream)
+                        // RFC 9000 §2.1 classifies the stream from its id, and RFC 9114 §6 gives the
+                        // two classes different lifetimes: a request stream is bounded by read
+                        // deadlines and retired when it ends, a peer unidirectional stream is
+                        // long-lived and its closure is a connection error (§6.2.1). They get
+                        // different loops so neither discipline can be applied to the other.
                         streams.addTask {
-                            await self.serveHTTP3Stream(
-                                stream,
-                                engine: engine,
-                                quic: quic,
-                                registry: registry,
-                                deadlines: deadlines
-                            )
+                            guard stream.id.isBidirectional else {
+                                return await self.serveHTTP3PeerUniStream(stream, in: scope)
+                            }
+                            await self.serveHTTP3Stream(stream, in: scope)
                         }
                     }
                 }
@@ -266,11 +291,22 @@ extension HTTPServer {
     /// (RFC 9220) that is then driven over this stream until it closes.
     private func serveHTTP3Stream(
         _ stream: any QUICStream,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry,
-        deadlines: HTTP3StreamDeadlines<C.Instant>
+        in scope: HTTP3ConnectionScope
     ) async {
+        // Everything below runs inside the retirement scope, so there is no `return` out of this
+        // driver that skips the sweep — the body has to name how it ended (R5-P0c).
+        await withHTTP3RequestStream(stream.id, in: scope) {
+            await self.driveHTTP3Stream(stream, in: scope)
+        }
+    }
+
+    /// The body of one request stream's serve loop, which must report how the stream ended.
+    private func driveHTTP3Stream(
+        _ stream: any QUICStream,
+        in scope: HTTP3ConnectionScope
+    ) async -> HTTP3StreamExit {
+        let registry = scope.registry
+        let deadlines = scope.deadlines
         var webSocket: WebSocketConnection?
         // The route handler resolved at this stream's Extended CONNECT (RFC 9220); tunnel DATA carries
         // only a stream id, so the handler is held here for the stream's lifetime rather than re-resolved.
@@ -289,8 +325,10 @@ extension HTTPServer {
             inbox.close()
         }
         registry.attach(inbox, to: stream.id)
-        armHTTP3(stream.id, phase: phase, on: deadlines)
-        defer { deadlines.disarm(stream.id) }
+        armHTTP3(stream.id, phase: phase, in: scope)
+        // Whether the loop left because the stream *completed* rather than because it died under us:
+        // the peer's FIN, or a tunnel this server closed. Anything else is an abandonment.
+        var completed = false
         reads: while true {
             let own: [HTTP3Connection.Event]
             var fin = false
@@ -304,45 +342,49 @@ extension HTTPServer {
                     fin = chunkFin
                     // The read landed; handler time is not charged to a read deadline.
                     deadlines.disarm(stream.id)
-                    let (produced, actions) = await engine.receive(stream.id, bytes, fin: chunkFin)
-                    await applyHTTP3(actions, registry: registry, engine: engine, quic: quic)
                     // Engine output is addressed by stream id, not by which stream's bytes provoked it:
-                    // hand every foreign-id event to the connection dispatcher and keep only our own
-                    // (P0.3). The mailbox carries back the ones another task routed *to* us.
-                    own =
-                        registry.takeMailbox(stream.id)
-                        + partitionHTTP3Events(produced, owner: stream.id, registry: registry)
+                    // every foreign-id event is filed against its own stream inside the engine's
+                    // isolation, and only ours comes back (P0.3 / R5-P0b). The mailbox carries the ones
+                    // another task routed *to* us.
+                    let produced = await receiveHTTP3(stream.id, bytes, fin: chunkFin, in: scope)
+                    own = registry.takeMailbox(stream.id) + produced
             }
             let handedOff = await applyHTTP3StreamEvents(
                 own,
                 stream: stream,
                 inbox: inbox,
-                engine: engine,
-                quic: quic,
-                registry: registry,
-                deadlines: deadlines,
+                in: scope,
                 webSocket: &webSocket,
                 tunnelHandler: &tunnelHandler
             )
-            if handedOff {
-                return
+            if let handedOff {
+                // A streaming route or a claimed request took the stream over and concluded it; its
+                // ending is this driver's ending.
+                if let handler = tunnelHandler {
+                    await handler.onClose()
+                }
+                return handedOff
             }
             if fin || webSocket?.isClosing == true {
+                completed = true
                 break
             }
             // Anything decoded means the head is behind us: the next read is body/tunnel progress.
             if !own.isEmpty { phase = .body }
-            armHTTP3(stream.id, phase: phase, on: deadlines)
+            armHTTP3(stream.id, phase: phase, in: scope)
         }
         // Lifecycle hook: the stream ended (FIN / EOF / reset) with the tunnel still open — every
         // ending funnels through exactly one `onClose` (the in-loop paths clear `tunnelHandler`).
         if let handler = tunnelHandler {
             await handler.onClose()
         }
-        // Keep the writer reachable only while the engine still owes this stream a request: a blocked
-        // field section surfaces later, from the encoder stream's receive (RFC 9204 §2.1.2), and the
-        // dispatcher must still be able to answer on it.
-        registry.endDriving(stream.id, retain: await engine.isBlocked(stream.id))
+        // A loop that ran to a FIN answered its request; one that ended on EOF, a receive fault or a
+        // reset did not, and the phase says whether the head had already reached the responder — which
+        // is the difference between "may be safely retried" and "was being processed" (§8.1).
+        guard completed else {
+            return .abandoned(errorCode: phase.errorCode)
+        }
+        return .answered
     }
 
     /// Answers a buffered request exactly once, on the stream its id names.
@@ -354,23 +396,13 @@ extension HTTPServer {
         request: HTTPRequest,
         body: [UInt8],
         stream: any QUICStream,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry
+        in scope: HTTP3ConnectionScope
     ) async {
-        guard registry.claim(id) != nil else {
+        guard scope.registry.claim(id) != nil else {
             return
         }
-        await respondHTTP3(
-            id,
-            request: request,
-            body: body,
-            stream: stream,
-            engine: engine,
-            quic: quic,
-            registry: registry
-        )
-        registry.retire(id)
+        await respondHTTP3(id, request: request, body: body, stream: stream, in: scope)
+        scope.registry.retire(id)
     }
 
     /// Answers a non-tunnel request — natively streamed (P6b) when the response carries a body stream,
@@ -380,19 +412,17 @@ extension HTTPServer {
         request inbound: HTTPRequest,
         body: [UInt8],
         stream: any QUICStream,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry
+        in scope: HTTP3ConnectionScope
     ) async {
         // The plan this stream's HEADERS resolved (CR-F12 / CR-F19): the generation whose body limit
         // was already enforced against these octets, and the route match it made.
-        let plan = registry.plan(for: id) ?? DispatchPlan(snapshot: currentSnapshot)
+        let plan = scope.registry.plan(for: id) ?? DispatchPlan(snapshot: currentSnapshot)
         // Build the per-request context from the QUIC connection's verified metadata (peer, TLS subject);
         // the verified mutual-TLS subject reaches handlers via `context.connection.tlsPeerSubject` rather
         // than a spoofable header (audit P0-1) — the same model the h1/h2 paths use. The same seam
         // strips every client-supplied server-asserted field off the request (audit CR-F13).
         let (request, context) = RequestContext.ingress(
-            inbound, over: quic, matching: plan.match
+            inbound, over: scope.quic, matching: plan.match
         )
         // Seam 5 of 6 (audit CR-F7). Verified against the HTTP/3 dispatcher rather than assumed:
         // engine state is behind an actor and each response is written to its own QUIC stream
@@ -410,9 +440,7 @@ extension HTTPServer {
             omitBody: request.method == .head,
             id: id,
             stream: stream,
-            engine: engine,
-            quic: quic,
-            registry: registry
+            in: scope
         )
     }
 
@@ -425,25 +453,22 @@ extension HTTPServer {
         omitBody: Bool,
         id: QUICStreamID,
         stream: any QUICStream,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry
+        in scope: HTTP3ConnectionScope
     ) async {
-        if let bodyStream = response.stream {
-            // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
-            await streamHTTP3Response(
-                response.head,
-                body: bodyStream,
-                omitBody: omitBody,
-                id: id,
-                engine: engine,
-                on: stream
-            )
+        guard let bodyStream = response.stream else {
+            let actions = await scope.engine.respond(to: id, response.head, body: response.body)
+            await applyHTTP3(actions, in: scope)
+            return
         }
-        else {
-            let responseActions = await engine.respond(to: id, response.head, body: response.body)
-            await applyHTTP3(responseActions, registry: registry, engine: engine, quic: quic)
-        }
+        // Native HTTP/3 streaming (P6b): pump the producer straight to the QUIC stream.
+        await streamHTTP3Response(
+            response.head,
+            body: bodyStream,
+            omitBody: omitBody,
+            id: id,
+            on: stream,
+            in: scope
+        )
     }
 
     /// Adds the `Alt-Svc` HTTP/3 advertisement (RFC 7838) to an h1/h2 response, when a QUIC listener

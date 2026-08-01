@@ -22,7 +22,7 @@ extension HTTP3Connection {
         _ response: HTTPResponse,
         body: [UInt8] = []
     ) throws(HTTP3Error) {
-        guard streams.removeValue(forKey: streamID) != nil else {
+        guard retireRecord(streamID) != nil else {
             throw .connection(.h3InternalError, "response for an unknown stream")
         }
         let headerBlock = encodeBufferedResponse(response, streamID: streamID)
@@ -47,7 +47,7 @@ extension HTTP3Connection {
         to streamID: QUICStreamID,
         _ response: HTTPResponse
     ) throws(HTTP3Error) -> [UInt8] {
-        guard streams.removeValue(forKey: streamID) != nil else {
+        guard retireRecord(streamID) != nil else {
             throw .connection(.h3InternalError, "streaming response for an unknown stream")
         }
         return HTTP3FrameWriter.frame(.headers, payload: encodeResponseSection(response))

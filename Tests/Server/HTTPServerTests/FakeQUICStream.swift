@@ -20,9 +20,16 @@ final class FakeQUICStream: QUICStream, @unchecked Sendable {
     let id: QUICStreamID
     let direction: QUICStreamDirection
 
+    /// A scripted transport fault, so a test can drive a *receive failure* rather than a clean EOF.
+    ///
+    /// The two are different exits from the serve loop even though both end the reader, and the
+    /// retirement funnel has to cover each (audit R5-P0c).
+    struct ReceiveFault: Error {}
+
     private struct State {
         var inbound: [(bytes: [UInt8], fin: Bool)] = []
         var closed = false
+        var faulted = false
         var sent: [(bytes: [UInt8], fin: Bool)] = []
         var resets: [UInt64] = []
         var waiter: CheckedContinuation<Void, Never>?
@@ -69,12 +76,24 @@ final class FakeQUICStream: QUICStream, @unchecked Sendable {
         waiter?.resume()
     }
 
-    // swiftlint:disable:next unneeded_throws_rethrows - the QUICStream requirement is throwing
+    /// Fails the inbound side, so a parked `receive()` throws (a transport fault, not an EOF).
+    func failInbound() {
+        let waiter = state.withLock { current -> CheckedContinuation<Void, Never>? in
+            current.faulted = true
+            defer { current.waiter = nil }
+            return current.waiter
+        }
+        waiter?.resume()
+    }
+
     func receive() async throws -> (bytes: [UInt8], fin: Bool)? {
         while true {
-            let next = state.withLock { current -> (bytes: [UInt8], fin: Bool)?? in
+            let next = try state.withLock { current -> (bytes: [UInt8], fin: Bool)?? in
                 if !current.inbound.isEmpty {
                     return current.inbound.removeFirst()
+                }
+                if current.faulted {
+                    throw ReceiveFault()
                 }
                 return current.closed ? .some(nil) : nil
             }
@@ -86,7 +105,7 @@ final class FakeQUICStream: QUICStream, @unchecked Sendable {
             }
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 let resumeNow = state.withLock { current -> Bool in
-                    guard current.inbound.isEmpty, !current.closed else {
+                    guard current.inbound.isEmpty, !current.closed, !current.faulted else {
                         return true
                     }
                     current.waiter = continuation

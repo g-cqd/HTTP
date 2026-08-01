@@ -209,6 +209,18 @@ public struct HTTP3Connection {
     /// The highest client-initiated bidirectional (request) stream id seen, which fixes the boundary
     /// our own GOAWAY announces (RFC 9114 §5.2).
     var highestRequestStreamID: QUICStreamID?
+    /// The request streams this connection has finished with (audit R5-P0c).
+    ///
+    /// Retirement is terminal: no record is ever created again for an id in here. The engine creates
+    /// records lazily from whatever octets it is handed, so without this every path that retired a
+    /// stream was undone by the next queued chunk for it — the record came back with a fresh parser
+    /// buffer, a fresh share of the RFC 9114 §4.1 buffered-body budget and a fresh claim on the
+    /// SETTINGS_QPACK_BLOCKED_STREAMS allowance (RFC 9204 §2.1.2), and the reset the peer had been
+    /// charged for bought nothing.
+    ///
+    /// Bounded by construction rather than growing with the streams served — see
+    /// ``HTTP3RetiredStreams`` for why a bare highest-id watermark is not sound on its own.
+    var retiredStreams = HTTP3RetiredStreams()
     /// Whether ``beginGracefulShutdown()`` has already queued our GOAWAY — it is sent once, because a
     /// later one must not raise the boundary (RFC 9114 §5.2).
     var sentGoAway = false
@@ -282,11 +294,35 @@ public struct HTTP3Connection {
     ///
     /// Optional — ``receive(_:_:fin:)`` auto-registers from the stream id's class — but the driver may
     /// call it as soon as QUIC surfaces the stream.
+    ///
+    /// A no-op for a stream already tracked, and for one already retired (audit R5-P0c): retirement is
+    /// terminal, so an id at or below ``retiredRequestWatermark`` never gets a record again.
     public mutating func registerStream(_ id: QUICStreamID, direction: StreamDirection) {
-        guard streams[id] == nil else {
+        guard streams[id] == nil, !isRetired(id) else {
             return
         }
         streams[id] = StreamState(kind: direction == .unidirectional ? .unclassifiedUni : .request)
+    }
+
+    /// Whether `id` names a request stream this connection has already retired (audit R5-P0c).
+    ///
+    /// Only request streams are watermarked. The critical unidirectional streams are long-lived by
+    /// design (RFC 9114 §6.2) and the driver never retires them, so they have nothing to be terminal
+    /// about.
+    func isRetired(_ id: QUICStreamID) -> Bool {
+        retiredStreams.contains(id)
+    }
+
+    /// Removes the record for `id` and, for a request stream, advances the terminal watermark.
+    ///
+    /// The one way a request stream's record leaves the engine (audit R5-P0c). Every caller that used
+    /// to clear `streams[id]` directly goes through here, so no removal can forget to make itself
+    /// terminal — which is what a second, differently-spelled cleanup would inevitably do.
+    @discardableResult
+    mutating func retireRecord(_ id: QUICStreamID) -> StreamState? {
+        let removed = streams.removeValue(forKey: id)
+        retiredStreams.retire(id)
+        return removed
     }
 
     /// Whether `streamID` still holds a field section blocked on not-yet-received QPACK inserts
@@ -337,7 +373,7 @@ public struct HTTP3Connection {
             guard error.isConnectionError else {
                 if let streamID = error.streamID {
                     actions.append(.resetStream(streamID: streamID, errorCode: error.code))
-                    streams[streamID] = nil
+                    retireRecord(streamID)
                     chargeStreamReset()  // MadeYouReset parity: engine-emitted resets count too
                 }
                 return events
@@ -353,7 +389,7 @@ public struct HTTP3Connection {
     /// Drops the stream and charges the Rapid Reset analog: too many resets of active streams trip
     /// H3_EXCESSIVE_LOAD, queuing CONNECTION_CLOSE for the driver (RFC 9114 §8.1).
     public mutating func resetStream(_ streamID: QUICStreamID, errorCode _: UInt64) -> [Event] {
-        if let state = streams.removeValue(forKey: streamID), state.kind == .request {
+        if let state = retireRecord(streamID), state.kind == .request {
             chargeStreamReset()
         }
         return []
@@ -388,7 +424,12 @@ public struct HTTP3Connection {
         if streams[streamID] == nil, streamID.kind == .serverBidirectional {
             throw .connection(.h3StreamCreationError, "a server-initiated bidirectional stream")
         }
-        buffer(bytes, on: streamID, fin: fin)
+        // A stream retired while these octets were still in flight is *gone* (audit R5-P0c): the peer
+        // was reset or answered, and RFC 9000 §3.2 lets the receiver discard what is still arriving.
+        // Buffering it would rebuild the record the retirement just removed.
+        guard buffer(bytes, on: streamID, fin: fin) else {
+            return
+        }
         try dispatch(streamID, into: &events)
     }
 
@@ -400,16 +441,26 @@ public struct HTTP3Connection {
     /// would make that reclaim see a shared buffer and allocate a fresh one, discarding the capacity
     /// the rolling buffer exists to reuse. Measured: one wire-sized allocation per receive with the
     /// copy alive, none without it (audit CR-F18).
-    private mutating func buffer(_ bytes: [UInt8], on streamID: QUICStreamID, fin: Bool) {
+    ///
+    /// - Returns: `false` when the stream has already been retired, so the octets are discarded and
+    ///   no record is created for it (audit R5-P0c).
+    private mutating func buffer(
+        _ bytes: [UInt8], on streamID: QUICStreamID, fin: Bool
+    ) -> Bool {
         // `removeValue` (not a subscript read) hands sole ownership of the receive buffer to `state`,
         // so the append below lands in place. A subscript read would leave the table sharing that
         // buffer, making every inbound chunk copy the whole thing first — O(n²) over a stream that
         // arrives in pieces, which is every stream.
-        var state =
-            streams.removeValue(forKey: streamID)
-            ?? StreamState(
-                kind: streamID.isUnidirectional ? .unclassifiedUni : .request
-            )
+        var state: StreamState
+        if let tracked = streams.removeValue(forKey: streamID) {
+            state = tracked
+        }
+        else {
+            guard !isRetired(streamID) else {
+                return false
+            }
+            state = StreamState(kind: streamID.isUnidirectional ? .unclassifiedUni : .request)
+        }
         state.buffer.append(contentsOf: bytes)
         if fin { state.finReceived = true }
         // Track the request-stream high-water mark so a graceful GOAWAY can name the first stream we
@@ -418,6 +469,7 @@ public struct HTTP3Connection {
             highestRequestStreamID = Swift.max(highestRequestStreamID ?? streamID, streamID)
         }
         streams[streamID] = state
+        return true
     }
 
     /// Reads a stream's classified kind and routes it to the matching handler (RFC 9114 §6).
@@ -452,8 +504,15 @@ public struct HTTP3Connection {
             case .qpackDecoder:
                 try processQpackDecoderStream(streamID)
             case .reserved:
-                // §6.2 — an unknown unidirectional stream type: discard its buffered data.
+                // §6.2 — an unknown unidirectional stream type: discard its buffered data, and drop
+                // the record itself once the stream ends. Nothing more is expected on it, and a peer
+                // that opens reserved streams should not leave one record behind per stream for the
+                // life of the connection (CWE-770); what is open at any moment stays bounded by the
+                // transport's own concurrent-unidirectional-stream limit (RFC 9000 §4.6).
                 streams[streamID]?.discardBuffer()
+                if streams[streamID]?.finReceived == true {
+                    retireRecord(streamID)
+                }
             case .request:
                 try processRequestStream(streamID, into: &events)
         }

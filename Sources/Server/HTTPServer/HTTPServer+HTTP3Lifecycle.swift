@@ -23,16 +23,6 @@ internal import HTTPTransport
 internal import Synchronization
 
 extension HTTPServer {
-    /// One QUIC connection being served, as the drain needs to see it.
-    ///
-    /// The registry holds the streams (so a forced close can reset each), and the engine is what
-    /// queues the GOAWAY — routed to the control stream by the same dispatcher the serve loop uses.
-    struct HTTP3Handle: Sendable {
-        let quic: any QUICConnection
-        let registry: HTTP3StreamRegistry
-        let engine: Engine
-    }
-
     /// Takes ownership of the admission slot charged for `quic`, serves it, then releases the slot.
     ///
     /// The QUIC peer of ``accept(_:)``. A gated backbone charged the slot before the connection was
@@ -62,9 +52,9 @@ extension HTTPServer {
     }
 
     /// Registers a QUIC connection with the shutdown registry, returning its key.
-    func registerHTTP3(_ handle: HTTP3Handle) -> Int {
+    func registerHTTP3(_ scope: HTTP3ConnectionScope) -> Int {
         let key = nextQUICHandleID.wrappingAdd(1, ordering: .relaxed).newValue
-        activeQUICConnections.withLock { $0[key] = handle }
+        activeQUICConnections.withLock { $0[key] = scope }
         return key
     }
 
@@ -80,11 +70,8 @@ extension HTTPServer {
     /// `outbound()`: whichever drain picks the action up, it is routed by the id or role it names, not
     /// by whoever drained it (audit addendum P0.3).
     func drainHTTP3Connections() async {
-        for handle in activeQUICConnections.withLock({ Array($0.values) }) {
-            let actions = await handle.engine.beginGracefulShutdown()
-            await applyHTTP3(
-                actions, registry: handle.registry, engine: handle.engine, quic: handle.quic
-            )
+        for scope in activeQUICConnections.withLock({ Array($0.values) }) {
+            await applyHTTP3(await scope.engine.beginGracefulShutdown(), in: scope)
         }
     }
 
@@ -94,11 +81,11 @@ extension HTTPServer {
     /// the connection teardown, then the connection itself gets a CONNECTION_CLOSE carrying H3_NO_ERROR
     /// — the shutdown is orderly, not an error (RFC 9114 §8.1 / RFC 9000 §19.19).
     func forceCloseHTTP3Connections() async {
-        for handle in activeQUICConnections.withLock({ Array($0.values) }) {
-            for stream in handle.registry.allStreams() {
+        for scope in activeQUICConnections.withLock({ Array($0.values) }) {
+            for stream in scope.registry.allStreams() {
                 stream.reset(errorCode: HTTP3ErrorCode.h3NoError.rawValue)
             }
-            await handle.quic.close(errorCode: HTTP3ErrorCode.h3NoError.rawValue)
+            await scope.quic.close(errorCode: HTTP3ErrorCode.h3NoError.rawValue)
         }
     }
 

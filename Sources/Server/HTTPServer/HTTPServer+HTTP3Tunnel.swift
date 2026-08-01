@@ -22,14 +22,15 @@ extension HTTPServer {
     func handleHTTP3TunnelEvent(
         _ event: HTTP3Connection.Event,
         stream: any QUICStream,
-        engine: Engine,
+        in scope: HTTP3ConnectionScope,
         webSocket: inout WebSocketConnection?,
         tunnelHandler: inout (any WebSocketHandler)?
     ) async {
+        let engine = scope.engine
         switch event {
             case .extendedConnect(let id, let request, let proto):
                 let tunnel = await acceptHTTP3Tunnel(
-                    id, request: request, protocol: proto, on: stream, engine: engine
+                    id, request: request, protocol: proto, on: stream, in: scope
                 )
                 webSocket = tunnel?.socket
                 tunnelHandler = tunnel?.handler
@@ -78,7 +79,7 @@ extension HTTPServer {
         request: HTTPRequest,
         protocol proto: String,
         on stream: any QUICStream,
-        engine: Engine
+        in scope: HTTP3ConnectionScope
     ) async -> (socket: WebSocketConnection, handler: any WebSocketHandler)? {
         // Resolve the WebSocket route for this path; CSWSH defense (RFC 6455 §10.2): a disallowed Origin
         // refuses the tunnel, as on the h1/h2 paths.
@@ -89,17 +90,29 @@ extension HTTPServer {
             handler.shouldUpgrade(request),
             handler.isOriginAllowed(request.headerFields[.origin])
         else {
-            stream.reset(errorCode: HTTP3ErrorCode.h3RequestRejected.rawValue)
+            // Through the funnel (R5-P0c). The engine recorded this stream as a tunnel the moment the
+            // Extended CONNECT decoded, and it never drops a tunnel record on its own — so a bare
+            // `stream.reset` here left one record per refused handshake for the life of the
+            // connection, which is a free lever for anyone who can reach a WebSocket path.
+            await retireHTTP3Stream(
+                id,
+                errorCode: HTTP3ErrorCode.h3RequestRejected.rawValue,
+                in: scope
+            )
             return nil
         }
         let permessageDeflate = WebSocketHandshake.negotiatePermessageDeflate(request.headerFields)
         guard
-            let accept = await engine.acceptTunnel(
+            let accept = await scope.engine.acceptTunnel(
                 id, secWebSocketExtensions: permessageDeflate?.headerValue
             ),
             (try? await stream.send(accept, fin: false)) != nil
         else {
-            stream.reset(errorCode: HTTP3ErrorCode.h3InternalError.rawValue)
+            await retireHTTP3Stream(
+                id,
+                errorCode: HTTP3ErrorCode.h3InternalError.rawValue,
+                in: scope
+            )
             return nil
         }
         let cap = limits.effectiveWebSocketMessageSize
