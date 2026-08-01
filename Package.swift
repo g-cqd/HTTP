@@ -135,13 +135,23 @@ let strictMemorySafeTargets: Set<String> = [
         // would have caught the `ready` redeclaration this Linux-restoration work exists because of.
         "ReadinessWaiterCollisionTests.swift"
     ]
-    let darwinOnlyServerTestSources = [
+    // Everything `HTTPServerTests` drops on Linux: the Network.framework-provided HTTP/3 suites, and
+    // the tests of codings Apple's `Compression` backs (Brotli/gzip/inflate + the streaming encoder).
+    // One list rather than two because it gates ONE target and the reason for each entry belongs to
+    // the entry, not to the list name — the zstd suite self-gates on `canImport(CZstd)` instead.
+    let serverTestExclusions = [
         "HTTPServerHTTP3Tests.swift",
-        "HTTPServerWebSocketHTTP3Tests.swift"
-    ]
-    // Tests of the Apple-`Compression` codings (Brotli/gzip/inflate). Excluded on Linux until the
-    // zlib/libbrotli Linux codings land (A3); the zstd suite self-gates on `canImport(CZstd)`.
-    let appleCompressionTestSources = [
+        "HTTPServerWebSocketHTTP3Tests.swift",
+        // The STREAMING coding path, which does not exist on Linux at all: `GzipEncoderStream.swift`
+        // is wrapped `#if canImport(Compression)` in its entirety, so `GzipEncoder.makeStream()`
+        // returns nil there and `CompressingBodyWriter` declines every stream. Not a test defect and
+        // not a portability defect — a missing feature. Both suites compile on Linux and FAIL at
+        // runtime, which is how this was found: they had never been reached before the test target
+        // started building. The follow-up is a `CZlibCoding` implementation of the streaming encoder
+        // (the buffered gzip path already has one, which is why `ContentEncoderTests` stays in);
+        // these two go back in the graph with it.
+        "ContentEncoderStreamTests.swift",
+        "StreamingCompressionTests.swift",
         "CompressionMiddlewareTests.swift",
         "DecompressionMiddlewareTests.swift",
         "DecompressionFuzzTests.swift",
@@ -152,8 +162,7 @@ let strictMemorySafeTargets: Set<String> = [
     let darwinOnlyTransportSources: [String] = []
     let appleCompressionSources: [String] = []
     let darwinOnlyTransportTestSources: [String] = []
-    let darwinOnlyServerTestSources: [String] = []
-    let appleCompressionTestSources: [String] = []
+    let serverTestExclusions: [String] = []
 #endif
 
 // ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
@@ -475,7 +484,7 @@ let package = Package(
                 .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
             ],
             path: "Tests/Server/HTTPServerTests",
-            exclude: darwinOnlyServerTestSources + appleCompressionTestSources
+            exclude: serverTestExclusions
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with
