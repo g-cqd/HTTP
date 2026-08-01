@@ -3,8 +3,9 @@
 //  CCRC32
 //
 //  gzip CRC-32 (RFC 1952 §8; reflected polynomial 0xEDB88320). One portable reference (slicing-by-8)
-//  plus hardware backends (ARMv8 CRC32 instructions; zlib's PCLMULQDQ on x86). All one-shot, all
-//  returning the final conditioned checksum, all agreeing bit-for-bit.
+//  plus hardware backends (ARMv8 CRC32 instructions; zlib's PCLMULQDQ on x86). All return the final
+//  conditioned checksum and all agree bit-for-bit; `ccrc32_update` is the seeded form of the pick a
+//  streaming gzip encoder folds chunk by chunk.
 //
 
 #include "CCRC32.h"
@@ -70,14 +71,23 @@ uint32_t ccrc32_slice1(const uint8_t *buf, size_t len) {
 // MARK: - zlib (correct polynomial; internally hardware-accelerated)
 
 uint32_t ccrc32_zlib(const uint8_t *buf, size_t len) {
-    uLong crc = crc32(0L, Z_NULL, 0);
+    return ccrc32_update(crc32(0L, Z_NULL, 0), buf, len);
+}
+
+uint32_t ccrc32_update(uint32_t crc, const uint8_t *buf, size_t len) {
+    // zlib documents crc32() with a NULL buffer as *returning the initial value*, not as folding
+    // nothing — so an empty chunk has to short-circuit or it would reset the running checksum.
+    if (buf == NULL || len == 0) {
+        return crc;
+    }
+    uLong running = (uLong)crc;
     while (len > 0) {  // zlib's length arg is 32-bit; chunk so huge buffers stay correct
         uInt chunk = (len > 0x7FFFFFFFu) ? 0x7FFFFFFFu : (uInt)len;
-        crc = crc32(crc, buf, chunk);
+        running = crc32(running, buf, chunk);
         buf += chunk;
         len -= chunk;
     }
-    return (uint32_t)crc;
+    return (uint32_t)running;
 }
 
 // MARK: - ARMv8 CRC32 instructions
