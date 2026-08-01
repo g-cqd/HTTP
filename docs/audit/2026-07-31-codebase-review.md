@@ -461,8 +461,14 @@ two values. Encode 16 random bytes or zero-pad each 64-bit component.
   failures due to a transport-expectation mismatch. It is not a conformance
   gate.
 - HTTP/3 load testing is advisory; Linux HTTP/3 remains intentionally absent.
-- Streaming response compression is explicitly unimplemented in
-  `Sources/Middleware/HTTPCompression/CompressionMiddleware.swift:71`.
+- ~~Streaming response compression is explicitly unimplemented in
+  `Sources/Middleware/HTTPCompression/CompressionMiddleware.swift:71`.~~
+  **Implemented.** A streamed body is coded incrementally through a
+  `CompressingBodyWriter` over the `StreamingContentEncoder` /
+  `ContentEncoderStream` seam; `Content-Length` is dropped and h1 frames it
+  chunked. gzip and Brotli stream on Darwin; the `CZlibCoding`, `CBrotli` and
+  `CZstd` shims are one-shot only, so those builds fall through to identity
+  rather than buffering the body to code it.
 - Strict Memory Safety remains deferred. Unsafe regions should be isolated,
   marked with explicit invariants, and tested before enabling the package trait
   as a gate.
