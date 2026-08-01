@@ -254,7 +254,13 @@ public struct HTTPLimits: Sendable, Equatable {
     /// trailer line once the unframed octets pass ``maxFieldSize``, so with strictly more room than
     /// that the decoder always either consumes or fails closed — it can never answer "need more" to a
     /// window that has no more to give (RFC 9112 §7.1.1, §7.1.2).
-    public var effectiveRequestBodyWindow: Int { max(requestBodyWindowSize, maxFieldSize + 16_384) }
+    ///
+    /// The addend is ``Bounds/bodyWindowHeadroom``, which is also the room ``Bounds/fieldSize``
+    /// reserves below `Int.max` — so this sum cannot overflow whatever `maxFieldSize` is set to
+    /// (R5-VAL; it used to trap on `maxFieldSize == .max`, a value validation accepted).
+    public var effectiveRequestBodyWindow: Int {
+        max(requestBodyWindowSize, maxFieldSize + Bounds.bodyWindowHeadroom)
+    }
 
     // MARK: Timeouts (Slowloris / slow-read defenses)
 

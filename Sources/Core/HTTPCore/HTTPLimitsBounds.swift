@@ -11,6 +11,15 @@
 //  `RateLimitMiddleware` clamped its own limit, and `acceptResumeRatio`'s own doc comment claimed a
 //  clamp that lived two modules away. Each consumer re-guessed, and nothing made them agree.
 //
+//  **A bound must also survive the arithmetic its value later feeds** (R5-VAL). CR-F15 bounded each
+//  limit in isolation, which is necessary but not sufficient: a limit that is later *added* to
+//  something needs headroom under `Int.max`, not merely a sane maximum. `maxFieldSize` of `Int.max`
+//  passed validation and then trapped in `effectiveRequestBodyWindow`'s `+ 16_384`, and
+//  `maxRequestLineLength` + `maxHeaderListSize` (the reader's header ceiling) trapped the same way —
+//  a configuration accepted by `init(validating:)` that crashes the server on its first request
+//  (CWE-190, integer overflow). Every range below whose value participates in a sum now reserves
+//  exactly that sum's room, and says which sum it is reserving it for.
+//
 
 extension HTTPLimits {
     /// The enforced range of every limit, with the standard that fixes it.
@@ -19,14 +28,30 @@ extension HTTPLimits {
     /// exclude the values that are *incoherent* — a zero frame size, a negative body cap, a
     /// non-positive timeout — not to second-guess an operator who has measured their deployment.
     enum Bounds {
+        /// The octets `effectiveRequestBodyWindow` adds to ``fieldSize`` so a maximal framing line
+        /// plus a full read always fits (RFC 9112 §7.1.1).
+        ///
+        /// Spelled here rather than at the sum so the bound and the arithmetic it protects cannot
+        /// drift apart — the same reason the ranges themselves live in one table.
+        static let bodyWindowHeadroom = 16_384
+
         /// A request line has at least one octet (RFC 9112 §3).
-        static let requestLine = 1 ... Int.max
+        ///
+        /// Topped at `Int.max / 2` because the HTTP/1.1 reader's pre-parse header ceiling is
+        /// ``requestLine`` + ``headerList``; halving each is the simplest split that makes the sum
+        /// representable whatever the other side is set to (R5-VAL).
+        static let requestLine = 1 ... (Int.max / 2)
 
         /// A field is at least a one-octet name (RFC 9110 §5.1).
-        static let fieldSize = 1 ... Int.max
+        ///
+        /// Topped ``bodyWindowHeadroom`` below `Int.max` because
+        /// ``HTTPLimits/effectiveRequestBodyWindow`` adds exactly that to it (R5-VAL).
+        static let fieldSize = 1 ... (Int.max - bodyWindowHeadroom)
 
         /// Zero is legal: it refuses every header section (RFC 9113 §6.5.2).
-        static let headerList = 0 ... Int.max
+        ///
+        /// Topped at `Int.max / 2` for the same sum as ``requestLine``.
+        static let headerList = 0 ... (Int.max / 2)
 
         /// HTTP/1.1 requires `Host`, so a message carries at least one field (RFC 9112 §3.2).
         static let fieldCount = 1 ... Int.max
