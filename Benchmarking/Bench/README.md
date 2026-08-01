@@ -1,109 +1,172 @@
-# Bench — consolidated comparative load battletest
+# Bench — the comparative load battletest
 
 End-to-end "vs the field" yardstick for the HTTP server. One runner (`run.sh`) drives our
-`httpd-example` and every installed reference server with the **same** load generator (`oha`) across a
-**set of route scenarios** on **identical** routes, and prints one throughput/tail-latency table per
-scenario. It measures the whole socket-to-socket path — accept, parse, route, serialize, write.
+`httpd-example` and every installed reference server with the **same** load generator (`oha`) across
+a set of route scenarios on **byte-identical** routes, and reports the **median** of N rounds.
 
-This complements the in-package microbenchmarks (`swift package --package-path Benchmarking/Benchmarks
-benchmark`), which lock per-engine **instructions** and **mallocs/op**; this harness is the wall-clock,
-many-servers comparison. A representative run is recorded in [`RESULTS.md`](RESULTS.md).
+It complements the in-package microbenchmarks (`swift package --package-path Benchmarking/Benchmarks
+benchmark`), which lock per-engine **instructions** and **mallocs/op**. This harness is the
+wall-clock, many-servers comparison.
 
 > **Iron Law.** Optimize only what you can measure; prove every change with a second measurement.
-> Report **percentiles, not averages** (the p99/p99.9 tail is what users feel), run in **release**, pin
-> the workload, and run on a **quiet** machine (absolute rps is contention-sensitive — see caveats).
-
-## Quick start
+> Report **percentiles, not averages**, run in **release**, pin the workload, and run on a **quiet**
+> machine. The harness now tells you when the machine was not quiet instead of leaving you to guess.
 
 ```sh
-brew install oha jq                 # required: load generator + JSON parser
-./Benchmarking/Bench/run.sh         # every installed server, all scenarios, 64 conns, 10s each
+brew install oha jq                 # required: load generator + JSON parser (curl ships with macOS)
+./Benchmarking/Bench/selftest.sh    # the harness's own tests — 27 assertions, no network needed
+./Benchmarking/Bench/run.sh         # every installed server, both profiles, 3 rounds
 ```
 
-It works with only `ours` present; each other competitor is run if its toolchain/binary is installed,
-and skipped (with a note) otherwise. Raw `oha` JSON + each server's log land in
-`Benchmarking/Bench/results/` (git-ignored).
+- The decision this harness was rebuilt to serve, and the rule it must be judged by, is in
+  [`DECISION.md`](DECISION.md) — written before the numbers.
+- The measured result is in [`RESULTS.md`](RESULTS.md).
+- The superseded pre-2026-08-01 rounds, and an audit of the claims made from them, are in
+  [`history/`](history/README.md).
 
-## Competitors
+## The two-mode matrix
 
-| server | role | install | port |
-|---|---|---|---|
-| **ours** (`httpd-example`) | the subject (built `-c release` at the current tree) | this repo | 8080 |
-| **nginx** | C throughput/latency ceiling | `brew install nginx` | 8081 |
-| **caddy** | modern Go server (h1/h2/h3) | `brew install caddy` | 8082 |
-| **hummingbird** | SwiftNIO framework — "are we competitive without NIO?" | `Bench/hummingbird/` (SwiftPM, auto-built) | 8083 |
-| **go** | Go `net/http` stdlib | `brew install go` | 8084 |
-| **bun** | `Bun.serve` native server | `brew install oven-sh/bun/bun` | 8085 |
-| **rust** | `hyper` + `tokio` (release) | `brew install rust` | 8086 |
-| **vapor** | SwiftNIO framework | `Bench/vapor/` (SwiftPM, auto-built) | 8088 |
-| **django-wsgi** | Django sync views under gunicorn, workers = cores | `Bench/django/` (auto venv) | 8087 |
-| **django-asgi** | Django async views under uvicorn, workers = cores | `Bench/django/` (auto venv) | 8087 |
+Every run measures our server in **two profiles**, and the difference between them is the point.
 
-The two SwiftNIO packages (hummingbird, vapor) are nested in this repo, which SwiftPM mis-resolves
-("product not found") — so the harness copies each **outside the repo tree** to build it, and reuses the
-build until its sources change. The Django venv is created and `pip install`-ed on first run.
+| profile | what it runs | what it is for |
+|---|---|---|
+| `floor` | the router alone — no middleware | the **only** column comparable to a peer, which runs a framework-floor handler |
+| `full` | the chain `httpd-example` ships: metrics, decompression, compression, `Server`, `Date`, security headers, CORS, conditional GET (CRC32 ETag), Range | what you get when you deploy the example as written |
 
-## Scenarios (the shared parity route set)
+Selected with `HTTPD_PROFILE`; the default is `full` and only the exact string `floor` changes
+anything, so a typo cannot downgrade a real deployment. `floor` is a benchmark posture, not a
+recommendation — it serves no `Date` (RFC 9110 §6.6.1), no security headers and no conditional
+requests.
 
-Every programmable server implements the same routes, so each scenario is an identical workload:
+**Only `ours` runs `full`.** `full` means *our* middleware chain; a peer has no such thing.
+Re-implementing an equivalent in Rust, Go and JS would swap a measured confound for an unprovable
+claim of equivalence — the exact failure this harness exists to end. Running each peer's *own*
+middleware answers a different (and worthwhile) question: "is Hummingbird's gzip faster than ours?"
+So the peers define the floor, we are compared to them at the floor, and our full column is priced
+against our own floor.
+
+## The four gates that make a number quotable
+
+### 1. Byte equivalence, before any timing
+
+Every route is fetched from every subject and the body digested. If two subjects that both implement
+a route return different bytes, the run **aborts**. A benchmark comparing servers that answer
+differently is not a benchmark.
+
+Run against the field as it stood, this found five divergences that a status-code check could not
+see — the per-server `GET /` greeting (30 B / 28 B / 71 B), Caddy's literal backslash-n, Caddy
+answering `POST /echo` with 200 and an empty body, Django's re-serialised JSON, and the one nobody
+guessed: `oha` sends `accept-encoding: gzip, compress, deflate, br` by default, so our full chain put
+**58 bytes** of gzip on `/payload` where every peer put **1024**.
+
+`ACCEPT_ENCODING` is therefore pinned to `identity`. To price content coding as its own question, set
+it to a real negotiation list — and read the parity table, which will correctly refuse to compare the
+compressing subject against the identity ones.
+
+### 2. Rotated order, on a recorded host
+
+The server order is a seeded shuffle, re-drawn each round; the seed and the order actually used are
+recorded. The load average and thermal notes are sampled at the **start and the end** of every round.
+
+A round whose load moves more than `LOAD_DRIFT_MAX` is `drifted`; a round on a box already past
+`LOAD_CEILING_PER_CPU` is `contended`. The headline aggregate uses the clean rounds; when there are
+none, the whole run is stamped **NOT-decision-grade** rather than reported as if it were. The drift
+fraction is normalised against a floor of 1.0, so a quiet box moving 0.05 → 0.30 is not rejected for
+a 500 % relative change that means nothing.
+
+### 3. One statistic: the median
+
+The reported number is the **median of the eligible rounds**, stated in the run header and again
+above every table. There is **no best-of anywhere**. The previous harness reported best-of-N,
+justified as cancelling the thermal bias of a fixed server order; that justification is gone with the
+fixed order, and best-of-N reports the luckiest round — not a thing any user experiences, and not
+comparable against a median taken elsewhere.
+
+`min`/`max` across rounds are carried beside every median and rendered as a `spread` column, flagged
+above 1.5x. A median over three rounds that disagree by more than half is a number with no error bar.
+
+### 4. A machine-readable record
+
+`results/results.json` (`schema: http-bench/2`) carries the config, the per-round host samples and
+verdicts, the parity digests, every individual sample and the aggregate — so two runs can be diffed
+without re-reading prose.
+
+## The field
+
+| server | role | install | port | profiles |
+|---|---|---|---|---|
+| **ours** (`httpd-example`) | the subject, one row per transport backbone | this repo | 8080 | `floor` + `full` |
+| **rust** | `hyper` + `tokio` — the performance ceiling for the comparison | `brew install rust` | 8086 | `floor` |
+| **go** | Go `net/http` stdlib | `brew install go` | 8084 | `floor` |
+| **bun** | `Bun.serve` native server | `brew install oven-sh/bun/bun` | 8085 | `floor` |
+| **hummingbird** | SwiftNIO framework — "are we competitive without NIO?" | `Bench/hummingbird/` (auto-built) | 8083 | `floor` |
+| **vapor** | SwiftNIO framework | `Bench/vapor/` (auto-built) | 8088 | `floor` |
+| **nginx** | C throughput/latency reference | `brew install nginx` | 8081 | `floor` |
+| **caddy** | modern Go server | `brew install caddy` | 8082 | `floor` |
+| **django-wsgi / django-asgi** | gunicorn / uvicorn, workers = cores | `Bench/django/` | 8087 | `floor` |
+
+Django is **not** in the default `SERVERS` list: it is ~10x slower than the rest, so it dominates the
+wall-clock cost of a run without changing any conclusion, and it has a dedicated harness in
+`Benchmarking/Django/`. Add it explicitly when you want it.
+
+The two SwiftNIO packages are nested in this repo, which SwiftPM mis-resolves ("product not found"),
+so the harness copies each outside the repo tree to build it — carrying `.swift-version` with it,
+without which `swiftly` selects no toolchain in the copy and both peers silently vanish from the
+field.
+
+## Scenarios
 
 | scenario | exercises |
 |---|---|
-| `GET /` | framework floor (tiny text) |
+| `GET /plaintext` | framework floor — 13 identical bytes on every server |
 | `GET /json` | serialize `{"message":"Hello, World!"}` |
-| `GET /payload` | ~1 KiB compressible body |
+| `GET /payload` | ~1 KiB body (32 × 32 B) |
 | `GET /hello/world` | router + path/query parameter |
 | `POST /echo` | request read + body round-trip |
 
-nginx and caddy are static servers: they serve `/`, `/json`, `/payload`, `/hello`, but **cannot echo a
-POST body** without a scripting module — so `POST /echo` shows **N/A** for them. The harness marks any
-cell N/A when fewer than 99% of responses are 2xx (a server 404-ing a route it lacks).
+**`GET /` is deliberately not measured.** Every server answers it with its own name, so it is not a
+comparable route and never was — it was nonetheless the "framework floor" column in every published
+round before this one. It remains as each server's identity page.
 
-## Knobs (env vars)
+nginx and Caddy cannot echo a POST body without a scripting module. They now say so with a 405
+(RFC 9110 §15.5.6), and the harness marks the cell N/A. Previously Caddy had no `/echo` matcher at
+all and its catch-all returned 200 with nothing, which the ≥99 %-2xx check happily scored.
+
+## Knobs
 
 | var | default | meaning |
 |---|---|---|
-| `SERVERS` | all ten above | space-separated subset to run (present ones only) |
-| `SCENARIOS` | `GET:/ GET:/json GET:/payload GET:/hello/world POST:/echo` | `METHOD:PATH` tokens to drive |
+| `SERVERS` | the eight above | space-separated subset |
+| `MODES` | `floor full` | which profiles to measure |
+| `BACKBONES` | `posixKqueue swiftSystem` | our transport backbones, one subject each |
+| `SCENARIOS` | the five above | `METHOD:PATH` tokens |
+| `ROUNDS` | `3` | repeats of the whole field; the median is taken over the clean ones |
 | `CONNECTIONS` | `64` | concurrent connections (closed loop) |
-| `DURATION` | `10s` | measured wall-clock per scenario |
-| `WARMUP` | `2s` | throwaway pre-measurement pass; `0` skips it |
-| `RATE` | _(unset)_ | per-connection request rate → **open loop**, coordinated-omission-free latency |
-| `BACKBONE` | `swiftSystem` | ours' transport: `swiftSystem` \| `posixKqueue` \| `posixDispatch` \| `networkFramework` |
-| `DJANGO_WORKERS` | CPU cores | gunicorn/uvicorn worker count |
+| `DURATION` / `WARMUP` | `5s` / `1s` | measured / throwaway per cell |
+| `RATE` | _(unset)_ | per-connection rate → **open loop**, coordinated-omission-free latency |
+| `ACCEPT_ENCODING` | `identity` | pinned content coding — the parity gate enforces the consequence |
+| `SEED` | random | recorded; reuse it to reproduce an order |
+| `LOAD_DRIFT_MAX` | `0.25` | fraction of movement that marks a round `drifted` |
+| `LOAD_CEILING_PER_CPU` | `0.5` | load per CPU above which a round is `contended` |
+| `PARITY_ENFORCE` | `1` | `0` records a mismatch and continues — diagnosis only, never for a number |
 | `ECHO_BODY` | `{"x":1}` | request body for `POST /echo` |
 
-Examples:
-
 ```sh
-# A subset of servers + scenarios:
-SERVERS="ours rust go nginx" SCENARIOS="GET:/json POST:/echo" ./Benchmarking/Bench/run.sh
-
-# Heavier load, longer measurement:
-CONNECTIONS=128 DURATION=20s ./Benchmarking/Bench/run.sh
-
-# Compare our four I/O backbones (same engine):
-for b in swiftSystem posixKqueue posixDispatch networkFramework; do
-  SERVERS=ours BACKBONE=$b ./Benchmarking/Bench/run.sh
-done
-
-# Open-loop, coordinated-omission-free tail latency at a fixed rate:
-RATE=2000 SERVERS="ours nginx rust" ./Benchmarking/Bench/run.sh
+MODES=floor SERVERS="ours rust go nginx" ./Benchmarking/Bench/run.sh    # apples-to-apples only
+SERVERS=ours ROUNDS=5 ./Benchmarking/Bench/run.sh                       # price the chain, 5 rounds
+SERVERS=ours MODES=full ACCEPT_ENCODING="gzip, deflate, br" ./Benchmarking/Bench/run.sh
+RATE=2000 SERVERS="ours nginx rust" ./Benchmarking/Bench/run.sh         # open loop, real tail latency
 ```
 
 ## Methodology & caveats
 
-- **Release only.** `httpd-example` and rust are built `-c release`; debug numbers are fiction.
-- **Loopback.** Runs hit `127.0.0.1`, so the NIC is out of the picture — this isolates
-  framing/IO/allocation cost. A NIC-bound run is a separate, machine-specific exercise.
-- **Quiet box.** Absolute rps is contention-sensitive: a run taken while a second benchmark was active
-  showed nginx/caddy depressed 2–5×. Trust the **within-run ranking** and back-to-back **before/after
-  deltas**; for trustworthy absolutes, run with nothing else loading the machine.
-- **Closed vs open loop.** Default is closed-loop (`-c N`, max throughput). For tail-latency claims set
-  `RATE` for an open-loop run that doesn't hide queueing delay (coordinated omission).
-- **N/A** means the route returned <99% 2xx (unimplemented) — not that the server failed.
-- **Django on bleeding-edge Python** (3.14 here) is flaky: gunicorn/uvicorn `[standard]` (uvloop /
-  httptools) may lack wheels and fall back to a slow/contended loop, or crash a scenario. Treat the
-  faster of the two Django rows as representative.
-- **Per-client cap.** Our default per-client connection cap (a single-IP DoS guard) trips on a loopback
-  test; `run.sh` launches us with `HTTPD_MAX_CONN=1000000` and `HTTPD_QUIET=1` (no access-log print).
+- **Release only.** `httpd-example`, rust and the SwiftNIO peers are built `-c release`.
+- **Loopback.** Runs hit `127.0.0.1`, so the NIC is out of the picture; this isolates
+  framing/IO/allocation cost. A NIC-bound run is a separate exercise.
+- **Closed loop by default** (`-c N`, max throughput). For tail-latency claims set `RATE` so
+  queueing delay is not hidden by coordinated omission.
+- **Quiet box.** Absolute RPS is contention-sensitive. The harness records and grades this rather
+  than asking you to remember; a run stamped `NOT-decision-grade` is directional only.
+- **Per-client cap.** Our default `maxConnectionsPerClient` (20) is a single-IP DoS guard that a
+  loopback test trips, so `run.sh` launches us with `HTTPD_MAX_CONN=1000000` and `HTTPD_QUIET=1` (no
+  access-log print, which no reference server performs either).

@@ -16,12 +16,16 @@ let payload = String(repeating: "from-scratch swift http server. ", count: 32)
 // A clean environment (no argv passthrough) so the bare port argument is not read as a Vapor command;
 // production env keeps Vapor's own logging/route-collection overhead minimal.
 let app = try await Application.make(Environment(name: "production", arguments: ["vapor"]))
+
 app.logger.logLevel = .error
 app.http.server.configuration.hostname = "127.0.0.1"
 app.http.server.configuration.port = port
 
 app.get { _ in "Hello from the Vapor baseline.\n" }
 app.get("health") { _ in "OK\n" }
+// The framework-floor parity route: byte-identical on every server in the field. `/` cannot
+// serve that purpose because each server answers it with its own name.
+app.get("plaintext") { _ in "Hello, World!" }
 app.get("payload") { _ in payload }
 
 app.get("json") { _ in

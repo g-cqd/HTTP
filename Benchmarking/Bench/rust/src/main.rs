@@ -44,6 +44,9 @@ async fn handle(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infalli
     let response = match path {
         "/" => respond("text/plain; charset=utf-8", Bytes::from_static(b"Hello from the Rust baseline.\n")),
         "/health" => respond("text/plain; charset=utf-8", Bytes::from_static(b"OK\n")),
+        // The framework-floor parity route: byte-identical on every server in the field. `/`
+        // cannot serve that purpose because each server answers it with its own name.
+        "/plaintext" => respond("text/plain; charset=utf-8", Bytes::from_static(b"Hello, World!")),
         "/json" => respond("application/json", Bytes::from_static(b"{\"message\":\"Hello, World!\"}")),
         "/payload" => respond("text/plain; charset=utf-8", PAYLOAD.clone()),
         p if p.starts_with("/hello/") => {
