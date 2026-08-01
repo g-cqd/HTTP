@@ -71,4 +71,9 @@ final class HTTP3StreamDeadlines<Instant: Comparable & Sendable>: Sendable {
     var count: Int {
         armed.withLock(\.count)
     }
+
+    /// Whether no stream has an armed deadline — every one has been disarmed or reaped.
+    var isEmpty: Bool {
+        armed.withLock(\.isEmpty)
+    }
 }

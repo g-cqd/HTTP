@@ -37,64 +37,23 @@ extension HTTPServer {
     /// streams as it surfaces them.
     func serveHTTP3PeerUniStream(
         _ stream: any QUICStream,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry
+        in scope: HTTP3ConnectionScope
     ) async {
         var ended = false
         while !ended, let chunk = try? await stream.receive() {
             ended = chunk.fin
-            await feedHTTP3Uni(
-                stream.id,
-                chunk.bytes,
-                fin: chunk.fin,
-                engine: engine,
-                quic: quic,
-                registry: registry
-            )
+            _ = await receiveHTTP3(stream.id, chunk.bytes, fin: chunk.fin, in: scope)
         }
         if !ended {
             // The peer's stream ended without a FIN — a receive fault or a transport EOF. Tell the
             // engine the stream is over anyway: for a critical stream that is the RFC 9114 §6.2.1
             // H3_CLOSED_CRITICAL_STREAM connection error, and for a reserved one it is a no-op.
-            await feedHTTP3Uni(
-                stream.id,
-                [],
-                fin: true,
-                engine: engine,
-                quic: quic,
-                registry: registry
-            )
+            _ = await receiveHTTP3(stream.id, [], fin: true, in: scope)
         }
         // Only the routing entry: a unidirectional stream has no wire reset to send (§6.2.1 escalates
-        // to the connection instead) and no request-stream state for the retirement funnel to charge.
-        registry.retire(stream.id)
-    }
-
-    /// Feeds one unidirectional chunk to the engine and flushes what it queues.
-    ///
-    /// A connection error — a second control stream, a closed critical stream, a QPACK fault — is
-    /// swallowed by the engine and surfaces as the CONNECTION_CLOSE it queued, which
-    /// ``receiveHTTP3(_:_:fin:registry:engine:quic:)`` then performs (RFC 9000 §19.19).
-    ///
-    /// Everything such a receive surfaces belongs to some *other* stream and has already been filed
-    /// against it; the only event that could come back here is the connection-scoped GOAWAY
-    /// (RFC 9114 §5.2), which needs no action on this stream.
-    private func feedHTTP3Uni(
-        _ id: QUICStreamID,
-        _ bytes: [UInt8],
-        fin: Bool,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry
-    ) async {
-        _ = await receiveHTTP3(
-            id,
-            bytes,
-            fin: fin,
-            registry: registry,
-            engine: engine,
-            quic: quic
-        )
+        // to the connection instead) and no request-stream state for the retirement funnel to charge —
+        // which is why it never goes near ``retireHTTP3Stream(_:errorCode:in:)``, and why that call
+        // refuses an id that is not client-initiated bidirectional.
+        scope.registry.retire(stream.id)
     }
 }

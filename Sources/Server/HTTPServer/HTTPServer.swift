@@ -78,7 +78,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// A QUIC connection is not a ``TransportConnection`` — it multiplexes streams rather than being
     /// one — so it needs its own registry; without it the drain reached only the TCP half of the
     /// server. ``shutdown(within:)`` GOAWAYs each of these, then force-closes whatever has not drained.
-    let activeQUICConnections = Mutex<[Int: HTTP3Handle]>([:])
+    let activeQUICConnections = Mutex<[Int: HTTP3ConnectionScope]>([:])
 
     /// The source of ``activeQUICConnections`` keys — a QUIC connection has no transport-assigned id.
     let nextQUICHandleID = Atomic<Int>(0)

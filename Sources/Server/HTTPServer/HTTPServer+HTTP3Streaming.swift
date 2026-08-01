@@ -34,17 +34,15 @@ extension HTTPServer {
         buffered: (chunks: [[UInt8]], ended: Bool),
         stream: any QUICStream,
         inbox: HTTP3StreamInbox,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry,
-        deadlines: HTTP3StreamDeadlines<C.Instant>
-    ) async {
+        in scope: HTTP3ConnectionScope
+    ) async -> HTTP3StreamExit {
+        let deadlines = scope.deadlines
         let handoff = AsyncHandoff()
         // The plan this stream's HEADERS resolved (CR-F12 / CR-F19), and the ingress seam (CR-F13):
         // the sanitized request is what the handler child captures.
-        let plan = registry.plan(for: id) ?? DispatchPlan(snapshot: currentSnapshot)
+        let plan = scope.registry.plan(for: id) ?? DispatchPlan(snapshot: currentSnapshot)
         let (request, context) = RequestContext.ingress(
-            inbound, over: quic, matching: plan.match
+            inbound, over: scope.quic, matching: plan.match
         )
         let handler = Task { [self] in
             // Seam 6 of 6 (audit CR-F7). `plan` carries this request's generation (CR-F12). The feed
@@ -67,7 +65,7 @@ extension HTTPServer {
         // that sends HEADERS and then stalls mid-upload no longer holds the stream open forever. The
         // watchdog resets the stream on a lapse, which is what unblocks the receive below.
         defer { deadlines.disarm(id) }
-        armHTTP3(id, phase: .body, on: deadlines)
+        armHTTP3(id, phase: .body, in: scope)
         // The same merged inbox the serve loop was waiting on (audit REG-2) — the stream's reader task
         // is still the only caller of `receive()`, and a routed deposit still reaches us here.
         feed: while !ended {
@@ -75,37 +73,23 @@ extension HTTPServer {
                 case .ended:
                     break feed
                 case .routed:
-                    ended = await absorbHTTP3Body(registry.takeMailbox(id), into: handoff) || ended
+                    let mail = scope.registry.takeMailbox(id)
+                    ended = await absorbHTTP3Body(mail, into: handoff) || ended
                 case .inbound(let bytes, let fin):
                     deadlines.disarm(id)  // the read landed; handler time is not a read deadline
                     // Foreign events are routed here too (audit REG-1): this loop used to *filter*
                     // them out, which is the same silent drop one layer down — a sibling stream's
                     // QPACK section can unblock while this one is still uploading.
-                    let own = await receiveHTTP3(
-                        id,
-                        bytes,
-                        fin: fin,
-                        registry: registry,
-                        engine: engine,
-                        quic: quic
-                    )
+                    let own = await receiveHTTP3(id, bytes, fin: fin, in: scope)
                     ended = await absorbHTTP3Body(own, into: handoff) || ended
                     if fin {
                         break feed
                     }
             }
-            armHTTP3(id, phase: .body, on: deadlines)
+            armHTTP3(id, phase: .body, in: scope)
         }
         guard ended else {
-            await abandonTruncatedHTTP3Request(
-                id,
-                handoff: handoff,
-                handler: handler,
-                registry: registry,
-                engine: engine,
-                quic: quic
-            )
-            return
+            return await abandonTruncatedHTTP3Request(handoff: handoff, handler: handler)
         }
         await handoff.finish()
         let response = await handler.value
@@ -114,11 +98,10 @@ extension HTTPServer {
             omitBody: request.method == .head,
             id: id,
             stream: stream,
-            engine: engine,
-            quic: quic,
-            registry: registry
+            in: scope
         )
-        registry.retire(id)
+        scope.registry.retire(id)
+        return .answered
     }
 
     /// Feeds a batch's body chunks into the handler's handoff, reporting whether the body ended.
@@ -145,29 +128,18 @@ extension HTTPServer {
     ///
     /// The handoff is failed rather than finished, so the handler's body iteration ends *without* the
     /// clean end-of-body it would otherwise be told; the handler task is cancelled and awaited so it
-    /// cannot outlive the stream, its response is discarded, and the stream is reset with
-    /// H3_REQUEST_INCOMPLETE so the peer learns the request was not processed.
+    /// cannot outlive the stream, and its response is discarded.
+    ///
+    /// The reset itself is the scope's job, not this function's: reporting the ending is all a driver
+    /// does, and the retirement that follows is identical whichever ending it was (R5-P0c).
     private func abandonTruncatedHTTP3Request(
-        _ id: QUICStreamID,
         handoff: AsyncHandoff,
-        handler: Task<ServerResponse, Never>,
-        registry: HTTP3StreamRegistry,
-        engine: Engine,
-        quic: any QUICConnection
-    ) async {
+        handler: Task<ServerResponse, Never>
+    ) async -> HTTP3StreamExit {
         await handoff.fail()
         handler.cancel()
         _ = await handler.value
-        // Through the shared reset so the engine is retired and the abuse budget charged (REG-3): an
-        // upload abandoned mid-body is the same shape as a lapsed deadline, and used to leak the same
-        // parser, QPACK and buffered-body state.
-        await resetHTTP3Stream(
-            id,
-            errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue,
-            registry: registry,
-            engine: engine,
-            quic: quic
-        )
+        return .abandoned(errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue)
     }
 
     /// Collects the body chunks (and whether `requestEnd` arrived) that follow a `requestHead` in the
@@ -203,11 +175,17 @@ extension HTTPServer {
         body: ResponseStream,
         omitBody: Bool,
         id: QUICStreamID,
-        engine: Engine,
-        on stream: any QUICStream
+        on stream: any QUICStream,
+        in scope: HTTP3ConnectionScope
     ) async {
-        guard let headerBytes = await engine.respondHeaders(to: id, head) else {
-            stream.reset(errorCode: HTTP3ErrorCode.h3InternalError.rawValue)
+        guard let headerBytes = await scope.engine.respondHeaders(to: id, head) else {
+            // The engine refused the head, so its record is still there: retire it with the stream
+            // rather than resetting the wire and leaving the state behind (R5-P0c).
+            await retireHTTP3Stream(
+                id,
+                errorCode: HTTP3ErrorCode.h3InternalError.rawValue,
+                in: scope
+            )
             return
         }
         do {
@@ -221,7 +199,11 @@ extension HTTPServer {
             try await stream.send([], fin: true)  // end-of-body (RFC 9114 §4.1)
         }
         catch {
-            stream.reset(errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue)
+            await retireHTTP3Stream(
+                id,
+                errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue,
+                in: scope
+            )
         }
     }
     /// Writes HTTP/3 response-body chunks as DATA frames (RFC 9114 §7.2.1), one `send` per chunk so the

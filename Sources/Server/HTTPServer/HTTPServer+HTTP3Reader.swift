@@ -39,19 +39,16 @@ extension HTTPServer {
 
     /// Acts on one batch of this stream's own engine events, in the order the engine surfaced them.
     ///
-    /// - Returns: whether a streaming route (Phase 1.4) took the stream over, in which case the serve
-    ///   loop is finished — that path owns the stream, its response, and its retirement.
+    /// - Returns: how the stream ended if a streaming route (Phase 1.4) or a rival claim took it over,
+    ///   in which case the serve loop is finished; `nil` while the loop should keep reading.
     func applyHTTP3StreamEvents(
         _ events: [HTTP3Connection.Event],
         stream: any QUICStream,
         inbox: HTTP3StreamInbox,
-        engine: Engine,
-        quic: any QUICConnection,
-        registry: HTTP3StreamRegistry,
-        deadlines: HTTP3StreamDeadlines<C.Instant>,
+        in scope: HTTP3ConnectionScope,
         webSocket: inout WebSocketConnection?,
         tunnelHandler: inout (any WebSocketHandler)?
-    ) async -> Bool {
+    ) async -> HTTP3StreamExit? {
         for (index, event) in events.enumerated() {
             switch event {
                 case .request(let id, let request, let body):
@@ -60,35 +57,29 @@ extension HTTPServer {
                         request: request,
                         body: body,
                         stream: stream,
-                        engine: engine,
-                        quic: quic,
-                        registry: registry
+                        in: scope
                     )
                 case .requestHead(let id, let request):
                     // A streaming route (Phase 1.4) takes over this stream for its lifetime: feed the
                     // body off the wire into the handler's stream, then send its response.
-                    guard registry.claim(id) != nil else {
-                        return true
+                    guard scope.registry.claim(id) != nil else {
+                        return .answered  // another driver claimed it; this one owes nothing
                     }
-                    await serveHTTP3StreamingRequest(
+                    return await serveHTTP3StreamingRequest(
                         id,
                         request: request,
                         buffered: Self.trailingBody(of: events, after: index),
                         stream: stream,
                         inbox: inbox,
-                        engine: engine,
-                        quic: quic,
-                        registry: registry,
-                        deadlines: deadlines
+                        in: scope
                     )
-                    return true
                 case .requestBodyChunk, .requestEnd:
                     break  // consumed by serveHTTP3StreamingRequest — never standalone here
                 case .extendedConnect, .tunnelData, .tunnelClosed:
                     await handleHTTP3TunnelEvent(
                         event,
                         stream: stream,
-                        engine: engine,
+                        in: scope,
                         webSocket: &webSocket,
                         tunnelHandler: &tunnelHandler
                     )
@@ -96,6 +87,6 @@ extension HTTPServer {
                     break
             }
         }
-        return false
+        return nil
     }
 }
