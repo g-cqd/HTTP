@@ -146,8 +146,21 @@
 
         // MARK: - Plaintext
 
-        /// One `SSL_read` into the adaptive plaintext scratch.
-        mutating func decrypt(ceiling: Int) -> Outcome {
+        /// One `SSL_read` into the adaptive plaintext scratch, delivering what it produced to `sink`.
+        ///
+        /// Decrypt and copy-out are ONE acquisition, and the produced count never leaves this method
+        /// as a bound anyone could re-use (audit F-02). The previous shape returned the count and let
+        /// the caller re-enter for the bytes; between those two acquisitions a second receiver could
+        /// `SSL_read` over the same scratch, so the first caller copied out the second's plaintext —
+        /// one byte duplicated into one caller and lost from the other. That is CWE-362 (a race on a
+        /// shared resource) over CWE-367 (the classic TOCTOU: check the count, then use it), and it is
+        /// the same defect ``staged`` was introduced to remove from the outbound pump. It is not
+        /// spelled out of the callers here, it is unspellable: the bytes are already in `sink` when
+        /// this returns and nothing exposes the scratch.
+        ///
+        /// `sink` is appended to only on ``Outcome/produced(_:)``, so a retry outcome — or a caller
+        /// that abandons the loop on cancellation — leaves it exactly as it was.
+        mutating func decrypt(ceiling: Int, into sink: inout [UInt8]) -> Outcome {
             // `max(1, …)`: `SSL_read` with a zero-length buffer is not a read, it is an error report.
             // The window is `raw.count`, never `ceiling` (ADD-P2), and `clamping` because `SSL_read`
             // takes an `int` — a window past `Int32.max` would trap the conversion, where a shorter
@@ -160,17 +173,13 @@
                 return unsafe Int(CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, room))
             }
             guard count <= 0 else {
+                // `sink` is the caller's accumulator, never this engine's storage, so the append
+                // cannot alias `plaintext` — and it happens here, under the acquisition that produced
+                // the octets, which is the entire point of the parameter.
+                sink.append(contentsOf: plaintext.received(count))
                 return .produced(count)
             }
             return classify(Int32(clamping: count))
-        }
-
-        /// The `count` octets the last ``decrypt(ceiling:)`` produced.
-        ///
-        /// Safe to take in a second acquisition only because the read direction is serialized as a
-        /// whole by the connection's receive exclusion — one reader, so nothing can decrypt over it.
-        func decrypted(_ count: Int) -> ArraySlice<UInt8> {
-            plaintext.received(count)
         }
 
         /// One `SSL_write` of `bytes` from `offset`.
