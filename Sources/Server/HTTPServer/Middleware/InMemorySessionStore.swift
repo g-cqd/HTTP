@@ -20,6 +20,14 @@
 //  the very next request would fail validation and mint another, forever. Evicting the most idle
 //  session logs somebody out early, which is recoverable; refusing is a livelock.
 //
+//  **This TTL is an idle timeout, not a lifetime** (audit R5-SEC2). Every ``validate(_:)`` slides it
+//  forward, which is the correct behavior for "log out a user who walked away" and is exactly wrong as
+//  an absolute bound: a session replayed once a minute stays live here forever, so a stolen cookie kept
+//  warm never ages out on its own (CWE-613). The absolute cap is not this type's job and is not added
+//  here — it lives in the expiry ``SessionMiddleware`` signs into the token, which is checked *before*
+//  the store is consulted, so it bounds the stateless and the store-backed configuration alike. What
+//  only a store can do it still does: revoke immediately, and time out an idle session early.
+//
 
 public import HTTPConcurrency
 
@@ -39,6 +47,10 @@ public final class InMemorySessionStore: SessionStore {
     }
 
     /// Creates the store: a session idle longer than `ttl` expires; `maxSessions` bounds the map.
+    ///
+    /// `ttl` is an *idle* timeout — it slides forward on every ``validate(_:)``, so it bounds
+    /// inactivity rather than total lifetime. The absolute lifetime comes from the expiry
+    /// ``SessionMiddleware`` signs into the token (R5-SEC2).
     ///
     /// `shards` trades a little memory for lock contention, and `now` is injectable for tests
     /// (defaulting to the monotonic clock).
