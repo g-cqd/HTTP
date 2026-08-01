@@ -75,8 +75,9 @@
         private let negotiated = Mutex<String?>(nil)
         /// The verified client-certificate identity (G3), captured once at handshake completion.
         private let peerIdentity = Mutex<TLSPeerIdentity?>(nil)
-        /// Reused plaintext receive buffer (`SSL_read` decrypts into it) — audit P1.
-        private let scratch = Mutex<[UInt8]>([])
+        /// Reused plaintext receive buffer (`SSL_read` decrypts into it) — audit P1, sized to what this
+        /// peer has shown it needs rather than to the caller's ceiling (ADD-P2, ``ReceiveScratch``).
+        private let scratch = Mutex(ReceiveScratch())
         /// Reused ciphertext pump buffer (raw socket ↔ BIO), sized once.
         private let cipher = Mutex<[UInt8]>([UInt8](repeating: 0, count: 16_384))
 
@@ -179,7 +180,7 @@
             guard count > 0 else {
                 return nil
             }
-            return scratch.withLock { Array($0[..<count]) }
+            return scratch.withLock { Array($0.received(count)) }
         }
 
         /// Reads up to `maxLength` decrypted bytes into the reused scratch and appends them to `buffer`
@@ -187,9 +188,16 @@
         func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
             let count = try await readPlaintext(maxLength: maxLength)
             if count > 0 {
-                scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+                scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
             }
             return count
+        }
+
+        /// The octets this connection's plaintext scratch currently holds — the residency oracle.
+        ///
+        /// ADD-P2. The ciphertext pump buffer (``cipher``) is separate and still fixed at 16 KiB.
+        var receiveScratchBytes: Int {
+            scratch.withLock(\.residentBytes)
         }
 
         /// `SSL_read` into the scratch, pumping ciphertext from the socket on `WANT_READ` — the shared
@@ -212,18 +220,23 @@
         /// The decrypt loop body of ``readPlaintext(maxLength:)``.
         private func decryptLoop(maxLength: Int) async throws -> Int {
             while true {
-                let count = scratch.withLock { (b: inout [UInt8]) -> Int32 in
-                    if b.count < maxLength {
-                        b = [UInt8](repeating: 0, count: max(1, maxLength))
-                    }
-                    return b.withUnsafeMutableBytes { raw in
-                        CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, Int32(maxLength))
+                let count = scratch.withLock { (b: inout ReceiveScratch) -> Int in
+                    // `max(1, ...)`: `SSL_read` with a zero-length buffer is not a read, it is an
+                    // error report. The window is `raw.count`, never `maxLength` (ADD-P2), and
+                    // `clamping` because `SSL_read` takes an `int` — a window past `Int32.max` would
+                    // trap the conversion, where a shorter read is always legal.
+                    // SE-0458 (ADR 0009): the call is unsafe by the closure's pointer parameter. The
+                    // buffer is sized by ``ReceiveScratch`` immediately before the call and is valid
+                    // for exactly `raw.count` octets; it does not escape this closure.
+                    unsafe b.read(ceiling: max(1, maxLength)) { raw in
+                        let room = Int32(clamping: raw.count)
+                        return Int(CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, room))
                     }
                 }
                 if count > 0 {
-                    return Int(count)
+                    return count
                 }
-                let status = CHTTPBoringSSL_SSL_get_error(ssl, count)
+                let status = CHTTPBoringSSL_SSL_get_error(ssl, Int32(clamping: count))
                 switch status {
                     case SSL_ERROR_ZERO_RETURN:
                         return 0  // clean TLS close-notify

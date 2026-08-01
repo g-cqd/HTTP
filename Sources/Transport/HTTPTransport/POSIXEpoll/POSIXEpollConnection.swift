@@ -48,8 +48,9 @@
         private let eventLoop: EpollEventLoop
         private let isClosed = Atomic<Bool>(false)
         /// Reused receive buffer for the read path — the Linux mirror of the ``POSIXKqueueConnection``
-        /// scratch (audit P1).
-        private let scratch = Mutex<[UInt8]>([])
+        /// scratch (audit P1), holding only what this peer has shown it needs (ADD-P2 — see
+        /// ``ReceiveScratch``).
+        private let scratch = Mutex(ReceiveScratch())
         /// Cached resumer for the hot read path (``receive(into:)``).
         ///
         /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
@@ -100,7 +101,7 @@
             guard count > 0 else {
                 return nil  // 0 == EOF (a zero-length read)
             }
-            return scratch.withLock { Array($0[..<count]) }
+            return scratch.withLock { Array($0.received(count)) }
         }
 
         /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer` (audit P1),
@@ -108,9 +109,14 @@
         public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
             let count = try await readIntoScratch(maxLength: maxLength)
             if count > 0 {
-                scratch.withLock { buffer.append(contentsOf: $0[..<count]) }
+                scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
             }
             return count
+        }
+
+        /// The octets this connection's receive scratch currently holds — the residency oracle (ADD-P2).
+        var receiveScratchBytes: Int {
+            scratch.withLock(\.residentBytes)
         }
 
         /// The shared scratch read core: one opportunistic non-blocking `read(2)`, then — only when the
@@ -146,14 +152,15 @@
                 throw TransportError.closed
             }
             do {
-                return try scratch.withLock { (buffer: inout [UInt8]) throws -> Int in
-                    if buffer.count < maxLength {
-                        // Sized once on first use, then reused for the connection's lifetime.
-                        buffer = [UInt8](repeating: 0, count: maxLength)
-                    }
-                    return try buffer.withUnsafeMutableBytes { raw -> Int in
+                return try scratch.withLock { (buffer: inout ReceiveScratch) throws -> Int in
+                    // `raw.count`, never `maxLength`: the window is what this peer has shown it needs,
+                    // and a short read is indistinguishable to the caller from a peer that sent less.
+                    // SE-0458 (ADR 0009): the call is unsafe by the closure's pointer parameter. The
+                    // buffer is sized by ``ReceiveScratch`` immediately before the call and is valid
+                    // for exactly `raw.count` octets; it does not escape this closure.
+                    try unsafe buffer.read(ceiling: maxLength) { raw -> Int in
                         while true {
-                            let count = read(descriptor, raw.baseAddress, maxLength)
+                            let count = read(descriptor, raw.baseAddress, raw.count)
                             if count >= 0 {
                                 return count
                             }
