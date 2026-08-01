@@ -203,7 +203,27 @@ let package = Package(
         //   `_CryptoExtras`  — `HTTPAuth` ONLY (RS256 via `_RSA`). It pulls a BoringSSL graph, so it
         //                      stays confined to the module that actually needs RSA.
         // apple/* — allowed by CLAUDE.md.
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
+        //
+        // 4.0.0, not 3.0.0, and the floor is load-bearing for LINUX rather than for any API we call.
+        // On Darwin `Crypto` is `@_exported import CryptoKit` (its `SymmetricKeys.swift` opens with
+        // `#if CRYPTO_IN_SWIFTPM && !CRYPTO_IN_SWIFTPM_FORCE_BUILD_API`), and CryptoKit's
+        // `SymmetricKey` is `Sendable` in the SDK — so every `Sendable` type holding one compiles
+        // here and the gap is invisible. On Linux the same import resolves to swift-crypto's own
+        // `SymmetricKey`, which through 3.15.1 is declared `public struct SymmetricKey:
+        // ContiguousBytes` with NO `Sendable`. `SessionSigningKeys` (a `Sendable` struct holding
+        // two) and `BasicAuthMiddleware.fixedCredentialVerifier` (which captures one in an
+        // `@Sendable` closure) are therefore Darwin-only code by accident.
+        // swift-crypto 4.0.0 declares `public struct SymmetricKey: ContiguousBytes, Sendable` over a
+        // `struct SecureBytes: @unchecked Sendable` — the conformance reviewed and asserted UPSTREAM,
+        // by the people who own the invariant, which is the only place an `@unchecked` on someone
+        // else's storage can honestly be written. Taking the bump is why neither call site needs a
+        // local wrapper or a `@preconcurrency` import.
+        // The major bump costs nothing here: swift-crypto declares no `platforms:` floor in any of
+        // 3.15.1/4.x, so this does not touch the macOS 15.6 / iOS 18 deployment floor, and the whole
+        // API surface this package uses (`SymmetricKey`, `HMAC<SHA256>`, `SHA256.Digest.byteCount`,
+        // `P256.Signing.PublicKey`/`ECDSASignature`, `_RSA.Signing.PublicKey`/`RSASignature`) is
+        // unchanged across the 4.0 boundary, whose sole release note is the WWDC25 refresh.
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
         // The one first-party dependency: shared SIMD byte kernels (see `adFoundationDependency`).
         adFoundationDependency()
     ],
