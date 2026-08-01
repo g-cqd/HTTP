@@ -14,7 +14,7 @@ wall-clock, many-servers comparison.
 
 ```sh
 brew install oha jq                 # required: load generator + JSON parser (curl ships with macOS)
-./Benchmarking/Bench/selftest.sh    # the harness's own tests — 22 assertions, no network needed
+./Benchmarking/Bench/selftest.sh    # the harness's own tests — 27 assertions, no network needed
 ./Benchmarking/Bench/run.sh         # every installed server, both profiles, 3 rounds
 ```
 
