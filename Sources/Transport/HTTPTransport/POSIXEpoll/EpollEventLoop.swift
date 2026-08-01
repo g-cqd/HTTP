@@ -193,6 +193,10 @@
 
         private func runLoop() {
             var events = [epoll_event](repeating: epoll_event(), count: 256)
+            // The drain's double buffer, owned by the loop thread for its whole life — see
+            // ``drainInbox(jobs:control:until:)`` and the identical twin in `KqueueEventLoop`.
+            var jobs: [UnownedJob] = []
+            var control: [@Sendable () -> Void] = []
             while registry.withLock(\.isRunning) {
                 // Return at once (timeout 0) when work is queued so pinned continuations are not delayed
                 // behind the idle poll; the 50 ms idle timeout only bounds shutdown latency on a quiet
@@ -222,8 +226,14 @@
                         dispatch(event)
                     }
                 }
+                // Bounded by the fairness quantum: unbounded, one saturating source starves every
+                // other socket on this reactor (PERF-1).
+                let budget = ReactorQuantum.nanoseconds() &+ ReactorQuantum.drainNanoseconds
                 while !inbox.withLock(\.isEmpty), registry.withLock(\.isRunning) {
-                    drainInbox()
+                    guard drainInbox(jobs: &jobs, control: &control, until: budget) else {
+                        // Over quantum; the remainder is back in the inbox, readiness goes first.
+                        break
+                    }
                 }
             }
             // `isRunning` just went false (a concurrent `stop()`). The inner drain above is gated on
@@ -234,26 +244,58 @@
             // drain closes that window: anything enqueued up to this point is guaranteed to run — fd
             // closed, continuation resumed — before the loop thread exits.
             while !inbox.withLock(\.isEmpty) {
-                drainInbox()
+                // No budget on the teardown drain: its whole purpose is that nothing is stranded.
+                _ = drainInbox(jobs: &jobs, control: &control, until: .max)
             }
             close(wakeFD)
             close(epfd)
         }
 
-        private func drainInbox() {
-            let (jobs, control) = inbox.withLock {
-                inbox -> ([UnownedJob], [@Sendable () -> Void]) in
-                let taken = (inbox.jobs, inbox.control)
-                inbox.jobs.removeAll(keepingCapacity: true)
-                inbox.control.removeAll(keepingCapacity: true)
-                return taken
+        /// Runs one batch of the inbox on the loop thread; returns whether it finished within `budget`.
+        ///
+        /// `jobs`/`control` are the caller's long-lived double buffer. Swapping them with the inbox's
+        /// arrays — rather than copying the arrays out and calling `removeAll(keepingCapacity:)` — is
+        /// what makes the drain allocation-free in steady state: a copy leaves both the inbox's `var`
+        /// and the local holding the same buffer, so the very next `removeAll` sees a non-unique
+        /// reference and reallocates, defeating `keepingCapacity` on every single drain.
+        ///
+        /// Control work always runs in full and is never deferred by the budget: a close or cancel held
+        /// back behind a job flood is a parked continuation left stranded.
+        private func drainInbox(
+            jobs: inout [UnownedJob],
+            control: inout [@Sendable () -> Void],
+            until budget: UInt64
+        ) -> Bool {
+            inbox.withLock { inbox in
+                swap(&inbox.jobs, &jobs)
+                swap(&inbox.control, &control)
             }
             for closure in control {
                 closure()
             }
-            for job in jobs {
-                job.runSynchronously(on: asUnownedTaskExecutor())
+            control.removeAll(keepingCapacity: true)
+
+            var index = 0
+            while index < jobs.count {
+                // The clock is read once per stride, not per job.
+                let stride = min(jobs.count, index &+ ReactorQuantum.clockCheckStride)
+                while index < stride {
+                    jobs[index].runSynchronously(on: asUnownedTaskExecutor())
+                    index &+= 1
+                }
+                if index < jobs.count, ReactorQuantum.nanoseconds() >= budget {
+                    break
+                }
             }
+            let finished = index == jobs.count
+            if !finished {
+                // Hand the tail back at the FRONT, so nothing is dropped and FIFO order holds across
+                // the readiness turn this yields to.
+                let remainder = Array(jobs[index...])
+                inbox.withLock { $0.jobs.insert(contentsOf: remainder, at: 0) }
+            }
+            jobs.removeAll(keepingCapacity: true)
+            return finished
         }
 
         private func dispatch(_ event: epoll_event) {

@@ -219,7 +219,13 @@ public final class POSIXKqueueTransport: ServerTransport {
         // A refused connection is closed here, on the accept loop: it was never registered with any
         // kqueue, so a direct `close(2)` cannot race a readiness handler.
         let closeRefused: (Int32) -> Void = { close($0) }
-        drain: while true {
+        // The fairness quantum (PERF-1). Draining until EAGAIN let an accept storm hold this loop in
+        // `accept(2)` for as long as the backlog lasted, while the connections it had ALREADY accepted
+        // waited behind it. Breaking out re-arms the listener, so nothing is dropped — an un-drained
+        // backlog leaves it immediately readable — but live sockets get their readiness turn first.
+        var batch = 0
+        drain: while batch < ReactorQuantum.acceptBatch {
+            batch += 1
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
