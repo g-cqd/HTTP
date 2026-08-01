@@ -1,5 +1,21 @@
 # Codebase review — 2026-07-31
 
+> **Editorial note (2026-08-01).** As received, 24 of this document's file
+> references pointed at paths that do not exist in the tree it reviewed, in a
+> module layout the package has never used — `Sources/Auth/HTTPAuth/`,
+> `Sources/Middleware/HTTPCaching/`, `Sources/Protocol/HTTP2/` (singular),
+> `Sources/Routing/HTTPRouting/`, `Sources/WebSocket/HTTPWebSocket/` — plus
+> event loops and the Network transport cited flat rather than in their
+> backbone subdirectories. Every finding was independently re-located against
+> the real tree before it was acted on, and the paths here have been rewritten
+> to what they actually name. The findings themselves are unaltered.
+>
+> Two references are a different case: `HMACSHA256.swift` and `SHA256.swift`
+> were correct when written and have since been deleted *by finding 20's own
+> remediation*. They are annotated in place rather than rewritten.
+>
+> Line numbers are as-reviewed and have drifted; treat them as approximate.
+
 ## Outcome
 
 The package has a broad, tested HTTP/1.1, HTTP/2, HTTP/3, WebSocket, routing, and
@@ -95,7 +111,7 @@ Locations:
 
 - `Sources/Server/HTTPServer/HTTPServer+WebSocket.swift:230`
 - `Sources/Server/HTTPServer/HTTPServer+WebSocket.swift:295`
-- `Sources/Server/HTTP2/HTTP2Connection+FlowControl.swift:48`
+- `Sources/Protocols/HTTP2/HTTP2Connection+FlowControl.swift:48`
 
 The tunnel signal stream is `.unbounded`. The engine replenishes tunnel flow
 control on receipt and deliberately applies no request-body bound, while the
@@ -128,7 +144,7 @@ Locations:
 
 - `Sources/Server/HTTPServer/HTTPServer+HTTP2RequestStreaming.swift:13`
 - `Sources/Server/HTTPServer/HTTPServer+HTTP2RequestStreaming.swift:92`
-- `Sources/Server/HTTP2/HTTP2Connection+FlowControl.swift:93`
+- `Sources/Protocols/HTTP2/HTTP2Connection+FlowControl.swift:93`
 - `Sources/Core/HTTPCore/HTTPLimits.swift:133`
 
 Each streaming request has an unbounded `AsyncStream`. HTTP/2 receive windows
@@ -175,7 +191,7 @@ request, and assert bounded RSS, allocation count, and retained capacity.
 Locations:
 
 - `Sources/Server/HTTPServer/HTTPServer+HTTP2RequestStreaming.swift:44`
-- `Sources/Server/HTTP2/HTTP2Connection+ControlFrames.swift:88`
+- `Sources/Protocols/HTTP2/HTTP2Connection+ControlFrames.swift:88`
 
 `streamReset` falls through to tunnel handling, which only removes WebSocket
 tunnels. An active request-body stream is neither removed nor finished.
@@ -196,7 +212,7 @@ zero while a sibling stream completes normally.
 Locations:
 
 - `Sources/Server/HTTPServer/HTTPServer.swift:168`
-- `Sources/Transport/HTTPTransport/KqueueEventLoop.swift:5`
+- `Sources/Transport/HTTPTransport/POSIXKqueue/KqueueEventLoop.swift:5`
 
 The entire connection-serving operation is wrapped in the transport's preferred
 executor. Kqueue documents read → parse → route → respond → write inline on one
@@ -218,9 +234,9 @@ allocations before choosing an inline fast-path policy.
 
 Locations:
 
-- `Sources/Transport/HTTPTransport/KqueueEventLoop.swift:100`
-- `Sources/Transport/HTTPTransport/EpollEventLoop.swift:104`
-- `Sources/Transport/HTTPTransport/NetworkFrameworkTransport.swift:76`
+- `Sources/Transport/HTTPTransport/POSIXKqueue/KqueueEventLoop.swift:100`
+- `Sources/Transport/HTTPTransport/POSIXEpoll/EpollEventLoop.swift:104`
+- `Sources/Transport/HTTPTransport/Network/NetworkFrameworkTransport.swift:76`
 - `Sources/Server/HTTPServer/HTTPServer.swift:86`
 - `Sources/Server/HTTPServer/HTTPServer.swift:150`
 
@@ -237,8 +253,8 @@ stop rearming or backpressure the accept source at capacity.
 
 Locations:
 
-- `Sources/Middleware/HTTPMiddleware/RateLimitMiddleware.swift:74`
-- `Sources/Middleware/HTTPSession/InMemorySessionStore.swift:62`
+- `Sources/Server/HTTPServer/Middleware/RateLimitMiddleware.swift:74`
+- `Sources/Server/HTTPServer/Middleware/InMemorySessionStore.swift:62`
 
 Both implementations prune expired entries when the map is full and then
 insert unconditionally. If every entry is live, repeated unique keys grow the
@@ -254,7 +270,7 @@ then repeat under concurrent churn and assert the hard bound.
 
 #### 10. The default rate-limit identity is Host, not client
 
-Location: `Sources/Middleware/HTTPMiddleware/RateLimitMiddleware.swift:41`
+Location: `Sources/Server/HTTPServer/Middleware/RateLimitMiddleware.swift:41`
 
 The default key is `HTTPRequest.effectiveAuthority`. That is typically shared
 by all legitimate clients and is attacker-controlled through Host/:authority.
@@ -270,9 +286,9 @@ proxy CIDRs.
 
 Locations:
 
-- `Sources/Middleware/HTTPFileServing/FileResponder.swift:188`
-- `Sources/Middleware/HTTPFileServing/FileResponder.swift:217`
-- `Sources/Middleware/HTTPFileServing/FileResponder.swift:283`
+- `Sources/Server/HTTPServer/FileResponder.swift:188`
+- `Sources/Server/HTTPServer/FileResponder.swift:217`
+- `Sources/Server/HTTPServer/FileResponder.swift:283`
 
 The responder resolves symlinks, checks containment, and later classifies and
 opens by pathname. A writer can swap a path component after validation and
@@ -312,7 +328,7 @@ HTTP/1, HTTP/2, and HTTP/3; each request must observe exactly one generation.
 
 #### 13. JWT middleware preserves a spoofed trusted identity header
 
-Location: `Sources/Auth/HTTPAuth/JWTMiddleware.swift:60`
+Location: `Sources/HTTPAuth/JWTMiddleware.swift:60`
 
 The middleware overwrites `X-Auth-Subject` only when a valid token contains a
 `sub` claim. With a valid token lacking `sub`, a client-supplied
@@ -332,10 +348,10 @@ downstream request must not contain the spoofed value.
 
 Locations:
 
-- `Sources/Middleware/HTTPCaching/ResponseCache.swift:47`
-- `Sources/Middleware/HTTPCaching/ResponseCache.swift:111`
-- `Sources/Middleware/HTTPCaching/CacheMiddleware.swift:26`
-- `Sources/Middleware/HTTPCaching/CacheMiddleware.swift:137`
+- `Sources/Server/HTTPServer/Middleware/ResponseCache.swift:47`
+- `Sources/Server/HTTPServer/Middleware/ResponseCache.swift:111`
+- `Sources/Server/HTTPServer/Middleware/CacheMiddleware.swift:26`
+- `Sources/Server/HTTPServer/Middleware/CacheMiddleware.swift:137`
 
 Each node strongly owns both `prev` and `next`, forming cycles that survive
 cache deallocation or hot replacement. Cache cost counts roughly body + 256,
@@ -368,7 +384,7 @@ substitute for actual backpressure.
 
 #### 16. WebSocket hub is one global actor and has unbounded cardinality
 
-Location: `Sources/WebSocket/HTTPWebSocket/WebSocketHub.swift:15`
+Location: `Sources/Server/HTTPServer/WebSocketHub.swift:15`
 
 Every topic, subscription, publication, and removal serializes through one
 actor. Removal scans every topic and allocates a key array. Topic/subscription
@@ -381,7 +397,7 @@ cardinality.
 
 #### 17. Timeout middleware is cooperative, not a hard response deadline
 
-Location: `Sources/Middleware/HTTPMiddleware/TimeoutMiddleware.swift:46`
+Location: `Sources/Server/HTTPServer/Middleware/TimeoutMiddleware.swift:46`
 
 The losing responder task is cancelled, but a task-group scope cannot return
 until that child exits. A blocking or cancellation-ignorant handler can delay
@@ -398,10 +414,10 @@ separate process boundary, not a Swift task.
 
 Locations:
 
-- `Sources/Protocol/HTTP2/HTTP2FrameDecoder.swift:54`
-- `Sources/Server/HTTP2/HTTP2Connection.swift:271`
-- `Sources/Protocol/HTTP3/HTTP3FrameDecoder.swift:65`
-- `Sources/Server/HTTP3/HTTP3Connection+Streams.swift:242`
+- `Sources/Protocols/HTTP2/HTTP2FrameDecoder.swift:54`
+- `Sources/Protocols/HTTP2/HTTP2Connection.swift:271`
+- `Sources/Protocols/HTTP3/HTTP3FrameDecoder.swift:65`
+- `Sources/Protocols/HTTP3/HTTP3Connection+Streams.swift:242`
 
 Decoders materialize payload arrays, connection code materializes frame arrays,
 and input buffers use front removal/compaction. DATA is then copied again into
@@ -419,7 +435,7 @@ zero-copy win.
 
 #### 19. Router matching is linear, allocating, and repeated
 
-Location: `Sources/Routing/HTTPRouting/Router.swift:47`
+Location: `Sources/Server/HTTPServer/Routing/Router.swift:47`
 
 Resolution splits paths and linearly scans routes. Dispatch can match again, and
 captures construct dictionaries and joined strings. Complexity is O(routes ×
@@ -433,11 +449,13 @@ worst-cases; only then consider a compiled immutable radix tree/trie.
 
 Locations:
 
-- `Sources/Core/HTTPCore/HMACSHA256.swift:19`
-- `Sources/Core/HTTPCore/SHA256.swift:14`
-- `Sources/Auth/HTTPAuth/BasicAuthMiddleware.swift:82`
-- `Sources/Auth/HTTPAuth/JWT.swift`
-- `Sources/Middleware/HTTPSession/SessionMiddleware.swift`
+- `Sources/Core/HTTPCore/HMACSHA256.swift:19` — deleted by this finding's own
+  remediation; the callers now use `swift-crypto`'s `HMAC<SHA256>`
+- `Sources/Core/HTTPCore/SHA256.swift:14` — likewise deleted, replaced by
+  `Crypto.SHA256`
+- `Sources/HTTPAuth/BasicAuthMiddleware.swift:82`
+- `Sources/HTTPAuth/JWT.swift`
+- `Sources/Server/HTTPServer/Middleware/SessionMiddleware.swift`
 
 The in-house SHA/HMAC path creates pad arrays, concatenations, and a padded
 whole-message copy. Basic fixed credentials create ephemeral symmetric keys and
@@ -462,7 +480,7 @@ two values. Encode 16 random bytes or zero-pad each 64-bit component.
   gate.
 - HTTP/3 load testing is advisory; Linux HTTP/3 remains intentionally absent.
 - Streaming response compression is explicitly unimplemented in
-  `Sources/Middleware/HTTPCompression/CompressionMiddleware.swift:71`.
+  `Sources/Server/HTTPServer/Middleware/CompressionMiddleware.swift:71`.
 - Strict Memory Safety remains deferred. Unsafe regions should be isolated,
   marked with explicit invariants, and tested before enabling the package trait
   as a gate.
