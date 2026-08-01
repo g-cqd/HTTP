@@ -116,6 +116,46 @@ check "a route no round measured is na" "na" "$(report_aggregate "$WORK/na.tsv" 
 check "stat_median of an even count interpolates" "150.000" "$(stat_median 100 200)"
 check "stat_median of an odd count picks the middle" "200.000" "$(stat_median 300 100 200)"
 
+echo "── report_paired ──"
+# Three rounds. The box halves in speed at round 3, hitting BOTH profiles equally. The paired ratio
+# is 0.90 in every round; the ratio of the two medians is 900/1000 = 0.90 here only because the
+# drift is symmetric — the next fixture shows where that estimator breaks.
+cat >"$WORK/paired.tsv" <<EOF
+round${TAB}subject${TAB}mode${TAB}scenkey${TAB}scenario${TAB}rps${TAB}p50${TAB}p99${TAB}p999${TAB}status
+1${TAB}ours${TAB}floor${TAB}_json${TAB}-${TAB}1000${TAB}1${TAB}1${TAB}1${TAB}ok
+1${TAB}ours${TAB}full${TAB}_json${TAB}-${TAB}900${TAB}1${TAB}1${TAB}1${TAB}ok
+2${TAB}ours${TAB}floor${TAB}_json${TAB}-${TAB}2000${TAB}1${TAB}1${TAB}1${TAB}ok
+2${TAB}ours${TAB}full${TAB}_json${TAB}-${TAB}1800${TAB}1${TAB}1${TAB}1${TAB}ok
+3${TAB}ours${TAB}floor${TAB}_json${TAB}-${TAB}500${TAB}1${TAB}1${TAB}1${TAB}ok
+3${TAB}ours${TAB}full${TAB}_json${TAB}-${TAB}450${TAB}1${TAB}1${TAB}1${TAB}ok
+EOF
+row="$(report_paired "$WORK/paired.tsv" "1 2 3")"
+check "paired ratio survives a 4x swing in the host" "0.9000" "$(printf '%s' "$row" | cut -f4)"
+check "paired ratio counts the rounds it used" "3" "$(printf '%s' "$row" | cut -f3)"
+check "sign count sees full slower in every round" "3" "$(printf '%s' "$row" | cut -f7)"
+
+# Where the ratio of medians breaks: the host is slow exactly when `full` is measured. Ratio of
+# medians = 1000/1000 = 1.00 and reports the chain as free; the paired ratio still reports 0.90.
+cat >"$WORK/skewed.tsv" <<EOF
+round${TAB}subject${TAB}mode${TAB}scenkey${TAB}scenario${TAB}rps${TAB}p50${TAB}p99${TAB}p999${TAB}status
+1${TAB}ours${TAB}floor${TAB}_json${TAB}-${TAB}1000${TAB}1${TAB}1${TAB}1${TAB}ok
+1${TAB}ours${TAB}full${TAB}_json${TAB}-${TAB}900${TAB}1${TAB}1${TAB}1${TAB}ok
+2${TAB}ours${TAB}floor${TAB}_json${TAB}-${TAB}1000${TAB}1${TAB}1${TAB}1${TAB}ok
+2${TAB}ours${TAB}full${TAB}_json${TAB}-${TAB}900${TAB}1${TAB}1${TAB}1${TAB}ok
+3${TAB}ours${TAB}floor${TAB}_json${TAB}-${TAB}1200${TAB}1${TAB}1${TAB}1${TAB}ok
+3${TAB}ours${TAB}full${TAB}_json${TAB}-${TAB}1080${TAB}1${TAB}1${TAB}1${TAB}ok
+EOF
+check "paired ratio is immune to which profile caught the fast round" "0.9000" \
+    "$(report_paired "$WORK/skewed.tsv" "1 2 3" | cut -f4)"
+
+# A subject measured in only one profile has no pair and must produce no row at all.
+cat >"$WORK/unpaired.tsv" <<EOF
+round${TAB}subject${TAB}mode${TAB}scenkey${TAB}scenario${TAB}rps${TAB}p50${TAB}p99${TAB}p999${TAB}status
+1${TAB}rust${TAB}floor${TAB}_json${TAB}-${TAB}1000${TAB}1${TAB}1${TAB}1${TAB}ok
+EOF
+check "a peer with no full profile produces no paired row" "0" \
+    "$(report_paired "$WORK/unpaired.tsv" "1" | wc -l | tr -d ' ')"
+
 echo
 printf '%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -eq 0 ]

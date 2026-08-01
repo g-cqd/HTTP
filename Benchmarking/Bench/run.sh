@@ -400,6 +400,26 @@ for scen in $SCENARIOS; do
         "$(printf '%s %s' "${scen%%:*}" "${scen#*:}")" "$STATISTIC"
 done
 
+# The floor-vs-full price, paired within each round so common-mode drift cancels. Only meaningful
+# when both profiles were measured for the same subject, i.e. MODES covered both.
+report_paired "$SAMPLES_TSV" "$CLEAN_ROUNDS" >"$RESULTS_DIR/_paired.tsv"
+if [ -s "$RESULTS_DIR/_paired.tsv" ]; then
+    echo "### What the middleware chain costs (paired within each round)"
+    echo
+    echo "\`cost\` = 1 − median(full ÷ floor) over rounds that measured both, seconds apart on the"
+    echo "same box. \`full slower\` is the sign count — the claim that survives a noisy host."
+    echo
+    echo '| subject | scenario | rounds | cost | ratio range | full slower |'
+    echo '|---|---|---:|---:|---:|---:|'
+    while IFS=$'\t' read -r subject key rounds med lo hi slower; do
+        printf '| %s | %s | %s | %s | %s–%s | %s/%s |\n' "$subject" "$key" "$rounds" \
+            "$(awk -v m="$med" 'BEGIN{printf "%.1f %%", (1 - m) * 100}')" \
+            "$(awk -v v="$lo" 'BEGIN{printf "%.2f", v}')" \
+            "$(awk -v v="$hi" 'BEGIN{printf "%.2f", v}')" "$slower" "$rounds"
+    done <"$RESULTS_DIR/_paired.tsv"
+    echo
+fi
+
 # results.json — the machine-readable record, assembled with jq so nothing hand-escapes.
 jq -n \
     --arg startedAt "$STARTED_AT" --arg finishedAt "$FINISHED_AT" \
@@ -411,6 +431,7 @@ jq -n \
     --arg uname "$(uname -srm)" --arg model "$(sysctl -n hw.model 2>/dev/null || echo unknown)" \
     --rawfile samples "$SAMPLES_TSV" --rawfile roundsTsv "$ROUNDS_TSV" \
     --rawfile parityTsv "$PARITY_DIR/_parity.tsv" --rawfile aggregateTsv "$RESULTS_DIR/_aggregate.tsv" \
+    --rawfile pairedTsv "$RESULTS_DIR/_paired.tsv" \
     '
     def rows($t; $names): $t | rtrimstr("\n") | split("\n")
         | map(select(length > 0) | split("\t"))
@@ -432,6 +453,8 @@ jq -n \
         probes: rows($parityTsv; ["scenkey","subject","status","bytes","sha256","contentType"])
       },
       rounds: rows($roundsTsv; ["round","seed","loadStart","loadEnd","drift","verdict","order"]),
+      paired: rows($pairedTsv;
+        ["subject","scenkey","rounds","ratioMedian","ratioMin","ratioMax","fullSlowerCount"]),
       samples: (rows($samples;
         ["round","subject","mode","scenkey","scenario","rps","p50","p99","p999","status"]) | .[1:]),
       aggregate: rows($aggregateTsv;

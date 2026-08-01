@@ -75,6 +75,59 @@ report_aggregate() {
     ' "$1"
 }
 
+# report_paired <samples-tsv> <eligible-rounds-space-separated>
+#
+# The floor-vs-full price, computed as a PAIRED statistic: within a round the two profiles are
+# measured seconds apart on the same box, so the per-round ratio full/floor cancels the common-mode
+# drift that swamps a comparison of two independent medians. The ratio of medians is the wrong
+# estimator here and can be wildly wrong — on a contended host it put `/json` at 0.66 where the
+# paired median put it at 0.86.
+#
+# Also emits a SIGN COUNT: how many rounds had full slower than floor. That is the one claim that
+# survives a noisy box, because it needs no magnitude — under a null of "no difference" it is a coin
+# flip, so 42 of 55 is evidence of direction even when every individual ratio is unusable.
+#
+# Emits: subject, scenkey, n, ratioMedian, ratioMin, ratioMax, fullSlowerCount
+report_paired() {
+    awk -F'\t' -v eligible=" $2 " '
+        function median(arr, n,   i, j, tmp) {
+            for (i = 2; i <= n; i++) {
+                tmp = arr[i]
+                for (j = i - 1; j >= 1 && arr[j] > tmp; j--) arr[j + 1] = arr[j]
+                arr[j + 1] = tmp
+            }
+            if (n == 0) return 0
+            return (n % 2) ? arr[(n + 1) / 2] : (arr[n / 2] + arr[n / 2 + 1]) / 2
+        }
+        NR == 1 && $1 == "round" { next }
+        eligible !~ (" " $1 " ") || $10 != "ok" { next }
+        { rps[$2 SUBSEP $4 SUBSEP $1 SUBSEP $3] = $6 + 0
+          if (!(($2 SUBSEP $4) in seen)) { cells[++n] = $2 SUBSEP $4; seen[$2 SUBSEP $4] = 1 }
+          if (!($1 in roundSeen)) { rounds[++rn] = $1; roundSeen[$1] = 1 } }
+        END {
+            for (i = 1; i <= n; i++) {
+                split(cells[i], f, SUBSEP)
+                count = 0; slower = 0
+                for (r = 1; r <= rn; r++) {
+                    lo = rps[f[1] SUBSEP f[2] SUBSEP rounds[r] SUBSEP "floor"]
+                    hi = rps[f[1] SUBSEP f[2] SUBSEP rounds[r] SUBSEP "full"]
+                    if (lo <= 0 || hi <= 0) continue
+                    ratio[++count] = hi / lo
+                    if (hi < lo) slower++
+                }
+                if (count == 0) continue
+                lowest = ratio[1]; highest = ratio[1]
+                for (k = 1; k <= count; k++) {
+                    if (ratio[k] < lowest) lowest = ratio[k]
+                    if (ratio[k] > highest) highest = ratio[k]
+                }
+                printf "%s\t%s\t%d\t%.4f\t%.4f\t%.4f\t%d\n", \
+                    f[1], f[2], count, median(ratio, count), lowest, highest, slower
+            }
+        }
+    ' "$1"
+}
+
 # report_markdown <aggregate-tsv> <scenario-key> <scenario-label> <statistic-label>
 #
 # One table per scenario, sorted by median RPS. The `spread` column is max/min across rounds — the
