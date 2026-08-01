@@ -47,11 +47,47 @@
         private let inbox = Mutex<Inbox>(Inbox())
 
         private struct Registry {
-            var readHandlers: [Int32: @Sendable () -> Void] = [:]
-            var writeHandlers: [Int32: @Sendable () -> Void] = [:]
+            /// Every waiter parked on a descriptor, per direction — a *list*, not one slot.
+            ///
+            /// Mirrors ``KqueueEventLoop``, whose `Registry` records why: a single slot let the second
+            /// waiter on a descriptor silently overwrite the first, whose continuation was then
+            /// resumed by nothing.
+            var readHandlers: [Int32: [Waiter]] = [:]
+            var writeHandlers: [Int32: [Waiter]] = [:]
+            var nextWaiterID: UInt64 = 0
             /// fds currently in the epoll set (so the next `arm` chooses `EPOLL_CTL_MOD` vs `_ADD`).
             var registered: Set<Int32> = []
             var isRunning = true
+
+            /// Registers `handler` for `fd` in `direction`, returning its removal id.
+            mutating func park(
+                _ handler: @escaping @Sendable () -> Void,
+                fd: Int32,
+                direction: WritableKeyPath<Self, [Int32: [Waiter]]>
+            ) -> UInt64 {
+                nextWaiterID += 1
+                let id = nextWaiterID
+                self[keyPath: direction][fd, default: []].append(Waiter(id: id, handler: handler))
+                return id
+            }
+
+            /// Removes the waiter `id` parked on `fd`, if it is still there.
+            mutating func unpark(
+                id: UInt64,
+                fd: Int32,
+                direction: WritableKeyPath<Self, [Int32: [Waiter]]>
+            ) {
+                self[keyPath: direction][fd]?.removeAll { $0.id == id }
+                if self[keyPath: direction][fd]?.isEmpty == true {
+                    self[keyPath: direction].removeValue(forKey: fd)
+                }
+            }
+        }
+
+        /// One parked readiness waiter, identified so it can be removed without comparing closures.
+        private struct Waiter {
+            let id: UInt64
+            let handler: @Sendable () -> Void
         }
 
         private struct Inbox {
@@ -138,9 +174,9 @@
         /// since reused. Mirrors ``KqueueEventLoop/waitReadable(_:_:)``.
         @discardableResult
         func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-            registry.withLock { $0.readHandlers[fd] = handler }
+            let id = registry.withLock { $0.park(handler, fd: fd, direction: \.readHandlers) }
             guard arm(fd) else {
-                registry.withLock { _ = $0.readHandlers.removeValue(forKey: fd) }
+                registry.withLock { $0.unpark(id: id, fd: fd, direction: \.readHandlers) }
                 return false
             }
             wakeIfOffLoop()
@@ -153,9 +189,9 @@
         /// ``waitReadable(_:_:)``.
         @discardableResult
         func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-            registry.withLock { $0.writeHandlers[fd] = handler }
+            let id = registry.withLock { $0.park(handler, fd: fd, direction: \.writeHandlers) }
             guard arm(fd) else {
-                registry.withLock { _ = $0.writeHandlers.removeValue(forKey: fd) }
+                registry.withLock { $0.unpark(id: id, fd: fd, direction: \.writeHandlers) }
                 return false
             }
             wakeIfOffLoop()
@@ -167,20 +203,19 @@
         func closeDescriptor(_ fd: Int32) {
             let offLoop = inbox.withLock { inbox -> Bool in
                 inbox.control.append { [self] in
-                    let (readHandler, writeHandler) = registry.withLock { registry in
+                    let parked = registry.withLock { registry -> [Waiter] in
                         registry.registered.remove(fd)
-                        return (
-                            registry.readHandlers.removeValue(forKey: fd),
-                            registry.writeHandlers.removeValue(forKey: fd)
-                        )
+                        return (registry.readHandlers.removeValue(forKey: fd) ?? [])
+                            + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
                     }
                     // Remove before close (a closed fd auto-leaves the set, but explicit DEL is race-free).
                     _ = epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
                     close(fd)
                     // Resume any parked waiter so a cancelled/closed receive/send doesn't leak its
                     // continuation: invoked after close, the handler hits EBADF and resumes with an error.
-                    readHandler?()
-                    writeHandler?()
+                    for waiter in parked {
+                        waiter.handler()
+                    }
                 }
                 return !inbox.onLoop
             }
@@ -305,30 +340,30 @@
             let hangup = ready & (EPOLLHUP.rawValue | EPOLLERR.rawValue) != 0
             let isReadable = hangup || (ready & EPOLLIN.rawValue != 0)
             let isWritable = hangup || (ready & EPOLLOUT.rawValue != 0)
-            let (readHandler, writeHandler) = registry.withLock { registry in
-                (
-                    isReadable ? registry.readHandlers.removeValue(forKey: fd) : nil,
-                    isWritable ? registry.writeHandlers.removeValue(forKey: fd) : nil
-                )
+            let ready: [Waiter] = registry.withLock { registry in
+                (isReadable ? registry.readHandlers.removeValue(forKey: fd) ?? [] : [])
+                    + (isWritable ? registry.writeHandlers.removeValue(forKey: fd) ?? [] : [])
             }
-            readHandler?()
-            writeHandler?()
+            for waiter in ready {
+                waiter.handler()
+            }
             // `EPOLLONESHOT` disarmed the whole fd; re-arm if a handler in the other direction is still
             // pending (or the fired handler re-armed itself). A redundant `MOD` with the same mask is
             // fine. A refused re-arm (the fd died under us) fails the still-parked handlers here — on
             // the loop thread, serialized with the close sweep — so no waiter leaks behind it.
+            // `isEmpty == false`, not `!= nil`: the tables now hold lists, and an empty list would
+            // re-arm for a direction with nobody parked on it.
             let stillPending = registry.withLock {
-                $0.readHandlers[fd] != nil || $0.writeHandlers[fd] != nil
+                $0.readHandlers[fd]?.isEmpty == false || $0.writeHandlers[fd]?.isEmpty == false
             }
             if stillPending, !arm(fd) {
-                let (stranded, strandedWrite) = registry.withLock {
-                    (
-                        $0.readHandlers.removeValue(forKey: fd),
-                        $0.writeHandlers.removeValue(forKey: fd)
-                    )
+                let stranded = registry.withLock { registry -> [Waiter] in
+                    (registry.readHandlers.removeValue(forKey: fd) ?? [])
+                        + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
                 }
-                stranded?()
-                strandedWrite?()
+                for waiter in stranded {
+                    waiter.handler()
+                }
             }
         }
 
@@ -340,8 +375,8 @@
         private func arm(_ fd: Int32) -> Bool {
             let (mask, alreadyRegistered): (UInt32, Bool) = registry.withLock { registry in
                 var events = EPOLLONESHOT.rawValue
-                if registry.readHandlers[fd] != nil { events |= EPOLLIN.rawValue }
-                if registry.writeHandlers[fd] != nil { events |= EPOLLOUT.rawValue }
+                if registry.readHandlers[fd]?.isEmpty == false { events |= EPOLLIN.rawValue }
+                if registry.writeHandlers[fd]?.isEmpty == false { events |= EPOLLOUT.rawValue }
                 let was = registry.registered.contains(fd)
                 registry.registered.insert(fd)
                 return (events, was)

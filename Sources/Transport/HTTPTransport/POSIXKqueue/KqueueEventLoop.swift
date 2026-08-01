@@ -46,9 +46,49 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     private static let wakeIdent = UInt(0xFFFF_FFF0)
 
     private struct Registry {
-        var readHandlers: [Int32: @Sendable () -> Void] = [:]
-        var writeHandlers: [Int32: @Sendable () -> Void] = [:]
+        /// Every waiter parked on a descriptor, per direction — a *list*, not one slot.
+        ///
+        /// A single slot meant the second waiter on a descriptor silently overwrote the first, whose
+        /// continuation was then resumed by nothing: not by readiness, which had forgotten it, and not
+        /// by ``closeDescriptor(_:)``, which also took only one. Waking all of them is sound because
+        /// readiness is level information — each waiter retries its syscall and re-parks on `EAGAIN`.
+        ///
+        /// Identified rather than anonymous so a refused registration unwinds *its own* waiter; the
+        /// closures are not comparable, and removing "the last one" would race a concurrent park.
+        var readHandlers: [Int32: [Waiter]] = [:]
+        var writeHandlers: [Int32: [Waiter]] = [:]
+        var nextWaiterID: UInt64 = 0
         var isRunning = true
+
+        /// Registers `handler` for `fd` in `direction`, returning its removal id.
+        mutating func park(
+            _ handler: @escaping @Sendable () -> Void,
+            fd: Int32,
+            direction: WritableKeyPath<Self, [Int32: [Waiter]]>
+        ) -> UInt64 {
+            nextWaiterID += 1
+            let id = nextWaiterID
+            self[keyPath: direction][fd, default: []].append(Waiter(id: id, handler: handler))
+            return id
+        }
+
+        /// Removes the waiter `id` parked on `fd`, if it is still there.
+        mutating func unpark(
+            id: UInt64,
+            fd: Int32,
+            direction: WritableKeyPath<Self, [Int32: [Waiter]]>
+        ) {
+            self[keyPath: direction][fd]?.removeAll { $0.id == id }
+            if self[keyPath: direction][fd]?.isEmpty == true {
+                self[keyPath: direction].removeValue(forKey: fd)
+            }
+        }
+    }
+
+    /// One parked readiness waiter, identified so it can be removed without comparing closures.
+    private struct Waiter {
+        let id: UInt64
+        let handler: @Sendable () -> Void
     }
 
     private struct Inbox {
@@ -123,9 +163,9 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// fd instead could touch a descriptor *number* the kernel has since reused.
     @discardableResult
     func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-        registry.withLock { $0.readHandlers[fd] = handler }
+        let id = registry.withLock { $0.park(handler, fd: fd, direction: \.readHandlers) }
         guard register(fd: fd, filter: EVFILT_READ) else {
-            registry.withLock { _ = $0.readHandlers.removeValue(forKey: fd) }
+            registry.withLock { $0.unpark(id: id, fd: fd, direction: \.readHandlers) }
             return false
         }
         return true
@@ -137,9 +177,9 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// ``waitReadable(_:_:)``.
     @discardableResult
     func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-        registry.withLock { $0.writeHandlers[fd] = handler }
+        let id = registry.withLock { $0.park(handler, fd: fd, direction: \.writeHandlers) }
         guard register(fd: fd, filter: EVFILT_WRITE) else {
-            registry.withLock { _ = $0.writeHandlers.removeValue(forKey: fd) }
+            registry.withLock { $0.unpark(id: id, fd: fd, direction: \.writeHandlers) }
             return false
         }
         return true
@@ -150,19 +190,18 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     func closeDescriptor(_ fd: Int32) {
         let offLoop = inbox.withLock { inbox -> Bool in
             inbox.control.append { [self] in
-                let (readHandler, writeHandler) = registry.withLock {
-                    (
-                        $0.readHandlers.removeValue(forKey: fd),
-                        $0.writeHandlers.removeValue(forKey: fd)
-                    )
+                let parked = registry.withLock {
+                    ($0.readHandlers.removeValue(forKey: fd) ?? [])
+                        + ($0.writeHandlers.removeValue(forKey: fd) ?? [])
                 }
                 close(fd)
                 // Resume any waiter parked on this fd so a cancelled (or otherwise closed) receive/send
                 // does not leak its continuation: invoked after `close`, the handler's read/write hits
                 // EBADF and resumes with an error instead of hanging (the cancel-deadlock the
                 // backbone-conformance suite guards).
-                readHandler?()
-                writeHandler?()
+                for waiter in parked {
+                    waiter.handler()
+                }
             }
             return !inbox.onLoop
         }
@@ -284,18 +323,25 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         return finished
     }
 
+    /// Resumes **every** waiter parked on this descriptor in this direction.
+    ///
+    /// Not just the newest: readiness is level information, so a waiter that finds the descriptor
+    /// already drained by a peer simply gets `EAGAIN` and re-parks. Resuming one and forgetting the
+    /// rest is what left continuations suspended forever.
     private func dispatch(_ event: KEvent) {
         let fd = Int32(event.ident)
-        let handler: (@Sendable () -> Void)? = registry.withLock { registry in
+        let waiters: [Waiter] = registry.withLock { registry in
             if Int32(event.filter) == EVFILT_READ {
-                return registry.readHandlers.removeValue(forKey: fd)
+                return registry.readHandlers.removeValue(forKey: fd) ?? []
             }
             if Int32(event.filter) == EVFILT_WRITE {
-                return registry.writeHandlers.removeValue(forKey: fd)
+                return registry.writeHandlers.removeValue(forKey: fd) ?? []
             }
-            return nil
+            return []
         }
-        handler?()
+        for waiter in waiters {
+            waiter.handler()
+        }
     }
 
     /// Adds a one-shot `EV_ADD` registration, reporting whether the kernel accepted it.
