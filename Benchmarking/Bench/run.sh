@@ -1,79 +1,119 @@
 #!/usr/bin/env bash
 #
-# Benchmarking/Bench/run.sh — the consolidated comparative HTTP load battletest.
+# Benchmarking/Bench/run.sh — the comparative HTTP load battletest, two-mode matrix.
 #
-# Drives our `httpd-example` and every installed reference server with the SAME load generator (`oha`)
-# across a SET of route scenarios (the heavier-workload comparison), and prints side-by-side tables of
-# throughput and tail latency — one per scenario, plus a throughput matrix. Each server is started once
-# and run through every scenario, so the whole field is measured on an identical workload.
+# Drives `httpd-example` and every installed reference server with the same load generator (`oha`)
+# across a set of route scenarios, and reports the MEDIAN of N rounds per cell.
 #
-# Scenarios (the shared parity route set every programmable server implements):
-#   GET /              framework floor (tiny text)
-#   GET /json          serialize {"message":"Hello, World!"}
-#   GET /payload       ~1 KiB compressible text (a body worth gzipping)
-#   GET /hello/world   router + path/query parameter
-#   POST /echo         request read + body round-trip
-# nginx/caddy are static servers: they serve /, /json, /payload, /hello but not /echo (no body echo
-# without a scripting module) — the harness marks unsupported cells N/A via oha's success rate.
+# ── WHAT THIS HARNESS FIXES, AND WHY IT HAD TO ────────────────────────────────────────────────────
 #
-# The field (run only if their toolchain/binary is present):
-#   ours — measured on EVERY transport backbone (posixKqueue · posixDispatch · swiftSystem ·
-#          networkFramework), one row each as ours(<backbone>)
-#   nginx · caddy · hummingbird (SwiftNIO) · go (net/http) · bun (Bun.serve) · rust (hyper+tokio)
-#   · vapor (SwiftNIO) · django-wsgi (gunicorn) · django-asgi (uvicorn)
-# So this single battletest covers every competitor technology AND every one of our own variants.
+# Three rounds of this comparison have been run. None of them could support a conclusion, and the
+# reasons were all in the harness rather than in any server:
 #
-# The two SwiftNIO framework packages (hummingbird, vapor) are nested inside this repo, which SwiftPM
-# mis-resolves ("product not found") — so they are built from a copy outside the repo tree.
+#  1. TWO DIFFERENT PROGRAMS WERE COMPARED. Our example ran its full production middleware chain
+#     (metrics, gzip, security headers, CORS, conditional GET with a CRC32 ETag, Date, Server, Range)
+#     while every peer ran a framework-floor handler. "N % behind hyper" was therefore a sentence
+#     about two different workloads. FIXED: `HTTPD_PROFILE=floor` strips our chain to the router, and
+#     the matrix runs BOTH modes. The floor column is the one comparable to a peer; the full column
+#     is what you deploy; the difference between them prices the chain, which nothing in this
+#     repository had ever measured.
 #
-# Usage:
-#   ./Benchmarking/Bench/run.sh                              # all present servers, all scenarios
-#   SCENARIOS="GET:/ GET:/json" SERVERS="ours rust go" ./Benchmarking/Bench/run.sh
-#   CONNECTIONS=128 DURATION=20s ./Benchmarking/Bench/run.sh
+#  2. THE SERVERS WERE NOT ANSWERING THE SAME THING. `GET /` returned each server's own name — 30 B
+#     from hyper, 28 B from Go, 71 B from us — and was reported as "framework floor" throughput for
+#     the whole field. Worse, `oha` sends `accept-encoding: gzip, compress, deflate, br` by default,
+#     so our CompressionMiddleware gzipped bodies that every peer returned as identity. FIXED: a
+#     byte-equivalence gate runs BEFORE any timing (lib/parity.sh), `/` is replaced by a `/plaintext`
+#     route that is identical on every server, and the content coding is pinned (`ACCEPT_ENCODING`,
+#     default `identity`) so every server is measured putting the same bytes on the wire.
 #
-# Requires: oha. Optional: jq, nginx, caddy, swift, go, bun, cargo, python3.
+#  3. A FIXED SERVER ORDER ON A MOVING HOST. Every round drove the field in the same sequence, on a
+#     box whose one-minute load moved 5.31 -> 16.77 between two of the rounds with unrelated work at
+#     ~140 % CPU. Whatever ran last was penalised, consistently. FIXED: the order is shuffled per
+#     round from a recorded seed, and the host state is sampled at the start and the end of every
+#     round into the results file (lib/host.sh); a round whose load drifts past `LOAD_DRIFT_MAX` is
+#     marked and dropped from the headline aggregate when a clean round exists to replace it.
+#
+#  4. TWO STATISTICS, NEVER STATED TOGETHER. The committed RESULTS.md was best-of-1; the two reviews
+#     hand-recomputed medians of 3. That alone can explain a double-digit difference between rounds.
+#     FIXED: median of N, stated in the header and in every rendered table, with the per-cell min/max
+#     spread printed beside it. There is no best-of anywhere in this harness.
+#
+#  5. NOTHING WAS MACHINE-READABLE. FIXED: `results/results.json` carries the config, the host
+#     samples, the parity digests, every individual sample and the aggregate, so two runs can be
+#     compared without re-reading prose.
+#
+# ── USAGE ─────────────────────────────────────────────────────────────────────────────────────────
+#
+#   ./Benchmarking/Bench/run.sh                                    # full field, both modes, 3 rounds
+#   SERVERS="ours rust go" ROUNDS=5 ./Benchmarking/Bench/run.sh
+#   MODES=floor ./Benchmarking/Bench/run.sh                        # apples-to-apples column only
+#   SERVERS=ours MODES=full ACCEPT_ENCODING="gzip, deflate, br" ./Benchmarking/Bench/run.sh
+#   ./Benchmarking/Bench/selftest.sh                               # the harness's own tests
+#
+# Requires: oha, jq, curl. Optional: nginx, caddy, swift, go, bun, cargo, python3.
 #
 set -uo pipefail
 
-# --- configuration (all overridable via env) --------------------------------------------------------
-DURATION="${DURATION:-10s}"
-CONNECTIONS="${CONNECTIONS:-64}"
-RATE="${RATE:-}"
-WARMUP="${WARMUP:-2s}"
-# Repeat the whole field N times and report **best-of-N** per cell. A single sequential pass on a
-# colocated box thermally throttles, so servers measured later look slower than they are; sampling each
-# server at N points in the run and keeping its best result cancels that ordering bias. ROUNDS=3+ advised.
-ROUNDS="${ROUNDS:-1}"
-BACKBONE="${BACKBONE:-swiftSystem}"                  # legacy single-backbone override (still honored)
-# Our server is measured across ALL its transport backbones — each a row labeled ours(<backbone>) — so
-# this one battletest covers every competitor technology AND every one of our own variants. Subset by
-# overriding, e.g. BACKBONES="posixKqueue swiftSystem".
-BACKBONES="${BACKBONES:-posixKqueue posixDispatch swiftSystem networkFramework}"
-SERVERS="${SERVERS:-ours nginx caddy hummingbird go bun rust vapor django-wsgi django-asgi}"
-SCENARIOS="${SCENARIOS:-GET:/ GET:/json GET:/payload GET:/hello/world POST:/echo}"
-ECHO_BODY="${ECHO_BODY:-{\"x\":1\}}"
-
-NCPU="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
-DJANGO_WORKERS="${DJANGO_WORKERS:-$NCPU}"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/host.sh
+. "$SCRIPT_DIR/lib/host.sh"
+# shellcheck source=lib/parity.sh
+. "$SCRIPT_DIR/lib/parity.sh"
+# shellcheck source=lib/report.sh
+. "$SCRIPT_DIR/lib/report.sh"
+
+# --- configuration (all overridable via env) --------------------------------------------------------
+DURATION="${DURATION:-5s}"
+WARMUP="${WARMUP:-1s}"
+CONNECTIONS="${CONNECTIONS:-64}"
+RATE="${RATE:-}"
+# Three rounds is the minimum that yields a true median (an odd count needs no interpolation) while
+# keeping a full-field run inside a few minutes. Raise it; do not lower it below 3.
+ROUNDS="${ROUNDS:-3}"
+# The two-mode axis. `floor` = router only for us / framework-floor handler for a peer. `full` = our
+# shipped middleware chain. Only `ours` implements `full` — see `subject_modes` for why.
+MODES="${MODES:-floor full}"
+BACKBONES="${BACKBONES:-posixKqueue swiftSystem}"
+SERVERS="${SERVERS:-ours rust go bun hummingbird vapor nginx caddy}"
+# `/plaintext`, not `/`: every server answers `/` with its own name, so `/` is not a comparable route
+# and the parity gate rejects it. See lib/parity.sh.
+SCENARIOS="${SCENARIOS:-GET:/plaintext GET:/json GET:/payload GET:/hello/world POST:/echo}"
+ECHO_BODY="${ECHO_BODY:-{\"x\":1\}}"
+# Pinned so every server puts the SAME BYTES on the wire. oha's default sends four codings, which
+# makes our full profile gzip while every peer returns identity — a different payload and a cost no
+# peer pays. Set this to a real negotiation list to price content coding as its own question.
+ACCEPT_ENCODING="${ACCEPT_ENCODING:-identity}"
+# Load-drift gate. A round whose one-minute load moves more than this fraction (normalised against a
+# floor of 1.0) is marked `drifted`; a round whose load per CPU exceeds the ceiling is `contended`.
+LOAD_DRIFT_MAX="${LOAD_DRIFT_MAX:-0.25}"
+LOAD_CEILING_PER_CPU="${LOAD_CEILING_PER_CPU:-0.5}"
+# Byte-equivalence is a hard gate by default. Setting this to 0 records the mismatch and continues —
+# for diagnosing WHICH server disagrees, never for producing a number anyone quotes.
+PARITY_ENFORCE="${PARITY_ENFORCE:-1}"
+SEED="${SEED:-$RANDOM}"
+
+NCPU="$(host_ncpu)"
+DJANGO_WORKERS="${DJANGO_WORKERS:-$NCPU}"
 SCRATCH="${SCRATCH:-/tmp/swiftpm-build/HTTP-battletest}"
-SWIFT_PKG_WORK="${SWIFT_PKG_WORK:-/tmp/http-bench-swift}"   # nested SwiftNIO packages built here (outside the repo)
+SWIFT_PKG_WORK="${SWIFT_PKG_WORK:-/tmp/http-bench-swift}"
 RESULTS_DIR="${RESULTS_DIR:-$SCRIPT_DIR/results}"
-mkdir -p "$RESULTS_DIR"
+PARITY_DIR="$RESULTS_DIR/parity"
+SAMPLES_TSV="$RESULTS_DIR/_samples.tsv"
+ROUNDS_TSV="$RESULTS_DIR/_rounds.tsv"
+mkdir -p "$RESULTS_DIR" "$PARITY_DIR"
 
 PORT_OURS=8080; PORT_NGINX=8081; PORT_CADDY=8082; PORT_HB=8083
 PORT_GO=8084; PORT_BUN=8085; PORT_RUST=8086; PORT_DJANGO=8087; PORT_VAPOR=8088
 
-command -v oha >/dev/null || { echo "error: 'oha' not found — brew install oha" >&2; exit 1; }
-HAVE_JQ=0; command -v jq >/dev/null && HAVE_JQ=1
-[ "$HAVE_JQ" = 1 ] || { echo "error: 'jq' required for the scenario tables — brew install jq" >&2; exit 1; }
+for tool in oha jq curl; do
+    command -v "$tool" >/dev/null || { echo "error: '$tool' not found — brew install $tool" >&2; exit 1; }
+done
 
 SERVER_PID=""
 reap_port() { local pids; pids=$(lsof -ti "tcp:$1" 2>/dev/null) && [ -n "$pids" ] && kill $pids 2>/dev/null; }
-cleanup() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; SERVER_PID=""; }
-trap 'cleanup' EXIT INT TERM
+stop_server() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; SERVER_PID=""; }
+trap 'stop_server' EXIT INT TERM
 
 wait_ready() {
     for _ in $(seq 1 150); do   # up to ~15s: cold gunicorn/uvicorn workers import Django slowly
@@ -83,256 +123,323 @@ wait_ready() {
     return 1
 }
 
-# --- thermal settling -------------------------------------------------------------------------------
-# A colocated box thermally throttles under sustained load, so a server measured on a hot box reads
-# slower than it is (the bias that made later-in-sequence servers look weak). There is no sudo-free
-# thermal sysctl on Apple Silicon, so gate on a CPU **calibration probe** instead: time a fixed compute
-# task on the idle box; when it returns near the coolest time seen, the box has recovered. Each
-# measurement then starts from a comparable thermal baseline. Disable with THERMAL_SETTLE=0.
-THERMAL_SETTLE="${THERMAL_SETTLE:-1}"
-THERMAL_TOLERANCE="${THERMAL_TOLERANCE:-12}"  # percent over the coolest probe still "reasonable"
-THERMAL_COOLDOWN="${THERMAL_COOLDOWN:-3}"     # seconds idle between probes while still hot
-THERMAL_MAX_WAIT="${THERMAL_MAX_WAIT:-40}"    # cap the wait per settle (never stall forever)
-THERMAL_BASELINE=""                           # coolest probe (ms) seen so far; set on first probe
+# --- the subject matrix ------------------------------------------------------------------------------
+# A SUBJECT is one measurable configuration: "<kind>:<backbone>:<mode>". `ours` expands to one subject
+# per backbone per mode; every other server contributes one subject per supported mode.
 
-# Milliseconds for a fixed CPU task (best of 2, to damp P/E-core placement noise). Lower = cooler.
-cool_probe_ms() {
-    local best="" t i
-    for i in 1 2; do
-        t=$( { /usr/bin/time -p awk 'BEGIN{s=0;for(i=0;i<6000000;i++)s+=i}'; } 2>&1 \
-            | awk '/real/{printf "%.0f", $2*1000}')
-        { [ -z "$best" ] || [ "${t:-0}" -lt "$best" ]; } && best="$t"
-    done
-    printf '%s' "${best:-0}"
+# subject_modes <kind> — which of MODES this kind can honestly run.
+#
+# Only `ours` runs `full`, and that is deliberate. `full` means OUR middleware chain; a peer has no
+# such thing. Re-implementing an equivalent stack in Rust/Go/JS would replace a measured confound
+# with an unprovable claim of equivalence — the exact failure this harness exists to end. Running a
+# peer's OWN middleware instead would answer a different question ("is Hummingbird's gzip faster than
+# ours?"), which is worth asking and is not this. So the peers define the floor, we are measured
+# against them at the floor, and our full column is priced against our own floor.
+subject_modes() {
+    case "$1" in
+        ours) printf '%s' "$MODES" ;;
+        *) printf '%s' "$MODES" | tr ' ' '\n' | grep -x floor | tr '\n' ' ' ;;
+    esac
 }
 
-# Wait (idle, no server load) until the box is near its coolest compute baseline.
-settle_thermal() {
-    [ "$THERMAL_SETTLE" = "1" ] || return 0
-    local waited=0 p limit
-    while :; do
-        p=$(cool_probe_ms)
-        [ "${p:-0}" -gt 0 ] || return 0  # probe unavailable — do not gate
-        { [ -z "$THERMAL_BASELINE" ] || [ "$p" -lt "$THERMAL_BASELINE" ]; } && THERMAL_BASELINE="$p"
-        limit=$(( THERMAL_BASELINE * (100 + THERMAL_TOLERANCE) / 100 ))
-        { [ "$p" -le "$limit" ] || [ "$waited" -ge "$THERMAL_MAX_WAIT" ]; } && return 0
-        sleep "$THERMAL_COOLDOWN"; waited=$(( waited + THERMAL_COOLDOWN ))
-    done
+subject_label() {
+    local kind="${1%%:*}" rest="${1#*:}" backbone
+    backbone="${rest%%:*}"
+    if [ -n "$backbone" ]; then printf 'ours(%s)' "$backbone"; else printf '%s' "$kind"; fi
+}
+subject_mode() { printf '%s' "${1##*:}"; }
+subject_kind() { printf '%s' "${1%%:*}"; }
+
+subject_port() {
+    case "$(subject_kind "$1")" in
+        ours) printf '%s' "$PORT_OURS" ;; nginx) printf '%s' "$PORT_NGINX" ;;
+        caddy) printf '%s' "$PORT_CADDY" ;; hummingbird) printf '%s' "$PORT_HB" ;;
+        go) printf '%s' "$PORT_GO" ;; bun) printf '%s' "$PORT_BUN" ;;
+        rust) printf '%s' "$PORT_RUST" ;; vapor) printf '%s' "$PORT_VAPOR" ;;
+        *) printf '%s' "$PORT_DJANGO" ;;
+    esac
 }
 
-# bench_one <url> <method> <server-label> <scenario-key> — one warmed oha pass; appends a row
-# "<scenkey>\t<label>\t<rps>\t<p50>\t<p99>\t<p999>" to _results.tsv, or N/A when the route is missing
-# (success rate below 99% — e.g. nginx/caddy on /echo).
-bench_one() {
-    local url="$1" method="$2" label="$3" key="$4"
-    local json="$RESULTS_DIR/${label}__${key}.json"
-    local common=(-c "$CONNECTIONS" --no-tui)
-    [ -n "$RATE" ] && common+=(-q "$RATE")
-    if [ "$method" = "POST" ]; then
-        common+=(-m POST -d "$ECHO_BODY" -H "Content-Type: application/json")
-    fi
-    settle_thermal  # wait for the box to cool to its baseline first, so every server is measured fairly
-    if [ "$WARMUP" != "0" ]; then
-        oha -z "$WARMUP" "${common[@]}" "$url" >/dev/null 2>&1 || true
-    fi
-    oha -z "$DURATION" "${common[@]}" --output-format json "$url" >"$json" 2>/dev/null || {
-        printf '%s\t%s\tN/A\t-\t-\t-\n' "$key" "$label" >>"$RESULTS_DIR/_results.tsv"; return; }
-    # A route counts only when ≥99% of responses are 2xx. oha's successRate treats a 4xx/5xx as a
-    # "successful" HTTP exchange, so a server that 404s a route it doesn't implement (nginx/caddy on
-    # /echo) would otherwise post a bogus throughput — gate on the 2xx share instead.
-    local total twoxx rps p50 p99 p999
-    total=$(jq -r '[.statusCodeDistribution[]?] | add // 0' "$json")
-    twoxx=$(jq -r '[.statusCodeDistribution | to_entries[]? | select(.key|startswith("2")) | .value] | add // 0' "$json")
-    if [ "${total:-0}" = "0" ] || awk "BEGIN{exit !($twoxx < 0.99 * $total)}"; then
-        printf '%s\t%s\tN/A\t-\t-\t-\n' "$key" "$label" >>"$RESULTS_DIR/_results.tsv"; return
-    fi
-    rps=$(jq -r '.summary.requestsPerSec // .summary.rps // 0' "$json")
-    p50=$(jq -r '(.latencyPercentiles."p50" // 0)*1000' "$json")
-    p99=$(jq -r '(.latencyPercentiles."p99" // 0)*1000' "$json")
-    p999=$(jq -r '(.latencyPercentiles."p99.9" // 0)*1000' "$json")
-    printf '%s\t%s\t%.0f\t%.3f\t%.3f\t%.3f\n' "$key" "$label" "$rps" "$p50" "$p99" "$p999" \
-        >>"$RESULTS_DIR/_results.tsv"
+# subject_start <id> — launch it in the background and set SERVER_PID; returns non-zero if it never
+# became ready. The caller always pairs this with `subject_stop`.
+subject_start() {
+    local id="$1" kind rest backbone mode port log
+    kind="$(subject_kind "$id")"; rest="${id#*:}"; backbone="${rest%%:*}"
+    mode="$(subject_mode "$id")"; port="$(subject_port "$id")"
+    log="$RESULTS_DIR/$(printf '%s' "$id" | tr ':' '-').server.log"
+    case "$kind" in
+        ours)
+            env HTTPD_MAX_CONN=1000000 HTTPD_QUIET=1 HTTPD_PROFILE="$mode" \
+                "$OURS_BIN" "$port" "$backbone" >"$log" 2>&1 & SERVER_PID=$! ;;
+        nginx) nginx -c "$NGINX_CONF" -g "daemon off;" >"$log" 2>&1 & SERVER_PID=$! ;;
+        caddy)
+            mkdir -p "$RESULTS_DIR/caddy-home"
+            env HOME="$RESULTS_DIR/caddy-home" XDG_DATA_HOME="$RESULTS_DIR/caddy-home" \
+                caddy run --config "$CADDY_CONF" --adapter caddyfile >"$log" 2>&1 & SERVER_PID=$! ;;
+        hummingbird) "$HB_BIN" "$port" >"$log" 2>&1 & SERVER_PID=$! ;;
+        vapor) "$VAPOR_BIN" "$port" >"$log" 2>&1 & SERVER_PID=$! ;;
+        go) "$GO_BIN" "$port" >"$log" 2>&1 & SERVER_PID=$! ;;
+        bun) bun run "$SCRIPT_DIR/bun/server.js" "$port" >"$log" 2>&1 & SERVER_PID=$! ;;
+        rust) "$RUST_BIN" "$port" >"$log" 2>&1 & SERVER_PID=$! ;;
+        django-wsgi)
+            env PYTHONPATH="$SCRIPT_DIR/django/djangoapp" DJANGO_SETTINGS_MODULE=benchsite.settings \
+                "$VENV/bin/gunicorn" benchsite.wsgi:application --bind "127.0.0.1:$port" \
+                --workers "$DJANGO_WORKERS" --log-level error >"$log" 2>&1 & SERVER_PID=$! ;;
+        django-asgi)
+            env PYTHONPATH="$SCRIPT_DIR/django/djangoapp" DJANGO_SETTINGS_MODULE=benchsite.settings \
+                BENCH_ASYNC=1 "$VENV/bin/uvicorn" benchsite.asgi:application --host 127.0.0.1 \
+                --port "$port" --workers "$DJANGO_WORKERS" --log-level error \
+                >"$log" 2>&1 & SERVER_PID=$! ;;
+        *) return 1 ;;
+    esac
+    wait_ready "http://127.0.0.1:$port/health"
 }
 
-# run_all_scenarios <label> <base-url> — drive every scenario against an already-running server.
-run_all_scenarios() {
-    local label="$1" base="$2" scen method path key
-    for scen in $SCENARIOS; do
-        method="${scen%%:*}"; path="${scen#*:}"
-        key="$(printf '%s' "$path" | tr -c 'A-Za-z0-9' '_')"; [ "$path" = "/" ] && key="root"
-        bench_one "$base$path" "$method" "$label" "$key"
-    done
+subject_stop() { local port; port="$(subject_port "$1")"; stop_server; reap_port "$port"; sleep 0.3; }
+
+# shuffle <seed> <items...> — a deterministic permutation, so a recorded seed reproduces the order.
+shuffle() {
+    local seed="$1"; shift
+    printf '%s\n' "$@" | awk -v seed="$seed" 'BEGIN{srand(seed)} {print rand() "\t" $0}' \
+        | sort -g | cut -f2-
 }
 
-# Build a nested Swift package from a copy OUTSIDE the repo (SwiftPM mis-resolves a package nested in
-# another package's git tree). Echoes the built binary path, or nothing on failure.
+scenario_key() { printf '%s' "${1#*:}" | tr -c 'A-Za-z0-9' '_'; }
+
+# --- build every subject's binary --------------------------------------------------------------------
 build_swift_pkg() {
-    local src="$1"
-    local product="$2"
-    local work="$SWIFT_PKG_WORK/$product"
-    local bin="$work/.build/release/$product"
-    # Reuse an existing build unless a source file is newer (a cold SwiftNIO build is minutes); the
-    # rebuild always happens out-of-tree because SwiftPM mis-resolves a package nested in the repo.
+    local src="$1" product="$2" work bin
+    work="$SWIFT_PKG_WORK/$product"; bin="$work/.build/release/$product"
+    # SwiftPM mis-resolves a package nested in another package's git tree, so the two SwiftNIO
+    # packages are copied outside the repo to build. Reused until a source file is newer.
     if [ ! -x "$bin" ] || [ -n "$(find "$src" -name '*.swift' -newer "$bin" 2>/dev/null | head -1)" ]; then
         rm -rf "$work" && mkdir -p "$work" && cp -R "$src/." "$work/" && rm -rf "$work/.build"
+        # Carry the repo's toolchain pin out with the sources. Without it `swiftly` finds no
+        # `.swift-version` in the copied tree, selects nothing, and both SwiftNIO peers silently
+        # dropped out of the field with "No installed swift toolchain is selected" — which is how a
+        # comparison against "the SwiftNIO frameworks" can be reported with neither of them present.
+        cp "$REPO_ROOT/.swift-version" "$work/.swift-version" 2>/dev/null || true
         ( cd "$work" && swift build -c release ) >"$RESULTS_DIR/$product.build.log" 2>&1
     fi
     [ -x "$bin" ] && printf '%s' "$bin"
 }
 
-# --- build our server once (release; the latest state of the working tree) --------------------------
 echo "building httpd-example (release)…"
 swift build -c release --package-path "$REPO_ROOT" --scratch-path "$SCRATCH" --product httpd-example \
     >"$RESULTS_DIR/_build.log" 2>&1 || { echo "error: build failed (see _build.log)" >&2; exit 1; }
 OURS_BIN="$SCRATCH/release/httpd-example"
 
-# --- run-local nginx/caddy configs with the 1 KiB payload filled in ---------------------------------
 PAYLOAD="$(printf 'from-scratch swift http server. %.0s' $(seq 1 32))"   # 32 × 32 B = 1024 B
 NGINX_CONF="$RESULTS_DIR/nginx.run.conf"; CADDY_CONF="$RESULTS_DIR/Caddyfile.run"
 sed "s#__PAYLOAD__#$PAYLOAD#g" "$SCRIPT_DIR/servers/nginx.conf" >"$NGINX_CONF"
 sed "s#__PAYLOAD__#$PAYLOAD#g" "$SCRIPT_DIR/servers/Caddyfile" >"$CADDY_CONF"
+HB_BIN=""; VAPOR_BIN=""; GO_BIN=""; RUST_BIN=""; VENV="$SCRIPT_DIR/django/.venv"
 
-: > "$RESULTS_DIR/_results.tsv"
-echo "scenarios=[$SCENARIOS]  connections=$CONNECTIONS  duration=$DURATION  ncpu=$NCPU  rounds=$ROUNDS"
-echo
-
-for round in $(seq 1 "$ROUNDS"); do
-[ "$ROUNDS" -gt 1 ] && echo "════════════════ round $round/$ROUNDS ════════════════"
-for s in $SERVERS; do
-    SERVER_PID=""
-    case "$s" in
-        ours)
-            # One row per backbone, so the field includes every one of our own variants.
-            for bb in $BACKBONES; do
-                echo "→ ours($bb) …"
-                env HTTPD_MAX_CONN=1000000 HTTPD_QUIET=1 "$OURS_BIN" "$PORT_OURS" "$bb" \
-                    >"$RESULTS_DIR/ours-$bb.server.log" 2>&1 &
-                SERVER_PID=$!
-                wait_ready "http://127.0.0.1:$PORT_OURS/" \
-                    && run_all_scenarios "ours($bb)" "http://127.0.0.1:$PORT_OURS" \
-                    || echo "  ours($bb): never ready (see results/ours-$bb.server.log)"
-                cleanup; reap_port "$PORT_OURS"
-                sleep 0.4
-            done ;;
-        nginx)
-            command -v nginx >/dev/null || { echo "skip nginx"; continue; }
-            echo "→ nginx …"
-            nginx -c "$NGINX_CONF" -g "daemon off;" >"$RESULTS_DIR/nginx.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_NGINX/" \
-                && run_all_scenarios "nginx" "http://127.0.0.1:$PORT_NGINX" || echo "  nginx: never ready"
-            cleanup; reap_port "$PORT_NGINX" ;;
-        caddy)
-            command -v caddy >/dev/null || { echo "skip caddy"; continue; }
-            echo "→ caddy …"; mkdir -p "$RESULTS_DIR/caddy-home"
-            env HOME="$RESULTS_DIR/caddy-home" XDG_DATA_HOME="$RESULTS_DIR/caddy-home" \
-                caddy run --config "$CADDY_CONF" --adapter caddyfile >"$RESULTS_DIR/caddy.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_CADDY/" \
-                && run_all_scenarios "caddy" "http://127.0.0.1:$PORT_CADDY" || echo "  caddy: never ready"
-            cleanup; reap_port "$PORT_CADDY" ;;
-        hummingbird)
-            command -v swift >/dev/null || { echo "skip hummingbird"; continue; }
-            echo "building hummingbird (out-of-tree)…"
-            HB_BIN="$(build_swift_pkg "$SCRIPT_DIR/hummingbird" hb-bench)"
-            [ -n "$HB_BIN" ] || { echo "skip hummingbird (build failed, see hb-bench.build.log)"; continue; }
-            echo "→ hummingbird …"; "$HB_BIN" "$PORT_HB" >"$RESULTS_DIR/hummingbird.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_HB/" \
-                && run_all_scenarios "hummingbird" "http://127.0.0.1:$PORT_HB" || echo "  hummingbird: never ready"
-            cleanup; reap_port "$PORT_HB" ;;
-        vapor)
-            command -v swift >/dev/null || { echo "skip vapor"; continue; }
-            echo "building vapor (out-of-tree)…"
-            VAPOR_BIN="$(build_swift_pkg "$SCRIPT_DIR/vapor" vapor-bench)"
-            [ -n "$VAPOR_BIN" ] || { echo "skip vapor (build failed, see vapor-bench.build.log)"; continue; }
-            echo "→ vapor …"; "$VAPOR_BIN" "$PORT_VAPOR" >"$RESULTS_DIR/vapor.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_VAPOR/" \
-                && run_all_scenarios "vapor" "http://127.0.0.1:$PORT_VAPOR" || echo "  vapor: never ready"
-            cleanup; reap_port "$PORT_VAPOR" ;;
+# Assemble the subject list, skipping any server whose toolchain or build is absent.
+SUBJECTS=()
+for kind in $SERVERS; do
+    case "$kind" in
+        nginx|caddy|bun)
+            command -v "$kind" >/dev/null || { echo "skip $kind (not installed)"; continue; } ;;
         go)
-            command -v go >/dev/null || { echo "skip go"; continue; }
+            command -v go >/dev/null || { echo "skip go (toolchain absent)"; continue; }
             GO_BIN="$RESULTS_DIR/go-bench"
             ( cd "$SCRIPT_DIR/go" && go build -o "$GO_BIN" . ) >"$RESULTS_DIR/go.build.log" 2>&1
-            [ -x "$GO_BIN" ] || { echo "skip go (build failed)"; continue; }
-            echo "→ go …"; "$GO_BIN" "$PORT_GO" >"$RESULTS_DIR/go.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_GO/" \
-                && run_all_scenarios "go" "http://127.0.0.1:$PORT_GO" || echo "  go: never ready"
-            cleanup; reap_port "$PORT_GO" ;;
-        bun)
-            command -v bun >/dev/null || { echo "skip bun"; continue; }
-            echo "→ bun …"; bun run "$SCRIPT_DIR/bun/server.js" "$PORT_BUN" >"$RESULTS_DIR/bun.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_BUN/" \
-                && run_all_scenarios "bun" "http://127.0.0.1:$PORT_BUN" || echo "  bun: never ready"
-            cleanup; reap_port "$PORT_BUN" ;;
+            [ -x "$GO_BIN" ] || { echo "skip go (build failed)"; continue; } ;;
         rust)
-            command -v cargo >/dev/null || { echo "skip rust"; continue; }
+            command -v cargo >/dev/null || { echo "skip rust (cargo absent)"; continue; }
             echo "building rust (release)…"
             ( cd "$SCRIPT_DIR/rust" && cargo build --release ) >"$RESULTS_DIR/rust.build.log" 2>&1
             RUST_BIN="$SCRIPT_DIR/rust/target/release/rust-bench"
-            [ -x "$RUST_BIN" ] || { echo "skip rust (build failed)"; continue; }
-            echo "→ rust …"; "$RUST_BIN" "$PORT_RUST" >"$RESULTS_DIR/rust.server.log" 2>&1 &
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_RUST/" \
-                && run_all_scenarios "rust" "http://127.0.0.1:$PORT_RUST" || echo "  rust: never ready"
-            cleanup; reap_port "$PORT_RUST" ;;
+            [ -x "$RUST_BIN" ] || { echo "skip rust (build failed)"; continue; } ;;
+        hummingbird)
+            echo "building hummingbird (out-of-tree)…"
+            HB_BIN="$(build_swift_pkg "$SCRIPT_DIR/hummingbird" hb-bench)"
+            [ -n "$HB_BIN" ] || { echo "skip hummingbird (build failed)"; continue; } ;;
+        vapor)
+            echo "building vapor (out-of-tree)…"
+            VAPOR_BIN="$(build_swift_pkg "$SCRIPT_DIR/vapor" vapor-bench)"
+            [ -n "$VAPOR_BIN" ] || { echo "skip vapor (build failed)"; continue; } ;;
         django-wsgi|django-asgi)
-            command -v python3 >/dev/null || { echo "skip $s (python3 absent)"; continue; }
-            VENV="$SCRIPT_DIR/django/.venv"
-            if [ ! -x "$VENV/bin/python" ]; then
-                echo "creating Django .venv…"
-                python3 -m venv "$VENV" \
-                    && "$VENV/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 \
-                    && "$VENV/bin/pip" install --quiet -r "$SCRIPT_DIR/django/requirements.txt" \
-                        >"$RESULTS_DIR/_venv-install.log" 2>&1 \
-                    || { echo "skip $s (venv/pip failed)"; continue; }
-            fi
-            APP="$SCRIPT_DIR/django/djangoapp"
-            echo "→ $s …"
-            if [ "$s" = "django-wsgi" ]; then
-                env PYTHONPATH="$APP" DJANGO_SETTINGS_MODULE=benchsite.settings \
-                    "$VENV/bin/gunicorn" benchsite.wsgi:application \
-                    --bind "127.0.0.1:$PORT_DJANGO" --workers "$DJANGO_WORKERS" --log-level error \
-                    >"$RESULTS_DIR/$s.server.log" 2>&1 &
-            else
-                env PYTHONPATH="$APP" DJANGO_SETTINGS_MODULE=benchsite.settings BENCH_ASYNC=1 \
-                    "$VENV/bin/uvicorn" benchsite.asgi:application \
-                    --host 127.0.0.1 --port "$PORT_DJANGO" --workers "$DJANGO_WORKERS" --log-level error \
-                    >"$RESULTS_DIR/$s.server.log" 2>&1 &
-            fi
-            SERVER_PID=$!
-            wait_ready "http://127.0.0.1:$PORT_DJANGO/" \
-                && run_all_scenarios "$s" "http://127.0.0.1:$PORT_DJANGO" || echo "  $s: never ready"
-            cleanup; reap_port "$PORT_DJANGO" ;;
-        *) echo "skip $s (unknown)";;
+            [ -x "$VENV/bin/python" ] || { echo "skip $kind (no venv — see README)"; continue; } ;;
     esac
-    sleep 0.4
+    for mode in $(subject_modes "$kind"); do
+        if [ "$kind" = "ours" ]; then
+            for backbone in $BACKBONES; do SUBJECTS+=("ours:$backbone:$mode"); done
+        else
+            SUBJECTS+=("$kind::$mode")
+        fi
+    done
 done
-done  # rounds
+[ "${#SUBJECTS[@]}" -gt 0 ] || { echo "error: no subjects to measure" >&2; exit 1; }
 
-# --- report: one table per scenario (best-of-N rps per server), then a throughput matrix ------------
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo
-SCEN_KEYS=""
-for scen in $SCENARIOS; do
-    path="${scen#*:}"; key="$(printf '%s' "$path" | tr -c 'A-Za-z0-9' '_')"; [ "$path" = "/" ] && key="root"
-    SCEN_KEYS="$SCEN_KEYS $key:$scen"
+echo "subjects=${#SUBJECTS[@]}  scenarios=[$SCENARIOS]  connections=$CONNECTIONS  duration=$DURATION"
+echo "rounds=$ROUNDS  statistic=median-of-$ROUNDS  accept-encoding='$ACCEPT_ENCODING'  seed=$SEED  ncpu=$NCPU"
+echo
+
+# --- phase 1: byte equivalence, before a single timed request ----------------------------------------
+echo "── parity gate: fetching every route from every subject and diffing the bytes ──"
+: >"$PARITY_DIR/_parity.tsv"
+for id in "${SUBJECTS[@]}"; do
+    label="$(subject_label "$id"):$(subject_mode "$id")"
+    if ! subject_start "$id"; then
+        echo "  $label: never became ready — excluded"; subject_stop "$id"; continue
+    fi
+    base="http://127.0.0.1:$(subject_port "$id")"
+    for scen in $SCENARIOS; do
+        parity_probe "$label" "$base" "${scen%%:*}" "${scen#*:}" "$(scenario_key "$scen")" \
+            "$PARITY_DIR" "$ACCEPT_ENCODING" "$ECHO_BODY"
+    done
+    subject_stop "$id"
 done
-for entry in $SCEN_KEYS; do
-    key="${entry%%:*}"; scen="${entry#*:}"
-    echo "### $scen"
-    echo "| server | rps | p50 (ms) | p99 (ms) | p99.9 (ms) |"
-    echo "|---|---:|---:|---:|---:|"
-    awk -F'\t' -v k="$key" '$1==k {
-            v = ($3=="N/A" ? -1 : $3+0)
-            if (!($2 in seen) || v > best[$2]) { seen[$2]=1; best[$2]=v; row[$2]=$0 }
-        } END { for (l in row) print row[l] }' "$RESULTS_DIR/_results.tsv" \
-        | sort -t$'\t' -k3 -nr \
-        | while IFS=$'\t' read -r _ label rps p50 p99 p999; do
-            printf '| %s | %s | %s | %s | %s |\n' "$label" "$rps" "$p50" "$p99" "$p999"
-        done
+
+PARITY_STATUS=pass
+parity_verdict "$PARITY_DIR/_parity.tsv" >"$PARITY_DIR/_verdict.tsv" || PARITY_STATUS=fail
+column -t -s"$(printf '\t')" "$PARITY_DIR/_verdict.tsv" 2>/dev/null || cat "$PARITY_DIR/_verdict.tsv"
+if [ "$PARITY_STATUS" = fail ]; then
     echo
+    echo "PARITY FAILED — subjects returned different bytes for the routes marked FAIL above."
+    echo "A throughput comparison across servers that answer differently is not a measurement."
+    if [ "$PARITY_ENFORCE" = "1" ]; then
+        echo "Aborting. Set PARITY_ENFORCE=0 to record the mismatch and continue (diagnosis only)."
+        exit 2
+    fi
+    echo "PARITY_ENFORCE=0 — continuing; every number below is NOT comparable across subjects."
+fi
+echo
+
+# --- phase 2: the rounds ------------------------------------------------------------------------------
+# bench_one <label> <mode> <round> <url> <method> <scenario-key>
+bench_one() {
+    local label="$1" mode="$2" round="$3" url="$4" method="$5" key="$6" json slug
+    slug="$(printf '%s' "${label}_${mode}_${key}_r${round}" | tr -c 'A-Za-z0-9_' '_')"
+    json="$RESULTS_DIR/oha__$slug.json"
+    local common=(-c "$CONNECTIONS" --no-tui -H "Accept-Encoding: $ACCEPT_ENCODING")
+    [ -n "$RATE" ] && common+=(-q "$RATE")
+    [ "$method" = "POST" ] && common+=(-m POST -d "$ECHO_BODY" -H "Content-Type: application/json")
+    [ "$WARMUP" != "0" ] && oha -z "$WARMUP" "${common[@]}" "$url" >/dev/null 2>&1
+    if ! oha -z "$DURATION" "${common[@]}" --output-format json "$url" >"$json" 2>/dev/null; then
+        printf '%s\t%s\t%s\t%s\t-\t0\t0\t0\t0\tfailed\n' "$round" "$label" "$mode" "$key" \
+            >>"$SAMPLES_TSV"
+        return
+    fi
+    # A cell counts only when >=99 % of responses are 2xx: oha's success rate treats a 4xx as a
+    # successful exchange, so a server 404-ing a route it lacks would otherwise post real throughput.
+    local total twoxx
+    total=$(jq -r '[.statusCodeDistribution[]?] | add // 0' "$json")
+    twoxx=$(jq -r '[.statusCodeDistribution | to_entries[]? | select(.key|startswith("2")) | .value] | add // 0' "$json")
+    if [ "${total:-0}" = "0" ] || awk "BEGIN{exit !($twoxx < 0.99 * $total)}"; then
+        printf '%s\t%s\t%s\t%s\t-\t0\t0\t0\t0\tna\n' "$round" "$label" "$mode" "$key" >>"$SAMPLES_TSV"
+        return
+    fi
+    jq -r --arg r "$round" --arg l "$label" --arg m "$mode" --arg k "$key" \
+        '[$r, $l, $m, $k, "-",
+          (.summary.requestsPerSec // 0 | tostring),
+          ((.latencyPercentiles."p50"   // 0) * 1000 | tostring),
+          ((.latencyPercentiles."p99"   // 0) * 1000 | tostring),
+          ((.latencyPercentiles."p99.9" // 0) * 1000 | tostring),
+          "ok"] | @tsv' "$json" >>"$SAMPLES_TSV"
+}
+
+printf 'round\tsubject\tmode\tscenkey\tscenario\trps\tp50\tp99\tp999\tstatus\n' >"$SAMPLES_TSV"
+: >"$ROUNDS_TSV"
+for round in $(seq 1 "$ROUNDS"); do
+    round_seed=$(( SEED + round ))
+    ORDER=()
+    while IFS= read -r line; do ORDER+=("$line"); done < <(shuffle "$round_seed" "${SUBJECTS[@]}")
+    start_sample="$(host_sample start)"
+    start_load="$(printf '%s' "$start_sample" | cut -f3)"
+    echo "════ round $round/$ROUNDS — seed $round_seed, load1 $start_load ════"
+    echo "     order: ${ORDER[*]}"
+    for id in "${ORDER[@]}"; do
+        label="$(subject_label "$id")"; mode="$(subject_mode "$id")"
+        printf '  → %-22s [%-5s] … ' "$label" "$mode"
+        if ! subject_start "$id"; then
+            echo "never ready"; subject_stop "$id"; continue
+        fi
+        base="http://127.0.0.1:$(subject_port "$id")"
+        for scen in $SCENARIOS; do
+            bench_one "$label" "$mode" "$round" "$base${scen#*:}" "${scen%%:*}" "$(scenario_key "$scen")"
+        done
+        echo "done"
+        subject_stop "$id"
+    done
+    end_sample="$(host_sample end)"
+    end_load="$(printf '%s' "$end_sample" | cut -f3)"
+    verdict="$(host_round_verdict "$start_load" "$end_load" "$LOAD_DRIFT_MAX" "$NCPU" \
+        "$LOAD_CEILING_PER_CPU")"
+    drift="$(host_drift_fraction "$start_load" "$end_load")"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$round" "$round_seed" "$start_load" "$end_load" "$drift" "$verdict" "${ORDER[*]}" \
+        >>"$ROUNDS_TSV"
+    echo "  round $round: load $start_load → $end_load (drift $drift) — $verdict"
 done
-echo "connections=$CONNECTIONS  duration=$DURATION — raw oha JSON + server logs in: $RESULTS_DIR"
+FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# --- phase 3: aggregate, render, emit ------------------------------------------------------------------
+# Eligible rounds: the clean ones, unless there are none — in which case every round is used and the
+# whole run is stamped NOT DECISION-GRADE rather than silently reported as if it were.
+CLEAN_ROUNDS="$(awk -F'\t' '$6 == "clean" {printf "%s ", $1}' "$ROUNDS_TSV")"
+GRADE=decision-grade
+if [ -z "$CLEAN_ROUNDS" ]; then
+    CLEAN_ROUNDS="$(awk -F'\t' '{printf "%s ", $1}' "$ROUNDS_TSV")"
+    GRADE="NOT-decision-grade (no clean round: every round drifted or ran on a contended host)"
+elif [ "$(printf '%s' "$CLEAN_ROUNDS" | wc -w | tr -d ' ')" -lt "$ROUNDS" ]; then
+    GRADE="partial ($(printf '%s' "$CLEAN_ROUNDS" | wc -w | tr -d ' ')/$ROUNDS rounds clean)"
+fi
+report_aggregate "$SAMPLES_TSV" "$CLEAN_ROUNDS" >"$RESULTS_DIR/_aggregate.tsv"
+STATISTIC="median of $(printf '%s' "$CLEAN_ROUNDS" | wc -w | tr -d ' ') round(s)"
+
+echo
+echo "## Comparative matrix — $STATISTIC — $GRADE"
+echo
+for scen in $SCENARIOS; do
+    report_markdown "$RESULTS_DIR/_aggregate.tsv" "$(scenario_key "$scen")" \
+        "$(printf '%s %s' "${scen%%:*}" "${scen#*:}")" "$STATISTIC"
+done
+
+# results.json — the machine-readable record, assembled with jq so nothing hand-escapes.
+jq -n \
+    --arg startedAt "$STARTED_AT" --arg finishedAt "$FINISHED_AT" \
+    --arg statistic "$STATISTIC" --arg grade "$GRADE" --arg parity "$PARITY_STATUS" \
+    --arg encoding "$ACCEPT_ENCODING" --arg seed "$SEED" --arg eligible "$CLEAN_ROUNDS" \
+    --arg duration "$DURATION" --arg warmup "$WARMUP" --arg connections "$CONNECTIONS" \
+    --arg rounds "$ROUNDS" --arg ncpu "$NCPU" --arg scenarios "$SCENARIOS" \
+    --arg driftMax "$LOAD_DRIFT_MAX" --arg loadCeiling "$LOAD_CEILING_PER_CPU" \
+    --arg uname "$(uname -srm)" --arg model "$(sysctl -n hw.model 2>/dev/null || echo unknown)" \
+    --rawfile samples "$SAMPLES_TSV" --rawfile roundsTsv "$ROUNDS_TSV" \
+    --rawfile parityTsv "$PARITY_DIR/_parity.tsv" --rawfile aggregateTsv "$RESULTS_DIR/_aggregate.tsv" \
+    '
+    def rows($t; $names): $t | rtrimstr("\n") | split("\n")
+        | map(select(length > 0) | split("\t"))
+        | map([$names, .] | transpose | map({(.[0]): .[1]}) | add);
+    {
+      schema: "http-bench/2",
+      startedAt: $startedAt, finishedAt: $finishedAt,
+      statistic: $statistic, grade: $grade,
+      config: {
+        rounds: ($rounds | tonumber), connections: ($connections | tonumber),
+        duration: $duration, warmup: $warmup, acceptEncoding: $encoding,
+        scenarios: ($scenarios | split(" ")), seed: $seed,
+        loadDriftMax: ($driftMax | tonumber), loadCeilingPerCPU: ($loadCeiling | tonumber),
+        eligibleRounds: ($eligible | split(" ") | map(select(length > 0) | tonumber))
+      },
+      host: { uname: $uname, model: $model, ncpu: ($ncpu | tonumber) },
+      parity: {
+        status: $parity,
+        probes: rows($parityTsv; ["scenkey","subject","status","bytes","sha256","contentType"])
+      },
+      rounds: rows($roundsTsv; ["round","seed","loadStart","loadEnd","drift","verdict","order"]),
+      samples: (rows($samples;
+        ["round","subject","mode","scenkey","scenario","rps","p50","p99","p999","status"]) | .[1:]),
+      aggregate: rows($aggregateTsv;
+        ["subject","mode","scenkey","rounds","rpsMedian","rpsMin","rpsMax",
+         "p50Median","p99Median","p999Median","status"])
+    }' >"$RESULTS_DIR/results.json"
+
+echo "grade:  $GRADE"
+echo "parity: $PARITY_STATUS"
+echo "json:   $RESULTS_DIR/results.json"
+awk -F'\t' '{printf "round %s: load %s → %s (drift %s) — %s\n", $1, $3, $4, $5, $6}' "$ROUNDS_TSV"
