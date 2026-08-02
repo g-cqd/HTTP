@@ -23,15 +23,39 @@
 //  the two directions are independent domains, and a fix that put them behind one connection-wide lock
 //  would trade this hang for a bottleneck on every connection in the server. It must stay green.
 //
-//  Standards: read()/write()/shutdown()/close() per POSIX.1-2017 (IEEE Std 1003.1-2017); TCP framing
-//  per RFC 9293. Readiness via BSD kqueue, so the suite self-gates to Darwin.
+//  PORTABLE ON PURPOSE. The defect is not a kqueue defect: `POSIXEpollConnection` carries the same
+//  `OnceResumer` shape, and the Linux-restoration work named the Darwin-only
+//  `ReadinessWaiterCollisionTests` "THE LARGEST COVERAGE DEBT IN THIS LIST" for exactly that reason —
+//  two red cases describing a live Linux defect that no Linux test observed. So the fixture below is
+//  the only platform-specific part: the reactor and the raw connection are picked by `#if`, and all
+//  nine tests run unchanged against BOTH mirrors. That needs no `Package.swift` entry, which matters
+//  because the Linux test-graph exclusions belong to another agent this week.
+//
+//  Standards: read()/write()/shutdown()/close()/socketpair() per POSIX.1-2017 (IEEE Std 1003.1-2017);
+//  TCP framing per RFC 9293. Readiness via BSD kqueue (Darwin) or epoll(7) (Linux).
 //
 
-#if canImport(Darwin)
+#if canImport(Darwin) || canImport(Glibc)
 
-    import Darwin
     internal import Dispatch
     internal import Synchronization
+
+    #if canImport(Darwin)
+        import Darwin
+
+        /// The Darwin reactor and the connection it drives.
+        private typealias ReactorLoop = KqueueEventLoop
+        private typealias ReactorConnection = POSIXKqueueConnection
+    #elseif canImport(Glibc)
+        import Glibc
+
+        /// The Linux mirror of the reactor and the connection it drives.
+        ///
+        /// Same nine claims, same fixture — the other half of the defect, which no Linux test observed
+        /// until this suite.
+        private typealias ReactorLoop = EpollEventLoop
+        private typealias ReactorConnection = POSIXEpollConnection
+    #endif
 
     import HTTPTestSupport
     import Testing
@@ -174,7 +198,8 @@
             defer { Self.cancel(readers) }
             try await fixture.settle()
 
-            #expect(shutdown(fixture.client, SHUT_WR) == 0)
+            // `SHUT_WR` imports as Int32 on Darwin and as Int on Glibc — normalize for `shutdown`.
+            #expect(shutdown(fixture.client, Int32(SHUT_WR)) == 0)
             let recorded = try await settled.wait(forAtLeast: concurrency, timeout: .seconds(3))
             #expect(recorded == Array(repeating: Self.endOfStream, count: concurrency))
         }
@@ -261,16 +286,16 @@
             /// Comfortably larger than any `window` below, so a send blocks partway and re-arms.
             static let payload = [UInt8](repeating: 0x41, count: 128 * 1_024)
 
-            let loop: KqueueEventLoop
-            let connection: POSIXKqueueConnection
+            let loop: ReactorLoop
+            let connection: ReactorConnection
             let client: Int32
             private let ownsLoop: Bool
             private let clientClosed = Atomic<Bool>(false)
 
             /// Builds the pair and the connection; `window` shrinks both socket buffers so a modest
             /// payload blocks partway, and `loop` reuses an already-running loop.
-            init(window: Int32? = nil, loop: KqueueEventLoop? = nil) throws {
-                let running = try loop ?? KqueueEventLoop()
+            init(window: Int32? = nil, loop: ReactorLoop? = nil) throws {
+                let running = try loop ?? ReactorLoop()
                 self.ownsLoop = loop == nil
                 if loop == nil {
                     running.start()
@@ -278,7 +303,7 @@
                 self.loop = running
                 let pair = try Self.makeSocketPair(window: window)
                 self.client = pair.client
-                self.connection = POSIXKqueueConnection(
+                self.connection = ReactorConnection(
                     id: TransportConnectionID(1),
                     descriptor: pair.server,
                     peer: TransportAddress(host: "local", port: 0),
@@ -366,8 +391,14 @@
                 window: Int32?
             ) throws -> (server: Int32, client: Int32) {
                 var descriptors = [Int32](repeating: 0, count: 2)
+                // Glibc vends SOCK_STREAM as the C enum `__socket_type`; `socketpair` takes Int32.
+                #if canImport(Darwin)
+                    let stream = SOCK_STREAM
+                #else
+                    let stream = Int32(SOCK_STREAM.rawValue)
+                #endif
                 let made = descriptors.withUnsafeMutableBufferPointer { buffer in
-                    socketpair(AF_UNIX, SOCK_STREAM, 0, buffer.baseAddress)
+                    socketpair(AF_UNIX, stream, 0, buffer.baseAddress)
                 }
                 try #require(made == 0, "socketpair(2) failed with errno \(errno)")
                 POSIXSocket.setNonBlocking(descriptors[0])
