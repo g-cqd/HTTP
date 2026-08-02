@@ -52,7 +52,17 @@ public final class POSIXDispatchTransport: ServerTransport {
 
     private struct State {
         var acceptSource: (any DispatchSourceRead)?
+        /// The listening descriptor, closed by the source's cancel handler — kept here so
+        /// ``shutdown()`` can re-point that handler at its own continuation.
+        var listenFD: Int32 = -1
         var boundPort: UInt16 = 0
+        /// The endpoint `getsockname(2)` reports for the listener.
+        var boundEndpoint: BindEndpoint?
+        /// Signalled once the listening descriptor is closed.
+        ///
+        /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
+        /// see ``ListenerCloseLatch``.
+        var closeLatch: ListenerCloseLatch?
         var isRunning = false
         /// The connection-stream continuation, finished on ``shutdown()`` so a consumer's `for await`
         /// completes instead of hanging.
@@ -74,6 +84,15 @@ public final class POSIXDispatchTransport: ServerTransport {
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
         state.withLock(\.boundPort)
+    }
+
+    /// The local endpoint actually bound (meaningful after ``start()`` returns), or `nil` before binding.
+    ///
+    /// Read back from the kernel with `getsockname(2)` at bind time, not derived from the configuration:
+    /// `port` `0` means "whichever the OS chose" and `host` may have been a name or a wildcard, so the
+    /// realized answer is the only one an operator log or an `Alt-Svc` advertisement (RFC 7838) can use.
+    public var boundEndpoint: BindEndpoint? {
+        state.withLock(\.boundEndpoint)
     }
 
     /// Binds a non-blocking TCP socket and begins accepting via a read source.
@@ -101,7 +120,10 @@ public final class POSIXDispatchTransport: ServerTransport {
         }
         state.withLock {
             $0.acceptSource = source
+            $0.listenFD = listener.descriptor
             $0.boundPort = listener.port
+            $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
+            $0.closeLatch = ListenerCloseLatch()
             $0.isRunning = true
             $0.continuation = continuation
             $0.gate = AcceptGate(admission: admission)
@@ -124,19 +146,47 @@ public final class POSIXDispatchTransport: ServerTransport {
         return stream
     }
 
-    /// Cancels the read source (whose cancel handler closes the listening descriptor).
+    /// Cancels the read source and waits for its cancel handler to close the listening descriptor.
+    ///
+    /// Waiting is the contract, not a nicety: POSIX.1-2017 keeps the local address bound to a listening
+    /// socket until it is closed, so returning early leaves an immediate rebind of the same port racing
+    /// the close and failing `bind(2)` with `EADDRINUSE`. `DispatchSource.cancel()` only *schedules* the
+    /// cancel handler on the source's queue, so the previous version — which resumed as soon as
+    /// `balanceAndCancel` returned — resolved one queue hop before `close(2)` ran. That is a narrower
+    /// window than the kqueue/epoll backbones' (a hop on one queue versus a cross-thread loop wakeup),
+    /// which is why the shared matrix only ever caught it there; it is the same defect.
+    ///
+    /// The cancel handler installed at ``start(admission:)`` is *replaced* here so the resume happens
+    /// inside it, after `close(2)`. Replacing it is safe because every transition on this source runs on
+    /// ``acceptQueue`` and the state swap below makes this the only caller that ever reaches a live
+    /// source — the start-time handler stays in place as the fallback for a cancel this method never
+    /// issues. If the source is currently suspended for the fd-exhaustion backoff, delivery waits out
+    /// that backoff's balancing `resume()`; bounded, and still strictly better than not waiting.
+    ///
+    /// Idempotent, and safe against a concurrent second call: the state swap is the arbiter, so exactly
+    /// one caller sees a live source and every other finds `nil` — which matters because
+    /// ``start(admission:)`` also wires `continuation.onTermination` to shut down.
     public func shutdown() async {
-        let (source, continuation) = state.withLock {
+        // `closeLatch` is deliberately NOT cleared — see ``POSIXKqueueTransport/shutdown()``.
+        let (source, listenFD, continuation, latch) = state.withLock {
             let current = $0.acceptSource
+            let fd = $0.listenFD
             let cont = $0.continuation
             $0.acceptSource = nil
+            $0.listenFD = -1
             $0.continuation = nil
             $0.isRunning = false
-            return (current, cont)
+            return (current, fd, cont, $0.closeLatch)
         }
         // Finish the connection stream so a consumer's `for await` completes instead of hanging.
         continuation?.finish()
+        guard let latch else {
+            return  // never started
+        }
         guard let source else {
+            // Another caller took the source and is cancelling it; wait for THEIR close, do not race
+            // ahead of it. This is the case the Linux job found (bind-contract `rebind after stop`).
+            await latch.wait()
             return
         }
         // Balance and cancel ON `acceptQueue`, which is what makes the 1:1 discipline hold.
@@ -152,12 +202,14 @@ public final class POSIXDispatchTransport: ServerTransport {
         // FLAKE-1), roughly once in six full-suite runs, and unreproducible in isolation. The three
         // transitions already ran here and the comments already claimed serialization; only shutdown
         // did not honour it. `suspend()` stops the *source*, never the queue, so this block still runs.
-        await withCheckedContinuation { resumed in
-            acceptQueue.async { [self] in
-                balanceAndCancel(source)
-                resumed.resume()
+        acceptQueue.async { [self] in
+            source.setCancelHandler {
+                close(listenFD)
+                latch.signal()
             }
+            balanceAndCancel(source)
         }
+        await latch.wait()
     }
 
     /// Balances any outstanding admission suspend and cancels `source`.

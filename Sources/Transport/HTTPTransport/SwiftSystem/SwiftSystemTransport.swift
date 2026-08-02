@@ -44,6 +44,13 @@ public final class SwiftSystemTransport: ServerTransport {
         var listenDescriptor: FileDescriptor?
         var listenFD: Int32 = -1
         var boundPort: UInt16 = 0
+        /// The endpoint `getsockname(2)` reports for the listener.
+        var boundEndpoint: BindEndpoint?
+        /// Signalled once the listening descriptor is closed.
+        ///
+        /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
+        /// see ``ListenerCloseLatch``.
+        var closeLatch: ListenerCloseLatch?
         var isRunning = false
         var continuation: AsyncStream<any TransportConnection>.Continuation?
         /// The admission policy applied between `accept(2)` and `yield` (audit F8), ungated until
@@ -63,6 +70,15 @@ public final class SwiftSystemTransport: ServerTransport {
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
         state.withLock(\.boundPort)
+    }
+
+    /// The local endpoint actually bound (meaningful after ``start()`` returns), or `nil` before binding.
+    ///
+    /// Read back from the kernel with `getsockname(2)` at bind time, not derived from the configuration:
+    /// `port` `0` means "whichever the OS chose" and `host` may have been a name or a wildcard, so the
+    /// realized answer is the only one an operator log or an `Alt-Svc` advertisement (RFC 7838) can use.
+    public var boundEndpoint: BindEndpoint? {
+        state.withLock(\.boundEndpoint)
     }
 
     /// Binds one non-blocking listening socket, spins up N event loops, and begins accepting on the
@@ -91,6 +107,8 @@ public final class SwiftSystemTransport: ServerTransport {
             $0.listenDescriptor = FileDescriptor(rawValue: listener.descriptor)
             $0.listenFD = listener.descriptor
             $0.boundPort = listener.port
+            $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
+            $0.closeLatch = ListenerCloseLatch()
             $0.isRunning = true
             $0.continuation = continuation
             $0.gate = AcceptGate(admission: admission)
@@ -122,9 +140,16 @@ public final class SwiftSystemTransport: ServerTransport {
         return stream
     }
 
-    /// Closes the listening socket and stops every event loop.
+    /// Closes the listening socket — **waiting for the close to land** — and stops every event loop.
+    ///
+    /// Same contract, same reasoning and the same idempotence argument as
+    /// ``POSIXKqueueTransport/shutdown()``: this backbone shares that one's ``KqueueEventLoop``, so it
+    /// shared the defect too — `shutdown()` enqueued the listening descriptor's close and returned, and
+    /// an immediate rebind of the same port raced it into `EADDRINUSE`. The wait is a continuation the
+    /// loop thread resumes, so no cooperative-pool thread is blocked on it.
     public func shutdown() async {
-        let (loops, listenFD, continuation) = state.withLock {
+        // `closeLatch` is deliberately NOT cleared — see ``POSIXKqueueTransport/shutdown()``.
+        let (loops, listenFD, continuation, latch) = state.withLock {
             let loops = $0.loops
             let fd = $0.listenFD
             let cont = $0.continuation
@@ -133,18 +158,35 @@ public final class SwiftSystemTransport: ServerTransport {
             $0.listenFD = -1
             $0.continuation = nil
             $0.isRunning = false
-            return (loops, fd, cont)
+            return (loops, fd, cont, $0.closeLatch)
         }
         continuation?.finish()
-        if listenFD >= 0, let acceptLoop = loops.first {
-            acceptLoop.closeDescriptor(listenFD)
+        guard let latch else {
+            return  // never started
         }
+        if listenFD >= 0 {
+            if let acceptLoop = loops.first {
+                acceptLoop.closeDescriptor(listenFD) { latch.signal() }
+            }
+            else {
+                close(listenFD)
+                latch.signal()
+            }
+        }
+        await latch.wait()
         for loop in loops {
             loop.stop()
         }
     }
 
     // MARK: - Internals
+
+    /// The loop that watches the listening socket, or `nil` once ``shutdown()`` has taken it.
+    ///
+    /// The shutdown-ordering test seam — see ``POSIXKqueueTransport/acceptLoop``.
+    var acceptLoop: KqueueEventLoop? {
+        state.withLock(\.loops.first)
+    }
 
     /// Auto-sizes the loop count to the performance-core count (Apple Silicon P-cores) — see
     /// ``POSIXKqueueTransport``.

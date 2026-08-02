@@ -44,6 +44,13 @@ public final class POSIXKqueueTransport: ServerTransport {
         var loops: [KqueueEventLoop] = []
         var listenFD: Int32 = -1
         var boundPort: UInt16 = 0
+        /// The endpoint `getsockname(2)` reports for the listener, `nil` for a UNIX-domain one.
+        var boundEndpoint: BindEndpoint?
+        /// Signalled once the listening descriptor is closed.
+        ///
+        /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
+        /// see ``ListenerCloseLatch``.
+        var closeLatch: ListenerCloseLatch?
         var isRunning = false
         /// The connection-stream continuation, finished on ``shutdown()`` so a consumer's `for await`
         /// completes instead of hanging.
@@ -65,6 +72,17 @@ public final class POSIXKqueueTransport: ServerTransport {
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
         state.withLock(\.boundPort)
+    }
+
+    /// The local endpoint actually bound (meaningful after ``start()`` returns), or `nil` before binding.
+    ///
+    /// Read back from the kernel with `getsockname(2)` at bind time, not derived from the configuration:
+    /// `port` `0` means "whichever the OS chose" and `host` may have been a name or a wildcard, so the
+    /// realized answer is the only one an operator log or an `Alt-Svc` advertisement (RFC 7838) can use.
+    /// `nil` for a ``TransportBackbone/unixDomainSocket`` listener, whose `AF_UNIX` address is a
+    /// filesystem path with no port to report.
+    public var boundEndpoint: BindEndpoint? {
+        state.withLock(\.boundEndpoint)
     }
 
     /// Binds one non-blocking listening socket — TCP, or `AF_UNIX` for the
@@ -107,6 +125,8 @@ public final class POSIXKqueueTransport: ServerTransport {
             $0.loops = loops
             $0.listenFD = listener.descriptor
             $0.boundPort = listener.port
+            $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
+            $0.closeLatch = ListenerCloseLatch()
             $0.isRunning = true
             $0.continuation = continuation
             $0.gate = AcceptGate(admission: admission)
@@ -140,9 +160,30 @@ public final class POSIXKqueueTransport: ServerTransport {
         return stream
     }
 
-    /// Closes the listening socket and stops every event loop.
+    /// Closes the listening socket — **waiting for the close to land** — and stops every event loop.
+    ///
+    /// Returning before the listening descriptor is actually closed is a restart-under-load hazard:
+    /// POSIX.1-2017 keeps the local address bound to a listening socket until it is closed, so a server
+    /// that stops and immediately rebinds the same port gets `EADDRINUSE` (errno 48 on Darwin, 98 on
+    /// Linux) and fails to come back. This used to end in a bare `acceptLoop.closeDescriptor(listenFD)`,
+    /// which only *enqueues* the close onto the loop thread — `shutdown()` then resolved with the port
+    /// still held, and the bind-contract matrix's `rebind after stop` row carried it as a known issue.
+    ///
+    /// The wait is a continuation resumed **by the loop thread**, not a blocking wait: parking a
+    /// cooperative-pool thread on a semaphore until an event loop got around to a close would trade this
+    /// race for a pool-starvation one, and on the single-loop configuration the loop's own pinned tasks
+    /// run on that pool. Suspending instead leaves the thread free and lets the loop drive the close —
+    /// the same shape ``POSIXDispatchTransport/shutdown()`` uses to reach its accept queue.
+    ///
+    /// Idempotent, and safe against a concurrent second call: the state swap below is the arbiter, so
+    /// exactly one caller ever sees a live `listenFD` and a non-empty `loops`, and every other caller
+    /// finds `-1`/`[]` and returns without enqueuing anything. That matters because
+    /// ``start(admission:)`` also wires `continuation.onTermination` to shut down, so a consumer
+    /// dropping the stream races an explicit `shutdown()` by construction.
     public func shutdown() async {
-        let (loops, listenFD, continuation) = state.withLock {
+        // `closeLatch` is deliberately NOT cleared: a caller that arrives after the close still has to
+        // find it, and find it already signalled.
+        let (loops, listenFD, continuation, latch) = state.withLock {
             let loops = $0.loops
             let fd = $0.listenFD
             let cont = $0.continuation
@@ -150,19 +191,42 @@ public final class POSIXKqueueTransport: ServerTransport {
             $0.listenFD = -1
             $0.continuation = nil
             $0.isRunning = false
-            return (loops, fd, cont)
+            return (loops, fd, cont, $0.closeLatch)
         }
         // Finish the connection stream so a consumer's `for await` completes instead of hanging.
         continuation?.finish()
-        if listenFD >= 0, let acceptLoop = loops.first {
-            acceptLoop.closeDescriptor(listenFD)  // close the listener on the loop that watches it
+        guard let latch else {
+            return  // never started: there is no listener to close and nothing to wait for
         }
+        if listenFD >= 0 {
+            // Close the listener on the loop that watches it. The loop is still running here — `stop()`
+            // is below — and even if it were not, its teardown drain runs the whole inbox
+            // unconditionally before the thread exits, so the latch cannot be left unsignalled.
+            if let acceptLoop = loops.first {
+                acceptLoop.closeDescriptor(listenFD) { latch.signal() }
+            }
+            else {
+                close(listenFD)  // no loop watches it; nothing to serialize against
+                latch.signal()
+            }
+        }
+        // Every caller waits here, including the ones that found the descriptor already taken.
+        await latch.wait()
         for loop in loops {
             loop.stop()
         }
     }
 
     // MARK: - Internals
+
+    /// The loop that watches the listening socket, or `nil` once ``shutdown()`` has taken it.
+    ///
+    /// A seam for the shutdown-ordering test: parking this loop is the only way to observe, from
+    /// outside, that ``shutdown()`` is *suspended* on its close rather than merely quick. See
+    /// ``KqueueEventLoop/queuedControlWork``.
+    var acceptLoop: KqueueEventLoop? {
+        state.withLock(\.loops.first)
+    }
 
     /// Auto-sizes the loop count to the **performance-core** count — one loop per P-core.
     ///

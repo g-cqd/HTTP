@@ -45,6 +45,8 @@
         private let registry = Mutex<Registry>(Registry())
         /// Work submitted from off-loop (executor jobs + control closures), drained each turn on the loop.
         private let inbox = Mutex<Inbox>(Inbox())
+        /// Control closures queued but not yet run — the lock-free mirror behind ``queuedControlWork``.
+        private let controlBacklog = Atomic<Int>(0)
 
         private struct Registry {
             /// Every waiter parked on a descriptor, per direction — a *list*, not one slot.
@@ -201,7 +203,32 @@
         /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races
         /// an in-flight handler and the fd number cannot be reused under one.
         func closeDescriptor(_ fd: Int32) {
+            enqueueClose(fd, then: nil)
+        }
+
+        /// Closes `fd` on the loop thread and runs `completion` there, strictly after `close(2)` returned.
+        ///
+        /// The Linux twin of ``KqueueEventLoop/closeDescriptor(_:then:)``, and the reason it exists is
+        /// the same: it lets ``POSIXEpollTransport/shutdown()`` suspend until the listening descriptor is
+        /// genuinely gone. The Linux job is where the defect was first *observed* — an immediate rebind
+        /// of the same port failed `bind(2)` with `EADDRINUSE`, errno 98 here against 48 on Darwin — even
+        /// though the racing code path is shared with the kqueue backbones.
+        func closeDescriptor(_ fd: Int32, then completion: @escaping @Sendable () -> Void) {
+            enqueueClose(fd, then: completion)
+        }
+
+        /// How much control work (closes, cancels) is queued for the loop thread but not yet run.
+        ///
+        /// The seam that makes the synchronous-close contract machine-checkable — see
+        /// ``KqueueEventLoop/queuedControlWork``, which also records why this is an `Atomic` mirror of
+        /// `inbox.control.count` rather than a read of it.
+        var queuedControlWork: Int {
+            controlBacklog.load(ordering: .acquiring)
+        }
+
+        private func enqueueClose(_ fd: Int32, then completion: (@Sendable () -> Void)?) {
             let offLoop = inbox.withLock { inbox -> Bool in
+                controlBacklog.add(1, ordering: .releasing)
                 inbox.control.append { [self] in
                     let parked = registry.withLock { registry -> [Waiter] in
                         registry.registered.remove(fd)
@@ -216,6 +243,7 @@
                     for waiter in parked {
                         waiter.handler()
                     }
+                    completion?()
                 }
                 return !inbox.onLoop
             }
@@ -304,6 +332,9 @@
             inbox.withLock { inbox in
                 swap(&inbox.jobs, &jobs)
                 swap(&inbox.control, &control)
+                // Queued-but-not-yet-run: this batch is about to RUN, so it leaves the backlog here —
+                // see the twin in ``KqueueEventLoop/drainInbox(jobs:control:until:)``.
+                controlBacklog.subtract(control.count, ordering: .releasing)
             }
             for closure in control {
                 closure()

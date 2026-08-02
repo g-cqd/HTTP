@@ -84,19 +84,18 @@ struct BindContractTests {
             #expect(realized == port, "\(backbone.rawValue) bound \(realized), configured \(port)")
         }
 
-        if backbone.reportsBoundEndpoint {
-            let reported = try #require(
-                subject.boundEndpoint(),
-                "\(backbone.rawValue) claims to report its endpoint but returned nil"
-            )
-            #expect(reported.address == resolved.address)
-            #expect(reported.family == resolved.family)
-            #expect(reported.port == realized)
-            #expect(reported.isWildcard == resolved.isWildcard)
-        }
-        else {
-            recordSkip(backbone, row, BindContractBackbone.unimplementedBoundEndpointReason)
-        }
+        // Asserted on every column, with no per-backbone relaxation left: the POSIX backbones used to
+        // take `ServerTransport`'s `nil` default here and the row recorded a skip instead, which meant
+        // four of the seven columns were not actually under contract for the thing the contract is about.
+        let reported = try #require(
+            subject.boundEndpoint(),
+            "\(backbone.rawValue) reported no bound endpoint after binding \(host)"
+        )
+        #expect(reported.address == resolved.address)
+        #expect(reported.family == resolved.family)
+        #expect(reported.port == realized)
+        #expect(reported.isWildcard == resolved.isWildcard)
+        _ = row
 
         // A wildcard is reachable through the loopback of its own family; an interface pin is
         // reachable at the literal it pinned. Either way the PORT under test is the reported one.
@@ -139,17 +138,7 @@ struct BindContractTests {
 
     /// Four stop/start cycles on one configured port: each stop must actually release it.
     private static func assertRebindAfterStop(_ backbone: BindContractBackbone) async throws {
-        let port = try freePort(backbone)
-        guard asynchronousListenerClose.contains(backbone) else {
-            try await rebindCycles(backbone, port: port)
-            return
-        }
-        await withKnownIssue(
-            "\(backbone.rawValue) closes its listening descriptor asynchronously at shutdown",
-            isIntermittent: true
-        ) {
-            try await rebindCycles(backbone, port: port)
-        }
+        try await rebindCycles(backbone, port: freePort(backbone))
     }
 
     private static func rebindCycles(_ backbone: BindContractBackbone, port: UInt16) async throws {
@@ -166,18 +155,6 @@ struct BindContractTests {
     }
 
     // MARK: - Helpers
-
-    /// Backbones whose `shutdown()` enqueues the listening-descriptor close onto their event loop and
-    /// returns, so a restart on the same port races that close.
-    ///
-    /// `POSIXKqueueTransport.shutdown()` and `SwiftSystemTransport.shutdown()` both end in
-    /// `acceptLoop.closeDescriptor(listenFD)`. Recorded as a known issue rather than dropped from the
-    /// matrix: if either starts awaiting its close, the trait fails as "known issue not recorded" and
-    /// the exclusion has to go. `POSIXEpoll/`, `POSIXKqueue/` and `SwiftSystem/` are owned elsewhere
-    /// in this closeout.
-    static let asynchronousListenerClose: Set<BindContractBackbone> = [
-        .posixKqueue, .swiftSystem, .posixEpoll
-    ]
 
     /// A free loopback port of the right transport for `backbone` (UDP for QUIC, TCP otherwise).
     static func freePort(_ backbone: BindContractBackbone) throws -> UInt16 {

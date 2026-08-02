@@ -41,6 +41,8 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     ///
     /// Separate from `registry` so enqueuing never contends with readiness bookkeeping.
     private let inbox = Mutex<Inbox>(Inbox())
+    /// Control closures queued but not yet run — the lock-free mirror behind ``queuedControlWork``.
+    private let controlBacklog = Atomic<Int>(0)
 
     /// The `EVFILT_USER` identity used purely as a cross-thread wakeup (never a real fd).
     private static let wakeIdent = UInt(0xFFFF_FFF0)
@@ -188,7 +190,41 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races an
     /// in-flight handler and the fd number cannot be reused under one.
     func closeDescriptor(_ fd: Int32) {
+        enqueueClose(fd, then: nil)
+    }
+
+    /// Closes `fd` on the loop thread and runs `completion` there, strictly after `close(2)` returned.
+    ///
+    /// The ordering is the whole point, and it is what lets a caller make an asynchronous close
+    /// *synchronous*: a listener's `shutdown()` suspends on a continuation this completion resumes, so
+    /// it cannot return while the listening descriptor is still open. Without it `shutdown()` merely
+    /// enqueued the close and returned, and an immediate rebind of the same port raced it — `bind(2)`
+    /// answering `EADDRINUSE` (errno 48 on Darwin, 98 on Linux; POSIX.1-2017 gives the listening socket
+    /// the address until it is closed), i.e. a server that stops and restarts could fail to come back.
+    ///
+    /// `completion` runs on the loop thread, after the parked waiters are resumed, so an assertion made
+    /// inside it observes a state in which the descriptor is provably gone.
+    func closeDescriptor(_ fd: Int32, then completion: @escaping @Sendable () -> Void) {
+        enqueueClose(fd, then: completion)
+    }
+
+    /// How much control work (closes, cancels) is queued for the loop thread but not yet run.
+    ///
+    /// The seam that makes the synchronous-close contract machine-checkable: a test can park the loop
+    /// thread, watch a caller's close land in the queue, and assert that the caller is *still suspended*
+    /// at that point. Without it "shutdown waited" and "shutdown got lucky" are indistinguishable from
+    /// outside, which is how the asynchronous close survived a green matrix.
+    ///
+    /// An `Atomic` mirror of `inbox.control.count` rather than a read of it, because this is meant to be
+    /// polled in a tight loop: polling the `Mutex` instead starved the very enqueue the poller was
+    /// waiting for, and the parked-loop test converged only when nothing else contended the CPU.
+    var queuedControlWork: Int {
+        controlBacklog.load(ordering: .acquiring)
+    }
+
+    private func enqueueClose(_ fd: Int32, then completion: (@Sendable () -> Void)?) {
         let offLoop = inbox.withLock { inbox -> Bool in
+            controlBacklog.add(1, ordering: .releasing)
             inbox.control.append { [self] in
                 let parked = registry.withLock {
                     ($0.readHandlers.removeValue(forKey: fd) ?? [])
@@ -202,6 +238,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
                 for waiter in parked {
                     waiter.handler()
                 }
+                completion?()
             }
             return !inbox.onLoop
         }
@@ -291,6 +328,10 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         inbox.withLock { inbox in
             swap(&inbox.jobs, &jobs)
             swap(&inbox.control, &control)
+            // Queued-but-not-yet-run: this batch is about to RUN, so it leaves the backlog here rather
+            // than after the closures return — otherwise a closure that parks the loop would count
+            // itself, and ``queuedControlWork`` would never read zero on a loop that is merely busy.
+            controlBacklog.subtract(control.count, ordering: .releasing)
         }
         for closure in control {
             closure()
