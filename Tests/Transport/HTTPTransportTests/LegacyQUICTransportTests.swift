@@ -53,6 +53,54 @@ struct LegacyQUICTransportTests {
         #expect(echoed == [UInt8]("ping".utf8))
     }
 
+    @Test(
+        "the legacy backbone binds the configured host and port, and reports what it bound",
+        .timeLimit(.minutes(1)))
+    func configuredEndpointIsHonored() async throws {
+        // This backbone always applied the configured port, but built its `NWParameters` without a
+        // required local endpoint — so the configured *host* was ignored and a loopback-configured h3
+        // listener bound every interface (the other half of audit F-04/F-05).
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let transport = LegacyQUICTransport(
+            configuration: TransportConfiguration(
+                host: "127.0.0.1",
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        let connections = try await transport.start()
+        #expect(transport.boundPort != 0)
+        let bound = try #require(transport.boundEndpoint)
+        #expect(bound.address == "127.0.0.1")
+        #expect(bound.port == transport.boundPort)
+        withExtendedLifetime(connections) {
+            // Held so the listener is not torn down before the assertions above.
+        }
+        await transport.shutdown()
+    }
+
+    @Test(
+        "an unbindable configured host fails closed on the legacy backbone",
+        .timeLimit(.minutes(1)), arguments: ["192.0.2.1", "legacy-quic-bind.invalid"])
+    func unbindableHostFailsClosed(_ host: String) async throws {
+        // RFC 5737 TEST-NET-1 and RFC 2606 §2's `.invalid` are both unbindable, so `start()` must
+        // throw rather than silently widen the listener to another interface (CWE-668).
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let transport = LegacyQUICTransport(
+            configuration: TransportConfiguration(
+                host: host,
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        await #expect(throws: TransportError.self) {
+            _ = try await transport.start()
+            await transport.shutdown()
+        }
+    }
+
     /// Echoes every byte of every inbound stream back to the peer, closing with FIN.
     private static func echoServer(_ connections: AsyncStream<any QUICConnection>) async {
         await withDiscardingTaskGroup { group in
