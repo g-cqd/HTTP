@@ -260,35 +260,10 @@
         /// A connected `SOCK_STREAM` pair with both directions' socket buffers shrunk, so a send of
         /// more than a few KiB is certain to park on writability rather than complete in one write.
         private static func makeSocketPair() -> (server: Int32, client: Int32) {
-            var descriptors = [Int32](repeating: 0, count: 2)
-            let paired = descriptors.withUnsafeMutableBufferPointer { buffer in
-                #if canImport(Darwin)
-                    socketpair(AF_UNIX, SOCK_STREAM, 0, buffer.baseAddress)
-                #else
-                    socketpair(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0, buffer.baseAddress)
-                #endif
-            }
-            #expect(paired == 0)
-            let width = socklen_t(MemoryLayout<Int32>.size)
-            var small = Self.sendBuffer
-            var large = Self.receiveBuffer
-            _ = setsockopt(descriptors[0], SOL_SOCKET, SO_SNDBUF, &small, width)
-            _ = setsockopt(descriptors[1], SOL_SOCKET, SO_RCVBUF, &small, width)
-            _ = setsockopt(descriptors[0], SOL_SOCKET, SO_RCVBUF, &large, width)
-            _ = setsockopt(descriptors[1], SOL_SOCKET, SO_SNDBUF, &large, width)
-            // A per-read watchdog on the CLIENT, so a stream that stops arriving surfaces as a short
-            // read the assertions can name rather than as a hung process. Five seconds against reads
-            // that complete in microseconds — a bound, not a measurement.
-            var patience = timeval(tv_sec: 5, tv_usec: 0)
-            _ = setsockopt(
-                descriptors[1],
-                SOL_SOCKET,
-                SO_RCVTIMEO,
-                &patience,
-                socklen_t(MemoryLayout<timeval>.size)
+            PortableTLSLoopback.makeSocketPair(
+                sendBuffer: Self.sendBuffer,
+                receiveBuffer: Self.receiveBuffer
             )
-            POSIXSocket.setNonBlocking(descriptors[0])
-            return (descriptors[0], descriptors[1])
         }
 
         /// The server side: a `PortableTLSConnection` over memory BIOs on the readiness loop.
@@ -297,47 +272,17 @@
             descriptor: Int32,
             loop: TLSEventLoop
         ) throws -> PortableTLSConnection {
-            let ssl = try #require(CHTTPBoringSSL_SSL_new(context))
-            let readBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            let writeBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            CHTTPBoringSSL_SSL_set_bio(ssl, readBIO, writeBIO)
-            return PortableTLSConnection(
-                id: TransportConnectionID(1),
-                peer: TransportAddress(host: "127.0.0.1", port: 0),
-                ssl: ssl,
-                readBIO: readBIO,
-                writeBIO: writeBIO,
-                descriptor: descriptor,
-                eventLoop: loop,
-                clientAuth: .none,
-                verifyPeer: nil
-            )
+            try PortableTLSLoopback.makeConnection(context, descriptor: descriptor, loop: loop)
         }
 
         /// Reads up to `limit` plaintext octets from a blocking client `SSL`, stopping early on any
         /// non-positive result — which is how a corrupted record stream surfaces here.
         private static func drain(_ ssl: OpaquePointer, upTo limit: Int) -> [UInt8] {
-            var collected: [UInt8] = []
-            collected.reserveCapacity(limit)
-            var window = [UInt8](repeating: 0, count: 32 * 1_024)
-            while collected.count < limit {
-                let count = window.withUnsafeMutableBytes {
-                    Int(CHTTPBoringSSL_SSL_read(ssl, $0.baseAddress, Int32($0.count)))
-                }
-                guard count > 0 else {
-                    break
-                }
-                collected.append(contentsOf: window[..<count])
-            }
-            return collected
+            PortableTLSLoopback.drain(ssl, upTo: limit)
         }
 
         private static func histogram(_ bytes: [UInt8]) -> [Int] {
-            var counts = [Int](repeating: 0, count: 256)
-            for byte in bytes {
-                counts[Int(byte)] += 1
-            }
-            return counts
+            PortableTLSLoopback.histogram(bytes)
         }
     }
 
