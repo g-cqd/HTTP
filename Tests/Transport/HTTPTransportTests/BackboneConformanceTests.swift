@@ -24,13 +24,13 @@ struct BackboneConformanceTests {
         .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem
     ]
 
-    private func makeTransport(_ backbone: TransportBackbone) throws -> any ServerTransport {
+    func makeTransport(_ backbone: TransportBackbone) throws -> any ServerTransport {
         try TransportFactory.make(TransportConfiguration(port: 0, backbone: backbone))
     }
 
     @Test(
         "the configured bind host does not expose the listener through another interface",
-        .timeLimit(.minutes(1)), arguments: [TransportBackbone.networkFramework, .posixKqueue])
+        .timeLimit(.minutes(1)), arguments: socketBackbones)
     func configuredHostIsHonored(_ backbone: TransportBackbone) async throws {
         // A listener explicitly bound to loopback must reject a connection through an active
         // non-loopback interface. The POSIX backbone is the control; Network.framework must honor the
@@ -56,7 +56,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "binding a nonlocal configured host fails instead of silently selecting another interface",
-        .timeLimit(.minutes(1)), arguments: [TransportBackbone.networkFramework, .posixKqueue])
+        .timeLimit(.minutes(1)), arguments: socketBackbones)
     func nonlocalConfiguredHostFailsClosed(_ backbone: TransportBackbone) async throws {
         // RFC 5737 TEST-NET-1 cannot be assigned to this host. Starting a listener configured for it
         // must fail; success proves the backend silently ignored the public bind-host setting.
@@ -73,7 +73,7 @@ struct BackboneConformanceTests {
         }
     }
 
-    private static func nonLoopbackIPv4Address() -> String? {
+    static func nonLoopbackIPv4Address() -> String? {
         var head: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&head) == 0, let head else {
             return nil
