@@ -12,6 +12,10 @@
 //  decline actually declines, that nothing accumulates across a large body, and that a body abandoned
 //  mid-stream releases the codec at a point the code names rather than whenever ARC gets to it.
 //
+//  These run on BOTH platforms. They were excluded from the Linux graph while no coding could stream
+//  there at all; that gap is closed, and the only platform-dependent thing left is WHICH codings a
+//  build offers, which ``streamableCodings`` derives rather than hard-codes.
+//
 
 internal import HTTPCore
 internal import HTTPTransport
@@ -25,6 +29,20 @@ import Testing
 private let payload = Array(
     String(repeating: "streamed compressible text 0123456789\n", count: 512).utf8
 )
+
+/// The coding tokens this build can both negotiate and stream.
+///
+/// Derived from ``CompressionMiddleware/defaultEncoders`` rather than written out, because that list
+/// is itself `#if`-assembled and the two must not disagree: a literal `["gzip", "br"]` asserted `br`
+/// on a build whose negotiator never offers it, which is a test failure that says nothing about the
+/// server. Darwin yields `["br", "gzip"]`; Linux yields `["gzip"]` — `br` has no incremental backend
+/// there and declines, which ``ContentEncoderStreamTests`` pins directly.
+private let streamableCodings: [String] = CompressionMiddleware.defaultEncoders.compactMap {
+    guard let streaming = $0 as? any StreamingContentEncoder, streaming.makeStream() != nil else {
+        return nil
+    }
+    return streaming.token
+}
 
 /// A `GET` carrying `accept`, or none at all.
 private func request(_ accept: String?) -> HTTPRequest {
@@ -76,7 +94,7 @@ private func drain(_ response: ServerResponse) async throws -> RecordingBodyWrit
 
 @Test(
     "RFC 9110 §8.4.1 — a streamed body is coded, byte-identically to the buffered path",
-    arguments: ["gzip", "br"]
+    arguments: streamableCodings
 )
 func streamedCodingMatchesBufferedCoding(coding: String) async throws {
     let chunks = stride(from: 0, to: payload.count, by: 700)
@@ -152,7 +170,7 @@ func declinesWhenTheBackendCannotStream(conformsToStreaming: Bool) async throws 
 
 @Test(
     "retention stays bounded across a large coded stream",
-    arguments: ["gzip", "br"]
+    arguments: streamableCodings
 )
 func largeCodedStreamDoesNotAccumulate(coding: String) async throws {
     // 16 MiB in ~64 KiB chunks — the shape a static file over the streaming threshold produces.

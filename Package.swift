@@ -140,22 +140,19 @@ let strictMemorySafeTargets: Set<String> = [
         "ReadinessWaiterCollisionTests.swift"
     ]
     // Everything `HTTPServerTests` drops on Linux: the Network.framework-provided HTTP/3 suites, and
-    // the tests of codings Apple's `Compression` backs (Brotli/gzip/inflate + the streaming encoder).
-    // One list rather than two because it gates ONE target and the reason for each entry belongs to
-    // the entry, not to the list name — the zstd suite self-gates on `canImport(CZstd)` instead.
+    // the tests of codings Apple's `Compression` backs (Brotli/gzip/inflate). One list rather than two
+    // because it gates ONE target and the reason for each entry belongs to the entry, not to the list
+    // name — the zstd suite self-gates on `canImport(CZstd)` instead.
+    //
+    // `ContentEncoderStreamTests` and `StreamingCompressionTests` are NOT here any more. They were,
+    // because `GzipEncoder.makeStream()` returned nil off Darwin and every streamed response fell
+    // through to identity — the exclusion was a symptom of a missing feature, not a portability
+    // defect in the tests. The feature exists now (`ZlibDeflateStream` over the `CZlibCoding` shim's
+    // resumable `deflate`), so both suites run here, and their byte-identity case is what holds the
+    // Linux streamed and buffered codings to the same octets. Keep it that way.
     let serverTestExclusions = [
         "HTTPServerHTTP3Tests.swift",
         "HTTPServerWebSocketHTTP3Tests.swift",
-        // The STREAMING coding path, which does not exist on Linux at all: `GzipEncoderStream.swift`
-        // is wrapped `#if canImport(Compression)` in its entirety, so `GzipEncoder.makeStream()`
-        // returns nil there and `CompressingBodyWriter` declines every stream. Not a test defect and
-        // not a portability defect — a missing feature. Both suites compile on Linux and FAIL at
-        // runtime, which is how this was found: they had never been reached before the test target
-        // started building. The follow-up is a `CZlibCoding` implementation of the streaming encoder
-        // (the buffered gzip path already has one, which is why `ContentEncoderTests` stays in);
-        // these two go back in the graph with it.
-        "ContentEncoderStreamTests.swift",
-        "StreamingCompressionTests.swift",
         "CompressionMiddlewareTests.swift",
         "DecompressionMiddlewareTests.swift",
         "DecompressionFuzzTests.swift",
