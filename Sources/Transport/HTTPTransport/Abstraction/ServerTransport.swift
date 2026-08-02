@@ -32,11 +32,10 @@ public protocol ServerTransport: Sendable {
     /// only knowable indirectly — a QUIC listener bound one port and advertised it while every client
     /// dialled the configured one.
     ///
-    /// The default returns `nil`. The Network.framework backbones override it; the POSIX backbones
-    /// (`POSIXKqueue`, `POSIXDispatch`, `SwiftSystem`, `POSIXEpoll`) and `PortableTLS` still owe the
-    /// override — each already resolves the endpoint at `start()` and reads the realized port back
-    /// with `getsockname(2)`, so it is a few lines each in files this change does not own. Until then
-    /// the shared bind-contract matrix skips their endpoint-reporting cell *by name*.
+    /// The default returns `nil`. The Network.framework backbones and all four POSIX backbones
+    /// (`POSIXKqueue`, `POSIXDispatch`, `SwiftSystem`, `POSIXEpoll`) override it, reading the realized
+    /// endpoint back with `getsockname(2)` — the bind-contract matrix asserts every one of them rather
+    /// than skipping the cell. `PortableTLS` is the one that still owes it.
     var boundEndpoint: BindEndpoint? { get }
 
     /// Binds and begins accepting, returning a stream of inbound connections that finishes when the
