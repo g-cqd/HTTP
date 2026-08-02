@@ -44,6 +44,8 @@ public final class SwiftSystemTransport: ServerTransport {
         var listenDescriptor: FileDescriptor?
         var listenFD: Int32 = -1
         var boundPort: UInt16 = 0
+        /// The endpoint `getsockname(2)` reports for the listener.
+        var boundEndpoint: BindEndpoint?
         /// Signalled once the listening descriptor is closed.
         ///
         /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
@@ -68,6 +70,15 @@ public final class SwiftSystemTransport: ServerTransport {
     /// The actual bound port (meaningful after ``start()`` returns).
     public var boundPort: UInt16 {
         state.withLock(\.boundPort)
+    }
+
+    /// The local endpoint actually bound (meaningful after ``start()`` returns), or `nil` before binding.
+    ///
+    /// Read back from the kernel with `getsockname(2)` at bind time, not derived from the configuration:
+    /// `port` `0` means "whichever the OS chose" and `host` may have been a name or a wildcard, so the
+    /// realized answer is the only one an operator log or an `Alt-Svc` advertisement (RFC 7838) can use.
+    public var boundEndpoint: BindEndpoint? {
+        state.withLock(\.boundEndpoint)
     }
 
     /// Binds one non-blocking listening socket, spins up N event loops, and begins accepting on the
@@ -96,6 +107,7 @@ public final class SwiftSystemTransport: ServerTransport {
             $0.listenDescriptor = FileDescriptor(rawValue: listener.descriptor)
             $0.listenFD = listener.descriptor
             $0.boundPort = listener.port
+            $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
             $0.closeLatch = ListenerCloseLatch()
             $0.isRunning = true
             $0.continuation = continuation

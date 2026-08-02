@@ -84,19 +84,18 @@ struct BindContractTests {
             #expect(realized == port, "\(backbone.rawValue) bound \(realized), configured \(port)")
         }
 
-        if backbone.reportsBoundEndpoint {
-            let reported = try #require(
-                subject.boundEndpoint(),
-                "\(backbone.rawValue) claims to report its endpoint but returned nil"
-            )
-            #expect(reported.address == resolved.address)
-            #expect(reported.family == resolved.family)
-            #expect(reported.port == realized)
-            #expect(reported.isWildcard == resolved.isWildcard)
-        }
-        else {
-            recordSkip(backbone, row, BindContractBackbone.unimplementedBoundEndpointReason)
-        }
+        // Asserted on every column, with no per-backbone relaxation left: the POSIX backbones used to
+        // take `ServerTransport`'s `nil` default here and the row recorded a skip instead, which meant
+        // four of the seven columns were not actually under contract for the thing the contract is about.
+        let reported = try #require(
+            subject.boundEndpoint(),
+            "\(backbone.rawValue) reported no bound endpoint after binding \(host)"
+        )
+        #expect(reported.address == resolved.address)
+        #expect(reported.family == resolved.family)
+        #expect(reported.port == realized)
+        #expect(reported.isWildcard == resolved.isWildcard)
+        _ = row
 
         // A wildcard is reachable through the loopback of its own family; an interface pin is
         // reachable at the literal it pinned. Either way the PORT under test is the reported one.

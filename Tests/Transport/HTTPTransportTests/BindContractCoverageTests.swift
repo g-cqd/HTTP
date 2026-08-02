@@ -75,18 +75,23 @@ struct BindContractCoverageTests {
         #endif
     }
 
-    @Test("the backbones that do not yet report a bound endpoint are named, not implied")
-    func unimplementedBoundEndpointIsNamed() {
-        let owing = BindContractBackbone.allCases.filter { !$0.reportsBoundEndpoint }
-        // Exactly the POSIX socket backbones. Network.framework and both QUIC backbones implement it;
-        // see `ServerTransport.boundEndpoint` for the one-line-each override the rest still owe.
-        let expected = ["posixDispatch", "posixEpoll", "posixKqueue", "swiftSystem"]
-        #expect(owing.map(\.rawValue).sorted() == expected)
-        for backbone in owing {
-            print(
-                "BIND-CONTRACT OWES boundEndpoint \(backbone.rawValue): "
-                    + BindContractBackbone.unimplementedBoundEndpointReason
-            )
+    /// The endpoint-reporting relaxation is gone, and this is what keeps it gone.
+    ///
+    /// `BindContractBackbone` used to carry a `reportsBoundEndpoint` flag that was `false` for the four
+    /// POSIX backbones, and the matrix recorded a named skip instead of asserting their endpoint — four
+    /// of seven columns not under contract for the thing the contract is about. All four report what
+    /// `getsockname(2)` gives now, so platform availability is the only skip reason left in the grid.
+    /// Asserted rather than assumed, because "no relaxations left" is exactly the property that decays
+    /// silently once the commit that removed them scrolls out of view.
+    @Test("platform availability is the only reason any cell skips")
+    func theOnlySkipReasonIsPlatform() {
+        for backbone in BindContractBackbone.allCases {
+            for row in BindContractCase.allCases {
+                #expect(
+                    backbone.skipReason(for: row) == backbone.platformSkipReason,
+                    "\(backbone.rawValue)/\(row.testDescription) skips for a non-platform reason"
+                )
+            }
         }
     }
 }
