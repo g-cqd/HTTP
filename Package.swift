@@ -126,13 +126,17 @@ let strictMemorySafeTargets: Set<String> = [
         // raw BSD-socket options; SO_NOSIGPIPE is Darwin-only (the epoll tests cover Linux)
         "POSIXSocketTests.swift",
         // Built on `KqueueEventLoop` + `POSIXKqueueConnection`, both excluded above, so it cannot
-        // compile here. THE LARGEST COVERAGE DEBT IN THIS LIST, and it must not be quiet: the
-        // single-slot-waiter defect it proves is not a kqueue defect. `POSIXEpollConnection` carries
-        // the same `OnceResumer` shape and `EpollEventLoop` the same readiness tables, so the two red
-        // cases here (`connectionReceivesResumeIndependently` /
-        // `connectionSendsResumeIndependently`) describe a live Linux defect that no Linux test
-        // currently observes. An epoll mirror of this suite is the follow-up — and it is the one that
-        // would have caught the `ready` redeclaration this Linux-restoration work exists because of.
+        // compile here. This was recorded as the largest coverage debt in this list, because the
+        // single-slot-waiter defect it proves is not a kqueue defect — `POSIXEpollConnection` carried
+        // the same `OnceResumer` shape and `EpollEventLoop` the same readiness tables.
+        //
+        // **That debt is retired**, so the entry stays but the warning does not. Its connection-level
+        // claims are now covered portably, and with strictly more, by
+        // `ConnectionDirectionOwnershipTests` (an `#if` picks the reactor and raw connection; N-way
+        // 2/4/8, close, half-close, EPIPE, cancellation, descriptor reuse), and its two loop-level
+        // claims have a native Linux twin in `EpollEventLoopTests`. Both run on Linux; neither is
+        // excluded. Keep it that way — an exclusion here is honest only while something else covers
+        // the behaviour on the platform being excluded.
         "ReadinessWaiterCollisionTests.swift"
     ]
     // Everything `HTTPServerTests` drops on Linux: the Network.framework-provided HTTP/3 suites, and
