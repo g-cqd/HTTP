@@ -29,6 +29,32 @@
 //  which is precisely the interleaving being excluded. It is NOT reentrant, so a gated entry point must
 //  never call another gated entry point on the same direction — keep the ungated core in its own method.
 //
+//  A CAPABILITY LEASE WAS TRIED HERE AND DECLINED. The obvious next step from `isOwned` is a token:
+//  a `~Copyable, ~Escapable` `Lease` vended only by ``withOwnership(_:)``, threaded into every helper
+//  that touches the direction, so that calling one WITHOUT the lease is inexpressible rather than
+//  merely detected at runtime. It was prototyped against both real call shapes on Swift 6.4 with
+//  `LifetimeDependence`. The receive half works completely — including the `inout` copy-out, which
+//  takes a `borrowing Lease` alongside `&buffer` and compiles clean. The send half does not, and the
+//  reason is structural rather than a rough edge:
+//
+//      error: 'lease' cannot be captured by an escaping closure since it is a borrowed parameter
+//      error: lifetime-dependent variable 'lease' escapes its scope
+//             note: this use causes the lifetime-dependent value to escape
+//
+//  Send ownership must span every partial-write, `writev` and `sendfile` retry, and those retries are
+//  driven by ESCAPING `@Sendable` re-arm callbacks owned by the reactor — that is what makes the pump
+//  event-driven instead of stack recursion, so hostile peers cannot grow the stack. A non-escapable
+//  lease cannot cross that boundary, by construction and correctly. The only way through is to lift
+//  ``OnceResumer`` out of the lease and capture it instead, which is exactly today's design and
+//  re-opens the same hole the token was meant to close.
+//
+//  So the choice was a capability on the inbound direction and a flag on the outbound one. That is
+//  worse than a flag on both: a reader would have to know which half of a symmetric contract is
+//  statically enforced and which is asserted, and the half that is NOT enforced is the half where the
+//  audit actually found the defect (the per-chunk `sendFile` splice). Uniform and asserted beats
+//  half-proven. The flag stays, and the assertions stay with it — they were always meant to be
+//  defence in depth, and here they are the depth.
+//
 
 internal import HTTPConcurrency
 internal import Synchronization
