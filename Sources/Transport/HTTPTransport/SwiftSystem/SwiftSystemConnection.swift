@@ -46,19 +46,19 @@ public final class SwiftSystemConnection: TransportConnection {
     /// A reusable receive buffer, overwritten each read, so the hot read path allocates no fresh chunk
     /// per `recv` (audit P1) and holds only what this peer has shown it needs (ADD-P2 — see
     /// ``ReceiveScratch``). `Mutex`-guarded because `read(2)` runs on the loop thread while the copy-out
-    /// runs on the awaiting (pinned) task; reads on one connection are serial, so the lock is
-    /// uncontended.
+    /// runs on the awaiting (pinned) task; the inbound ``DirectionOwner`` makes reads serial, so the
+    /// lock is uncontended.
     private let scratch = Mutex(ReceiveScratch())
-    /// Cached resumer for the shared scratch read core (both `receive` overloads).
+    /// The inbound direction and its sole operation owner (audit F-03).
     ///
-    /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
-    /// Sound because reads on one connection are serialized — the prior continuation is always taken
-    /// before the next op installs its own.
-    private let readResumer = OnceResumer<Int>()
-    /// Cached resumer for the hot write path (``send(_:)`` and the ``send(_:_:)`` writev override).
+    /// Covers the WHOLE receive — the opportunistic read, the parked wait, and the copy-out of a
+    /// scratch the next read overwrites. Mirrors ``POSIXKqueueConnection``.
+    private let receiveOwner = DirectionOwner<Int>()
+    /// The outbound direction and its sole operation owner (audit F-03).
     ///
-    /// Reused the same way: writes on one connection are serial and never overlap a read.
-    private let writeResumer = OnceResumer<Void>()
+    /// Covers the whole send: the first write and every partial-write / `writev` / `sendfile` retry.
+    /// Independent of ``receiveOwner`` — a parked receive never delays a send.
+    private let sendOwner = DirectionOwner<Void>()
 
     private enum WriteOutcome {
         case done
@@ -95,21 +95,33 @@ public final class SwiftSystemConnection: TransportConnection {
     /// chunk is the only per-read allocation — and honors per-call task cancellation (the
     /// ``TransportConnection`` receive contract).
     public func receive(maxLength: Int) async throws -> [UInt8]? {
-        let count = try await readIntoScratch(maxLength: maxLength)
-        guard count > 0 else {
-            return nil  // 0 == EOF
+        try await receiveOwner.withOwnership { once -> [UInt8]? in
+            let count = try await readIntoScratch(maxLength: maxLength, once: once)
+            guard count > 0 else {
+                return nil  // 0 == EOF
+            }
+            // Inside the ownership on purpose (audit F-03): the scratch holds THIS read's octets only
+            // until the next read overwrites them, and the next receive cannot start until this returns.
+            return scratch.withLock { Array($0.received(count)) }
         }
-        return scratch.withLock { Array($0.received(count)) }
     }
 
     /// Reads up to `maxLength` bytes into the reused scratch and appends them to `buffer`, returning the
     /// count appended (`0` at EOF) — the allocation-free read path (audit P1).
+    ///
+    /// The append happens INSIDE the ownership (audit F-03): the scratch holds only THIS read's octets,
+    /// until the next `read(2)` overwrites them, so a copy-out taken after the direction is released is
+    /// a race rather than an optimization — the shape the 2026-07-31 audit found in the TLS twin under
+    /// the same unenforced justification ("reads are serial"). `buffer` is captured by the non-escaping
+    /// ownership body and appended to in place: no owned chunk hand-back, so no per-receive allocation.
     public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-        let count = try await readIntoScratch(maxLength: maxLength)
-        if count > 0 {
-            scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
+        try await receiveOwner.withOwnership { once in
+            let count = try await readIntoScratch(maxLength: maxLength, once: once)
+            if count > 0 {
+                scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
+            }
+            return count
         }
-        return count
     }
 
     /// The octets this connection's receive scratch currently holds — the residency oracle (ADD-P2).
@@ -118,30 +130,67 @@ public final class SwiftSystemConnection: TransportConnection {
     }
 
     /// Writes all of `bytes`, re-arming on writability whenever the socket buffer is full.
+    ///
+    /// Owns the outbound direction for the whole operation — the first write and every partial-write
+    /// retry (audit F-03) — so a second sender queues behind it rather than displacing its
+    /// continuation and stranding a half-written response.
     public func send(_ bytes: [UInt8]) async throws {
-        try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Void, any Error>) in
-            writeResumer.reset(continuation)
-            writeRemaining(bytes: bytes, offset: 0, once: writeResumer)
+        try await sendOwner.withOwnership { once in
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                guard claimSend(continuation, once) else {
+                    return
+                }
+                writeRemaining(bytes: bytes, offset: 0, once: once)
+            }
         }
     }
 
     /// Scatter-gather send: writes `head` then `body` in one `writev` syscall — no coalesce copy
     /// (audit #3 / L4) — re-arming on writability whenever the socket buffer fills.
     ///
-    /// An empty `body` falls back to the single-buffer ``send(_:)``. No per-op cancellation handler on
-    /// the write path: the server registers one ``cancel()`` for the whole connection (audit CC4),
-    /// which closes the fd and unblocks a parked write.
+    /// An empty `body` falls back to the single-buffer ``send(_:)``. That fallback runs BEFORE the
+    /// direction is taken: ``DirectionOwner`` is not reentrant, and taking it here and again in
+    /// ``send(_:)`` would deadlock the connection (CWE-833). No per-op cancellation handler on the
+    /// write path: the server registers one ``cancel()`` for the whole connection (audit CC4), which
+    /// closes the fd and unblocks a parked write.
     public func send(_ head: [UInt8], _ body: [UInt8]) async throws {
         guard !body.isEmpty else {
             try await send(head)
             return
         }
-        try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Void, any Error>) in
-            writeResumer.reset(continuation)
-            writevRemaining(head: head, body: body, offset: 0, once: writeResumer)
+        try await sendOwner.withOwnership { once in
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                guard claimSend(continuation, once) else {
+                    return
+                }
+                writevRemaining(head: head, body: body, offset: 0, once: once)
+            }
         }
+    }
+
+    /// Installs a send's continuation and reports whether the syscall may proceed.
+    ///
+    /// Two refusals, both of which have already resumed `continuation`: the ownership contract was
+    /// broken (``OnceResumer/claim(_:)`` failed the intruder), or the connection was closed while this
+    /// operation waited its turn. The close check matters most for a QUEUED send: by the time it owns
+    /// the direction the descriptor may have been closed and its NUMBER reused by the kernel for an
+    /// unrelated connection, and writing a response into that would be cross-connection corruption.
+    private func claimSend(
+        _ continuation: UnsafeContinuation<Void, any Error>,
+        _ once: OnceResumer<Void>
+    ) -> Bool {
+        // SE-0458 (ADR 0009): unsafe by the continuation parameter. `OnceResumer` stores and resumes
+        // it under a `Mutex` that guarantees exactly one resumal; it does not escape this connection.
+        guard unsafe once.claim(continuation) else {
+            return false
+        }
+        guard !isClosed.load(ordering: .acquiring) else {
+            once.resume(throwing: TransportError.closed)
+            return false
+        }
+        return true
     }
 
     /// Sends `length` octets of the open file `file` starting at `offset` via Darwin `sendfile(2)` —
@@ -155,10 +204,14 @@ public final class SwiftSystemConnection: TransportConnection {
         guard length > 0 else {
             return
         }
-        try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Void, any Error>) in
-            writeResumer.reset(continuation)
-            sendFileRemaining(file: file, offset: offset, remaining: length, once: writeResumer)
+        try await sendOwner.withOwnership { once in
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<Void, any Error>) in
+                guard claimSend(continuation, once) else {
+                    return
+                }
+                sendFileRemaining(file: file, offset: offset, remaining: length, once: once)
+            }
         }
     }
 
@@ -228,12 +281,15 @@ public final class SwiftSystemConnection: TransportConnection {
     /// while a *parked* receive honors its own task's cancellation per the ``TransportConnection``
     /// contract: cancellation tears the connection down (``cancel()``), the loop's close sweep resumes
     /// the waiter, and the lapse surfaces here as `CancellationError`.
-    private func readIntoScratch(maxLength: Int) async throws -> Int {
+    ///
+    /// The ungated core: the caller already owns the inbound direction (audit F-03), and ``DirectionOwner``
+    /// is not reentrant, so this must never be reached through a gated entry point twice.
+    private func readIntoScratch(maxLength: Int, once: OnceResumer<Int>) async throws -> Int {
         do {
             if let immediate = try readScratchNow(maxLength: maxLength) {
                 return immediate
             }
-            return try await parkForScratchRead(maxLength: maxLength)
+            return try await parkForScratchRead(maxLength: maxLength, once: once)
         }
         catch _ where Task.isCancelled {
             // The teardown above — or a pre-cancelled task finding the descriptor already closed —
@@ -271,12 +327,14 @@ public final class SwiftSystemConnection: TransportConnection {
     /// Parks until the socket is readable and resumes with the next read's outcome, under a
     /// cancellation handler that closes the connection — the only way to abandon an in-flight read on
     /// a byte stream without losing its framing (the ``TransportConnection`` receive contract).
-    private func parkForScratchRead(maxLength: Int) async throws -> Int {
+    private func parkForScratchRead(maxLength: Int, once: OnceResumer<Int>) async throws -> Int {
         try await withTaskCancellationHandler {
             try await withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Int, any Error>) in
-                readResumer.reset(continuation)
-                armScratchRead(maxLength: maxLength, into: readResumer)
+                guard once.claim(continuation) else {
+                    return  // contract broken; `claim` has already failed this caller
+                }
+                armScratchRead(maxLength: maxLength, into: once)
             }
         } onCancel: {
             self.cancel()
