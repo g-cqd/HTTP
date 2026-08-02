@@ -102,7 +102,7 @@ public final class SwiftSystemConnection: TransportConnection {
             }
             // Inside the ownership on purpose (audit F-03): the scratch holds THIS read's octets only
             // until the next read overwrites them, and the next receive cannot start until this returns.
-            return scratch.withLock { Array($0.received(count)) }
+            return copyOutReceived(count)
         }
     }
 
@@ -118,10 +118,41 @@ public final class SwiftSystemConnection: TransportConnection {
         try await receiveOwner.withOwnership { once in
             let count = try await readIntoScratch(maxLength: maxLength, once: once)
             if count > 0 {
-                scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
+                appendReceived(count, to: &buffer)
             }
             return count
         }
+    }
+
+    /// Copies out the octets THIS read produced, into a fresh chunk.
+    private func copyOutReceived(_ count: Int) -> [UInt8] {
+        assertInboundLeased()
+        return scratch.withLock { Array($0.received(count)) }
+    }
+
+    /// Appends the octets THIS read produced to `buffer`, in place — the allocation-free copy-out.
+    private func appendReceived(_ count: Int, to buffer: inout [UInt8]) {
+        assertInboundLeased()
+        scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
+    }
+
+    /// Asserts the inbound direction is still leased, which is what makes a scratch copy-out sound.
+    ///
+    /// The reason both copy-outs route through a helper (audit F-03). The scratch holds one read's
+    /// octets until the next `read` overwrites them, so the copy is correct only while this operation
+    /// still owns the direction — and a behavioural test cannot prove that: narrowing the lease so the
+    /// copy-out happens after release was caught by the socket-level suite in only about half of its
+    /// runs, because it needs a second receive to actually interleave. A test that only MAY interleave
+    /// is not a regression test, so the invariant is machine-checked instead. Mirrors
+    /// `PortableTLSConnection.drainCiphertext`'s `precondition(sendPump.isHeld)`.
+    ///
+    /// One uncontended lock read per receive, kept in release rather than an `assert` because a scratch
+    /// copied out from under its owner is silent corruption of a request body, not a crash.
+    private func assertInboundLeased() {
+        precondition(
+            receiveOwner.isOwned,
+            "the receive copy-out requires the inbound direction; the scratch would be overwritten"
+        )
     }
 
     /// The octets this connection's receive scratch currently holds — the residency oracle (ADD-P2).
@@ -177,10 +208,21 @@ public final class SwiftSystemConnection: TransportConnection {
     /// operation waited its turn. The close check matters most for a QUEUED send: by the time it owns
     /// the direction the descriptor may have been closed and its NUMBER reused by the kernel for an
     /// unrelated connection, and writing a response into that would be cross-connection corruption.
+    ///
+    /// The `precondition` is the machine-checked half of the contract on this side (audit F-03): every
+    /// send entry point routes through here, so an ungated one — a gated method calling another gated
+    /// method's core, or an exclusion removed in a later refactor — trips it deterministically rather
+    /// than splicing its octets into another response's body. Mirrors
+    /// `PortableTLSConnection.drainCiphertext`'s `precondition(sendPump.isHeld)`. One uncontended lock
+    /// read per send, not per retry.
     private func claimSend(
         _ continuation: UnsafeContinuation<Void, any Error>,
         _ once: OnceResumer<Void>
     ) -> Bool {
+        precondition(
+            sendOwner.isOwned,
+            "a send requires the outbound direction; octets would splice into another response"
+        )
         // SE-0458 (ADR 0009): unsafe by the continuation parameter. `OnceResumer` stores and resumes
         // it under a `Mutex` that guarantees exactly one resumal; it does not escape this connection.
         guard unsafe once.claim(continuation) else {

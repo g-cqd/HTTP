@@ -62,12 +62,6 @@
         /// retry. Independent of ``receiveOwner`` — a parked receive never delays a send.
         private let sendOwner = DirectionOwner<Void>()
 
-        private enum WriteOutcome {
-            case done
-            case wouldBlock(offset: Int)
-            case failed(errno: Int32)
-        }
-
         /// Wraps an accepted, non-blocking socket descriptor watched by `eventLoop`.
         init(
             id: TransportConnectionID,
@@ -105,7 +99,7 @@
                 // Inside the ownership on purpose (audit F-03): the scratch holds THIS read's octets
                 // only until the next `read(2)` overwrites them, and the next receive cannot start
                 // until this body returns.
-                return scratch.withLock { Array($0.received(count)) }
+                return copyOutReceived(count)
             }
         }
 
@@ -121,11 +115,63 @@
             try await receiveOwner.withOwnership { once in
                 let count = try await readIntoScratch(maxLength: maxLength, once: once)
                 if count > 0 {
-                    scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
+                    appendReceived(count, to: &buffer)
                 }
                 return count
             }
         }
+
+        /// Copies out the octets THIS read produced, into a fresh chunk.
+        private func copyOutReceived(_ count: Int) -> [UInt8] {
+            assertInboundLeased()
+            return scratch.withLock { Array($0.received(count)) }
+        }
+
+        /// Appends the octets THIS read produced to `buffer`, in place — the allocation-free copy-out.
+        private func appendReceived(_ count: Int, to buffer: inout [UInt8]) {
+            assertInboundLeased()
+            scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
+        }
+
+        /// Asserts the inbound direction is still leased, which is what makes a scratch copy-out sound.
+        ///
+        /// The reason both copy-outs route through a helper (audit F-03). The scratch holds one read's
+        /// octets until the next `read(2)` overwrites them, so the copy is correct only while this operation
+        /// still owns the direction — and a behavioural test cannot prove that: narrowing the lease so the
+        /// copy-out happens after release was caught by the socket-level suite in only about half of its
+        /// runs, because it needs a second receive to actually interleave. A test that only MAY interleave
+        /// is not a regression test, so the invariant is machine-checked instead. Mirrors
+        /// `PortableTLSConnection.drainCiphertext`'s `precondition(sendPump.isHeld)`.
+        ///
+        /// One uncontended lock read per receive, kept in release rather than an `assert` because a scratch
+        /// copied out from under its owner is silent corruption of a request body, not a crash.
+        private func assertInboundLeased() {
+            precondition(
+                receiveOwner.isOwned,
+                "the receive copy-out requires the inbound direction; the scratch would be overwritten"
+            )
+        }
+
+        /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
+        public func close() async {
+            closeDescriptor()
+        }
+
+        /// Closes the descriptor synchronously to unblock a parked read/write (audit CC4) — the server's
+        /// once-per-connection cancellation handler calls this; it is the idempotent ``closeDescriptor()``.
+        public func cancel() {
+            closeDescriptor()
+        }
+
+        private func closeDescriptor() {
+            guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else {
+                return
+            }
+            eventLoop.closeDescriptor(descriptor)
+        }
+
+        /// A non-blocking `read` reported it would block — re-arm readability rather than fail (audit T-F3).
+        private struct WouldBlockOnRead: Error {}
 
         /// The octets this connection's receive scratch currently holds — the residency oracle (ADD-P2).
         var receiveScratchBytes: Int {
@@ -266,10 +312,21 @@
         /// it owns the direction the descriptor may have been closed and its NUMBER reused by the
         /// kernel for an unrelated connection, and writing a response into that would be
         /// cross-connection corruption.
+        ///
+        /// The `precondition` is the machine-checked half of the contract on this side (audit F-03):
+        /// every send entry point routes through here, so an ungated one — a gated method calling
+        /// another gated method's core, or an exclusion removed in a later refactor — trips it
+        /// deterministically rather than splicing its octets into another response's body. Mirrors
+        /// `PortableTLSConnection.drainCiphertext`'s `precondition(sendPump.isHeld)`. One uncontended
+        /// lock read per send, not per retry.
         private func claimSend(
             _ continuation: UnsafeContinuation<Void, any Error>,
             _ once: OnceResumer<Void>
         ) -> Bool {
+            precondition(
+                sendOwner.isOwned,
+                "a send requires the outbound direction; octets would splice into another response"
+            )
             // SE-0458 (ADR 0009): unsafe by the continuation parameter. `OnceResumer` stores and
             // resumes it under a `Mutex` that guarantees exactly one resumal; it does not escape
             // this connection.
@@ -346,239 +403,6 @@
                         once: once
                     )
                 }
-            }
-        }
-
-        /// One event-driven `sendfile(2)` pump step — Linux semantics: a positive return is the
-        /// (possibly partial) count sent, `0` means the file ended early, `-1`/`EAGAIN` means the
-        /// socket buffer is full with nothing sent.
-        private static func sendFileRemaining(
-            file: Int32,
-            offset: Int,
-            remaining: Int,
-            socket: Int32,
-            eventLoop: EpollEventLoop,
-            once: OnceResumer<Void>
-        ) {
-            var offset = offset
-            var remaining = remaining
-            while remaining > 0 {
-                let sent = CEpoll_sendfile(socket, file, CLong(offset), CUnsignedLong(remaining))
-                if sent > 0 {
-                    offset += Int(sent)
-                    remaining -= Int(sent)
-                    continue
-                }
-                if sent == 0 {
-                    // EOF before the framed length — never stop silently short (audit F1).
-                    once.resume(
-                        throwing: TransportError.ioFailed(
-                            "sendFile: file ended \(remaining) octet(s) short of the framed length"
-                        )
-                    )
-                    return
-                }
-                if errno == EINTR {
-                    continue  // interrupted before any byte — retry (audit T-F3)
-                }
-                if errno == EAGAIN || errno == EWOULDBLOCK {
-                    // Immutable copies for the @Sendable re-arm closure.
-                    let nextOffset = offset
-                    let nextRemaining = remaining
-                    let registered = eventLoop.waitWritable(socket) {
-                        sendFileRemaining(
-                            file: file,
-                            offset: nextOffset,
-                            remaining: nextRemaining,
-                            socket: socket,
-                            eventLoop: eventLoop,
-                            once: once
-                        )
-                    }
-                    if !registered {
-                        // See ``writeRemaining``: never park behind a refused registration.
-                        once.resume(throwing: TransportError.closed)
-                    }
-                    return
-                }
-                once.resume(throwing: TransportError.ioFailed("sendfile errno \(errno)"))
-                return
-            }
-            once.resume(returning: ())
-        }
-
-        /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
-        public func close() async {
-            closeDescriptor()
-        }
-
-        /// Closes the descriptor synchronously to unblock a parked read/write (audit CC4) — the server's
-        /// once-per-connection cancellation handler calls this; it is the idempotent ``closeDescriptor()``.
-        public func cancel() {
-            closeDescriptor()
-        }
-
-        private func closeDescriptor() {
-            guard !isClosed.exchange(true, ordering: .acquiringAndReleasing) else {
-                return
-            }
-            eventLoop.closeDescriptor(descriptor)
-        }
-
-        /// A non-blocking `read` reported it would block — re-arm readability rather than fail (audit T-F3).
-        private struct WouldBlockOnRead: Error {}
-
-        private static func writeRemaining(
-            bytes: [UInt8],
-            offset: Int,
-            descriptor: Int32,
-            eventLoop: EpollEventLoop,
-            once: OnceResumer<Void>
-        ) {
-            var offset = offset
-            let outcome: WriteOutcome = bytes.withUnsafeBytes { raw in
-                while offset < raw.count {
-                    // `MSG_NOSIGNAL`: a write to a peer that closed its read end returns EPIPE instead of
-                    // raising SIGPIPE (Linux's per-call equivalent of Darwin's SO_NOSIGPIPE — audit T-F1).
-                    // `Glibc.send` (not the `send(_:)` instance method, which would shadow it here).
-                    let written = Glibc.send(
-                        descriptor,
-                        raw.baseAddress?.advanced(by: offset),
-                        raw.count - offset,
-                        Int32(MSG_NOSIGNAL)
-                    )
-                    if written > 0 {
-                        offset += written
-                    }
-                    else if written < 0, errno == EINTR {
-                        continue  // interrupted before any byte — retry (audit T-F3)
-                    }
-                    else if written < 0, errno == EWOULDBLOCK || errno == EAGAIN {
-                        return .wouldBlock(offset: offset)
-                    }
-                    else {
-                        return .failed(errno: errno)
-                    }
-                }
-                return .done
-            }
-            switch outcome {
-                case .done:
-                    once.resume(returning: ())
-                case .failed(let code):
-                    once.resume(throwing: TransportError.ioFailed("send errno \(code)"))
-                case .wouldBlock(let remaining):
-                    let registered = eventLoop.waitWritable(descriptor) {
-                        writeRemaining(
-                            bytes: bytes,
-                            offset: remaining,
-                            descriptor: descriptor,
-                            eventLoop: eventLoop,
-                            once: once
-                        )
-                    }
-                    if !registered {
-                        // The descriptor died under us (a concurrent close/cancel raced this re-arm):
-                        // fail the waiter rather than park behind a registration that can never fire.
-                        once.resume(throwing: TransportError.closed)
-                    }
-            }
-        }
-
-        /// Writes `head` then `body` as one scatter-gather message, advancing one combined offset across
-        /// the two buffers and re-arming on writability when the socket buffer fills — iterative
-        /// (event-driven), not recursive.
-        ///
-        /// Uses `sendmsg(..., MSG_NOSIGNAL)` rather than `writev`: `writev` cannot carry `MSG_NOSIGNAL`,
-        /// and Linux has no `SO_NOSIGPIPE`, so a bare `writev` would let a peer RST mid-write raise a fatal
-        /// `SIGPIPE` (the one-packet DoS audit T-F1 closes). `sendmsg` is the scatter-gather form that
-        /// takes the flag — `msg_iov`/`msg_iovlen` gather exactly as `writev(2)`.
-        private static func writevRemaining(
-            head: [UInt8],
-            body: [UInt8],
-            offset: Int,
-            descriptor: Int32,
-            eventLoop: EpollEventLoop,
-            once: OnceResumer<Void>
-        ) {
-            var offset = offset
-            let total = head.count + body.count
-            let outcome: WriteOutcome = head.withUnsafeBytes { headRaw in
-                body.withUnsafeBytes { bodyRaw in
-                    guard
-                        let headBase = headRaw.baseAddress, let bodyBase = bodyRaw.baseAddress
-                    else {
-                        // Both buffers are non-empty by construction (body guarded, head is status).
-                        return WriteOutcome.done
-                    }
-                    while offset < total {
-                        // Gather vector for the unwritten tail: still within the head (head slice +
-                        // whole body), or already past it (a body slice only).
-                        var iovecs: [iovec]
-                        if offset < head.count {
-                            let headPtr = UnsafeMutableRawPointer(mutating: headBase + offset)
-                            let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase)
-                            iovecs = [
-                                iovec(iov_base: headPtr, iov_len: head.count - offset),
-                                iovec(iov_base: bodyPtr, iov_len: body.count)
-                            ]
-                        }
-                        else {
-                            let bodyOffset = offset - head.count
-                            let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase + bodyOffset)
-                            iovecs = [iovec(iov_base: bodyPtr, iov_len: body.count - bodyOffset)]
-                        }
-                        let written = sendScatter(descriptor, &iovecs)
-                        if written > 0 {
-                            offset += written
-                        }
-                        else if written < 0, errno == EINTR {
-                            continue  // interrupted before any byte — retry (audit T-F3)
-                        }
-                        else if written < 0, errno == EWOULDBLOCK || errno == EAGAIN {
-                            return .wouldBlock(offset: offset)
-                        }
-                        else {
-                            return .failed(errno: errno)
-                        }
-                    }
-                    return .done
-                }
-            }
-            switch outcome {
-                case .done:
-                    once.resume(returning: ())
-                case .failed(let code):
-                    once.resume(throwing: TransportError.ioFailed("sendmsg errno \(code)"))
-                case .wouldBlock(let remaining):
-                    let registered = eventLoop.waitWritable(descriptor) {
-                        writevRemaining(
-                            head: head,
-                            body: body,
-                            offset: remaining,
-                            descriptor: descriptor,
-                            eventLoop: eventLoop,
-                            once: once
-                        )
-                    }
-                    if !registered {
-                        // See ``writeRemaining``: never park behind a refused registration.
-                        once.resume(throwing: TransportError.closed)
-                    }
-            }
-        }
-
-        /// Sends one gather vector via `sendmsg(..., MSG_NOSIGNAL)`, returning its raw result.
-        ///
-        /// `msghdr()` zero-fills the header (no name, no control bytes, no flags); only `msg_iov` and
-        /// `msg_iovlen` are set. `MSG_NOSIGNAL` is the per-call SIGPIPE suppression Linux lacks as a
-        /// socket option (audit T-F1) — `writev` could not carry it.
-        private static func sendScatter(_ descriptor: Int32, _ iovecs: inout [iovec]) -> Int {
-            iovecs.withUnsafeMutableBufferPointer { iov -> Int in
-                var message = msghdr()
-                message.msg_iov = iov.baseAddress
-                message.msg_iovlen = iov.count
-                return sendmsg(descriptor, &message, Int32(MSG_NOSIGNAL))
             }
         }
     }
