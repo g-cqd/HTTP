@@ -59,11 +59,17 @@ public protocol TransportConnection: Sendable {
     /// Receives up to `maxLength` inbound bytes, **appending** them to `buffer`, and returns the number
     /// of bytes appended (`0` at EOF).
     ///
-    /// This is the allocation-lean read path: a backbone that owns a reusable read buffer overrides it to
-    /// read straight into that scratch and copy only the received bytes into `buffer` — no fresh per-read
-    /// chunk. The default below adapts ``receive(maxLength:)`` for backbones that cannot (Network.framework
-    /// hands back its own `Data`). Cancellation follows the ``receive(maxLength:)`` contract: a cancelled
+    /// This is the allocation-lean read path: a backbone that owns a reusable read buffer reads straight
+    /// into that scratch and copies only the received bytes into `buffer` — no fresh per-read chunk —
+    /// and holds its inbound lease across BOTH steps, so the copy-out cannot be taken from under the
+    /// operation that produced it. Cancellation follows the ``receive(maxLength:)`` contract: a cancelled
     /// call tears the connection down and throws `CancellationError` promptly.
+    ///
+    /// There is deliberately NO default here. The obvious one — receive a chunk, then append it — is
+    /// two gated calls composing one logical operation, so a leased backbone that inherited it would run
+    /// with a narrower ownership span than its own contract claims and no assertion of its own able to
+    /// see that. A conformer with nothing to lease gets that adapter by conforming to
+    /// ``UnleasedTransportConnection`` and saying so; everyone else answers this requirement.
     func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int
 
     /// Sends `bytes` to the peer, completing once they are handed to the OS.
@@ -80,11 +86,13 @@ public protocol TransportConnection: Sendable {
     /// Sends `length` octets of the open file `descriptor`, starting at byte `offset`, to the peer
     /// (G5 zero-copy static serving).
     ///
-    /// A raw-socket backbone overrides it with `sendfile(2)` — the kernel moves file pages straight
-    /// to the socket, no userspace copy; the default preads into a bounded scratch and ``send(_:)``s,
-    /// byte-identical but with the two extra copies. Backbones that cannot reach a raw socket keep
-    /// the default: Network.framework exposes no file-send on `NWConnection`, and the portable TLS
-    /// backbone must pass every byte through `SSL_write` (kernel TLS is out of scope). The caller
+    /// A raw-socket backbone implements it with `sendfile(2)` — the kernel moves file pages straight
+    /// to the socket, no userspace copy. A backbone that cannot reach a raw socket copies instead:
+    /// Network.framework exposes no file-send on `NWConnection`, so it takes the `pread` + ``send(_:)``
+    /// adapter on ``UnleasedTransportConnection``, byte-identical with two extra copies. A backbone
+    /// that leases its outbound direction must NOT take that adapter — its `send(_:)` call sits inside
+    /// the chunk loop, so the lease would be released mid-body; the portable TLS backbone passes every
+    /// byte through `SSL_write` (kernel TLS is out of scope) under one lease of its own. The caller
     /// owns `descriptor` (the transport never closes it) and applies its own protocol framing —
     /// only an UNFRAMED body span (HTTP/1.1 with a known `Content-Length`) is eligible; h2/h3 wrap
     /// body bytes in frames, so a raw file-to-socket copy is inapplicable there by design.
@@ -152,19 +160,6 @@ extension TransportConnection {
     /// overrides this to close its descriptor synchronously (audit CC4).
     public func cancel() {
         // No descriptor to close: a fake's I/O completes without parking on a syscall.
-    }
-
-    /// Default ``receive(into:maxLength:)``: read one chunk via ``receive(maxLength:)`` and append it.
-    ///
-    /// Used by backbones that cannot read into a caller buffer (Network.framework returns its own `Data`)
-    /// and the in-memory test fakes — behaviour-identical to the prior `receive` + `append`. The POSIX
-    /// backbones override it to drop the per-read allocation.
-    public func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-        guard let chunk = try await receive(maxLength: maxLength), !chunk.isEmpty else {
-            return 0
-        }
-        buffer.append(contentsOf: chunk)
-        return chunk.count
     }
 
     /// Default ``send(_:_:)``: coalesce `head` + `body` into one buffer and send it (the copy a `writev`

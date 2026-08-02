@@ -14,7 +14,7 @@ import HTTPTransport
 ///
 /// `FakeConnection` delivers its whole inbound array in one read, which would collapse N wire chunks
 /// into a single wakeup and so could not reproduce a wakeup-eviction bug at all.
-actor StagedChunkConnection: TransportConnection {
+actor StagedChunkConnection: UnleasedTransportConnection {
     nonisolated let id: TransportConnectionID
     nonisolated let peer = TransportAddress(host: "staged", port: 0)
     nonisolated let negotiatedApplicationProtocol: String? = nil
