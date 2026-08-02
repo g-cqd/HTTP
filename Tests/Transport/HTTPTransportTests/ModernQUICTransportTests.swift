@@ -178,10 +178,59 @@ struct ModernQUICTransportTests {
             using: Self.clientParameters()
         )
         defer { client.cancel() }
-        try await ready(client)
+        try await ready(client, within: 10)
         try await send([UInt8]("ping".utf8), on: client)
         let echoed = try await receive(from: client)
         #expect(echoed == [UInt8]("ping".utf8))
+    }
+
+    @Test(
+        "the modern backbone offers h3 whatever ALPN list the shared TLS identity carries",
+        .timeLimit(.minutes(1)),
+        arguments: [["h2", "http/1.1"], ["h2"], [], ["h3"], ["h3", "h2"]])
+    func http3IsOfferedRegardlessOfTheTCPProtocolList(_ configured: [String]) async throws {
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
+        // ``TransportTLS/applicationProtocols`` is ONE list shared by the TCP TLS listener and the
+        // QUIC listener, and its documented default is the TCP set `["h2", "http/1.1"]`. Feeding that
+        // set to QUIC advertised identifiers that are defined for HTTP over TCP (RFC 9113 §3.3,
+        // RFC 7301) and never `h3` (RFC 9114 §3.1), so a third-party client offering only `h3` shared
+        // no protocol with us. RFC 9001 §8.1 makes that fatal: "endpoints MUST immediately close a
+        // connection … with a no_application_protocol TLS alert … if an application protocol is not
+        // negotiated". Every non-Apple client (curl --http3-only, h3spec) hit exactly this; the
+        // in-repo tests did not, because they all hand-configure `["h3"]` on BOTH ends.
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: configured)
+        let transport = ModernQUICTransport(
+            configuration: TransportConfiguration(
+                host: "127.0.0.1",
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        let connections = try await transport.start()
+        let port = transport.boundPort
+        let server = Task { await Self.echoServer(connections) }
+        defer {
+            server.cancel()
+            Task { await transport.shutdown() }
+        }
+
+        let client = NWConnection(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port) ?? .any,
+            using: Self.clientParameters()
+        )
+        defer { client.cancel() }
+        try await ready(client, within: 10)
+        #expect(Self.negotiatedALPN(of: client) == "h3")
+    }
+
+    /// The ALPN identifier a ready QUIC `connection` negotiated (RFC 7301), or `nil`.
+    private static func negotiatedALPN(of connection: NWConnection) -> String? {
+        let metadata = connection.metadata(definition: NWProtocolQUIC.definition)
+        return (metadata as? NWProtocolQUIC.Metadata)?.negotiatedALPN
     }
 
     /// Echoes every byte of every inbound stream back to the peer, closing with FIN.
@@ -218,7 +267,13 @@ struct ModernQUICTransportTests {
         return NWParameters(quic: options)
     }
 
-    private func ready(_ connection: NWConnection) async throws {
+    /// Waits up to `seconds` for `connection` to complete its QUIC handshake.
+    ///
+    /// The deadline is load-bearing, not defensive: when the server offers no ALPN the client can
+    /// accept, Apple's QUIC stack reports `.waiting(POSIXErrorCode(57))` and retries forever rather
+    /// than reaching `.failed`, so a bare `.ready`/`.failed` wait parks until the suite's time limit
+    /// and names nothing. The deadline turns that into a diagnosis.
+    private func ready(_ connection: NWConnection, within seconds: Int) async throws {
         let queue = DispatchQueue(label: "modern.quic.test.client")
         let resumed = ModernOnceLatch()
         try await withCheckedThrowingContinuation {
@@ -232,6 +287,16 @@ struct ModernQUICTransportTests {
                     default:
                         break
                 }
+            }
+            queue.asyncAfter(deadline: .now() + .seconds(seconds)) {
+                guard resumed.take() else {
+                    return
+                }
+                continuation.resume(
+                    throwing: TransportError.tlsConfigurationFailed(
+                        "QUIC handshake did not complete in \(seconds)s — no ALPN overlap?"
+                    )
+                )
             }
             connection.start(queue: queue)
         }

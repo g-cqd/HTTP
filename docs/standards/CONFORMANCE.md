@@ -100,29 +100,50 @@ catalog row-for-row: `catalogIsWellFormed` pins the per-layer split (27 RFC 9000
 asserts the mandated error code (honoring the RFC 9114 §8 generic-error tolerance). An HTTP/3
 regression fails that job.
 
-### Why the external tool is not the gate — measured, 2026-07-31
+### Why the external tool is not the gate — measured, 2026-08-02
 
-Earlier revisions of this document said the 48/49 failures were "every one a QUIC-transport-layer
-expectation aimed at Apple's closed Network.framework stack". That did not survive re-measurement
-(arm64 macOS, h3spec v0.1.13 `h3spec-mac-arm64`, release `httpd-example`):
+This section has now been wrong twice, in opposite directions, so it states what was measured and how.
 
-- **h3spec *can* be split.** It accepts hspec's `-m/--match` and `-s/--skip`, and its 49 cases are
-  grouped `describe "QUIC servers"` (34 — 27 RFC 9000 transport + 7 RFC 9001 TLS) and
-  `describe "HTTP/3 servers"` (15 — 11 RFC 9114 + 4 RFC 9204). `-m "HTTP/3 servers"` selects exactly
-  the subset that exercises this repository's code. The split is mechanically available.
-- **The split still cannot gate.** A full re-run reproduces 49 examples / 48 failures, and every one
-  of the 48 carries the *identical* message `did not get expected exception: QUICException`. The 15
-  HTTP/3-layer cases fail for the same reason as the 34 transport ones. Under `-d` the cause is
-  `ConnectionIsTimeout "Client Handshaking"` — nothing ever reaches the HTTP/3 layer. A deliberately
-  broken H3 engine would produce a byte-identical report: zero discriminating power.
-- **The cause is not Apple's QUIC stack.** `ModernQUICTransport.start` constructs its
-  `Network.NetworkListener` with no port, so the QUIC listener binds an **ephemeral UDP port** and
-  only announces it through `Alt-Svc` (observed `alt-svc: h3=":50649"` while the job dialed 14433).
-  h3spec has no `Alt-Svc` discovery — it dials the UDP port you give it. The job has been probing a
-  port with no listener on it. Dialing the bound port directly does not rescue the run either: a real
-  h3 client (curl 8.21, ngtcp2/nghttp3, `--http3-only`) also fails to connect to it, so the QUIC
-  listener is not currently reachable from an external client on this host. That is a transport
-  defect, and it is also why `bench-h3load` has never produced a number.
+The 2026-07-31 revision blamed the ephemeral QUIC listener port. That was **a** defect and it is
+fixed — but it was not the one keeping every client out, and the "not Apple's QUIC stack" conclusion
+it drew was reached from a run that never got a packet to the server. Re-measured on arm64 macOS 27,
+h3spec v0.1.13 `h3spec-mac-arm64`, release `httpd-example`, curl 8.21.0 (ngtcp2 1.25.0 /
+nghttp3 1.18.0, OpenSSL 3.6.3):
+
+- **The real blocker was ALPN, on both backbones.** `TransportTLS.applicationProtocols` is one list
+  shared by the TCP TLS listener and the QUIC listener, and its documented default is the TCP set
+  `["h2", "http/1.1"]`. Both QUIC backbones fed that list straight to their QUIC listener, so the
+  listener advertised `h2`/`http/1.1` over QUIC and **never `h3`** (RFC 9114 §3.1). Any client
+  offering only `h3` shared no protocol with us, and RFC 9001 §8.1 makes that terminal. Measured
+  directly with a Network.framework probe against the running example server: a client offering
+  `["h2"]` reached `.ready` and reported `negotiatedALPN = h2`; a client offering `["h3"]` never
+  completed. See `Sources/Transport/HTTPTransport/Quic/QUICApplicationProtocols.swift`.
+- **It was never a modern-vs-legacy difference.** An earlier note claimed the legacy backbone
+  completed the QUIC handshake where the modern one did not. It does not: forced onto
+  `LegacyQUICTransport`, the same binary produced the same 15/15
+  `TransportErrorIsReceived TLSInternalError` in 0.056 s that the modern backbone produced in
+  0.064 s. Both backbones read the same ALPN list, so both had the same defect.
+- **Apple's stack sends the wrong alert, which is why this looked like a server crash.** RFC 9001
+  §8.1 mandates `no_application_protocol` (TLS alert 120, QUIC error `0x178`) when no application
+  protocol is negotiated. Network.framework sends `internal_error` (alert 80, QUIC error `0x150`)
+  instead. That deviation is what sent three separate investigations looking for a fault in
+  certificate handling, transport parameters and TLS-version pinning rather than at ALPN.
+- **h3spec now discriminates, and now fails on this repository's own code.** Post-fix:
+  `-m "HTTP/3 servers"` is 15 examples / **12 failures** in 2.3 s (3 pass), and `-m "QUIC servers"`
+  is 34 examples / **4 failures** in 8.6 s (was 34/34). The HTTP/3-layer failures are real engine
+  findings, not handshake noise — the dominant one is that the connection is closed with QUIC
+  application error code **0** instead of the RFC 9114 §8.1 code the engine selected.
+- **The error code is dropped by the transport, not by the engine.** The engine already emits
+  `.closeConnection(code)` with the right §8.1 code and `HTTPServer+HTTP3Dispatch` already forwards
+  it, but both backbones' `close(errorCode:)` discarded the argument. The obvious fix does **not**
+  work and was measured, not assumed: setting `NetworkConnection<QUIC>.applicationError` (modern) or
+  the connection group's `NWProtocolQUIC.Metadata.applicationError` (legacy) before teardown makes
+  Network.framework stop closing the connection **at all** — h3spec goes from 12 failures in 2.3 s to
+  15 failures in 60.1 s, every one a timeout, on both backbones. Whatever the right sequence is, it
+  is not "set the error then tear down"; this is a live follow-up, not a solved problem.
+
+Real third-party HTTP/3 works: `curl --http3-only` gets `HTTP/3 200` on `GET /` and on
+`POST /echo` against `httpd-example 14433 networkFramework tls`.
 
 ### The excluded checks, by name
 
@@ -133,13 +154,20 @@ enforced by Apple's QUIC/TLS implementation beneath the engine, with no code in 
 to affect the outcome. `H3SpecTests` asserts that stamping is exhaustive, so a case cannot be
 excluded by forgetting it.
 
+The `.platform` stamping now has evidence behind it that it did not have before: with a reachable,
+correctly-negotiating listener, 30 of those 34 cases **pass** on Apple's stack. The 4 that do not
+(RFC 9000 §12.4 unknown frame type, §12.4 no frames, §19.7 NEW_TOKEN, §19.11 invalid MAX_STREAMS) are
+Network.framework's own transport behavior and remain unaffectable from here. The earlier 34/34-fail
+reading was an artifact of a handshake that never completed.
+
 ### Promotion trigger
 
-Fix the QUIC listener to bind the port it is given, then re-run
-`h3spec … -m "HTTP/3 servers"`. If those 15 cases become meaningful, promote that step of
-`h3spec-observation` to a required job alongside `h3-conformance` — the two would then check the
-same MUSTs from opposite sides (in-process engine vs. over-the-wire), which is worth having. The
-34 transport/TLS cases stay excluded regardless; they test code this project does not own.
+**Not met.** With the listener reachable and `h3` negotiated, `h3spec … -m "HTTP/3 servers"` is
+15 examples / 12 failures — the cases are now meaningful, which is the improvement, but they are
+failing on this repository's code. Promote that step of `h3spec-observation` to a required job when
+those 12 go green; the dominant blocker is the dropped RFC 9114 §8.1 connection-close error code
+described above. Until then the in-repo `h3-conformance` job remains the gate, unweakened. The 34
+transport/TLS cases stay excluded regardless; they test code this project does not own.
 
 ## HTTP/3 load (h3load)
 
