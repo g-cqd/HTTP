@@ -178,7 +178,7 @@ public final class POSIXDispatchConnection: TransportConnection {
 
     /// Appends the octets THIS read produced to `buffer`, in place — the copy-out, inside the lease.
     private func appendReceived(_ bytes: [UInt8], to buffer: inout [UInt8]) {
-        assertInboundLeased()
+        assertInboundLeased("the copy-out")
         buffer.append(contentsOf: bytes)
     }
 
@@ -191,10 +191,10 @@ public final class POSIXDispatchConnection: TransportConnection {
     ///
     /// Kept a `precondition` rather than an `assert` so it holds in release: octets appended to a
     /// caller's buffer out of stream order are a silently desynchronized request body, not a crash.
-    private func assertInboundLeased() {
+    private func assertInboundLeased(_ step: StaticString) {
         precondition(
             receiveOwner.isOwned,
-            "the receive copy-out requires the inbound direction; octets would land out of stream order"
+            "\(step) requires the inbound direction: it would take octets the owner never sees"
         )
     }
 
@@ -236,6 +236,13 @@ public final class POSIXDispatchConnection: TransportConnection {
         }
         source.setEventHandler { [self] in
             do {
+                // The syscall itself requires the lease, not only the copy-out that follows it: a
+                // `read(2)` reached without the inbound direction takes octets off the stream that
+                // the rightful owner then never sees, and a short read is indistinguishable from a
+                // peer that sent less. Sound here because the owning task is suspended INSIDE
+                // `withOwnership` while this handler runs, so the lease is still held; the close
+                // sweep does not come through here, it runs the waiter's `fail` closure instead.
+                assertInboundLeased("the read(2)")
                 let bytes = try Self.readAvailable(fd, maxLength)
                 clearRead(source)
                 once.resume(returning: bytes)

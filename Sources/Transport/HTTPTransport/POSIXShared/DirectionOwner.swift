@@ -31,6 +31,7 @@
 //
 
 internal import HTTPConcurrency
+internal import Synchronization
 
 /// The sole owner of one direction of a raw connection's octet stream.
 ///
@@ -48,6 +49,21 @@ final class DirectionOwner<Success: Sendable>: Sendable {
     /// operation, so the hot path allocates no fresh resumer (audit: tail-latency variance). Reuse is
     /// sound *because* of the exclusion — no longer because a comment asserts operations are serial.
     private let resumer = OnceResumer<Success>()
+
+    /// How many operation bodies are running right now — 0 or 1, never more.
+    ///
+    /// The type's whole invariant, machine-checked (audit F-03). Every other cancellation boundary on
+    /// this direction can be driven from outside a test — before enqueue, while queued, after
+    /// acquisition, mid-payload — but the instant the exclusion hands the lease from one operation to
+    /// the next cannot be: it is interior to ``AsyncExclusion``, it lasts as long as a resumption, and
+    /// a cancellation aimed at it lands on either side of it depending on scheduling. A test that only
+    /// MAY hit it is not a regression test, so the invariant is asserted instead of sampled.
+    ///
+    /// Two atomic read-modify-writes per operation, uncontended (the exclusion above already
+    /// serializes them), no allocation, and not per retry — a partial-write pump re-arms inside one
+    /// admission. Cheap enough to keep in release, where it needs to be: two operations sharing a
+    /// direction is interleaved octets on the wire, which no crash reports and no log shows.
+    private let bodiesInFlight = Atomic<Int>(0)
 
     /// An unowned direction with nothing queued.
     init() {
@@ -75,8 +91,22 @@ final class DirectionOwner<Success: Sendable>: Sendable {
     /// continuation is therefore possible only while holding the direction. Ownership is released
     /// however the body ends — return, `throw`, or cancellation — so a torn-down connection cannot
     /// leave a direction owned by a task that is already gone.
+    ///
+    /// A caller cancelled while merely QUEUED never reaches `operation` at all: the exclusion throws
+    /// `CancellationError` before admitting it, which is what makes "a cancelled operation cannot
+    /// consume another's readiness" true rather than hoped for. ``bodiesInFlight`` asserts the other
+    /// half — that admission is exclusive even at the instant the lease changes hands.
     func withOwnership<T>(_ operation: (OnceResumer<Success>) async throws -> T) async throws -> T {
-        try await exclusion.withExclusiveAccess { try await operation(resumer) }
+        try await exclusion.withExclusiveAccess {
+            let concurrent = bodiesInFlight.wrappingAdd(1, ordering: .acquiringAndReleasing)
+                .oldValue
+            defer { bodiesInFlight.wrappingSubtract(1, ordering: .releasing) }
+            precondition(
+                concurrent == 0,
+                "two operations own one direction at once; their octets would interleave on the wire"
+            )
+            return try await operation(resumer)
+        }
     }
 
     /// Suspends until at least `count` operations are queued behind the owner.

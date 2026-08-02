@@ -126,13 +126,13 @@ public final class SwiftSystemConnection: TransportConnection {
 
     /// Copies out the octets THIS read produced, into a fresh chunk.
     private func copyOutReceived(_ count: Int) -> [UInt8] {
-        assertInboundLeased()
+        assertInboundLeased("the scratch copy-out")
         return scratch.withLock { Array($0.received(count)) }
     }
 
     /// Appends the octets THIS read produced to `buffer`, in place — the allocation-free copy-out.
     private func appendReceived(_ count: Int, to buffer: inout [UInt8]) {
-        assertInboundLeased()
+        assertInboundLeased("the scratch copy-out")
         scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
     }
 
@@ -148,10 +148,10 @@ public final class SwiftSystemConnection: TransportConnection {
     ///
     /// One uncontended lock read per receive, kept in release rather than an `assert` because a scratch
     /// copied out from under its owner is silent corruption of a request body, not a crash.
-    private func assertInboundLeased() {
+    private func assertInboundLeased(_ step: StaticString) {
         precondition(
             receiveOwner.isOwned,
-            "the receive copy-out requires the inbound direction; the scratch would be overwritten"
+            "\(step) requires the inbound direction: it would take octets the owner never sees"
         )
     }
 
@@ -346,7 +346,19 @@ public final class SwiftSystemConnection: TransportConnection {
     /// The close-flag guard runs first so a callback firing after ``cancel()`` — the loop's close
     /// sweep — never touches the descriptor *number*, which the kernel may already have reused for
     /// another connection.
+    /// The syscall itself requires the lease, not only the copy-out that follows it.
+    ///
+    /// "A cancelled operation must not consume another's readiness" is the invariant, and this is
+    /// where it would be broken: a `read(2)` reached without the inbound direction takes octets off
+    /// the stream that the rightful owner then never sees, and a short read is indistinguishable
+    /// from a peer that sent less — so the theft is silent at every layer above. Asserting at the
+    /// copy-out alone was one step too late.
+    ///
+    /// Sound from the readiness callback too: the owning task is suspended INSIDE `withOwnership`
+    /// while its handler runs, so the lease is still held. The close sweep does not come through
+    /// here — it resumes the waiter directly.
     private func readScratchNow(maxLength: Int) throws -> Int? {
+        assertInboundLeased("the read(2)")
         guard !isClosed.load(ordering: .acquiring) else {
             throw TransportError.closed
         }

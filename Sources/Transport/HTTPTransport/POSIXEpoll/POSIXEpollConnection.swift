@@ -123,13 +123,13 @@
 
         /// Copies out the octets THIS read produced, into a fresh chunk.
         private func copyOutReceived(_ count: Int) -> [UInt8] {
-            assertInboundLeased()
+            assertInboundLeased("the scratch copy-out")
             return scratch.withLock { Array($0.received(count)) }
         }
 
         /// Appends the octets THIS read produced to `buffer`, in place — the allocation-free copy-out.
         private func appendReceived(_ count: Int, to buffer: inout [UInt8]) {
-            assertInboundLeased()
+            assertInboundLeased("the scratch copy-out")
             scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
         }
 
@@ -145,10 +145,10 @@
         ///
         /// One uncontended lock read per receive, kept in release rather than an `assert` because a scratch
         /// copied out from under its owner is silent corruption of a request body, not a crash.
-        private func assertInboundLeased() {
+        private func assertInboundLeased(_ step: StaticString) {
             precondition(
                 receiveOwner.isOwned,
-                "the receive copy-out requires the inbound direction; the scratch would be overwritten"
+                "\(step) requires the inbound direction: it would take octets the owner never sees"
             )
         }
 
@@ -172,6 +172,26 @@
 
         /// A non-blocking `read` reported it would block — re-arm readability rather than fail (audit T-F3).
         private struct WouldBlockOnRead: Error {}
+
+        /// The receives queued behind the inbound owner — the deterministic contention oracle (F-03).
+        ///
+        /// Lets a test assert AT the contended moment rather than sleep and hope to catch it. The nine
+        /// original ownership tests sequence their setup with a fixed sleep; the cancellation matrix
+        /// cannot, because the whole question is WHERE in the operation the cancel lands.
+        var queuedReceives: Int { receiveOwner.queuedOperations }
+
+        /// Suspends until at least `count` receives are queued behind the inbound owner.
+        func waitForQueuedReceives(atLeast count: Int) async throws {
+            try await receiveOwner.waitForQueued(atLeast: count)
+        }
+
+        /// Suspends until at least `count` sends are queued behind the outbound owner.
+        func waitForQueuedSends(atLeast count: Int) async throws {
+            try await sendOwner.waitForQueued(atLeast: count)
+        }
+
+        /// Whether the inbound direction is leased right now — the exactly-one-owner oracle.
+        var isReceiving: Bool { receiveOwner.isOwned }
 
         /// The octets this connection's receive scratch currently holds — the residency oracle (ADD-P2).
         var receiveScratchBytes: Int {
@@ -210,7 +230,19 @@
         /// The close-flag guard runs first so a callback firing after ``cancel()`` — the loop's close
         /// sweep — never touches the descriptor *number*, which the kernel may already have reused for
         /// another connection.
+        /// The syscall itself requires the lease, not only the copy-out that follows it.
+        ///
+        /// "A cancelled operation must not consume another's readiness" is the invariant, and this is
+        /// where it would be broken: a `read(2)` reached without the inbound direction takes octets off
+        /// the stream that the rightful owner then never sees, and a short read is indistinguishable
+        /// from a peer that sent less — so the theft is silent at every layer above. Asserting at the
+        /// copy-out alone was one step too late.
+        ///
+        /// Sound from the readiness callback too: the owning task is suspended INSIDE `withOwnership`
+        /// while its handler runs, so the lease is still held. The close sweep does not come through
+        /// here — it resumes the waiter directly.
         private func readScratchNow(maxLength: Int) throws -> Int? {
+            assertInboundLeased("the read(2)")
             guard !isClosed.load(ordering: .acquiring) else {
                 throw TransportError.closed
             }
