@@ -629,8 +629,20 @@ jobs:
   # `.platform`-stamped, i.e. enforced by Apple's QUIC/TLS stack rather than by any code here. That
   # file is the authoritative exclusion list; it is asserted complete by `H3SpecTests`.
   #
-  # Promote step 1 to a required job when its cases stop failing on the handshake — the blocker is
-  # the ephemeral QUIC listener port, not the h3 engine (see docs/standards/CONFORMANCE.md).
+  # STATUS 2026-08-02: the handshake blocker is FIXED (the QUIC listener never offered the `h3` ALPN
+  # — RFC 9114 §3.1 — because both backbones reused the TCP `applicationProtocols` list; see
+  # `QUICApplicationProtocols.swift`). h3spec now reaches the HTTP/3 layer and discriminates:
+  # step 1 is 15 examples / 12 failures in ~2.3s (was 15/15 in 0.06s, all `TLSInternalError`), and
+  # step 2 is 34 examples / 4 failures (was 34/34). `curl --http3-only` gets `HTTP/3 200`.
+  #
+  # It is therefore STILL NOT PROMOTED, but for a new and better reason: the 12 remaining failures are
+  # this repository's own, not handshake noise. Nearly all report QUIC application error code 0 where
+  # RFC 9114 §8.1 mandates a specific code — the engine selects it and the dispatcher forwards it, but
+  # `Modern/LegacyQUICConnection.close(errorCode:)` discards it. Promote step 1 to a required job when
+  # those 12 go green. Do not promote it by weakening `h3-conformance`, which stays the gate.
+  # (Measured dead end, so nobody repeats it: setting `applicationError` before teardown makes
+  # Network.framework stop closing the connection at all — 15 failures / 60s of timeouts on BOTH
+  # backbones. See docs/standards/CONFORMANCE.md.)
   # ---------------------------------------------------------------------------
   h3spec-observation:
     if: github.event_name == 'workflow_dispatch'
@@ -658,9 +670,23 @@ jobs:
             curl -sk --max-time 1 -o /dev/null https://127.0.0.1:14433/ && break
             sleep 0.5
           done
-          # Record which UDP port the QUIC listener actually bound — this is the discrepancy that
-          # makes the run vacuous, so surface it rather than letting it hide in the failures.
+          # Record which UDP port the QUIC listener actually bound. This used to be the discrepancy
+          # that made the whole run vacuous; it is fixed, and it stays logged so a regression is
+          # visible in one line instead of as 15 uniform failures.
           curl -skI --max-time 4 https://127.0.0.1:14433/ | grep -i alt-svc || true
+      - name: Prove the QUIC listener is reachable by a NON-Apple client before believing the report
+        run: |
+          # The whole suite reports identically whether the h3 engine is broken or the handshake never
+          # happened, so establish which world we are in FIRST. curl on macos-26 has no HTTP/3, so this
+          # is best-effort evidence rather than a gate; when it does run, a failure here means the
+          # h3spec output below says nothing about the HTTP/3 engine.
+          if curl --version | grep -q HTTP3; then
+            curl -sk --http3-only --max-time 10 -o /dev/null \
+              -w 'third-party h3 client: http_version=%{http_version} code=%{http_code}\n' \
+              https://127.0.0.1:14433/
+          else
+            echo "third-party h3 client: SKIPPED — this runner's curl has no HTTP/3 support"
+          fi
       - name: h3spec — the RFC 9114/9204 subset (the gating candidate)
         run: |
           /tmp/h3spec 127.0.0.1 14433 -n -t 4000 -m "HTTP/3 servers" \
