@@ -45,17 +45,18 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// earlier: the displaced source stayed armed but became unreachable from teardown, and the close
     /// sweep resumed at most one continuation — so one of the two operations never resumed at all.
     private let waiters = Mutex<Waiters>(Waiters())
-    /// Cached resumer for the read path (``receive(maxLength:)`` — this backbone has no scratch override).
+    /// The inbound direction and its sole operation owner (audit F-03).
     ///
-    /// ``reset(_:)`` per op so the hot path allocates no fresh resumer (audit: tail-latency variance).
-    /// Sound because reads on one connection are serialized — the prior continuation is always taken
-    /// before the next op installs its own.
-    private let readResumer = OnceResumer<[UInt8]?>()
-    /// Cached resumer for the write path (``send(_:)``).
+    /// This backbone has no scratch override, so the whole receive is the readiness wait plus the one
+    /// `read(2)` its handler performs; a second receive queues behind it rather than displacing its
+    /// continuation. Independent of ``sendOwner`` — see ``waiters`` for why a read and a write in
+    /// flight together is a supported state, and ``DirectionOwner`` for why they must stay separate.
+    private let receiveOwner = DirectionOwner<[UInt8]?>()
+    /// The outbound direction and its sole operation owner (audit F-03).
     ///
-    /// Reused the same way: writes on one connection are serialized against each other. They may,
-    /// however, overlap a *read* — see ``waiters``.
-    private let writeResumer = OnceResumer<Void>()
+    /// Covers the whole send: the first `write(2)` and every re-armed partial write until the payload
+    /// is drained, and — through ``sendFile(descriptor:offset:length:)`` — every chunk of a file body.
+    private let sendOwner = DirectionOwner<Void>()
 
     /// How many directions currently have a parked waiter — 0, 1, or 2.
     ///
@@ -137,41 +138,8 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// receive on this backbone round-trips its serial queue anyway, so — unlike the loop-pinned
     /// backbones (audit CC4) — there is no handler-free hot path to preserve.
     public func receive(maxLength: Int) async throws -> [UInt8]? {
-        let fd = descriptor
-        let bytes = try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
-                (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
-                readResumer.reset(continuation)
-                queue.async { [self] in
-                    guard !isClosed.load(ordering: .acquiring) else {
-                        readResumer.resume(returning: nil)
-                        return
-                    }
-                    let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-                    waiters.withLock {
-                        $0.read = Waiter(source: source) { [self] in
-                            readResumer.resume(returning: nil)
-                        }
-                    }
-                    source.setEventHandler { [self] in
-                        do {
-                            let bytes = try Self.readAvailable(fd, maxLength)
-                            clearRead(source)
-                            readResumer.resume(returning: bytes)
-                        }
-                        catch is WouldBlock {
-                            // Spurious readiness — leave the source armed; it fires again.
-                        }
-                        catch {
-                            clearRead(source)
-                            readResumer.resume(throwing: error)
-                        }
-                    }
-                    source.resume()
-                }
-            }
-        } onCancel: {
-            self.cancel()
+        let bytes = try await receiveOwner.withOwnership { once in
+            try await parkForRead(maxLength: maxLength, once: once)
         }
         // The close sweep resumes a parked read as EOF (`nil`); when that EOF was manufactured by this
         // task's own cancellation, report the standard signal instead of a fake end-of-stream.
@@ -179,6 +147,59 @@ public final class POSIXDispatchConnection: TransportConnection {
             try Task.checkCancellation()
         }
         return bytes
+    }
+
+    /// Arms a read source and parks until it fires — the ungated core of ``receive(maxLength:)``.
+    ///
+    /// The caller already owns the inbound direction (audit F-03), and ``DirectionOwner`` is not
+    /// reentrant, so this must never be reached through a gated entry point twice.
+    private func parkForRead(maxLength: Int, once: OnceResumer<[UInt8]?>) async throws -> [UInt8]? {
+        let fd = descriptor
+        return try await withTaskCancellationHandler {
+            try await withUnsafeThrowingContinuation {
+                (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
+                guard once.claim(continuation) else {
+                    return  // contract broken; `claim` has already failed this caller
+                }
+                queue.async { [self] in
+                    guard !isClosed.load(ordering: .acquiring) else {
+                        once.resume(returning: nil)
+                        return
+                    }
+                    armRead(fd: fd, maxLength: maxLength, once: once)
+                }
+            }
+        } onCancel: {
+            self.cancel()
+        }
+    }
+
+    /// Registers read interest whose handler completes `once` with the bytes buffered when it fires.
+    ///
+    /// Runs on `queue`. A spurious readiness leaves the source armed; anything else clears the parked
+    /// read (so teardown does not find a stale waiter) before resuming.
+    private func armRead(fd: Int32, maxLength: Int, once: OnceResumer<[UInt8]?>) {
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+        waiters.withLock {
+            $0.read = Waiter(source: source) {
+                once.resume(returning: nil)
+            }
+        }
+        source.setEventHandler { [self] in
+            do {
+                let bytes = try Self.readAvailable(fd, maxLength)
+                clearRead(source)
+                once.resume(returning: bytes)
+            }
+            catch is WouldBlock {
+                // Spurious readiness — leave the source armed; it fires again.
+            }
+            catch {
+                clearRead(source)
+                once.resume(throwing: error)
+            }
+        }
+        source.resume()
     }
 
     /// One non-blocking `read(2)` of the bytes buffered now (`nil` at EOF); throws `WouldBlock` if the
@@ -200,20 +221,97 @@ public final class POSIXDispatchConnection: TransportConnection {
     // MARK: - Send
 
     /// Writes all of `bytes`, awaiting socket writability across short writes (backpressure).
+    ///
+    /// Owns the outbound direction for the whole operation — the first `write(2)` and every re-armed
+    /// partial write (audit F-03) — so a second sender queues behind it rather than displacing its
+    /// continuation and stranding a half-written response.
     public func send(_ bytes: [UInt8]) async throws {
         guard !bytes.isEmpty else {
             return
         }
+        try await sendOwner.withOwnership { once in
+            try await writeOwned(bytes, once: once)
+        }
+    }
+
+    /// Writes all of `bytes` — the ungated core of ``send(_:)``.
+    ///
+    /// The caller already owns the outbound direction, and ``DirectionOwner`` is not reentrant, so a
+    /// gated entry point must call THIS rather than ``send(_:)`` (CWE-833). The close check runs on
+    /// `queue`, after this operation has waited its turn: by then the descriptor may have been closed
+    /// and its NUMBER reused by the kernel for an unrelated connection.
+    private func writeOwned(_ bytes: [UInt8], once: OnceResumer<Void>) async throws {
         let fd = descriptor
         try await withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<Void, any Error>) in
-            writeResumer.reset(continuation)
+            guard once.claim(continuation) else {
+                return  // contract broken; `claim` has already failed this caller
+            }
             queue.async { [self] in
                 guard !isClosed.load(ordering: .acquiring) else {
-                    writeResumer.resume(throwing: TransportError.ioFailed("connection closed"))
+                    once.resume(throwing: TransportError.ioFailed("connection closed"))
                     return
                 }
-                writeFrom(0, fd: fd, bytes: bytes, once: writeResumer)
+                writeFrom(0, fd: fd, bytes: bytes, once: once)
+            }
+        }
+    }
+
+    /// Sends `length` octets of the open file `file` from `offset`, holding the outbound direction for
+    /// the WHOLE transfer rather than for each chunk.
+    ///
+    /// The inherited default (``TransportConnection/sendFile(descriptor:offset:length:)``) `pread`s
+    /// into a bounded scratch and calls ``send(_:)`` per chunk, which under this contract would take
+    /// and release the direction once per chunk — leaving a window between chunks for a concurrent
+    /// sender to splice its octets into the middle of a file body. This override takes the direction
+    /// once and drives the ungated ``writeOwned(_:once:)``; the copies are identical, the framing is
+    /// not. `pread` (not `read`) so the caller's descriptor offset is never disturbed, and the loop
+    /// never buffers more than one 64 KiB chunk regardless of file size.
+    ///
+    /// Standards: pread() per POSIX.1-2017 (IEEE Std 1003.1-2017).
+    public func sendFile(descriptor file: Int32, offset: Int, length: Int) async throws {
+        guard length > 0 else {
+            return
+        }
+        try await sendOwner.withOwnership { once in
+            var remaining = length
+            var cursor = offset
+            var chunk = [UInt8](repeating: 0, count: min(64 * 1_024, length))
+            while remaining > 0 {
+                let count = Self.preadChunk(file, &chunk, min(chunk.count, remaining), cursor)
+                guard count > 0 else {
+                    throw TransportError.ioFailed(
+                        count == 0
+                            ? "sendFile: file ended \(remaining) octet(s) short of the framed length"
+                            : "sendFile: pread errno \(errno)"
+                    )
+                }
+                try await writeOwned(Array(chunk[..<count]), once: once)
+                cursor += count
+                remaining -= count
+            }
+        }
+    }
+
+    /// One `pread(2)` of `wanted` octets into `chunk` at `cursor`, retrying `EINTR`; `-1` on failure.
+    private static func preadChunk(
+        _ file: Int32,
+        _ chunk: inout [UInt8],
+        _ wanted: Int,
+        _ cursor: Int
+    ) -> Int {
+        chunk.withUnsafeMutableBytes { raw -> Int in
+            while true {
+                // SE-0458 (ADR 0009): unsafe by the pointer parameter. `raw` is this call's own buffer,
+                // valid for at least `wanted` octets (`wanted <= chunk.count`), and does not escape.
+                let read = unsafe pread(file, raw.baseAddress, wanted, off_t(cursor))
+                if read >= 0 {
+                    return read
+                }
+                if errno == EINTR {
+                    continue
+                }
+                return -1
             }
         }
     }
