@@ -15,6 +15,14 @@ import Synchronization
 /// A scripted QUIC listener over in-memory connections.
 final class FakeQUICTransport: QUICServerTransport, @unchecked Sendable {
     let boundPort: UInt16 = 4_433
+    /// The endpoint this fake "bound" — loopback on its fixed port, so the server's `Alt-Svc`
+    /// advertisement (RFC 7838) reads the realized endpoint here exactly as it does on a real
+    /// listener (audit F-04).
+    let boundEndpoint: BindEndpoint? = BindEndpoint(
+        address: "127.0.0.1",
+        family: .ipv4,
+        port: 4_433
+    )
     /// Whether this listener charges the admission gate itself before yielding a connection.
     private let charging: Bool
 

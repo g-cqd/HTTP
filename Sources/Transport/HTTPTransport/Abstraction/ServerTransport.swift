@@ -22,6 +22,23 @@ public protocol ServerTransport: Sendable {
     /// (e.g. `Alt-Svc`) and so one conformance suite can drive every backbone uniformly.
     var boundPort: UInt16 { get }
 
+    /// The local endpoint actually bound after ``start()`` — the resolved interface literal, its
+    /// family, and the realized port — or `nil` before binding, or when a backbone cannot report it.
+    ///
+    /// First-class rather than a test affordance. Both halves of the configuration can differ from
+    /// what was asked for: `port` `0` means "whichever the OS chose", and `host` may have been a name
+    /// or a wildcard. An operator log, a health check, and the `Alt-Svc` advertisement (RFC 7838) all
+    /// need the realized answer, and audit F-04 is exactly what happens when the realized answer is
+    /// only knowable indirectly — a QUIC listener bound one port and advertised it while every client
+    /// dialled the configured one.
+    ///
+    /// The default returns `nil`. The Network.framework backbones override it; the POSIX backbones
+    /// (`POSIXKqueue`, `POSIXDispatch`, `SwiftSystem`, `POSIXEpoll`) and `PortableTLS` still owe the
+    /// override — each already resolves the endpoint at `start()` and reads the realized port back
+    /// with `getsockname(2)`, so it is a few lines each in files this change does not own. Until then
+    /// the shared bind-contract matrix skips their endpoint-reporting cell *by name*.
+    var boundEndpoint: BindEndpoint? { get }
+
     /// Binds and begins accepting, returning a stream of inbound connections that finishes when the
     /// transport is shut down.
     ///
@@ -50,6 +67,14 @@ public protocol ServerTransport: Sendable {
 }
 
 extension ServerTransport {
+    /// A backbone that cannot yet report its realized local endpoint reports nothing, never a guess.
+    ///
+    /// Synthesizing one from ``boundPort`` alone would have to invent the interface, which is the
+    /// error this property exists to prevent.
+    public var boundEndpoint: BindEndpoint? {
+        nil
+    }
+
     /// Binds and begins accepting with **no** admission ceiling applied at the transport.
     ///
     /// The ungated entry point, for a caller that owns the ceiling itself (``HTTPServer`` charges

@@ -39,13 +39,111 @@ struct ModernQUICTransportTests {
                 tls: tls
             )
         )
-        _ = try await transport.start()
-        defer { Task { await transport.shutdown() } }
+        let connections = try await transport.start()
 
         #expect(
             transport.boundPort == requestedPort,
             "configured UDP port \(requestedPort), but modern QUIC bound \(transport.boundPort)"
         )
+        // The endpoint an operator (and `Alt-Svc`, RFC 7838) should see: resolved interface + real port.
+        let bound = try #require(transport.boundEndpoint)
+        #expect(bound.address == "127.0.0.1")
+        #expect(bound.port == requestedPort)
+        #expect(bound.description == "127.0.0.1:\(requestedPort)")
+        withExtendedLifetime(connections) {
+            // Held so the listener is not torn down before the assertions above.
+        }
+        await transport.shutdown()
+    }
+
+    @Test(
+        "port 0 stays an explicit ephemeral request on the modern backbone",
+        .timeLimit(.minutes(1)))
+    func ephemeralPortIsStillEphemeral() async throws {
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let transport = ModernQUICTransport(
+            configuration: TransportConfiguration(
+                host: "127.0.0.1",
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        let connections = try await transport.start()
+        #expect(transport.boundPort != 0, "port 0 must realize an OS-chosen port, not stay 0")
+        #expect(transport.boundEndpoint?.port == transport.boundPort)
+        withExtendedLifetime(connections) {
+            // Held so the listener is not torn down before the assertions above.
+        }
+        await transport.shutdown()
+    }
+
+    @Test(
+        "an unbindable configured host fails closed instead of binding somewhere else",
+        .timeLimit(.minutes(1)), arguments: ["192.0.2.1", "quic-bind-target.invalid"])
+    func unbindableHostFailsClosed(_ host: String) async throws {
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
+        // RFC 5737 TEST-NET-1 is assigned to no host and RFC 2606 §2's `.invalid` resolves nowhere, so
+        // a QUIC listener configured for either must throw rather than land on another interface.
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let transport = ModernQUICTransport(
+            configuration: TransportConfiguration(
+                host: host,
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        await #expect(throws: TransportError.self) {
+            _ = try await transport.start()
+            await transport.shutdown()
+        }
+    }
+
+    @Test(
+        "a second QUIC listener on the same UDP port fails closed",
+        .timeLimit(.minutes(1)))
+    func portConflictFailsClosed() async throws {
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let holder = ModernQUICTransport(
+            configuration: TransportConfiguration(
+                host: "127.0.0.1",
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        let held = try await holder.start()
+        let port = holder.boundPort
+        #expect(port != 0)
+
+        let clashing = ModernQUICTransport(
+            configuration: TransportConfiguration(
+                host: "127.0.0.1",
+                port: port,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        await #expect(throws: TransportError.self) {
+            let stream = try await clashing.start()
+            withExtendedLifetime(stream) {
+                // Held so a successful bind is observable rather than instantly undone.
+            }
+            await clashing.shutdown()
+        }
+        withExtendedLifetime(held) {
+            // The holder must keep the port for the whole clash attempt.
+        }
+        await holder.shutdown()
     }
 
     @Test(

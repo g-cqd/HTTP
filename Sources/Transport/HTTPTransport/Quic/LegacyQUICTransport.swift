@@ -38,6 +38,12 @@ public final class LegacyQUICTransport: QUICServerTransport {
         var readyContinuation: CheckedContinuation<Void, any Error>?
         /// The shared connection ceiling, charged before a connection group is yielded (audit F8).
         var admission: ConnectionAdmission?
+        /// The local endpoint the configuration resolved to (audit F-04/F-05): this backbone always
+        /// applied ``TransportConfiguration/port`` but ignored ``TransportConfiguration/host``, so an
+        /// h3 listener configured for loopback bound every interface.
+        var bindEndpoint: BindEndpoint?
+        /// The UDP port captured at the `.ready` transition, so a read never races a transient nil.
+        var boundPort: UInt16 = 0
     }
 
     /// Creates a legacy QUIC transport for `configuration` (which must carry TLS) and `limits`.
@@ -52,7 +58,23 @@ public final class LegacyQUICTransport: QUICServerTransport {
 
     /// The actual bound UDP port (valid after ``start()``; resolves an ephemeral `0` request).
     public var boundPort: UInt16 {
-        state.withLock { $0.listener?.port?.rawValue ?? 0 }
+        state.withLock { $0.boundPort != 0 ? $0.boundPort : ($0.listener?.port?.rawValue ?? 0) }
+    }
+
+    /// The local endpoint actually bound — the resolved interface literal plus the realized UDP port.
+    ///
+    /// `nil` until ``start(admission:)`` binds; what `Alt-Svc` (RFC 7838) and an operator log need.
+    public var boundEndpoint: BindEndpoint? {
+        state.withLock { current in
+            guard let endpoint = current.bindEndpoint, current.boundPort != 0 else {
+                return nil
+            }
+            return BindEndpoint(
+                address: endpoint.address,
+                family: endpoint.family,
+                port: current.boundPort
+            )
+        }
     }
 
     /// Binds the QUIC listener and begins accepting, returning a stream of inbound connections.
@@ -64,8 +86,12 @@ public final class LegacyQUICTransport: QUICServerTransport {
     public func start(
         admission: ConnectionAdmission?
     ) async throws -> AsyncStream<any QUICConnection> {
-        let listener = try makeListener()
-        state.withLock { $0.admission = admission }
+        let endpoint = try BindEndpoint.resolve(configuration)
+        let listener = try makeListener(endpoint: endpoint)
+        state.withLock {
+            $0.admission = admission
+            $0.bindEndpoint = endpoint
+        }
         let (stream, continuation) = AsyncStream<any QUICConnection>.makeStream()
 
         listener.newConnectionGroupHandler = { [weak self] group in
@@ -80,7 +106,16 @@ public final class LegacyQUICTransport: QUICServerTransport {
 
         state.withLock { $0.listener = listener }
         listener.start(queue: queue)
-        try await waitUntilReady()
+        do {
+            try await waitUntilReady()
+        }
+        catch {
+            // A refused bind must not leave a live `NWListener` behind: a `.waiting` listener retries
+            // its bind for the life of the process, holding Network.framework queues and sources.
+            await shutdown()
+            continuation.finish()
+            throw error
+        }
         return stream
     }
 
@@ -96,7 +131,12 @@ public final class LegacyQUICTransport: QUICServerTransport {
 
     // MARK: - Internals
 
-    private func makeListener() throws -> NWListener {
+    /// Builds the QUIC `NWListener` pinned to `endpoint` — the configured host as well as the port.
+    ///
+    /// The port was already honoured here (`NWListener(using:on:)`); the host was not, so this
+    /// backbone had exactly half of audit F-04's defect. `requiredLocalEndpoint` carries both, and it
+    /// is available at the macOS 15.6 / iOS 18 floor this backbone exists to serve.
+    private func makeListener(endpoint: BindEndpoint) throws -> NWListener {
         guard let tls = configuration.tls else {
             throw TransportError.tlsConfigurationFailed("QUIC requires a TLS identity")
         }
@@ -122,9 +162,11 @@ public final class LegacyQUICTransport: QUICServerTransport {
         options.initialMaxStreamsBidirectional = limits.maxConcurrentStreams
         options.initialMaxStreamsUnidirectional = 16
         let parameters = NWParameters(quic: options)
-        let port = NWEndpoint.Port(rawValue: configuration.port) ?? .any
+        parameters.requiredLocalEndpoint = try endpoint.networkEndpoint()
+        // Port sharing stays opt-in, as on every other backbone.
+        parameters.allowLocalEndpointReuse = configuration.reusePort
         do {
-            return try NWListener(using: parameters, on: port)
+            return try NWListener(using: parameters)
         }
         catch {
             throw TransportError.bindFailed("\(error)")
@@ -173,20 +215,38 @@ public final class LegacyQUICTransport: QUICServerTransport {
             switch newState {
                 case .ready:
                     current.isReady = true
+                    current.boundPort = current.listener?.port?.rawValue ?? 0
                     current.readyContinuation?.resume()
                     current.readyContinuation = nil
                 case .failed(let error):
-                    let failure = TransportError.bindFailed("\(error)")
-                    current.failure = failure
-                    current.readyContinuation?.resume(throwing: failure)
-                    current.readyContinuation = nil
-                    continuation.finish()
+                    Self.fail(&current, with: .bindFailed("\(error)"), continuation)
+                case .waiting(let error):
+                    // A required local endpoint no interface owns parks the listener in `.waiting`
+                    // forever; `start()` would never return (audit F-05, CWE-755).
+                    let context = current.bindEndpoint?.description ?? "the configured endpoint"
+                    guard let failure = TransportError.bindFailure(from: error, binding: context)
+                    else {
+                        break
+                    }
+                    Self.fail(&current, with: failure, continuation)
                 case .cancelled:
                     continuation.finish()
                 default:
                     break
             }
         }
+    }
+
+    /// Records a terminal listener failure, unblocks ``waitUntilReady()``, and finishes the stream.
+    private static func fail(
+        _ current: inout State,
+        with failure: TransportError,
+        _ continuation: AsyncStream<any QUICConnection>.Continuation
+    ) {
+        current.failure = failure
+        current.readyContinuation?.resume(throwing: failure)
+        current.readyContinuation = nil
+        continuation.finish()
     }
 
     private func waitUntilReady() async throws {

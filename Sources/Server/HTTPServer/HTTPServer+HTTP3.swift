@@ -166,7 +166,14 @@ extension HTTPServer {
         else {
             return
         }
-        altSvc.withLock { $0 = "h3=\":\(quicTransport.boundPort)\"" }
+        // Advertise the port the listener REALLY bound, read back from the realized endpoint (audit
+        // F-04: this header used to be the only place the real port appeared, while every client
+        // dialled the configured one). The authority is deliberately empty — RFC 7838 §3's
+        // same-host form — because the alternative service is this same host on a different
+        // transport; naming the bound interface literal here would break a client reaching the
+        // server through any other address.
+        let advertised = quicTransport.boundEndpoint?.port ?? quicTransport.boundPort
+        altSvc.withLock { $0 = "h3=\":\(advertised)\"" }
         await withDiscardingTaskGroup { group in
             for await connection in connections {
                 // Charged through the same process-wide gate as a TCP connection, and released when
