@@ -25,14 +25,17 @@ public struct GzipEncoder: StreamingContentEncoder {
         #endif
     }
 
-    /// An incremental gzip member on Darwin, nil elsewhere.
+    /// An incremental gzip member, on every build that can produce a buffered one.
     ///
-    /// The Linux backend is the `CZlibCoding` shim, whose only entry point is a one-shot
-    /// `czlib_gzip_compress` over a worst-case-bounded destination — there is no resumable form to
-    /// call, and zlib's own `deflate`/`deflateEnd` are not exposed through it. A streamed response
-    /// therefore goes out **uncoded** on Linux rather than being buffered whole to code it.
+    /// The condition here and the one on ``encode(_:)`` are deliberately the same expression, and
+    /// `ContentEncoderStreamTests` asserts that they agree. A coding that can encode but cannot stream
+    /// serves streamed responses **uncoded** (never buffered and coded — see
+    /// ``StreamingContentEncoder``), which is a silent downgrade for exactly the bodies most worth
+    /// coding: SSE, chunked downloads, and every static file over the streaming threshold. Darwin
+    /// streams through `compression_stream`, Linux through the `CZlibCoding` shim's resumable
+    /// `deflate`; each is byte-identical to its own platform's buffered path.
     public func makeStream() -> (any ContentEncoderStream)? {
-        #if canImport(Compression)
+        #if canImport(Compression) || canImport(CZlibCoding)
             return GzipEncoderStream()
         #else
             return nil

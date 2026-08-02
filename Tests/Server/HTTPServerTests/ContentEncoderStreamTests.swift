@@ -9,7 +9,13 @@
 //
 //  Darwin's `compression_stream` buffers internally and flushes only at FINALIZE, so chunk boundaries
 //  do not reach the output; these pin that, since it is an implementation property rather than an API
-//  guarantee and a toolchain change could take it away silently.
+//  guarantee and a toolchain change could take it away silently. The Linux gzip backend has the same
+//  property for the same kind of reason — zlib's `deflate` under `Z_NO_FLUSH` will not emit while its
+//  lookahead is short, so a caller's chunk boundary never becomes a block boundary — and it is pinned
+//  here rather than assumed, because it too is an implementation property a zlib bump could remove.
+//
+//  These run on BOTH platforms. They were excluded from the Linux graph while `GzipEncoder.makeStream()`
+//  returned nil there; the exclusion was a symptom of the missing backend, and it went away with it.
 //
 
 import Testing
@@ -62,11 +68,40 @@ func gzipStreamMatchesOneShot(chunk: Int) throws {
 
 @Test(
     "RFC 9110 §8.4.1 — a chunked Brotli stream is byte-identical to the one-shot stream",
+    .enabled(if: BrotliEncoder().makeStream() != nil, "no incremental Brotli backend here"),
     arguments: feedSizes
 )
 func brotliStreamMatchesOneShot(chunk: Int) throws {
     let encoder = BrotliEncoder()
     #expect(try streamed(encoder, chunk: chunk) == encoder.encode(payload))
+}
+
+// MARK: - Which codings stream, and where
+
+@Test("RFC 1952 — the `gzip` coding streams on every build that can encode it")
+func gzipStreamsWhereverItEncodes() {
+    // The regression guard for the Linux streaming gap: `encode` went through the `CZlibCoding` shim
+    // while `makeStream` returned nil, so a streamed response silently fell through to identity — the
+    // client got an uncompressed body with no error and no way to tell. Stated as an equivalence
+    // rather than as `!= nil` so it also holds on a build with no gzip backend at all, where the
+    // honest answer is that neither works.
+    let encoder = GzipEncoder()
+    #expect((encoder.encode(payload) != nil) == (encoder.makeStream() != nil))
+}
+
+@Test("RFC 7932 — the `br` coding streams exactly where it has an incremental backend")
+func brotliStreamsOnlyWithAnIncrementalBackend() {
+    #if canImport(Compression)
+        #expect(BrotliEncoder().makeStream() != nil)
+    #else
+        // Declining, explicitly and on purpose. The `CBrotli` shim bridges only the one-shot
+        // `BrotliEncoderCompress`; libbrotli's incremental `BrotliEncoderCompressStream` is not
+        // exposed, and bridging it would not close this gap anyway — brotli's streaming encoder is
+        // not specified to produce the one-shot encoder's octets, so it would satisfy the seam's
+        // signature while breaking the byte-identity the seam exists to guarantee. So `br` streams
+        // on Darwin and serves identity elsewhere, which is the stated fallback — never buffer-and-code.
+        #expect(BrotliEncoder().makeStream() == nil)
+    #endif
 }
 
 @Test("RFC 1952 — an empty streamed gzip member still carries a header and a trailer")

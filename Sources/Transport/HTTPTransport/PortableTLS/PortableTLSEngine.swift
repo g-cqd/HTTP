@@ -25,7 +25,8 @@
 //    task's `SSL_*` call rewrite the classification in between. It does NOT read per-`SSL` state
 //    alone, which this file used to claim: `SSL_ERROR_SSL` is reported off the error queue, and that
 //    queue is per-THREAD. So each classified call clears it first — see ``clearThreadErrorQueue()``,
-//    without which one connection's failure is reported as another's.
+//    which on the vendored BoringSSL is defence in depth rather than the guard, for the reason
+//    recorded there and pinned by `PortableTLSErrorQueueTests`.
 //  - The outbound pump's staging range lives *with* the staging buffer (``staged``), so a count read
 //    under one acquisition can never be used to slice the buffer under another (CWE-362, TOCTOU).
 //
@@ -313,12 +314,24 @@
         /// The queue is per-THREAD, not per-`SSL` — `err.h`: "ERR_clear_error clears the error queue
         /// for the current thread" — while `SSL_ERROR_SSL` means only "the operation failed within the
         /// library. The caller may inspect the error queue […] for more information" (`ssl.h`). A stale
-        /// entry left on a pooled thread by a DIFFERENT connection is therefore read back as this
+        /// entry left on a pooled thread by a DIFFERENT connection would therefore be read back as this
         /// connection's failure: a rejected mutual-TLS handshake leaves
         /// `PEER_DID_NOT_RETURN_A_CERTIFICATE` behind, and the next healthy session that decrypts on
-        /// that thread fails its `SSL_read` with a fatal error it never committed. Clearing
-        /// immediately before each classified call is the standard discipline and the only thing that
-        /// makes ``classify(_:)`` describe the operation it was actually handed.
+        /// that thread would fail its `SSL_read` with a fatal error it never committed.
+        ///
+        /// DEFENCE IN DEPTH, not the load-bearing guard — corrected here because the previous version
+        /// of this comment claimed it was "the only thing" that makes ``classify(_:)`` honest, and
+        /// `PortableTLSErrorQueueTests` demonstrates otherwise. The vendored BoringSSL already opens
+        /// each of the three entry points with `ssl_reset_error_state`, which calls `ERR_clear_error`
+        /// for us: `SSL_do_handshake` (`ssl_lib.cc:706`, and `SSL_accept` is a wrapper over it at
+        /// `:746`), `ssl_read_impl` (`:792`, reached from `SSL_read` via `SSL_peek`), and `SSL_write`
+        /// (`:932`). Delete this line today and nothing observable changes — verified by mutation, and
+        /// the reason three earlier regression tests for it asserted nothing.
+        ///
+        /// It stays because the redundancy is the library's to withdraw, not ours. ADR 0004 reached
+        /// vendored BoringSSL only at Phase 6; system OpenSSL, which this backbone started on, does
+        /// NOT clear the queue for you. The test pins the premise so the day it stops holding is a red
+        /// build rather than a 1-in-12 mystery.
         private func clearThreadErrorQueue() {
             CHTTPBoringSSL_ERR_clear_error()
         }
