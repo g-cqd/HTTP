@@ -143,7 +143,9 @@ public final class LegacyQUICTransport: QUICServerTransport {
         // 0-RTT early data: `NWProtocolQUIC.Options` exposes no early-data knob, and we do not enable
         // it, so no request is processed from replayable early data (RFC 9001 §9.2) — see
         // ModernQUICTransport for the full policy + the 425 Too Early (RFC 8470) defense if ever enabled.
-        let options = NWProtocolQUIC.Options(alpn: tls.applicationProtocols)
+        // ALPN comes from ``QUICApplicationProtocols``, NOT from `tls.applicationProtocols` — see that
+        // file for why reading the shared TLS list here refused every third-party HTTP/3 client.
+        let options = NWProtocolQUIC.Options(alpn: QUICApplicationProtocols.offered)
         let identity = try NetworkFrameworkTLS.identity(
             pkcs12: tls.pkcs12,
             passphrase: tls.passphrase
@@ -195,12 +197,14 @@ public final class LegacyQUICTransport: QUICServerTransport {
             case nil:
                 ticket = nil
         }
-        // This transport offers only "h3", so a completed QUIC handshake has negotiated it.
+        // This transport offers only "h3", so a completed QUIC handshake has negotiated it. That
+        // comment was here before the ALPN fix while the code below reported the TCP list's first
+        // entry — so a QUIC connection announced itself as "h2". The claim is now the code.
         let connection = LegacyQUICConnection(
             group: group,
             queue: queue,
             peer: peer,
-            negotiatedApplicationProtocol: configuration.tls?.applicationProtocols.first,
+            negotiatedApplicationProtocol: QUICApplicationProtocols.http3,
             admissionTicket: ticket
         )
         connection.start()

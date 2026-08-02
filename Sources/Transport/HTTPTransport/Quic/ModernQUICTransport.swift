@@ -106,7 +106,9 @@ public final class ModernQUICTransport: QUICServerTransport {
             pkcs12: tls.pkcs12,
             passphrase: tls.passphrase
         )
-        let alpn = tls.applicationProtocols
+        // ALPN comes from ``QUICApplicationProtocols``, NOT from `tls.applicationProtocols` — see that
+        // file for why reading the shared TLS list here refused every third-party HTTP/3 client.
+        let alpn = QUICApplicationProtocols.offered
         let maxBidirectional = limits.maxConcurrentStreams
         let endpoint = try BindEndpoint.resolve(configuration)
         let localEndpoint = try endpoint.networkEndpoint()
