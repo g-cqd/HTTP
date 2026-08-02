@@ -45,6 +45,11 @@
             var loops: [EpollEventLoop] = []
             var listenFD: Int32 = -1
             var boundPort: UInt16 = 0
+            /// Signalled once the listening descriptor is closed.
+            ///
+            /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
+            /// see ``ListenerCloseLatch``.
+            var closeLatch: ListenerCloseLatch?
             var isRunning = false
             /// The connection-stream continuation, finished on ``shutdown()`` so a consumer's `for await`
             /// completes instead of hanging.
@@ -111,6 +116,7 @@
                 $0.loops = loops
                 $0.listenFD = listener.descriptor
                 $0.boundPort = listener.port
+                $0.closeLatch = ListenerCloseLatch()
                 $0.isRunning = true
                 $0.continuation = continuation
                 $0.gate = AcceptGate(admission: admission)
@@ -142,9 +148,16 @@
             return stream
         }
 
-        /// Closes the listening socket and stops every event loop.
+        /// Closes the listening socket — **waiting for the close to land** — and stops every event loop.
+        ///
+        /// Same contract, reasoning and idempotence argument as ``POSIXKqueueTransport/shutdown()``.
+        /// This is the column that *found* the defect: the Linux job's `rebind after stop` row failed
+        /// `bind(2)` with `EADDRINUSE` (errno 98 here, 48 on Darwin) because `shutdown()` only enqueued
+        /// the listening descriptor's close onto the loop thread before returning. The Darwin review had
+        /// missed it on what is, structurally, the same code path.
         public func shutdown() async {
-            let (loops, listenFD, continuation) = state.withLock {
+            // `closeLatch` is deliberately NOT cleared — see ``POSIXKqueueTransport/shutdown()``.
+            let (loops, listenFD, continuation, latch) = state.withLock {
                 let loops = $0.loops
                 let fd = $0.listenFD
                 let cont = $0.continuation
@@ -152,20 +165,38 @@
                 $0.listenFD = -1
                 $0.continuation = nil
                 $0.isRunning = false
-                return (loops, fd, cont)
+                return (loops, fd, cont, $0.closeLatch)
             }
             // Finish the connection stream so a consumer's `for await` completes instead of hanging.
             continuation?.finish()
-            if listenFD >= 0, let acceptLoop = loops.first {
-                // close the listener on the loop that watches it
-                acceptLoop.closeDescriptor(listenFD)
+            guard let latch else {
+                return  // never started
             }
+            if listenFD >= 0 {
+                // Close the listener on the loop that watches it, and do not return until it is closed.
+                if let acceptLoop = loops.first {
+                    acceptLoop.closeDescriptor(listenFD) { latch.signal() }
+                }
+                else {
+                    close(listenFD)
+                    latch.signal()
+                }
+            }
+            // Every caller waits here, including the ones that found the descriptor already taken.
+            await latch.wait()
             for loop in loops {
                 loop.stop()
             }
         }
 
         // MARK: - Internals
+
+        /// The loop that watches the listening socket, or `nil` once ``shutdown()`` has taken it.
+        ///
+        /// The shutdown-ordering test seam — see ``POSIXKqueueTransport/acceptLoop``.
+        var acceptLoop: EpollEventLoop? {
+            state.withLock(\.loops.first)
+        }
 
         /// Auto-sizes the loop count to the online processor count (capped) — one loop per core, the
         /// nginx-style default.

@@ -139,17 +139,7 @@ struct BindContractTests {
 
     /// Four stop/start cycles on one configured port: each stop must actually release it.
     private static func assertRebindAfterStop(_ backbone: BindContractBackbone) async throws {
-        let port = try freePort(backbone)
-        guard asynchronousListenerClose.contains(backbone) else {
-            try await rebindCycles(backbone, port: port)
-            return
-        }
-        await withKnownIssue(
-            "\(backbone.rawValue) closes its listening descriptor asynchronously at shutdown",
-            isIntermittent: true
-        ) {
-            try await rebindCycles(backbone, port: port)
-        }
+        try await rebindCycles(backbone, port: freePort(backbone))
     }
 
     private static func rebindCycles(_ backbone: BindContractBackbone, port: UInt16) async throws {
@@ -166,18 +156,6 @@ struct BindContractTests {
     }
 
     // MARK: - Helpers
-
-    /// Backbones whose `shutdown()` enqueues the listening-descriptor close onto their event loop and
-    /// returns, so a restart on the same port races that close.
-    ///
-    /// `POSIXKqueueTransport.shutdown()` and `SwiftSystemTransport.shutdown()` both end in
-    /// `acceptLoop.closeDescriptor(listenFD)`. Recorded as a known issue rather than dropped from the
-    /// matrix: if either starts awaiting its close, the trait fails as "known issue not recorded" and
-    /// the exclusion has to go. `POSIXEpoll/`, `POSIXKqueue/` and `SwiftSystem/` are owned elsewhere
-    /// in this closeout.
-    static let asynchronousListenerClose: Set<BindContractBackbone> = [
-        .posixKqueue, .swiftSystem, .posixEpoll
-    ]
 
     /// A free loopback port of the right transport for `backbone` (UDP for QUIC, TCP otherwise).
     static func freePort(_ backbone: BindContractBackbone) throws -> UInt16 {
