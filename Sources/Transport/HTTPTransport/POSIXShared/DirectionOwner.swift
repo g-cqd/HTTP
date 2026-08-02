@@ -29,8 +29,35 @@
 //  which is precisely the interleaving being excluded. It is NOT reentrant, so a gated entry point must
 //  never call another gated entry point on the same direction — keep the ungated core in its own method.
 //
+//  A CAPABILITY LEASE WAS TRIED HERE AND DECLINED. The obvious next step from `isOwned` is a token:
+//  a `~Copyable, ~Escapable` `Lease` vended only by ``withOwnership(_:)``, threaded into every helper
+//  that touches the direction, so that calling one WITHOUT the lease is inexpressible rather than
+//  merely detected at runtime. It was prototyped against both real call shapes on Swift 6.4 with
+//  `LifetimeDependence`. The receive half works completely — including the `inout` copy-out, which
+//  takes a `borrowing Lease` alongside `&buffer` and compiles clean. The send half does not, and the
+//  reason is structural rather than a rough edge:
+//
+//      error: 'lease' cannot be captured by an escaping closure since it is a borrowed parameter
+//      error: lifetime-dependent variable 'lease' escapes its scope
+//             note: this use causes the lifetime-dependent value to escape
+//
+//  Send ownership must span every partial-write, `writev` and `sendfile` retry, and those retries are
+//  driven by ESCAPING `@Sendable` re-arm callbacks owned by the reactor — that is what makes the pump
+//  event-driven instead of stack recursion, so hostile peers cannot grow the stack. A non-escapable
+//  lease cannot cross that boundary, by construction and correctly. The only way through is to lift
+//  ``OnceResumer`` out of the lease and capture it instead, which is exactly today's design and
+//  re-opens the same hole the token was meant to close.
+//
+//  So the choice was a capability on the inbound direction and a flag on the outbound one. That is
+//  worse than a flag on both: a reader would have to know which half of a symmetric contract is
+//  statically enforced and which is asserted, and the half that is NOT enforced is the half where the
+//  audit actually found the defect (the per-chunk `sendFile` splice). Uniform and asserted beats
+//  half-proven. The flag stays, and the assertions stay with it — they were always meant to be
+//  defence in depth, and here they are the depth.
+//
 
 internal import HTTPConcurrency
+internal import Synchronization
 
 /// The sole owner of one direction of a raw connection's octet stream.
 ///
@@ -48,6 +75,21 @@ final class DirectionOwner<Success: Sendable>: Sendable {
     /// operation, so the hot path allocates no fresh resumer (audit: tail-latency variance). Reuse is
     /// sound *because* of the exclusion — no longer because a comment asserts operations are serial.
     private let resumer = OnceResumer<Success>()
+
+    /// How many operation bodies are running right now — 0 or 1, never more.
+    ///
+    /// The type's whole invariant, machine-checked (audit F-03). Every other cancellation boundary on
+    /// this direction can be driven from outside a test — before enqueue, while queued, after
+    /// acquisition, mid-payload — but the instant the exclusion hands the lease from one operation to
+    /// the next cannot be: it is interior to ``AsyncExclusion``, it lasts as long as a resumption, and
+    /// a cancellation aimed at it lands on either side of it depending on scheduling. A test that only
+    /// MAY hit it is not a regression test, so the invariant is asserted instead of sampled.
+    ///
+    /// Two atomic read-modify-writes per operation, uncontended (the exclusion above already
+    /// serializes them), no allocation, and not per retry — a partial-write pump re-arms inside one
+    /// admission. Cheap enough to keep in release, where it needs to be: two operations sharing a
+    /// direction is interleaved octets on the wire, which no crash reports and no log shows.
+    private let bodiesInFlight = Atomic<Int>(0)
 
     /// An unowned direction with nothing queued.
     init() {
@@ -75,8 +117,22 @@ final class DirectionOwner<Success: Sendable>: Sendable {
     /// continuation is therefore possible only while holding the direction. Ownership is released
     /// however the body ends — return, `throw`, or cancellation — so a torn-down connection cannot
     /// leave a direction owned by a task that is already gone.
+    ///
+    /// A caller cancelled while merely QUEUED never reaches `operation` at all: the exclusion throws
+    /// `CancellationError` before admitting it, which is what makes "a cancelled operation cannot
+    /// consume another's readiness" true rather than hoped for. ``bodiesInFlight`` asserts the other
+    /// half — that admission is exclusive even at the instant the lease changes hands.
     func withOwnership<T>(_ operation: (OnceResumer<Success>) async throws -> T) async throws -> T {
-        try await exclusion.withExclusiveAccess { try await operation(resumer) }
+        try await exclusion.withExclusiveAccess {
+            let concurrent = bodiesInFlight.wrappingAdd(1, ordering: .acquiringAndReleasing)
+                .oldValue
+            defer { bodiesInFlight.wrappingSubtract(1, ordering: .releasing) }
+            precondition(
+                concurrent == 0,
+                "two operations own one direction at once; their octets would interleave on the wire"
+            )
+            return try await operation(resumer)
+        }
     }
 
     /// Suspends until at least `count` operations are queued behind the owner.

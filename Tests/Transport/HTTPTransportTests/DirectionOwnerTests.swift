@@ -32,9 +32,16 @@ struct DirectionOwnerTests {
     /// resumed by nothing — not by readiness, which had handed its result to the survivor, and not by
     /// close, which finds only the survivor. Here the intruder is failed at once and the incumbent is
     /// still there to be resumed, which is what makes the contract enforceable rather than described.
+    ///
+    /// Both resumptions are harvested through a ``ResumptionOracle`` rather than `await`ed directly,
+    /// which is what makes the mutation BOUNDED. Restore the unconditional overwrite and the displaced
+    /// task is parked on a continuation nothing will resume and nothing can cancel: awaiting it here
+    /// would hang the process to the `.timeLimit` below and report only that it did. See
+    /// ``ResumptionOracle`` for why an in-process watchdog is sufficient and a subprocess is not.
     @Test("the resumer refuses to displace a pending continuation", .timeLimit(.minutes(1)))
     func resumerRefusesDisplacement() async throws {
         let resumer = OnceResumer<Int>()
+        let oracle = ResumptionOracle(direction: .inbound, operation: "receive")
         let installed = AsyncEventProbe<Int>()
         let incumbent = Task {
             try await withUnsafeThrowingContinuation {
@@ -45,17 +52,28 @@ struct DirectionOwnerTests {
         }
         _ = try await installed.wait(forAtLeast: 1)
 
+        // Recorded rather than asserted inside the task, so the refusal is observable from out here
+        // BEFORE anything resumes — the intruder must be failed by `claim` itself, not by the resume
+        // below. Under the overwrite mutation this is the first thing that fails, and it fails fast.
+        let refusal = AsyncEventProbe<Bool>()
         let intruder = Task {
             try await withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Int, any Error>) in
-                #expect(!resumer.claim(continuation))
+                refusal.record(resumer.claim(continuation))
             }
         }
-        await #expect(throws: DirectionOwnershipViolation.self) { try await intruder.value }
+        #expect(try await refusal.wait(forAtLeast: 1) == [false])
 
         // The incumbent was never touched: readiness still finds the continuation it installed.
         resumer.resume(returning: 42)
-        #expect(try await incumbent.value == 42)
+        let rejected = await oracle.resumption(of: "the displaced intruder") {
+            try await intruder.value
+        }
+        #expect(throws: DirectionOwnershipViolation.self) { try rejected?.get() }
+        let survived = await oracle.resumption(of: "the incumbent owner") {
+            try await incumbent.value
+        }
+        #expect(try survived?.get() == 42)
     }
 
     /// A resumer resumes at most once, however many times its callback fires.

@@ -1,19 +1,32 @@
 # SE-0458 strict-memory-safety budget — the ratchet (ADR 0009).
 #
-# One row per target: the number of expressions that use unsafe constructs without an `unsafe`
-# marker, as counted by `scripts/strict-memory-safety.py`. The number may FALL freely; CI fails if
-# it RISES. A target reaching 0 graduates out of this file and into `strictMemorySafeTargets` in
-# Package.swift, where the compiler enforces it as a build error instead of a count.
+# One row per target, TWO columns:
 #
-# Regenerate after reducing a count:  scripts/strict-memory-safety.py --update
-# Targets absent from this file must be at 0 — a new target with unsafe sites fails the gate until
-# it is either annotated or added here deliberately.
-HTTPTransport	147
-HTTPServer	79
-HTTPCore	77
-HTTPTestSupport	75
-WebSocket	29
-HTTP1	23
-HTTP2	21
-HTTP3	8
-httpd-example	4
+#   target <TAB> un-annotated <TAB> suppressed
+#
+# UN-ANNOTATED — expressions using unsafe constructs with no `unsafe` marker, counted from the
+# compiler's own diagnostics. May FALL freely; CI fails if it RISES. A target reaching 0 graduates
+# out of this file and into `strictMemorySafeTargets` in Package.swift, where the compiler enforces
+# it as a build error instead of a count.
+#
+# SUPPRESSED — constructs that make the compiler stop ASKING rather than answer: `@unchecked
+# Sendable`, `nonisolated(unsafe)`, `@unsafe`, `unsafeBitCast`, `unsafeDowncast`,
+# `@_unsafeInheritExecutor`. Held at EXACT equality, in both directions. Without this column,
+# replacing an un-annotated expression with `@unchecked Sendable` lowered the first number and read
+# as progress; now it lowers the first and raises the second, and fails. Equality rather than a
+# ceiling because slack is how a ratchet stops ratcheting, and a genuine removal is worth the one
+# deliberate `--update` it costs.
+#
+# Regenerate after either count changes:  scripts/strict-memory-safety.py --update
+# Targets absent from this file must be at 0 in both columns — a new target with unsafe sites fails
+# the gate until it is either annotated or added here deliberately.
+HTTPTransport	147	10
+HTTPServer	79	3
+HTTPCore	77	0
+HTTPTestSupport	75	1
+WebSocket	29	0
+HTTP1	23	0
+HTTP2	21	0
+HTTP3	8	0
+httpd-example	4	0
+HTTPAuth	0	1

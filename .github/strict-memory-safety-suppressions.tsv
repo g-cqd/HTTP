@@ -1,0 +1,29 @@
+# The suppressions already in the tree, per file and kind (ADR 0009).
+#
+#   path <TAB> kind <TAB> count
+#
+# This file is the review record. Counting per file rather than per line on purpose: a suppression
+# that merely MOVES within its file is not a new suppression, and a line-keyed inventory would churn
+# on every edit above it and teach everyone to re-run `--update` without reading the diff.
+#
+# A suppression BEYOND the count recorded here must carry a `// SAFETY:` comment on its own line or
+# within the five lines above it. Existing entries are grandfathered: they were argued in prose when
+# they were written, and rewriting other people's justifications into a new format would be churn
+# that proves nothing. New ones argue in the format.
+#
+# Regenerate:  scripts/strict-memory-safety.py --update
+Sources/HTTPAuth/JWT.swift	@unchecked Sendable	1
+Sources/Server/HTTPServer/ForwardingByteBudget.swift	@unchecked Sendable	1
+Sources/Server/HTTPServer/ForwardingByteBudget.swift	nonisolated(unsafe)	1
+Sources/Server/HTTPServer/RequestContext.swift	@unchecked Sendable	1
+Sources/Testing/HTTPTestSupport/ConstrainedStack.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/Network/NetworkFrameworkConnection.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/Network/NetworkFrameworkTLS.swift	nonisolated(unsafe)	1
+Sources/Transport/HTTPTransport/Network/NetworkFrameworkTLS.swift	unsafeDowncast	1
+Sources/Transport/HTTPTransport/PortableTLS/PortableTLSConnection.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/PortableTLS/PortableTLSEngine.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/PortableTLS/PortableTLSTransport.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/Quic/LegacyQUICConnection.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/Quic/LegacyQUICStream.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/Quic/ModernQUICConnection.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/Quic/ModernQUICStream.swift	@unchecked Sendable	1
