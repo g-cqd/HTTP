@@ -20,17 +20,17 @@ import _CryptoExtras
 @Suite("HTTPAuth — JWT verification (RFC 7519)")
 struct JWTTests {
     let secret: [UInt8] = Array("0123456789abcdef0123456789abcdef".utf8)
-    // Immutable test-fixture keys, read-only across parallel tests. On Darwin these types are
-    // `Sendable` (CryptoKit re-export), so the 6.4 compiler flags an explicit `nonisolated(unsafe)`
-    // as unnecessary (promoted to an error under HTTP_WARNINGS_AS_ERRORS); on Linux swift-crypto's
-    // own types are NOT `Sendable`, so the opt-out is required — hence the platform split.
-    #if canImport(Darwin)
-        static let ecKey = P256.Signing.PrivateKey()
-        static let rsaKey = try? _RSA.Signing.PrivateKey(keySize: .bits2048)
-    #else
-        nonisolated(unsafe) static let ecKey = P256.Signing.PrivateKey()
-        nonisolated(unsafe) static let rsaKey = try? _RSA.Signing.PrivateKey(keySize: .bits2048)
-    #endif
+    // Immutable test-fixture keys, read-only across parallel tests.
+    //
+    // This used to be a `#if canImport(Darwin)` split whose `#else` branch spelled both keys
+    // `nonisolated(unsafe)`, because through swift-crypto 3.15.1 the Linux `P256.Signing.PrivateKey`
+    // and `_RSA.Signing.PrivateKey` were not `Sendable` while their CryptoKit re-exports on Darwin
+    // were. swift-crypto 4.x conforms them upstream, so the opt-out is not merely unneeded on Linux —
+    // it is an ERROR there under `HTTP_WARNINGS_AS_ERRORS` ("'nonisolated(unsafe)' is unnecessary for
+    // a constant with 'Sendable' type"), the same diagnostic that forced the split for Darwin in the
+    // first place. Both platforms now want the plain declaration, so the split goes away entirely.
+    static let ecKey = P256.Signing.PrivateKey()
+    static let rsaKey = try? _RSA.Signing.PrivateKey(keySize: .bits2048)
 
     private let hsHeader = #"{"alg":"HS256","typ":"JWT"}"#
 

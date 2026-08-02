@@ -16,6 +16,13 @@
 //  Standards: QUIC (RFC 9000 §5.1, connections identified per peer); ALPN "h3" (RFC 7301, RFC 9114
 //  §3.1). Defense: CWE-770 (allocation without limits) via the per-host connection ceiling.
 //
+//  Darwin-only, and excluded from the Linux build by `darwinOnlyTransportTestSources`: every case
+//  here needs a Network.framework QUIC listener, a real `NWConnection` h3 client, or the
+//  `NWEndpoint` overload of `QUICPeer.address(of:)` — none of which exist on Linux, where there is
+//  no QUIC backbone to attribute a peer for. The part of the contract that is NOT about
+//  Network.framework — that an unattributable peer folds into one shared, capped, unforgeable
+//  admission bucket — lives in `QUICPeerAdmissionTests` and stays cross-platform.
+//
 
 import Foundation
 import HTTPCore
@@ -98,17 +105,6 @@ struct QUICPeerAttributionTests {
         // folds it into the same shared, fail-closed budget it already uses for a missing peer.
         #expect(address.ipAddress == nil)
         #expect(address.host == "-")
-    }
-
-    @Test("unattributable peers share one admission bucket rather than escaping the cap")
-    func unattributablePeersShareOneBucket() {
-        let admission = ConnectionAdmission(
-            capacity: ConnectionAdmission.Capacity(total: 8, perHost: 8)
-        )
-        let first = admission.admit(host: QUICPeer.unattributed.host)
-        let second = admission.admit(host: QUICPeer.unattributed.host)
-        #expect(admission.counts == (total: 2, hosts: 1))
-        _ = (first, second)
     }
 
     // MARK: - Harness

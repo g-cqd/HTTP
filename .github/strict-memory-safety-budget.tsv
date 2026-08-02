@@ -8,7 +8,7 @@
 # Regenerate after reducing a count:  scripts/strict-memory-safety.py --update
 # Targets absent from this file must be at 0 — a new target with unsafe sites fails the gate until
 # it is either annotated or added here deliberately.
-HTTPTransport	149
+HTTPTransport	147
 HTTPServer	79
 HTTPCore	77
 HTTPTestSupport	75

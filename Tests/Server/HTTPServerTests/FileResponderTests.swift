@@ -85,10 +85,10 @@ struct FileResponderTests {
         let outside = base.appendingPathComponent("secret")
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         try? manager.createDirectory(at: outside, withIntermediateDirectories: true)
-        manager.createFile(
+        _ = manager.createFile(
             atPath: outside.appendingPathComponent("passwd").path, contents: Data("TOP SECRET".utf8)
         )
-        manager.createFile(
+        _ = manager.createFile(
             atPath: root.appendingPathComponent("ok.txt").path, contents: Data("ok".utf8)
         )
         // A symlink inside the docroot pointing to the sibling secret dir — no `..` appears in the URL.

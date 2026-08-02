@@ -20,9 +20,12 @@
 //
 //  Two consequences are baked into the method shapes rather than left to callers:
 //
-//  - `SSL_get_error` classifies the *last* operation by reading per-`SSL` state, so it is paired with
-//    its call inside one acquisition and the caller only ever sees an ``Outcome``. Splitting the pair
-//    would let another task's `SSL_*` call rewrite the classification in between.
+//  - `SSL_get_error` classifies the *last* operation, so it is paired with its call inside one
+//    acquisition and the caller only ever sees an ``Outcome``. Splitting the pair would let another
+//    task's `SSL_*` call rewrite the classification in between. It does NOT read per-`SSL` state
+//    alone, which this file used to claim: `SSL_ERROR_SSL` is reported off the error queue, and that
+//    queue is per-THREAD. So each classified call clears it first — see ``clearThreadErrorQueue()``,
+//    without which one connection's failure is reported as another's.
 //  - The outbound pump's staging range lives *with* the staging buffer (``staged``), so a count read
 //    under one acquisition can never be used to slice the buffer under another (CWE-362, TOCTOU).
 //
@@ -128,6 +131,7 @@
         /// `SSL_accept` rather than `SSL_do_handshake` so the session enters server accept-state on the
         /// first call; later calls continue the handshake after each BIO pump.
         mutating func acceptHandshake() -> Outcome {
+            clearThreadErrorQueue()
             let result = CHTTPBoringSSL_SSL_accept(ssl)
             guard result != 1 else {
                 return .produced(1)
@@ -146,8 +150,22 @@
 
         // MARK: - Plaintext
 
-        /// One `SSL_read` into the adaptive plaintext scratch.
-        mutating func decrypt(ceiling: Int) -> Outcome {
+        /// One `SSL_read` into the adaptive plaintext scratch, delivering what it produced to `sink`.
+        ///
+        /// Decrypt and copy-out are ONE acquisition, and the produced count never leaves this method
+        /// as a bound anyone could re-use (audit F-02). The previous shape returned the count and let
+        /// the caller re-enter for the bytes; between those two acquisitions a second receiver could
+        /// `SSL_read` over the same scratch, so the first caller copied out the second's plaintext —
+        /// one byte duplicated into one caller and lost from the other. That is CWE-362 (a race on a
+        /// shared resource) over CWE-367 (the classic TOCTOU: check the count, then use it), and it is
+        /// the same defect ``staged`` was introduced to remove from the outbound pump. It is not
+        /// spelled out of the callers here, it is unspellable: the bytes are already in `sink` when
+        /// this returns and nothing exposes the scratch.
+        ///
+        /// `sink` is appended to only on ``Outcome/produced(_:)``, so a retry outcome — or a caller
+        /// that abandons the loop on cancellation — leaves it exactly as it was.
+        mutating func decrypt(ceiling: Int, into sink: inout [UInt8]) -> Outcome {
+            clearThreadErrorQueue()
             // `max(1, …)`: `SSL_read` with a zero-length buffer is not a read, it is an error report.
             // The window is `raw.count`, never `ceiling` (ADD-P2), and `clamping` because `SSL_read`
             // takes an `int` — a window past `Int32.max` would trap the conversion, where a shorter
@@ -160,17 +178,13 @@
                 return unsafe Int(CHTTPBoringSSL_SSL_read(ssl, raw.baseAddress, room))
             }
             guard count <= 0 else {
+                // `sink` is the caller's accumulator, never this engine's storage, so the append
+                // cannot alias `plaintext` — and it happens here, under the acquisition that produced
+                // the octets, which is the entire point of the parameter.
+                sink.append(contentsOf: plaintext.received(count))
                 return .produced(count)
             }
             return classify(Int32(clamping: count))
-        }
-
-        /// The `count` octets the last ``decrypt(ceiling:)`` produced.
-        ///
-        /// Safe to take in a second acquisition only because the read direction is serialized as a
-        /// whole by the connection's receive exclusion — one reader, so nothing can decrypt over it.
-        func decrypted(_ count: Int) -> ArraySlice<UInt8> {
-            plaintext.received(count)
         }
 
         /// One `SSL_write` of `bytes` from `offset`.
@@ -182,6 +196,7 @@
         /// `withUnsafeBytes` yields the same base address every time — and the connection's send
         /// exclusion is what stops a *different* caller's buffer from arriving in between.
         func encrypt(_ bytes: [UInt8], from offset: Int) -> Outcome {
+            clearThreadErrorQueue()
             // SE-0458 (ADR 0009): unsafe by the closure's pointer parameter; the pointer is used only
             // for the duration of the call and does not escape.
             let written = bytes.withUnsafeBytes { raw -> Int32 in
@@ -293,11 +308,27 @@
             staged = 0 ..< max(0, moved)
         }
 
+        /// Empties the calling thread's BoringSSL error queue before a classified `SSL_*` call.
+        ///
+        /// The queue is per-THREAD, not per-`SSL` — `err.h`: "ERR_clear_error clears the error queue
+        /// for the current thread" — while `SSL_ERROR_SSL` means only "the operation failed within the
+        /// library. The caller may inspect the error queue […] for more information" (`ssl.h`). A stale
+        /// entry left on a pooled thread by a DIFFERENT connection is therefore read back as this
+        /// connection's failure: a rejected mutual-TLS handshake leaves
+        /// `PEER_DID_NOT_RETURN_A_CERTIFICATE` behind, and the next healthy session that decrypts on
+        /// that thread fails its `SSL_read` with a fatal error it never committed. Clearing
+        /// immediately before each classified call is the standard discipline and the only thing that
+        /// makes ``classify(_:)`` describe the operation it was actually handed.
+        private func clearThreadErrorQueue() {
+            CHTTPBoringSSL_ERR_clear_error()
+        }
+
         /// Classifies a non-positive `SSL_*` result through `SSL_get_error`.
         ///
         /// Called in the same acquisition as the operation it describes: `SSL_get_error` reports on the
         /// *last* operation this `SSL` performed, so a second task's call in between would rewrite the
-        /// answer.
+        /// answer. Paired with ``clearThreadErrorQueue()`` on the way in, so what it reads back is this
+        /// call's outcome rather than a neighbouring connection's leftovers.
         private func classify(_ result: Int32) -> Outcome {
             switch CHTTPBoringSSL_SSL_get_error(ssl, result) {
                 case SSL_ERROR_WANT_READ:
