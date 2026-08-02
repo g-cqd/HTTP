@@ -61,6 +61,10 @@
     /// earlier justification ("I/O is serial per connection") was not true of any HTTP/2 or WebSocket
     /// connection, which is what this serialization replaces.
     final class PortableTLSConnection: TransportConnection, @unchecked Sendable {
+        /// One `pread` chunk of ``sendFile(descriptor:offset:length:)`` — the ceiling on how much file
+        /// this connection buffers at once, whatever the body's size.
+        private static let fileChunkOctets = 64 * 1_024
+
         let id: TransportConnectionID
         let peer: TransportAddress
         let isSecure = true
@@ -242,6 +246,17 @@
         /// Whether the inbound direction is currently claimed — see ``isSendPumpHeld``.
         var isReceivePumpHeld: Bool { receivePump.isHeld }
 
+        /// Suspends until at least `count` senders are queued behind the current outbound holder.
+        ///
+        /// The deterministic sequencing hook for an ownership-SPAN assertion, and the reason the span
+        /// tests are regression tests rather than coin flips: a test that starts a second sender and
+        /// hopes it lands inside the window observes the interleaving perhaps half the time. This
+        /// returns exactly when the contended state exists, so the assertion that follows is about a
+        /// state the test established rather than one it wished for.
+        func awaitQueuedSenders(atLeast count: Int) async throws {
+            try await sendPump.waitForWaiters(atLeast: count)
+        }
+
         /// `SSL_read` into the scratch and on into `sink`, pumping ciphertext from the socket on
         /// `WANT_READ` — the shared decrypt loop.
         ///
@@ -292,6 +307,27 @@
 
         // MARK: - Send
 
+        /// Asserts the outbound direction is still leased, which is what keeps one response's octets
+        /// contiguous and its TLS records unspliced.
+        ///
+        /// The machine-checked half of the send contract on this backbone. Both cores it guards —
+        /// ``encryptAndDrain(_:)`` and ``drainCiphertext()`` — are ungated on purpose, because
+        /// ``AsyncExclusion`` is not reentrant (CWE-833) and the gated entry points must call them
+        /// directly. That split is exactly the shape a later refactor gets wrong: the per-chunk
+        /// `sendFile` splice this backbone carried arrived by *inheriting* a default that called the
+        /// gated ``send(_:)`` in a loop, and nothing failed. Now something does.
+        ///
+        /// One uncontended lock read per chunk — not per partial write. `precondition` rather than
+        /// `assert`, so it holds in release: octets spliced into another response are silent
+        /// corruption of a message body, not a crash. Mirrors ``POSIXDispatchConnection``'s
+        /// `assertOutboundLeased` and the `assertInboundLeased` of all four POSIX backbones.
+        private func assertOutboundLeased(_ step: StaticString) {
+            precondition(
+                sendPump.isHeld,
+                "\(step) requires the outbound direction; records would splice without it"
+            )
+        }
+
         /// Encrypts and sends all of `bytes`, draining the produced ciphertext to the socket.
         ///
         /// The whole call runs under ``sendPump``. That is not belt-and-braces: `SSL_write` commits to
@@ -305,10 +341,87 @@
             try await sendPump.withExclusiveAccess { try await self.encryptAndDrain(bytes) }
         }
 
-        /// The `SSL_write` loop of ``send(_:)``.
+        /// Sends `length` octets of the open file `file` from `offset`, holding the outbound direction
+        /// for the WHOLE transfer rather than for each chunk.
         ///
-        /// The caller holds ``sendPump``.
+        /// Without this, the connection inherits ``TransportConnection``'s copying default, whose
+        /// ``TransportConnection/send(_:)`` call sits inside the chunk loop — so under this backbone's
+        /// exclusion the lease is taken and released once per 64 KiB chunk, and a sender arriving in
+        /// the gap between two chunks writes its octets into the MIDDLE of a body the peer is reading
+        /// against a `Content-Length` it already has (RFC 9112 §6.2). The record stream stays
+        /// well-formed while that happens, which is what makes it dangerous: TLS accepts the splice
+        /// and the damage lands one layer up, in the HTTP framing, unseen. This override takes the
+        /// exclusion once and drives the ungated ``encryptAndDrain(_:)``; the copies are identical,
+        /// the framing is not. `pread` (not `read`) so the caller's descriptor offset is never
+        /// disturbed, and the loop never buffers more than one chunk regardless of file size.
+        ///
+        /// Standards: pread() per POSIX.1-2017 (IEEE Std 1003.1-2017); TLS 1.3 per RFC 8446 §5.1.
+        func sendFile(descriptor file: Int32, offset: Int, length: Int) async throws {
+            guard length > 0 else {
+                return
+            }
+            try await sendPump.withExclusiveAccess {
+                try await self.preadAndEncrypt(file, offset: offset, length: length)
+            }
+        }
+
+        /// The `pread` chunk loop of ``sendFile(descriptor:offset:length:)``.
+        ///
+        /// The caller holds ``sendPump`` for every iteration, which is the entire point of the
+        /// override; it fails closed if the file delivers fewer than `length` octets, because the
+        /// caller has already framed that length and a silent short body would desync the connection.
+        private func preadAndEncrypt(_ file: Int32, offset: Int, length: Int) async throws {
+            var remaining = length
+            var cursor = offset
+            var chunk = [UInt8](repeating: 0, count: min(Self.fileChunkOctets, length))
+            while remaining > 0 {
+                let count = Self.preadChunk(file, &chunk, min(chunk.count, remaining), cursor)
+                guard count > 0 else {
+                    throw TransportError.ioFailed(
+                        count == 0
+                            ? "sendFile: file ended \(remaining) octet(s) short of the framed length"
+                            : "sendFile: pread errno \(errno)"
+                    )
+                }
+                try await encryptAndDrain(Array(chunk[..<count]))
+                cursor += count
+                remaining -= count
+            }
+        }
+
+        /// One `pread(2)` of `wanted` octets into `chunk` at `cursor`, retrying `EINTR`; `-1` on
+        /// failure.
+        private static func preadChunk(
+            _ file: Int32,
+            _ chunk: inout [UInt8],
+            _ wanted: Int,
+            _ cursor: Int
+        ) -> Int {
+            chunk.withUnsafeMutableBytes { raw -> Int in
+                while true {
+                    // SE-0458 (ADR 0009): unsafe by the pointer parameter. `raw` is this call's own
+                    // buffer, valid for at least `wanted` octets (`wanted <= chunk.count`), and does
+                    // not escape.
+                    let read = unsafe pread(file, raw.baseAddress, wanted, off_t(cursor))
+                    if read >= 0 {
+                        return read
+                    }
+                    if errno == EINTR {
+                        continue
+                    }
+                    return -1
+                }
+            }
+        }
+
+        /// The `SSL_write` loop of ``send(_:)`` and of ``sendFile(descriptor:offset:length:)``.
+        ///
+        /// The caller holds ``sendPump``, and ``assertOutboundLeased()`` is what makes that a checked
+        /// claim rather than a comment: this is the sole encrypt core, so a gated entry point refactored
+        /// into an ungated one — which is exactly how the per-chunk splice above arrived — is caught
+        /// here, before the first `SSL_write` puts a record into the write BIO.
         private func encryptAndDrain(_ bytes: [UInt8]) async throws {
+            assertOutboundLeased("a TLS encrypt")
             var offset = 0
             while offset < bytes.count {
                 let outcome = engine.withLock { $0.encrypt(bytes, from: offset) }
@@ -383,10 +496,7 @@
         /// The close-flag guard keeps a pump resumed after ``cancel()``/``close()`` from touching the
         /// descriptor *number*, which the kernel may already have reused for another connection.
         private func drainCiphertext() async throws {
-            precondition(
-                sendPump.isHeld,
-                "the TLS ciphertext drain requires the send exclusion; records would splice without it"
-            )
+            assertOutboundLeased("the TLS ciphertext drain")
             while true {
                 guard !isClosed.load(ordering: .acquiring) else {
                     throw TransportError.closed
