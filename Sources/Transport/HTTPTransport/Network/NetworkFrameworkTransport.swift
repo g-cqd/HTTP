@@ -141,7 +141,21 @@ public final class NetworkFrameworkTransport: ServerTransport {
                 queue.async { [self] in setConnectionLimit(NWListener.InfiniteConnectionLimit) }
             }
         listener.start(queue: queue)
-        try await waitUntilReady()
+        do {
+            try await waitUntilReady()
+        }
+        catch {
+            // A refused bind must not leave a live `NWListener` behind: a `.waiting` listener retries
+            // its bind for the life of the process, holding Network.framework queues and sources.
+            let refused = state.withLock { current -> NWListener? in
+                let live = current.listener
+                current.listener = nil
+                return live
+            }
+            refused?.cancel()
+            continuation.finish()
+            throw error
+        }
         return stream
     }
 

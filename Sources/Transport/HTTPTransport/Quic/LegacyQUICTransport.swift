@@ -106,7 +106,16 @@ public final class LegacyQUICTransport: QUICServerTransport {
 
         state.withLock { $0.listener = listener }
         listener.start(queue: queue)
-        try await waitUntilReady()
+        do {
+            try await waitUntilReady()
+        }
+        catch {
+            // A refused bind must not leave a live `NWListener` behind: a `.waiting` listener retries
+            // its bind for the life of the process, holding Network.framework queues and sources.
+            await shutdown()
+            continuation.finish()
+            throw error
+        }
         return stream
     }
 

@@ -14,6 +14,15 @@ public protocol QUICServerTransport: Sendable {
     /// The actual bound UDP port (meaningful after ``start()``; resolves an ephemeral `0` request).
     var boundPort: UInt16 { get }
 
+    /// The local endpoint actually bound after ``start()`` — the resolved interface literal, its
+    /// family, and the realized UDP port — or `nil` before binding.
+    ///
+    /// The same first-class contract as ``ServerTransport/boundEndpoint``, and the property audit
+    /// F-04 was about: this backbone advertised a port through `Alt-Svc` (RFC 7838) while binding a
+    /// different one, so "what did you actually bind" had no answer a caller could act on. Both QUIC
+    /// backbones implement it.
+    var boundEndpoint: BindEndpoint? { get }
+
     /// Binds and begins accepting, returning a stream of inbound connections that finishes at shutdown.
     ///
     /// `admission` is the shared connection ceiling (audit F8), charged before a connection is yielded

@@ -178,14 +178,32 @@ public final class ModernQUICTransport: QUICServerTransport {
             continuation.finish()
         }
         runTask.withLock { $0 = task }
-        try await waitUntilBound()
+        do {
+            try await waitUntilBound()
+        }
+        catch {
+            // A refused bind must not leave `run` looping on a listener nobody owns: tear it down
+            // before rethrowing, so a failed `start()` costs nothing beyond the error.
+            await shutdown()
+            throw error
+        }
         return stream
     }
 
     /// Stops accepting: cancels the listener's run task, which unwinds it (the modern API has no
     /// `cancel()`; teardown is via structured task cancellation).
     public func shutdown() async {
-        runTask.withLock(\.self)?.cancel()
+        let task = runTask.withLock { current -> Task<Void, Never>? in
+            let running = current
+            current = nil
+            return running
+        }
+        task?.cancel()
+        // Drop the listener too. A `start()` that threw leaves a listener still parked in `run`
+        // (a `.waiting` bind retries forever), and holding it keeps Network.framework's own queues
+        // and sources alive for the life of the process. Not awaited: `run` unwinds on the
+        // cancellation above, and awaiting it here would make teardown depend on it doing so.
+        listenerBox.withLock { $0 = nil }
     }
 
     /// The address the peer of `connection` is speaking from.

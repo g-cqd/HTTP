@@ -83,9 +83,12 @@ struct QUICPeerAttributionTests {
         }
 
         let peers = accepted.map(\.peer)
-        // `::1` cannot be the listener's own bind address — the transport is configured with
-        // `127.0.0.1` — so seeing it proves the address came from the peer.
-        #expect(Set(peers.map(\.host)) == Set(Self.peerHosts))
+        // Two peers dialled from two different loopback addresses must be reported as two different
+        // hosts, and neither may be the wildcard the listener bound — that is what proves the address
+        // came from the peer rather than from the listener. The exact literals are left to the
+        // stack: on a dual-stack listener an IPv4 peer may be reported IPv4-mapped (RFC 4291 §2.5.5.2).
+        #expect(Set(peers.map(\.host)).count == 2)
+        #expect(peers.allSatisfy { $0.host != "::" && !$0.host.isEmpty })
         // Nor is it the listener's port: each peer speaks from its own ephemeral source port.
         #expect(peers.allSatisfy { $0.port != boundPort && $0.port != 0 })
     }
@@ -112,8 +115,13 @@ struct QUICPeerAttributionTests {
     /// The backbone under test, or `nil` when this OS cannot provide it.
     private static func makeTransport(_ backbone: String) throws -> (any QUICServerTransport)? {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        // The IPv6 wildcard (RFC 4291 §2.5.2), not `127.0.0.1`, because this suite needs ONE listener
+        // that two peers from two different loopback addresses can both reach. That used to work with
+        // a loopback host purely because the QUIC backbones ignored `TransportConfiguration.host`
+        // (audit F-04/F-05): they bound every interface whatever they were told. Now the host is
+        // honoured, so a test that wants every interface has to say so.
         let configuration = TransportConfiguration(
-            host: "127.0.0.1",
+            host: "::",
             port: 0,
             backbone: .networkFramework,
             tls: tls
