@@ -101,12 +101,6 @@ let strictMemorySafeTargets: Set<String> = [
     // the Linux test build, like the backbones they cover. The sans-I/O engine tests, the portable-backbone
     // tests, and the gated PortableTLS suite stay cross-platform.
     let darwinOnlyTransportTestSources = [
-        // Every backbone in its `gatedBackbones` (kqueue/dispatch/swift-system/Network) is excluded
-        // above, and it drives them through `LoopbackSupport`, which is excluded too. COVERAGE DEBT,
-        // and the honest kind: the `AcceptGate` it pins is SHARED with `.posixEpoll`, so the Linux
-        // accept-backpressure path (global ceiling suspends the listener, per-host ceiling does not)
-        // is currently untested rather than absent. An epoll mirror is the follow-up.
-        "AcceptBackpressureTests.swift",
         // FLAKE-1's `_dispatch_queue_xref_dispose` trap, which is a property of
         // `POSIXDispatchTransport` — itself Darwin-only and excluded above. No debt: there is no
         // libdispatch accept source on Linux to get this wrong.
@@ -114,6 +108,10 @@ let strictMemorySafeTargets: Set<String> = [
         "BackboneConformanceTests.swift",
         "CertificateReloadTests.swift",
         "LegacyQUICTransportTests.swift",
+        // The three `assertLoopback*` round-trips, each driving an `NWConnection` through
+        // `NetworkFrameworkConnection`. The raw `socket(2)`/`connect(2)` dialer that used to sit
+        // beside them needs none of that and now lives in `LoopbackDialer.swift`, which is NOT
+        // excluded — it was the last thing keeping `AcceptBackpressureTests` off this platform.
         "LoopbackSupport.swift",
         "ModernQUICTransportTests.swift",
         "NetworkFrameworkMutualTLSTests.swift",
