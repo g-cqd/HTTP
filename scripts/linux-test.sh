@@ -25,7 +25,10 @@
 #
 set -euo pipefail
 
-IMAGE="${HTTP_LINUX_IMAGE:-docker.io/swiftlang/swift:nightly-noble}"
+# Same tag the required `build-test-linux` CI job pins, so a local pass and a CI pass are statements
+# about one toolchain. nightly-6.4.x tracks the 6.4 RELEASE branch — the language mode this package
+# targets — rather than main, which can break the build for reasons unrelated to the change at hand.
+IMAGE="${HTTP_LINUX_IMAGE:-docker.io/swiftlang/swift:nightly-6.4.x-jammy}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRATCH="${HTTP_LINUX_SCRATCH:-$REPO/.build-linux}"
 SEED_SRC="${HTTP_LINUX_SEED_SRC:-$REPO/.build}"

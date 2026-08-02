@@ -82,6 +82,10 @@ let strictMemorySafeTargets: Set<String> = [
         "Quic/ModernQUICConnection.swift",
         "Quic/ModernQUICStream.swift",
         "Quic/ModernQUICTransport.swift",
+        // The `NWEndpoint` -> `TransportAddress` mapping only. `Quic/QUICPeer.swift` — the
+        // `unattributed` sentinel the admission gate and `RateLimitIdentity` key on (ADD-P0.5b) — is
+        // platform-neutral and deliberately STAYS in the Linux graph.
+        "Quic/QUICPeer+Network.swift",
         "Quic/QUICTransportFactory.swift"
     ]
     // The outbound/inbound codings built on Apple's `Compression` framework (Brotli RFC 7932, gzip
@@ -97,6 +101,16 @@ let strictMemorySafeTargets: Set<String> = [
     // the Linux test build, like the backbones they cover. The sans-I/O engine tests, the portable-backbone
     // tests, and the gated PortableTLS suite stay cross-platform.
     let darwinOnlyTransportTestSources = [
+        // Every backbone in its `gatedBackbones` (kqueue/dispatch/swift-system/Network) is excluded
+        // above, and it drives them through `LoopbackSupport`, which is excluded too. COVERAGE DEBT,
+        // and the honest kind: the `AcceptGate` it pins is SHARED with `.posixEpoll`, so the Linux
+        // accept-backpressure path (global ceiling suspends the listener, per-host ceiling does not)
+        // is currently untested rather than absent. An epoll mirror is the follow-up.
+        "AcceptBackpressureTests.swift",
+        // FLAKE-1's `_dispatch_queue_xref_dispose` trap, which is a property of
+        // `POSIXDispatchTransport` — itself Darwin-only and excluded above. No debt: there is no
+        // libdispatch accept source on Linux to get this wrong.
+        "AcceptShutdownRaceTests.swift",
         "BackboneConformanceTests.swift",
         "CertificateReloadTests.swift",
         "LegacyQUICTransportTests.swift",
@@ -104,16 +118,40 @@ let strictMemorySafeTargets: Set<String> = [
         "ModernQUICTransportTests.swift",
         "NetworkFrameworkMutualTLSTests.swift",
         "NetworkFrameworkTLSTests.swift",
+        // Network.framework QUIC listeners + `NWConnection` h3 clients + the `NWEndpoint` overload
+        // of `QUICPeer.address(of:)`. The platform-neutral half of the same contract — the shared,
+        // capped bucket every unattributable peer folds into — is `QUICPeerAdmissionTests.swift`,
+        // which is NOT excluded and keeps ADD-P0.5b covered on Linux.
+        "QUICPeerAttributionTests.swift",
         // raw BSD-socket options; SO_NOSIGPIPE is Darwin-only (the epoll tests cover Linux)
-        "POSIXSocketTests.swift"
+        "POSIXSocketTests.swift",
+        // Built on `KqueueEventLoop` + `POSIXKqueueConnection`, both excluded above, so it cannot
+        // compile here. THE LARGEST COVERAGE DEBT IN THIS LIST, and it must not be quiet: the
+        // single-slot-waiter defect it proves is not a kqueue defect. `POSIXEpollConnection` carries
+        // the same `OnceResumer` shape and `EpollEventLoop` the same readiness tables, so the two red
+        // cases here (`connectionReceivesResumeIndependently` /
+        // `connectionSendsResumeIndependently`) describe a live Linux defect that no Linux test
+        // currently observes. An epoll mirror of this suite is the follow-up — and it is the one that
+        // would have caught the `ready` redeclaration this Linux-restoration work exists because of.
+        "ReadinessWaiterCollisionTests.swift"
     ]
-    let darwinOnlyServerTestSources = [
+    // Everything `HTTPServerTests` drops on Linux: the Network.framework-provided HTTP/3 suites, and
+    // the tests of codings Apple's `Compression` backs (Brotli/gzip/inflate + the streaming encoder).
+    // One list rather than two because it gates ONE target and the reason for each entry belongs to
+    // the entry, not to the list name — the zstd suite self-gates on `canImport(CZstd)` instead.
+    let serverTestExclusions = [
         "HTTPServerHTTP3Tests.swift",
-        "HTTPServerWebSocketHTTP3Tests.swift"
-    ]
-    // Tests of the Apple-`Compression` codings (Brotli/gzip/inflate). Excluded on Linux until the
-    // zlib/libbrotli Linux codings land (A3); the zstd suite self-gates on `canImport(CZstd)`.
-    let appleCompressionTestSources = [
+        "HTTPServerWebSocketHTTP3Tests.swift",
+        // The STREAMING coding path, which does not exist on Linux at all: `GzipEncoderStream.swift`
+        // is wrapped `#if canImport(Compression)` in its entirety, so `GzipEncoder.makeStream()`
+        // returns nil there and `CompressingBodyWriter` declines every stream. Not a test defect and
+        // not a portability defect — a missing feature. Both suites compile on Linux and FAIL at
+        // runtime, which is how this was found: they had never been reached before the test target
+        // started building. The follow-up is a `CZlibCoding` implementation of the streaming encoder
+        // (the buffered gzip path already has one, which is why `ContentEncoderTests` stays in);
+        // these two go back in the graph with it.
+        "ContentEncoderStreamTests.swift",
+        "StreamingCompressionTests.swift",
         "CompressionMiddlewareTests.swift",
         "DecompressionMiddlewareTests.swift",
         "DecompressionFuzzTests.swift",
@@ -124,8 +162,7 @@ let strictMemorySafeTargets: Set<String> = [
     let darwinOnlyTransportSources: [String] = []
     let appleCompressionSources: [String] = []
     let darwinOnlyTransportTestSources: [String] = []
-    let darwinOnlyServerTestSources: [String] = []
-    let appleCompressionTestSources: [String] = []
+    let serverTestExclusions: [String] = []
 #endif
 
 // ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
@@ -203,7 +240,27 @@ let package = Package(
         //   `_CryptoExtras`  — `HTTPAuth` ONLY (RS256 via `_RSA`). It pulls a BoringSSL graph, so it
         //                      stays confined to the module that actually needs RSA.
         // apple/* — allowed by CLAUDE.md.
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
+        //
+        // 4.0.0, not 3.0.0, and the floor is load-bearing for LINUX rather than for any API we call.
+        // On Darwin `Crypto` is `@_exported import CryptoKit` (its `SymmetricKeys.swift` opens with
+        // `#if CRYPTO_IN_SWIFTPM && !CRYPTO_IN_SWIFTPM_FORCE_BUILD_API`), and CryptoKit's
+        // `SymmetricKey` is `Sendable` in the SDK — so every `Sendable` type holding one compiles
+        // here and the gap is invisible. On Linux the same import resolves to swift-crypto's own
+        // `SymmetricKey`, which through 3.15.1 is declared `public struct SymmetricKey:
+        // ContiguousBytes` with NO `Sendable`. `SessionSigningKeys` (a `Sendable` struct holding
+        // two) and `BasicAuthMiddleware.fixedCredentialVerifier` (which captures one in an
+        // `@Sendable` closure) are therefore Darwin-only code by accident.
+        // swift-crypto 4.0.0 declares `public struct SymmetricKey: ContiguousBytes, Sendable` over a
+        // `struct SecureBytes: @unchecked Sendable` — the conformance reviewed and asserted UPSTREAM,
+        // by the people who own the invariant, which is the only place an `@unchecked` on someone
+        // else's storage can honestly be written. Taking the bump is why neither call site needs a
+        // local wrapper or a `@preconcurrency` import.
+        // The major bump costs nothing here: swift-crypto declares no `platforms:` floor in any of
+        // 3.15.1/4.x, so this does not touch the macOS 15.6 / iOS 18 deployment floor, and the whole
+        // API surface this package uses (`SymmetricKey`, `HMAC<SHA256>`, `SHA256.Digest.byteCount`,
+        // `P256.Signing.PublicKey`/`ECDSASignature`, `_RSA.Signing.PublicKey`/`RSASignature`) is
+        // unchanged across the 4.0 boundary, whose sole release note is the WWDC25 refresh.
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
         // The one first-party dependency: shared SIMD byte kernels (see `adFoundationDependency`).
         adFoundationDependency()
     ],
@@ -427,7 +484,7 @@ let package = Package(
                 .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
             ],
             path: "Tests/Server/HTTPServerTests",
-            exclude: darwinOnlyServerTestSources + appleCompressionTestSources
+            exclude: serverTestExclusions
         ),
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with

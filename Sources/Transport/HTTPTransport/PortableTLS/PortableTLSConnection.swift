@@ -23,8 +23,9 @@
 //    drain, *including* the writability parks inside it. TLS records must reach the socket in BIO
 //    order and unspliced (RFC 8446 §5.1), and `SSL_write` commits to a buffer across a retry, so this
 //    exclusion has to survive a suspension — which is why a `Mutex` cannot serve.
-//  - ``receivePump`` is the same for the read direction, so a second receiver cannot decrypt over the
-//    plaintext scratch a first one is about to copy out.
+//  - ``receivePump`` is the same for the read direction, and is held across the copy-out as well as
+//    the decrypt (audit F-02) — otherwise a second receiver decrypts over the plaintext scratch a
+//    first one is about to copy out, and the two callers disagree about a byte.
 //
 //  A park on *readability* holds only ``receivePump``, so a receive waiting on a silent peer never
 //  blocks a send. A park on *writability* holds ``sendPump``, which a receive needs only when
@@ -188,31 +189,35 @@
         // MARK: - Receive
 
         /// Receives up to `maxLength` decrypted bytes, or `nil` once the peer closes (TLS close-notify).
+        ///
+        /// The allocating spelling of ``receive(into:maxLength:)``, and literally that call: one
+        /// receive path, so the lease discipline cannot be right in one and wrong in the other.
         func receive(maxLength: Int) async throws -> [UInt8]? {
-            try await receivePump.withExclusiveAccess {
-                let count = try await self.readPlaintext(maxLength: maxLength)
-                guard count > 0 else {
-                    return nil
-                }
-                return self.engine.withLock { Array($0.decrypted(count)) }
+            var chunk: [UInt8] = []
+            let count = try await receive(into: &chunk, maxLength: maxLength)
+            guard count > 0 else {
+                return nil
             }
+            return chunk
         }
 
         /// Reads up to `maxLength` decrypted bytes into the reused scratch and appends them to `buffer`
         /// (audit P1), returning the count appended (`0` once the peer closes).
         ///
-        /// `buffer` is filled after the exclusion is released rather than inside it, because an `inout`
-        /// parameter cannot be captured by a closure that spans a suspension point. That is sound for
-        /// the same reason ``PortableTLSEngine/decrypted(_:)`` is: the copy-out reads scratch only this
-        /// call's `SSL_read` wrote, and no other decrypt can have run in between.
+        /// `buffer` is filled **inside** the exclusion, by the same engine acquisition that decrypted
+        /// into the scratch (audit F-02). It used to be filled after the exclusion was released, on
+        /// the stated grounds that "an `inout` parameter cannot be captured by a closure that spans a
+        /// suspension point" — which is not true of a *non-escaping* closure, and ``withExclusiveAccess``
+        /// takes one. The invariant that copy-out claimed instead — that no other decrypt can have run
+        /// in between — was asserted by nothing: the release is what let a second receiver in.
+        ///
+        /// Cancellation and close are all-or-nothing here: the append happens only on the decrypt that
+        /// returns, so a receive that throws (`CancellationError` from its own task, ``TransportError``
+        /// from a closed descriptor) leaves `buffer` untouched rather than half-filled.
         func receive(into buffer: inout [UInt8], maxLength: Int) async throws -> Int {
-            let count = try await receivePump.withExclusiveAccess {
-                try await self.readPlaintext(maxLength: maxLength)
+            try await receivePump.withExclusiveAccess {
+                try await self.readPlaintext(into: &buffer, maxLength: maxLength)
             }
-            if count > 0 {
-                engine.withLock { buffer.append(contentsOf: $0.decrypted(count)) }
-            }
-            return count
         }
 
         /// The octets this connection's plaintext scratch currently holds — the residency oracle.
@@ -237,15 +242,16 @@
         /// Whether the inbound direction is currently claimed — see ``isSendPumpHeld``.
         var isReceivePumpHeld: Bool { receivePump.isHeld }
 
-        /// `SSL_read` into the scratch, pumping ciphertext from the socket on `WANT_READ` — the shared
-        /// decrypt loop.
+        /// `SSL_read` into the scratch and on into `sink`, pumping ciphertext from the socket on
+        /// `WANT_READ` — the shared decrypt loop.
         ///
         /// Returns the plaintext byte count, or `0` at end of stream. A read torn down by its own
         /// task's cancellation (the ``TransportConnection`` receive contract — see ``awaitReadable()``)
-        /// surfaces as `CancellationError`. The caller holds ``receivePump``.
-        private func readPlaintext(maxLength: Int) async throws -> Int {
+        /// surfaces as `CancellationError`. The caller holds ``receivePump`` for the whole of this,
+        /// copy-out included.
+        private func readPlaintext(into sink: inout [UInt8], maxLength: Int) async throws -> Int {
             do {
-                return try await decryptLoop(maxLength: maxLength)
+                return try await decryptLoop(into: &sink, maxLength: maxLength)
             }
             catch _ where Task.isCancelled {
                 // The teardown — or a pre-cancelled task finding the descriptor already closed —
@@ -254,10 +260,15 @@
             }
         }
 
-        /// The decrypt loop body of ``readPlaintext(maxLength:)``.
-        private func decryptLoop(maxLength: Int) async throws -> Int {
+        /// The decrypt loop body of ``readPlaintext(into:maxLength:)``.
+        ///
+        /// Every `await` below is a *retry* step — a ciphertext flush, a socket park — reached only
+        /// when the engine produced no plaintext, so no suspension ever sits between an `SSL_read` and
+        /// the copy-out of what it produced. That is why the loop can hold the lease across a park
+        /// without holding the engine's `Mutex`: the two are different locks with different lifetimes.
+        private func decryptLoop(into sink: inout [UInt8], maxLength: Int) async throws -> Int {
             while true {
-                let outcome = engine.withLock { $0.decrypt(ceiling: maxLength) }
+                let outcome = engine.withLock { $0.decrypt(ceiling: maxLength, into: &sink) }
                 switch outcome {
                     case .produced(let count):
                         return count

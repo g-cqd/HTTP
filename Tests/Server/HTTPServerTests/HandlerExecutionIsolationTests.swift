@@ -115,7 +115,12 @@ struct HandlerExecutionIsolationTests {
 
     /// Opens a blocking loopback TCP connection to `port`, returning its descriptor.
     private static func openSocket(to port: UInt16) throws -> Int32 {
-        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        // Glibc vends SOCK_STREAM as the C enum `__socket_type` while `socket` takes Int32.
+        #if canImport(Glibc)
+            let descriptor = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
+        #else
+            let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        #endif
         try #require(descriptor >= 0)
         var address = sockaddr_in()
         #if canImport(Darwin)
