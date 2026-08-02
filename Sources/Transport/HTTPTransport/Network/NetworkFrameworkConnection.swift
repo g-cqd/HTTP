@@ -14,7 +14,7 @@ internal import Network
 /// `NWConnection`'s `send`, `receive`, and `cancel` are documented thread-safe, and this wrapper
 /// adds no mutable Swift state of its own, so it is safe to share across tasks — hence
 /// `@unchecked Sendable`. The connection's callback I/O is bridged to `async` with continuations.
-public final class NetworkFrameworkConnection: TransportConnection, @unchecked Sendable {
+public final class NetworkFrameworkConnection: UnleasedTransportConnection, @unchecked Sendable {
     /// The connection's stable identifier.
     public let id: TransportConnectionID
 

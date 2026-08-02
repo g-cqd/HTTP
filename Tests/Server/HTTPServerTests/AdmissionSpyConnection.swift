@@ -14,7 +14,7 @@ import Synchronization
 
 /// A ``TransportConnection`` that records its reads and closes, parks the serve loop, and carries an
 /// admission ticket the transport attaches at accept time.
-final class AdmissionSpyConnection: TransportConnection {
+final class AdmissionSpyConnection: UnleasedTransportConnection {
     let id: TransportConnectionID
     let peer: TransportAddress
 

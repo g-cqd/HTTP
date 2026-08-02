@@ -18,7 +18,7 @@ import HTTPTransport
 import Synchronization
 
 /// A connection pinned to a serial probe executor, recording where each transport call ran.
-final class ReactorPinnedConnection: TransportConnection, Sendable {
+final class ReactorPinnedConnection: UnleasedTransportConnection, Sendable {
     let id: TransportConnectionID
     let peer = TransportAddress(host: "reactor", port: 0)
     let negotiatedApplicationProtocol: String?

@@ -13,7 +13,7 @@
 import HTTPTransport
 
 /// A ``TransportConnection`` whose `send` blocks until released, with one staged inbound chunk per read.
-actor BlockingSendConnection: TransportConnection {
+actor BlockingSendConnection: UnleasedTransportConnection {
     nonisolated let id: TransportConnectionID
     nonisolated let peer = TransportAddress(host: "blocking", port: 0)
     nonisolated let negotiatedApplicationProtocol: String? = "h2"

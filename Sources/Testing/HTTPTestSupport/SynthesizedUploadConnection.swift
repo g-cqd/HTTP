@@ -19,7 +19,7 @@
 public import HTTPTransport
 
 /// An in-memory ``TransportConnection`` that generates a large upload on demand rather than storing it.
-public actor SynthesizedUploadConnection: TransportConnection {
+public actor SynthesizedUploadConnection: UnleasedTransportConnection {
     /// How the synthesized body is framed on the wire (RFC 9112 §6).
     public enum Framing: Sendable, Equatable {
         /// A `Content-Length` body: the octets follow the head directly.
