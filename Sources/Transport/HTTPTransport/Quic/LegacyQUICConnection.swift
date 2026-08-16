@@ -85,7 +85,28 @@ final class LegacyQUICConnection: QUICConnection, @unchecked Sendable {
         return stream
     }
 
-    func close(errorCode _: UInt64) async {
+    /// Closes the whole connection (RFC 9000 §10.2), recording the RFC 9114 §8.1 application error
+    /// code in the tunnel's QUIC state before teardown.
+    ///
+    /// Best-effort by platform constraint, not by choice: `nw_quic_set_application_error` writes the
+    /// code into live, shared QUIC state (a fresh metadata copy reads it back), but **no**
+    /// Network.framework teardown path puts it on the wire — `NWConnectionGroup.cancel()` closes
+    /// abortively with no CONNECTION_CLOSE frame type 0x1d (§19.19) at all, in either direction, on
+    /// either backbone. Measured, with the wire observed by a second Network.framework client; the
+    /// probe is `closeCarriesTheApplicationErrorCode` in `LegacyQUICTransportTests`, and the full
+    /// experiment matrix is in docs/standards/CONFORMANCE.md. The write stays so the day Apple's
+    /// stack consults it, the pinned probe flags the change and the wire gets the mandated code.
+    ///
+    /// The reason string must be **non-nil**: with `nil`, `nw_quic_set_application_error` crashes in
+    /// `strlen(NULL)` (measured on macOS 27.0 — the crash that a previous attempt misread as "the
+    /// connection stops closing"). It stays empty because RFC 9000 §10.2.3 cautions that reason
+    /// phrases can disclose internal state.
+    func close(errorCode: UInt64) async {
+        if let metadata = group.metadata(definition: NWProtocolQUIC.definition)
+            as? NWProtocolQUIC.Metadata
+        {
+            metadata.applicationError = .init(code: errorCode, reason: "")
+        }
         group.cancel()
     }
 
