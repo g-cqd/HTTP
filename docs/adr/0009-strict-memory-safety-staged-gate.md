@@ -101,6 +101,51 @@ main lane.
 - The budget file is a public backlog: `HTTPTransport` at 149 is the largest single piece of
   unaudited pointer work in the package, and it is now written down where CI reads it.
 
+## Addendum (2026-08-02): the suppression column
+
+The ratchet as decided above counted un-annotated unsafe expressions — which made *suppression* read
+as improvement. Writing `unsafe` in front of an expression stops the compiler asking; `@unchecked
+Sendable`, `nonisolated(unsafe)`, `@unsafe`, `unsafeBitCast` and `unsafeDowncast` mean it never asked
+at all. Every one of those moved the number down. So suppressions are censused as a second counted
+category (`7215af7`): `.github/strict-memory-safety-suppressions.tsv` inventories what is in the
+tree, per file and kind, and that inventory is the review record. The column is held at **exact
+equality** rather than "may fall" — unspent headroom in a suppression budget is a suppression a later
+change can add back unnoticed. Any suppression beyond the inventoried count must carry a
+`// SAFETY:` justification on its own line or within the five lines above it; existing entries are
+grandfathered because they were argued in prose where they were written.
+
+## Known blind spots — what the numbers do not prove
+
+Stated here so the ratchet lives next to its limits and is not trusted past them. A green
+`strict-memory-safety` job proves the *counts* did not rise. It does not prove any of the following,
+and the enforcing script (`scripts/strict-memory-safety.py`, "WHAT THIS DOES NOT CATCH") carries the
+same list beside the code:
+
+- **A justification that is present but wrong.** `// SAFETY:` is checked for existence and
+  placement, never for truth. The gate buys a deliberate act and a greppable marker for review —
+  not a proof. No reviewer beyond the person re-baselining ever has to look.
+- **Moving unsafe code out of `Sources/` entirely** — into a C shim target, a dependency, or a test
+  target. Both censuses stop at this repository's `Sources/`, so the total falls and reads as
+  progress while the unsafety merely changed jurisdiction.
+- **Transfers between targets with slack.** The first column's per-target ceiling catches a rise,
+  not a move: a site migrating from a target under budget into another target under budget changes
+  neither verdict. Only the first column tolerates slack at all.
+- **Coarsening** — the most likely *accidental* regression. One `unsafe` marker can span a whole
+  expression, so merging three marked sub-expressions into one statement lowers the count without
+  lowering the unsafety. The compiler reports expressions; the script can only count what the
+  compiler reports.
+- **Silencers not on the allowlist.** The `SUPPRESSIONS` table names known constructs; `@_spi`,
+  `@_silgen_name`, `withMemoryRebound` and friends, and anything the language adds after the list
+  was written are invisible to it. The list is an allowlist of known silencers, not a definition of
+  "unsafe".
+- **Removing `.strictMemorySafety()` from a target in `Package.swift`** — caught, but by the build
+  gate rather than the ratchet: the script passes `-strict-memory-safety` to every target itself,
+  so the census is independent of the manifest's settings.
+
+The consequence for review practice: a change that touches unsafe code is reviewed on its own
+merits; the ratchet only guarantees the reviewer is *told* (a budget or inventory diff line) — and
+only when the change crosses one of the counted lines above.
+
 ## Plan (unchanged in spirit from ADR 0002, now with a counter)
 
 1. `HTTP3` (8) and `httpd-example` (4) are the next promotions — small enough to annotate in one pass.
