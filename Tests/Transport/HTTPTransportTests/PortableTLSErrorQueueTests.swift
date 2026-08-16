@@ -128,10 +128,10 @@
                 "the queue was not actually poisoned, so this asserts nothing"
             )
 
-            let outcome = Self.perform(call, on: &engine)
+            let outcome = call.drive(&engine)
             // Nothing has been fed to the read BIO, so every one of the three is waiting on the peer's
-            // first flight. `.failed(1)` here would be `SSL_ERROR_SSL` — the neighbour's error,
-            // wearing this session's name.
+            // first flight. A `.failed` with status `SSL_ERROR_SSL` here would be the neighbour's
+            // error, wearing this session's name.
             guard case .wantRead = outcome else {
                 Issue.record("\(call) classified a healthy wait as \(outcome)")
                 return
@@ -149,7 +149,7 @@
             // Without this, a `.wantRead` above could be read as "this call never consults the queue"
             // rather than "the queue was empty by the time it did"; with it, the only variable left
             // between the two tests is the poison.
-            guard case .wantRead = Self.perform(call, on: &engine) else {
+            guard case .wantRead = call.drive(&engine) else {
                 Issue.record("\(call) does not wait for the peer on a clean queue")
                 return
             }
@@ -171,22 +171,6 @@
                 #file,
                 UInt32(#line)
             )
-        }
-
-        /// Runs `call` against `engine` and returns what it classified.
-        private static func perform(
-            _ call: ClassifiedTLSCall,
-            on engine: inout PortableTLSEngine
-        ) -> PortableTLSEngine.Outcome {
-            switch call {
-                case .acceptHandshake:
-                    return engine.acceptHandshake()
-                case .decrypt:
-                    var sink: [UInt8] = []
-                    return engine.decrypt(ceiling: 4_096, into: &sink)
-                case .encrypt:
-                    return engine.encrypt(Array("ping".utf8), from: 0)
-            }
         }
 
         /// Runs the `SSL_*` entry point behind `call` directly, bypassing the engine.
@@ -211,7 +195,12 @@
             let ssl = try makeAcceptStateSession()
             let readBIO = try #require(CHTTPBoringSSL_SSL_get_rbio(ssl))
             let writeBIO = try #require(CHTTPBoringSSL_SSL_get_wbio(ssl))
-            return PortableTLSEngine(ssl: ssl, readBIO: readBIO, writeBIO: writeBIO)
+            return PortableTLSEngine(
+                ssl: ssl,
+                readBIO: readBIO,
+                writeBIO: writeBIO,
+                connectionID: TransportConnectionID(0)
+            )
         }
 
         /// A server `SSL` in accept state over two empty memory BIOs.

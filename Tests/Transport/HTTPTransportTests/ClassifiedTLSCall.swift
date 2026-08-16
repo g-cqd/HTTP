@@ -12,6 +12,8 @@
 
 #if canImport(CHTTPBoringSSLShims)
 
+    @testable import HTTPTransport
+
     /// One of the three calls that `PortableTLSEngine` classifies through `SSL_get_error`.
     enum ClassifiedTLSCall: String, CaseIterable, Sendable, CustomStringConvertible {
         /// `PortableTLSEngine.acceptHandshake()` — `SSL_accept`.
@@ -22,6 +24,20 @@
         case encrypt = "SSL_write"
 
         var description: String { rawValue }
+
+        /// Runs this call against `engine` and returns what the engine classified — shared by the
+        /// error-queue and failure-evidence suites, so the two cannot drift on what "one call" is.
+        func drive(_ engine: inout PortableTLSEngine) -> PortableTLSEngine.Outcome {
+            switch self {
+                case .acceptHandshake:
+                    return engine.acceptHandshake()
+                case .decrypt:
+                    var sink: [UInt8] = []
+                    return engine.decrypt(ceiling: 4_096, into: &sink)
+                case .encrypt:
+                    return engine.encrypt(Array("ping".utf8), from: 0)
+            }
+        }
     }
 
 #endif

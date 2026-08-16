@@ -118,7 +118,9 @@
         ) {
             self.id = id
             self.peer = peer
-            engine = Mutex(PortableTLSEngine(ssl: ssl, readBIO: readBIO, writeBIO: writeBIO))
+            engine = Mutex(
+                PortableTLSEngine(ssl: ssl, readBIO: readBIO, writeBIO: writeBIO, connectionID: id)
+            )
             self.descriptor = descriptor
             self.eventLoop = eventLoop
             self.clientAuth = clientAuth
@@ -162,8 +164,10 @@
                         try await awaitWritable()
                     case .closedByPeer, .transportEnded:
                         throw TransportError.tlsConfigurationFailed("handshake EOF")
-                    case .failed(let status):
-                        throw TransportError.tlsConfigurationFailed("SSL_accept error \(status)")
+                    case .failed(let evidence):
+                        // The evidence renders the historical prefix (`SSL_accept error 1`) and the
+                        // queue/connection/thread capture behind it — see ``TLSFailureEvidence``.
+                        throw TransportError.tlsConfigurationFailed(evidence.description)
                 }
             }
         }
@@ -304,8 +308,10 @@
                         }
                     case .wantWrite:
                         try await awaitWritable()
-                    case .failed(let status):
-                        throw TransportError.ioFailed("SSL_read error \(status)")
+                    case .failed(let evidence):
+                        // `SSL_read error 1` was all the unexplained field failure ever said;
+                        // the evidence keeps that prefix and adds what the report was missing.
+                        throw TransportError.ioFailed(evidence.description)
                 }
             }
         }
@@ -447,8 +453,10 @@
                         throw TransportError.ioFailed("SSL_write error \(SSL_ERROR_ZERO_RETURN)")
                     case .transportEnded:
                         throw TransportError.ioFailed("SSL_write error \(SSL_ERROR_SYSCALL)")
-                    case .failed(let status):
-                        throw TransportError.ioFailed("SSL_write error \(status)")
+                    case .failed(let evidence):
+                        // Renders as `SSL_write error <status>` plus the capture, matching the
+                        // spellings of the two arms above — see ``TLSFailureEvidence``.
+                        throw TransportError.ioFailed(evidence.description)
                 }
             }
             try await drainCiphertext()

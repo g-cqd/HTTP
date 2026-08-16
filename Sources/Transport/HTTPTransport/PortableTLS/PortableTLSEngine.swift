@@ -26,7 +26,9 @@
 //    alone, which this file used to claim: `SSL_ERROR_SSL` is reported off the error queue, and that
 //    queue is per-THREAD. So each classified call clears it first — see ``clearThreadErrorQueue()``,
 //    which on the vendored BoringSSL is defence in depth rather than the guard, for the reason
-//    recorded there and pinned by `PortableTLSErrorQueueTests`.
+//    recorded there and pinned by `PortableTLSErrorQueueTests`. And when the classification IS
+//    fatal, the queue is drained into ``TLSFailureEvidence`` inside the same acquisition, because
+//    that is the only moment the entries exist.
 //  - The outbound pump's staging range lives *with* the staging buffer (``staged``), so a count read
 //    under one acquisition can never be used to slice the buffer under another (CWE-362, TOCTOU).
 //
@@ -64,8 +66,10 @@
             case closedByPeer
             /// `SSL_ERROR_SYSCALL` — the transport ended with nothing queued; an abrupt peer EOF.
             case transportEnded
-            /// Any other `SSL_get_error` status, carried verbatim for the caller's message.
-            case failed(Int32)
+            /// Any other `SSL_get_error` status — `SSL_ERROR_SSL` above all — with the error queue,
+            /// connection, thread, and call captured at the moment of classification, because none
+            /// of that survives to anywhere later (see ``TLSFailureEvidence``).
+            case failed(TLSFailureEvidence)
         }
 
         /// A non-blocking socket read/write reported it would block — await readiness and retry.
@@ -79,6 +83,9 @@
         static let ciphertextWindow = 16_384 + 256 + 5
 
         private let ssl: OpaquePointer
+        /// The connection this engine serves — carried only so a fatal classification can say WHOSE
+        /// failure it is describing (``TLSFailureEvidence``); never read on the happy path.
+        private let connectionID: TransportConnectionID
         /// Ciphertext IN: raw socket bytes are `BIO_write`-fed here for `SSL_read` to decrypt.
         private let readBIO: UnsafeMutablePointer<BIO>
         /// Ciphertext OUT: `SSL_write`/handshake leave ciphertext here for us to drain to the socket.
@@ -105,11 +112,13 @@
         init(
             ssl: OpaquePointer,
             readBIO: UnsafeMutablePointer<BIO>,
-            writeBIO: UnsafeMutablePointer<BIO>
+            writeBIO: UnsafeMutablePointer<BIO>,
+            connectionID: TransportConnectionID
         ) {
             self.ssl = ssl
             self.readBIO = readBIO
             self.writeBIO = writeBIO
+            self.connectionID = connectionID
         }
 
         deinit {
@@ -137,7 +146,7 @@
             guard result != 1 else {
                 return .produced(1)
             }
-            return classify(result)
+            return classify(result, in: "SSL_accept")
         }
 
         /// The ALPN protocol the completed handshake selected (RFC 7301).
@@ -185,7 +194,7 @@
                 sink.append(contentsOf: plaintext.received(count))
                 return .produced(count)
             }
-            return classify(Int32(clamping: count))
+            return classify(Int32(clamping: count), in: "SSL_read")
         }
 
         /// One `SSL_write` of `bytes` from `offset`.
@@ -210,7 +219,7 @@
             guard written <= 0 else {
                 return .produced(Int(written))
             }
-            return classify(written)
+            return classify(written, in: "SSL_write")
         }
 
         // MARK: - Ciphertext pump
@@ -342,7 +351,13 @@
         /// *last* operation this `SSL` performed, so a second task's call in between would rewrite the
         /// answer. Paired with ``clearThreadErrorQueue()`` on the way in, so what it reads back is this
         /// call's outcome rather than a neighbouring connection's leftovers.
-        private func classify(_ result: Int32) -> Outcome {
+        ///
+        /// The fatal arm — and only that arm — drains the thread's error queue into
+        /// ``TLSFailureEvidence`` here and now, because here and now is the only place it exists:
+        /// the queue is per-thread (`err.h`) and the next classified call on this thread clears it
+        /// (`ssl_reset_error_state`, `ssl_lib.cc:79`). Every retryable outcome returns before the
+        /// capture, so the ordinary path drains nothing and allocates nothing.
+        private func classify(_ result: Int32, in call: StaticString) -> Outcome {
             switch CHTTPBoringSSL_SSL_get_error(ssl, result) {
                 case SSL_ERROR_WANT_READ:
                     .wantRead
@@ -353,7 +368,13 @@
                 case SSL_ERROR_SYSCALL:
                     .transportEnded
                 case let status:
-                    .failed(status)
+                    .failed(
+                        TLSFailureEvidence.capture(
+                            status: status,
+                            call: call,
+                            connectionID: connectionID
+                        )
+                    )
             }
         }
 
