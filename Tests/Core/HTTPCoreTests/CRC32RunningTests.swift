@@ -49,6 +49,30 @@ func runningReachesStandardCheck() {
     #expect(running.checksum == 0xCBF4_3926)
 }
 
+/// The seeded differential twin — hardware vs portable under the same chunking.
+///
+/// The same chunking folds once through the accelerated path (contiguous slices — `ccrc32_update`,
+/// the hardware kernel where the CPU has one, seeded nonzero after the first chunk) and once through
+/// the portable per-byte table (non-contiguous sequences), both pinned to the deterministic
+/// slicing-by-8 one-shot. A seeding/conditioning bug in either path lands here.
+@Test(
+    "RFC 1952 §8 — seeded folds agree between the accelerated and portable paths",
+    arguments: [1, 3, 8, 13, 64]
+)
+func seededFoldsAgreeAcrossPaths(chunk: Int) {
+    let bytes = sample(1_031)
+    let expected = CRC32.checksum(bytes, backend: .sliceBy8)
+    var accelerated = CRC32.Running()
+    var portable = CRC32.Running()
+    for start in stride(from: 0, to: bytes.count, by: chunk) {
+        let slice = bytes[start ..< min(start + chunk, bytes.count)]
+        accelerated.update(slice)
+        portable.update(AnySequence(slice))
+    }
+    #expect(accelerated.checksum == expected)
+    #expect(portable.checksum == expected)
+}
+
 @Test("RFC 1952 §8 — a non-contiguous chunk folds through the portable table")
 func runningFoldsNonContiguousInput() {
     let bytes = sample(257)

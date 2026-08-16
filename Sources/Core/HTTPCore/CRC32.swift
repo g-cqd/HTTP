@@ -4,9 +4,9 @@
 //
 //  RFC 1952 §8 — the CRC-32 (ITU-T V.42, reflected polynomial 0xEDB88320) that gzip appends to its
 //  payload as an integrity check. Contiguous input dispatches to a hardware / SWAR backend (`CCRC32`:
-//  the ARMv8 CRC32 instructions, zlib's PCLMULQDQ on x86, or a portable slicing-by-8 table); a
-//  non-contiguous sequence uses a byte-at-a-time table loop (also the cross-check reference).
-//  Iterative; no recursion.
+//  the ARMv8 CRC32 instructions, an in-house PCLMULQDQ folding kernel on x86, or a portable
+//  slicing-by-8 table — self-contained C, no system libraries); a non-contiguous sequence uses a
+//  byte-at-a-time table loop (also the cross-check reference). Iterative; no recursion.
 //
 
 internal import CCRC32
@@ -24,11 +24,10 @@ public enum CRC32 {
         case sliceBy1
         /// The portable slicing-by-8 table — deterministic across machines.
         case sliceBy8
-        /// zlib's `crc32` (internally hardware-accelerated, e.g. PCLMULQDQ on x86).
-        case zlib
         /// ARMv8 CRC32 instructions (table fallback off aarch64).
         case arm
-        /// The x86-64 hardware path — zlib's PCLMULQDQ (table fallback off x86-64).
+        /// The x86 hardware path — an in-house PCLMULQDQ folding kernel, CPUID-dispatched (SSE4.2's
+        /// `crc32` is CRC-32C, the wrong polynomial for gzip). Table fallback off x86.
         case x86
     }
 
@@ -105,8 +104,6 @@ public enum CRC32 {
                 return ccrc32_slice1(base, buffer.count)
             case .sliceBy8:
                 return ccrc32_slice8(base, buffer.count)
-            case .zlib:
-                return ccrc32_zlib(base, buffer.count)
             case .arm:
                 return ccrc32_arm(base, buffer.count)
             case .x86:

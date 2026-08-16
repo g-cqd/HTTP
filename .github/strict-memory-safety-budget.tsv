@@ -22,7 +22,7 @@
 # the gate until it is either annotated or added here deliberately.
 HTTPTransport	147	10
 HTTPServer	79	3
-HTTPCore	77	0
+HTTPCore	76	0
 HTTPTestSupport	75	1
 WebSocket	29	0
 HTTP1	23	0
