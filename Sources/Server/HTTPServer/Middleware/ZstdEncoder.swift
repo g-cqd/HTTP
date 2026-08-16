@@ -3,7 +3,7 @@
 //  HTTPServer
 //
 //  The `zstd` content coding (RFC 8878) as a ``ContentEncoder`` — the opt-in `CZstd` shim over the system
-//  libzstd (`HTTP_ZSTD`); `nil` on a build without that shim (Phase 3.3).
+//  libzstd (the `Zstd` package trait); `nil` on a build without that shim (Phase 3.3).
 //
 
 /// The `zstd` content coding (RFC 8878).

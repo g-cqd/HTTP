@@ -90,7 +90,7 @@ let strictMemorySafeTargets: Set<String> = [
     ]
     // The outbound/inbound codings built on Apple's `Compression` framework (Brotli RFC 7932, gzip
     // RFC 1952, inflate) — absent on Linux, where the `CompressionMiddleware`/`DecompressionMiddleware`
-    // gate them off `#if canImport(Compression)` and zstd (the `CZstd` shim, `HTTP_ZSTD`) is the
+    // gate them off `#if canImport(Compression)` and zstd (the `CZstd` shim, the `Zstd` trait) is the
     // cross-platform coding. zlib-gzip + `libbrotli` for Linux are a G0 follow-up.
     let appleCompressionSources = [
         "Middleware/Brotli.swift",
@@ -167,6 +167,55 @@ let strictMemorySafeTargets: Set<String> = [
     let serverTestExclusions: [String] = []
 #endif
 
+// MARK: - Opt-in system-library codings (SE-0450 package traits)
+//
+// The `Zstd` / `Brotli` content codings link system libraries (libzstd / libbrotli) the default
+// graph must never reference, so they are opt-in via SE-0450 package traits — a consumer writes
+// `.package(url: …, from: …, traits: ["Zstd"])`; a local build passes `--traits Zstd,Brotli`.
+// These replace the retired `HTTP_ZSTD` / `HTTP_BROTLI` env-var gates: an env var is invisible to
+// SwiftPM's resolver (a consumer could not opt in through a versioned dependency at all), while a
+// trait is part of the manifest contract.
+//
+// Mechanics (probed 2026-08-17 on the pinned Swift 6.4 toolchain): a trait cannot conditionally
+// DECLARE a target — every declared root-package target compiles under the default build, and the
+// manifest cannot observe traits. So the two C shims below are always declared, and the trait
+// instead conditions everything else: their `.c` bodies compile to EMPTY translation units unless
+// the trait-conditional `.define(…, .when(traits:))` is active, and every `-I`/`-L`/`-l` — including
+// `.linkedLibrary(_:_, .when(traits:))` — is trait-conditional, so a default build on a machine
+// without libzstd/libbrotli succeeds and never sees either library. The Swift consumers' dependency
+// edges are `.when(traits:)`-conditional, so their `#if canImport(CZstd)` / `#if canImport(CBrotli)`
+// guards flip with the trait, unchanged.
+//
+// The include/lib prefixes are path HINTS, not gates: `HTTP_ZSTD_PREFIX` / `HTTP_BROTLI_PREFIX`
+// override them, defaulting to the Homebrew kegs on macOS and to nothing on Linux (the distro dev
+// packages land on the default search paths, where a redundant `-I /usr/include` would only reorder
+// system headers). The `.unsafeFlags` they feed are trait-conditional and verified (same probe) to
+// neither apply to nor poison a stable-versioned consumer's default (trait-off) resolution.
+#if os(macOS)
+    let zstdPrefix: String? = Context.environment["HTTP_ZSTD_PREFIX"] ?? "/opt/homebrew/opt/zstd"
+    let brotliPrefix: String? =
+        Context.environment["HTTP_BROTLI_PREFIX"] ?? "/opt/homebrew/opt/brotli"
+#else
+    let zstdPrefix: String? = Context.environment["HTTP_ZSTD_PREFIX"]
+    let brotliPrefix: String? = Context.environment["HTTP_BROTLI_PREFIX"]
+#endif
+
+/// An always-declared coding-shim target whose every setting is trait-conditional: the
+/// `HTTP_TRAIT_*` define that un-empties the translation unit, the `-I`/`-L` search paths when a
+/// prefix hint exists, and the `-l` links — all absent from a default (trait-off) build.
+func codingShim(
+    name: String, path: String, trait: String, define: String, libraries: [String], prefix: String?
+) -> Target {
+    var cSettings: [CSetting] = [.define(define, .when(traits: [trait]))]
+    var linkerSettings: [LinkerSetting] = []
+    if let prefix {
+        cSettings.append(.unsafeFlags(["-I", prefix + "/include"], .when(traits: [trait])))
+        linkerSettings.append(.unsafeFlags(["-L", prefix + "/lib"], .when(traits: [trait])))
+    }
+    linkerSettings += libraries.map { .linkedLibrary($0, .when(traits: [trait])) }
+    return .target(name: name, path: path, cSettings: cSettings, linkerSettings: linkerSettings)
+}
+
 // ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
 // UTF-8 validator uses the ASCII-run skip. This is the one first-party dependency HTTP takes.
 //
@@ -213,6 +262,16 @@ let package = Package(
         .library(name: "HTTPObservability", targets: ["HTTPObservability"]),
         .library(name: "HTTPAuth", targets: ["HTTPAuth"]),
         .executable(name: "httpd-example", targets: ["httpd-example"])
+    ],
+    // SE-0450 package traits — the opt-in system-library codings (see the MARK above for the full
+    // mechanics). Neither is a default trait: the default graph stays free of libzstd/libbrotli.
+    traits: [
+        // RFC 8878 `zstd` content coding via the `CZstd` shim over the system libzstd
+        // (Homebrew `zstd` on macOS, `libzstd-dev` on Debian/Ubuntu).
+        .trait(name: "Zstd", description: "The RFC 8878 zstd coding over the system libzstd."),
+        // RFC 7932 `br` content coding on the non-Apple path via the `CBrotli` shim over libbrotli
+        // (Darwin gets `br` from Apple's Compression framework without this trait).
+        .trait(name: "Brotli", description: "The RFC 7932 br coding over libbrotli (non-Apple).")
     ],
     dependencies: [
         // apple/swift-system — typed, SwiftNIO-free wrappers over POSIX file/socket descriptors,
@@ -326,6 +385,30 @@ let package = Package(
             name: "CZlibCoding",
             path: "Sources/Core/CZlibCoding",
             linkerSettings: [.linkedLibrary("z")]
+        ),
+        // The RFC 8878 `zstd` content coding shim over the system libzstd (Apple's Compression
+        // framework has no Zstandard codec, on any platform). Opt-in via the `Zstd` package trait:
+        // the target is always DECLARED (a trait cannot conditionally declare one — see the traits
+        // MARK), but trait-off it compiles to an empty translation unit and contributes no
+        // `-I`/`-L`/`-lzstd`, so the default graph never references libzstd.
+        codingShim(
+            name: "CZstd",
+            path: "Sources/Core/CZstd",
+            trait: "Zstd",
+            define: "HTTP_TRAIT_ZSTD",
+            libraries: ["zstd"],
+            prefix: zstdPrefix
+        ),
+        // The RFC 7932 `br` content coding shim over libbrotli for the non-Apple path (Darwin's `br`
+        // is Apple's Compression framework). Opt-in via the `Brotli` package trait; same
+        // always-declared / empty-TU-when-off mechanics as `CZstd` above.
+        codingShim(
+            name: "CBrotli",
+            path: "Sources/Core/CBrotli",
+            trait: "Brotli",
+            define: "HTTP_TRAIT_BROTLI",
+            libraries: ["brotlienc", "brotlidec", "brotlicommon"],
+            prefix: brotliPrefix
         ),
         // Test-only support: the deterministic async toolkit ported from ADTestKit (TestClock,
         // AsyncEventProbe, AsyncGate, ThreadGate) plus shared fakes, seeded fuzzing,
@@ -473,7 +556,11 @@ let package = Package(
                 // dependency comment). `Crypto` only — never `_CryptoExtras`.
                 .product(name: "Crypto", package: "swift-crypto"),
                 // Linux gzip coding (zlib); on Darwin gzip is Apple's Compression, so this stays off the graph.
-                .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
+                .target(name: "CZlibCoding", condition: .when(platforms: [.linux])),
+                // The opt-in codings: trait-conditional edges, so `#if canImport(CZstd)` /
+                // `#if canImport(CBrotli)` in the middleware flip with the trait.
+                .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
+                .target(name: "CBrotli", condition: .when(traits: ["Brotli"]))
             ],
             path: "Sources/Server/HTTPServer",
             exclude: appleCompressionSources
@@ -483,7 +570,11 @@ let package = Package(
             dependencies: [
                 "HTTPServer", "HTTP1", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket",
                 "HTTPTransport", "HTTPTestSupport",
-                .target(name: "CZlibCoding", condition: .when(platforms: [.linux]))
+                .target(name: "CZlibCoding", condition: .when(platforms: [.linux])),
+                // The self-gating coding suites (`#if canImport(CZstd)` / `#if canImport(CBrotli)`)
+                // compile only when the trait puts the shim in the graph.
+                .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
+                .target(name: "CBrotli", condition: .when(traits: ["Brotli"]))
             ],
             path: "Tests/Server/HTTPServerTests",
             exclude: serverTestExclusions
@@ -560,8 +651,11 @@ let package = Package(
 // var so downstream consumers' builds stay green.
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
-for target in package.targets
-where !["CHTTPTestMalloc", "CCRC32", "CEpoll", "CZlibCoding"].contains(target.name) {
+let nonSwiftTargets: Set<String> = [
+    "CHTTPTestMalloc", "CCRC32", "CEpoll", "CZlibCoding", "CZstd", "CBrotli"
+]
+
+for target in package.targets where !nonSwiftTargets.contains(target.name) {
     var settings = (target.swiftSettings ?? []) + strictSwiftSettings
     // SE-0458, staged per `strictMemorySafeTargets` above.
     if strictMemorySafeTargets.contains(target.name) {
@@ -573,10 +667,18 @@ where !["CHTTPTestMalloc", "CCRC32", "CEpoll", "CZlibCoding"].contains(target.na
     target.swiftSettings = settings
 }
 
-// G0 / ADR 0004 — the opt-in portable TLS backbone (system OpenSSL behind the `CHTTPBoringSSLShims` shim).
-// Gated by `HTTP_PORTABLE_TLS` so the DEFAULT build graph stays apple/swiftlang-only — no OpenSSL in a
-// consumer's resolved graph unless they opt in. The OpenSSL prefix is `HTTP_OPENSSL_PREFIX` or the
-// Homebrew `openssl@3` default on macOS (Linux: set the env, or rely on the default search paths).
+// G0 / ADR 0004 — the opt-in portable TLS backbone. Still an ENV-VAR gate (`HTTP_PORTABLE_TLS`),
+// deliberately NOT an SE-0450 trait like `Zstd`/`Brotli`: the 2026-08-17 probe of the pinned Swift 6.4
+// toolchain established that a trait can only *condition* settings and dependency edges on targets that
+// are always declared — it cannot un-declare a root-package target, and the manifest cannot observe
+// traits (no `#if`, no Context API). The codings dodge that shortfall because their shims are 2 files
+// we own, compiled to empty translation units when the trait is off; `CHTTPBoringSSL` is a 399-file
+// vendored C/C++/asm tree, and running all 399 through the compiler on every default build just to
+// produce empty objects is exactly the cost this gate exists to avoid. The gate is BoringSSL-shaped and
+// expires with BoringSSL: when the vendored tree is deleted (planned Phase 3e), the replacement
+// pure-Swift TLS target is ordinary reuse-safe Swift and needs no gate — env var or trait — at all.
+//
+// Until then: gated by `HTTP_PORTABLE_TLS` so the DEFAULT build graph stays apple/swiftlang-only.
 // Appended after the strict loop above so the C shim never receives Swift-only settings. The portable
 // Swift sources / tests guard on `#if canImport(CHTTPBoringSSLShims)`, so they vanish when the flag is off.
 if Context.environment["HTTP_PORTABLE_TLS"] != nil {
@@ -612,78 +714,5 @@ if Context.environment["HTTP_PORTABLE_TLS"] != nil {
     where ["HTTPTransport", "HTTPTransportTests"].contains(target.name) {
         target.dependencies.append("CHTTPBoringSSL")
         target.dependencies.append("CHTTPBoringSSLShims")
-    }
-}
-
-// The opt-in outbound `zstd` content coding (RFC 8878): a `CZstd` C shim over the system libzstd,
-// since Apple's Compression framework has no Zstandard codec. Gated by `HTTP_ZSTD` so the DEFAULT
-// build graph never links libzstd; the Swift integration (Zstd.swift, the CompressionMiddleware
-// case, the test) all guard on `#if canImport(CZstd)`, so they vanish when the flag is off. The
-// libzstd prefix is `HTTP_ZSTD_PREFIX` or the Homebrew `zstd` default on macOS (Linux: set the env,
-// or rely on the default search paths). Appended after the strict loop above so the C shim never
-// receives Swift-only settings — mirrors the HTTP_PORTABLE_TLS block. The `.unsafeFlags` header /
-// library paths are acceptable here precisely because the whole block is opt-in (off for downstream
-// consumers), exactly like the gated settings the package already documents.
-if Context.environment["HTTP_ZSTD"] != nil {
-    let zstdPrefix = Context.environment["HTTP_ZSTD_PREFIX"] ?? "/opt/homebrew/opt/zstd"
-    let zstdInclude = zstdPrefix + "/include"
-    let zstdLib = zstdPrefix + "/lib"
-    // The thin C wrapper over <zstd.h>. It alone needs the header path; it links libzstd directly,
-    // so a consumer of HTTPServer pulls the dependency transitively. Default C settings — the loop
-    // above (which it is appended after) never gives a C target Swift-only settings.
-    package.targets.append(
-        .target(
-            name: "CZstd",
-            path: "Sources/Core/CZstd",
-            cSettings: [.unsafeFlags(["-I", zstdInclude])],
-            linkerSettings: [
-                .unsafeFlags(["-L", zstdLib]),
-                .linkedLibrary("zstd")
-            ]
-        )
-    )
-    // The server (and its tests) gain the shim dependency, plus the clang header path threaded
-    // through swiftc (`-Xcc -I …`) so importing the `CZstd` module resolves regardless of the
-    // toolchain's default search paths.
-    for target in package.targets
-    where ["HTTPServer", "HTTPServerTests"].contains(target.name) {
-        target.dependencies.append("CZstd")
-        var settings = target.swiftSettings ?? []
-        // The joined `-I<path>` form (one token after `-Xcc`) — the separated `-Xcc -I -Xcc <path>`
-        // form interleaves with swift-testing's plugin args on the test target and breaks its build.
-        settings.append(.unsafeFlags(["-Xcc", "-I" + zstdInclude]))
-        target.swiftSettings = settings
-    }
-}
-
-// The opt-in Brotli content coding (RFC 7932) on the non-Apple path: a `CBrotli` C shim over libbrotli,
-// since Apple's Compression (which backs `br` on Darwin) is absent on Linux. Gated by `HTTP_BROTLI` so the
-// DEFAULT build graph never links libbrotli; the Swift side (BrotliLinux + the `br` arms of
-// CompressionMiddleware/InflateLinux/DecompressionMiddleware) guards on `#if canImport(CBrotli)`. The
-// libbrotli prefix is `HTTP_BROTLI_PREFIX` (the Homebrew `brotli` default on macOS; set it to `/usr` on a
-// Linux distro). Mirror of the HTTP_ZSTD block above.
-if Context.environment["HTTP_BROTLI"] != nil {
-    let brotliPrefix = Context.environment["HTTP_BROTLI_PREFIX"] ?? "/opt/homebrew/opt/brotli"
-    let brotliInclude = brotliPrefix + "/include"
-    let brotliLib = brotliPrefix + "/lib"
-    package.targets.append(
-        .target(
-            name: "CBrotli",
-            path: "Sources/Core/CBrotli",
-            cSettings: [.unsafeFlags(["-I", brotliInclude])],
-            linkerSettings: [
-                .unsafeFlags(["-L", brotliLib]),
-                .linkedLibrary("brotlienc"),
-                .linkedLibrary("brotlidec"),
-                .linkedLibrary("brotlicommon")
-            ]
-        )
-    )
-    for target in package.targets
-    where ["HTTPServer", "HTTPServerTests"].contains(target.name) {
-        target.dependencies.append("CBrotli")
-        var settings = target.swiftSettings ?? []
-        settings.append(.unsafeFlags(["-Xcc", "-I" + brotliInclude]))
-        target.swiftSettings = settings
     }
 }

@@ -4,8 +4,8 @@
 //
 //  Round-trips the Brotli content coding through the CBrotli libbrotli shim: compress → decompress
 //  recovers the input byte-for-byte and shrinks compressible data, and an over-cap decode fails closed
-//  (the decompression-bomb defense, CWE-409). Gated `#if canImport(CBrotli)` — the opt-in `HTTP_BROTLI`
-//  build (libbrotli present): on macOS via Homebrew `brotli`, on Linux via `libbrotli-dev` in CI.
+//  (the decompression-bomb defense, CWE-409). Gated `#if canImport(CBrotli)` — the opt-in `Brotli`
+//  package trait (libbrotli present): on macOS via Homebrew `brotli`, on Linux via `libbrotli-dev` in CI.
 //
 
 #if canImport(CBrotli)

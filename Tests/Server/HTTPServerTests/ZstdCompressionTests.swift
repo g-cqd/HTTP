@@ -7,7 +7,7 @@
 //  `ZSTD_decompress` to prove the produced frame is faithful) plus the negotiation edges that
 //  involve zstd — it is chosen ahead of gzip when accepted at the top quality, beaten by Brotli on
 //  a tie (the server preference br > zstd > gzip, RFC 9110 §12.5.3), and refused at `q=0`. The
-//  whole file compiles only when the `CZstd` target is in the graph (`HTTP_ZSTD`), guarded by
+//  whole file compiles only when the `CZstd` target is in the graph (`--traits Zstd`), guarded by
 //  `#if canImport(CZstd)`.
 //
 
