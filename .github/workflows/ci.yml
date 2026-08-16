@@ -845,6 +845,45 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $rc
 
+  # ---------------------------------------------------------------------------
+  # Memory soak — EVIDENCE, not a gate, and dispatch-only. Modeled on `h3spec-observation`: it produces
+  # a report (an RSS plateau verdict + a summary table in the job summary) rather than blocking a PR.
+  #
+  # WHY DISPATCH-ONLY, NOT `schedule:`. A soak is a long, hostile run (default 30 min) whose value is
+  # trend evidence, not per-commit signal — it does not belong on the PR path, and a nightly `schedule:`
+  # is a REPO-OWNER decision (it consumes runner minutes on a cadence and needs someone to watch its
+  # output), recorded here rather than made unilaterally. TO PROMOTE TO NIGHTLY LATER: add
+  # `schedule: [{cron: "0 7 * * *"}]` to this workflow's `on:` block and gate the other jobs' triggers
+  # so only this one runs on the schedule (e.g. an `if:` on each gating job excluding
+  # `github.event_name == 'schedule'`), or split the soak into its own workflow file with its own `on:`.
+  #
+  # WHAT IT PROVES. `scripts/soak.sh` drives mixed adversarial load (sustained oha h1 + h2, slowloris,
+  # connection churn, abrupt resets) against httpd-example and asserts the resident set PLATEAUS — the
+  # median RSS of the final third must not exceed the mid third beyond tolerance — plus liveness, no
+  # crash, and end-to-end correctness. A connection-lifetime leak that no bounded benchmark would show
+  # climbs the RSS and fails the run. The script's exit code is the verdict; the summary table lands in
+  # the job summary. `continue-on-error` because this is evidence: a soak failure on a shared, loaded
+  # runner should be READ (the plateau tolerances assume a reasonably quiet box), not auto-block anyone.
+  #
+  # SOAK_DURATION is short here (8 min) so a dispatch returns in reasonable runner time; a real soak is
+  # the 30-min local/owner run. RSS is per-process, so the plateau assertion survives runner noise even
+  # if the absolute numbers do not.
+  # ---------------------------------------------------------------------------
+  soak:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Install oha (closed-loop load generator)
+        run: brew list oha >/dev/null 2>&1 || brew install oha
+      - name: Adversarial memory soak (RSS plateau assertion)
+        env:
+          SOAK_DURATION: "480"
+        run: scripts/soak.sh
+
 # NOTE: jobs run on the `macos-26` image with the Swift 6.4 development toolchain. If a specific 6.4
 # snapshot is needed beyond the image default, install it as the first step of each job with swiftly
 # (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
@@ -871,3 +910,6 @@ jobs:
 #     the codec/parser UB surface with `halt_on_error=1`. Full rationale in the `sanitizers` job
 #     comment. Follow-up: drop `--build-system native` once swiftbuild links the UBSan runtime, and
 #     widen the scope if the toolchain makes the network suite fast enough under UBSan to gate.
+#   • Memory soak (`scripts/soak.sh` / the `soak` job) — dispatch-only EVIDENCE, non-gating. A
+#     nightly `schedule:` is deliberately NOT set: that is a repo-owner decision (runner-minute cost +
+#     someone to watch it). Promotion recipe is in the `soak` job comment.
