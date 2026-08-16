@@ -116,6 +116,9 @@ let strictMemorySafeTargets: Set<String> = [
         "ModernQUICTransportTests.swift",
         "NetworkFrameworkMutualTLSTests.swift",
         "NetworkFrameworkTLSTests.swift",
+        // The wire oracle for QUIC application close codes: an `NWConnection` h3 client reading the
+        // peer's close code — Network.framework end to end, like the QUIC backbones it observes.
+        "QUICApplicationCloseProbe.swift",
         // Network.framework QUIC listeners + `NWConnection` h3 clients + the `NWEndpoint` overload
         // of `QUICPeer.address(of:)`. The platform-neutral half of the same contract — the shared,
         // capped bucket every unattributable peer folds into — is `QUICPeerAdmissionTests.swift`,
