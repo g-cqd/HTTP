@@ -129,10 +129,12 @@ nghttp3 1.18.0, OpenSSL 3.6.3):
   instead. That deviation is what sent three separate investigations looking for a fault in
   certificate handling, transport parameters and TLS-version pinning rather than at ALPN.
 - **h3spec now discriminates, and now fails on this repository's own code.** Post-fix:
-  `-m "HTTP/3 servers"` is 15 examples / **12 failures** in 2.3 s (3 pass), and `-m "QUIC servers"`
+  `-m "HTTP/3 servers"` was 15 examples / **12 failures** in 2.3 s (3 pass), and `-m "QUIC servers"`
   is 34 examples / **4 failures** in 8.6 s (was 34/34). The HTTP/3-layer failures are real engine
   findings, not handshake noise — the dominant one is that the connection is closed with QUIC
-  application error code **0** instead of the RFC 9114 §8.1 code the engine selected.
+  application error code **0** instead of the RFC 9114 §8.1 code the engine selected. (The count is
+  15 / **11** since 2026-08-16: the one engine-owned failure — 4.1.3 mandatory pseudo-headers — is
+  closed, see "The engine-owned 4.1.3 failure" below.)
 - **The error code is dropped by the transport, not by the engine.** The engine already emits
   `.closeConnection(code)` with the right §8.1 code and `HTTPServer+HTTP3Dispatch` already forwards
   it to `close(errorCode:)`. What happens next is a platform limitation, established 2026-08-16 by
@@ -218,9 +220,23 @@ QUIC-transport rows:
 | control stream closed [QPACK 4.2] | H3_CLOSED_CRITICAL_STREAM (0x0104) |
 | Insert Count Increment is 0 [QPACK 4.4.3] | QPACK_DECODER_STREAM_ERROR (0x0202) |
 
+### The engine-owned 4.1.3 failure — closed, 2026-08-16
+
 The 12th failure — `H3_MESSAGE_ERROR if mandatory pseudo-header fields are absent [HTTP/3 4.1.3]`,
-"did not get expected exception" — is **not** platform-blocked: its two sibling 4.1.3 cases pass via
-stream-level H3_MESSAGE_ERROR, so this one is an engine-side gap and stays owned here.
+"did not get expected exception" — was **not** platform-blocked: its two sibling 4.1.3 cases pass
+via stream-level H3_MESSAGE_ERROR, so it was an engine-side gap, and it is now fixed. The diagnosis,
+from h3spec v0.1.13's source (`HTTP3Error.hs`, `illegalHeader0`): the case sends the QPACK field
+section `\x00\x00\xd1\xd7\xc1` — static-table indexes 17/23/1, i.e. `:method GET`, `:scheme https`,
+`:path /`. The absent mandatory element is the **authority**: RFC 9114 §4.3.1 requires a request
+whose scheme has a mandatory authority component (http/https) to carry a non-empty `:authority` or
+`Host`, and §4.1.2 makes the omission a malformed request — a stream error of type
+H3_MESSAGE_ERROR. The shared `RequestMapper` validated `:method`/`:scheme`/`:path` but never the
+authority rule, so the request was accepted, routed, and answered — no RESET_STREAM, no exception
+for h3spec to observe. The in-repo injection for this row compounded it by testing a *different*
+absence (a missing `:path`), which the mapper does catch — fixed where measured, broken where not.
+`RequestMapper.requireAuthority` now enforces §8.3.1/§4.3.1 for both engines, the injection
+reproduces h3spec's exact field shape, and the live run is 15 examples / **11 failures** — all 11
+platform-blocked rows above, nothing engine-owned.
 
 ### The excluded checks, by name
 
@@ -239,17 +255,17 @@ reading was an artifact of a handshake that never completed.
 
 ### Promotion trigger
 
-**Not met — and no longer pending on this repository's code.** `h3spec … -m "HTTP/3 servers"`
-remains 15 examples / 12 failures on the modern backbone (34 / 4 on `-m "QUIC servers"`,
-unchanged). Of the 12, the 11 named above are blocked by the platform's inexpressible
-connection-close code, and 1 is an engine-side gap (4.1.3, mandatory pseudo-headers). A promoted
-gate would therefore be able to enforce at most the 3 currently-passing cases, which is not a gate
-worth a required job. Promote when either (a) the pinned `closeCarriesTheApplicationErrorCode`
-probes flag that an SDK started delivering the recorded code, or (b) the 4.1.3 engine gap is closed
-*and* a skip-list gating run is judged worth its maintenance. Until then the in-repo
-`h3-conformance` job remains the gate, unweakened — it asserts the very codes the platform drops,
-at the engine seam. The 34 transport/TLS cases stay excluded regardless; they test code this
-project does not own.
+**Not met — and no longer pending on this repository's code.** `h3spec … -m "HTTP/3 servers"` is
+15 examples / **11 failures** on the modern backbone since 2026-08-16 (34 / 4 on
+`-m "QUIC servers"`, unchanged): the one engine-side gap (4.1.3, mandatory pseudo-headers) is
+closed, and every remaining failure is one of the 11 named above, blocked by the platform's
+inexpressible connection-close code. A promoted gate would therefore be able to enforce at most the
+4 currently-passing cases, which is not a gate worth a required job. Promote when either (a) the
+pinned `closeCarriesTheApplicationErrorCode` probes flag that an SDK started delivering the
+recorded code, or (b) a skip-list gating run over the 4 passing cases is judged worth its
+maintenance. Until then the in-repo `h3-conformance` job remains the gate, unweakened — it asserts
+the very codes the platform drops, at the engine seam. The 34 transport/TLS cases stay excluded
+regardless; they test code this project does not own.
 
 ## HTTP/3 load (h3load)
 
