@@ -66,7 +66,7 @@ struct HTTP2RequestBackpressureTests {
 
     @Test(
         "eight concurrent uploads: unconsumed bytes never exceed the connection window",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func concurrentUploadsStayWithinTheConnectionWindow() async throws {
         let stuck = AsyncGate()  // stream 1's handler never reads a byte until this opens
         let slow = AsyncGate()  // stream 3's handler reads only after this opens
@@ -252,7 +252,7 @@ struct HTTP2RequestBackpressureTests {
     /// The same rule end to end: the sweeper task fires, the stalled stream is reset, siblings survive.
     @Test(
         "a swept stream is reset with ENHANCE_YOUR_CALM while its sibling continues",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func aNonConsumingStreamIsSwept() async throws {
         let stuck = AsyncGate()
         let router = Router {
@@ -315,7 +315,7 @@ struct HTTP2RequestBackpressureTests {
 
     @Test(
         "a handler that never reads holds exactly its own window and no more",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func aNonConsumingHandlerHoldsOnlyItsOwnWindow() async throws {
         let stuck = AsyncGate()
         let router = Router {
@@ -349,7 +349,9 @@ struct HTTP2RequestBackpressureTests {
         await serving.value
     }
 
-    @Test("a draining handler's consumption is what re-opens the window", .timeLimit(.minutes(1)))
+    @Test(
+        "a draining handler's consumption is what re-opens the window",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func consumptionReopensTheWindow() async {
         let router = Router {
             Route.post("/drain") { _, body, _ in

@@ -59,7 +59,7 @@
 
         @Test(
             "a concurrent sender cannot splice its octets into a file body",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func aQueuedSenderCannotSpliceIntoAFileBody() async throws {
             let body = Self.bodyPattern()
             let harness = try Harness(body: body)
@@ -107,7 +107,7 @@
         /// sender forever. This one has no second sender to hide behind.
         @Test(
             "an uncontended file body arrives byte-exact and frees the direction",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func anUncontendedFileBodyArrivesIntact() async throws {
             let body = Self.bodyPattern()
             let harness = try Harness(body: body)
@@ -135,7 +135,7 @@
         /// has to keep doing so, and has to hand the direction back while doing it.
         @Test(
             "a file shorter than the framed length fails and still frees the direction",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func aShortFileFailsClosedAndFreesTheDirection() async throws {
             let body = Self.bodyPattern()
             let harness = try Harness(body: body)

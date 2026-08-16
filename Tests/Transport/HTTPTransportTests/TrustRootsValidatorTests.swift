@@ -8,6 +8,7 @@
 //  by openssl-minted fixtures (a dev CA and a leaf it issued), so the signatures are genuine.
 //
 
+import HTTPTestSupport
 import Testing
 
 @testable import HTTPTransport
@@ -22,7 +23,7 @@ import Testing
     struct TrustRootsValidatorTests {
         @Test(
             "a CA-issued leaf validates to that CA; a stranger leaf does not",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func issuedLeafValidatesAndStrangerFails() throws {
             let issued = try DevTLSIdentity.issuedChainDER()
             let validator = TransportTLS.chainValidator(roots: [issued.authority])

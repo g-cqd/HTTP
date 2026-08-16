@@ -86,7 +86,7 @@
 
         @Test(
             "concurrent receives at each scratch-window boundary deliver every byte exactly once",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             .serialized,
             arguments: boundaries)
         func concurrentReceivesPreserveEveryByte(ceiling: Int) async throws {
@@ -106,7 +106,7 @@
 
         @Test(
             "a peer that dribbles forces WANT_READ on nearly every receive and still loses nothing",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func dribbledDeliveryForcesWantReadWithoutLosingAByte() async throws {
             let harness = try Harness()
             defer { harness.tearDown() }
@@ -138,7 +138,7 @@
 
         @Test(
             "a receive that ends at close_notify returns zero and appends nothing",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func endOfStreamAppendsNothingToTheCallersBuffer() async throws {
             let harness = try Harness()
             defer { harness.tearDown() }
@@ -170,7 +170,7 @@
 
         @Test(
             "a receive cancelled while parked on a silent peer appends nothing and frees the lease",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func aCancelledReceiveLeavesTheCallersBufferUntouched() async throws {
             let harness = try Harness()
             defer { harness.tearDown() }

@@ -31,7 +31,7 @@
     struct PortableTLSConnectionTests {
         @Test(
             "a TLS session round-trips plaintext through PortableTLSConnection over a socket",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func connectionEchoesOverLoopback() async throws {
             let identity = try DevTLSIdentity.selfSigned()
             let serverContext = try OpenSSLTLS.serverContext(identity)
@@ -120,7 +120,7 @@
 
         @Test(
             "a BARE child-task cancel unblocks a parked TLS receive (the receive contract)",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func childTaskCancelUnblocksParkedReceive() async throws {
             let identity = try DevTLSIdentity.selfSigned()
             let serverContext = try OpenSSLTLS.serverContext(identity)

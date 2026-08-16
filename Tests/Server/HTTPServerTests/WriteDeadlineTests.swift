@@ -29,7 +29,7 @@ struct WriteDeadlineTests {
     /// was disarmed during sends), so this test would time out.
     @Test(
         "a peer that reads zero bytes has its stalled response send reaped at the idle timeout",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func stalledSendIsReaped() async {
         let clock = TestClock()
         let limits = HTTPLimits(idleTimeout: .milliseconds(500))
@@ -69,7 +69,7 @@ struct WriteDeadlineTests {
     /// wall-clock cap on the whole response.
     @Test(
         "a slow-but-progressing streamed response is NOT reaped — each chunk resets the deadline",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func progressingStreamIsNotReaped() async {
         let clock = TestClock()
         let idle = Duration.milliseconds(1_000)

@@ -35,7 +35,7 @@
     struct PortableTLSMutualTLSTests {
         @Test(
             "required client-auth surfaces the presented client certificate subject",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func requiredSurfacesSubject() async throws {
             // RFC 8446 §4.4.2.4: a presented client certificate MUST be validated. This backbone defers
             // that validation to the `verifyPeer` hook (the TLS layer is permissive — G3 "the hook is the
@@ -48,7 +48,7 @@
 
         @Test(
             "required client-auth rejects a client that presents no certificate",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func requiredRejectsNoCertificate() async throws {
             let transport = try Self.transport(clientAuth: .required)
             try await Self.expectNoConnection(from: transport, identity: nil)
@@ -56,7 +56,7 @@
 
         @Test(
             "a verifyPeer pin rejects a disallowed certificate under required auth",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func requiredHonorsVerifyPeerRejection() async throws {
             let identity = try DevTLSIdentity.selfSigned(commonName: "portable-unpinned")
             let transport = try Self.transport(clientAuth: .required) { _ in false }
@@ -65,7 +65,7 @@
 
         @Test(
             "verifyPeer receives the DER chain leaf-first and admits a match",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func verifyPeerReceivesDERChain() async throws {
             let sawNonEmptyLeaf = Mutex(false)
             try await Self.expectSubject(
@@ -91,7 +91,7 @@
         // destructor optionality and this file's neighbor `Glibc.send` shadowing.)
         @Test(
             "optional client-auth surfaces a presented client certificate subject",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func optionalSurfacesSubject() async throws {
             // RFC 8446 §4.4.2.4 — see `requiredSurfacesSubject`: validation is the `verifyPeer` hook's
             // job here, so a surfacing test supplies it; a nil hook conformantly rejects a presented cert.
@@ -102,7 +102,7 @@
 
         @Test(
             "optional client-auth admits a client that presents no certificate",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func optionalAdmitsNoCertificate() async throws {
             let transport = try Self.transport(clientAuth: .optional)
             let connections = try await transport.start()
@@ -127,7 +127,7 @@
 
         @Test(
             "a verifyPeer pin rejects a disallowed certificate under optional auth",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func optionalHonorsVerifyPeerRejection() async throws {
             let identity = try DevTLSIdentity.selfSigned(commonName: "portable-optional-unpinned")
             let transport = try Self.transport(clientAuth: .optional) { _ in false }

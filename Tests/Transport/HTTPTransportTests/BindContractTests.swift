@@ -43,7 +43,7 @@ struct BindContractTests {
     @Test(
         "the bind contract holds on every backbone",
         .serialized,
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: BindContractBackbone.allCases, BindContractCase.allCases)
     func bindContract(
         _ backbone: BindContractBackbone, _ row: BindContractCase

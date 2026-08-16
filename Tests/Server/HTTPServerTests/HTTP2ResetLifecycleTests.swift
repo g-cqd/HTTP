@@ -56,7 +56,7 @@ struct HTTP2ResetLifecycleTests {
 
     @Test(
         "a body chunk queued before a reset is dropped without faulting the connection",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: [true, false])
     func lateChunkIsDroppedWithoutTouchingTheConnection(retiredByDriver: Bool) async throws {
         // The relay reports from its own task, so a `.streamChunk` can already be sitting in the mailbox
@@ -122,7 +122,7 @@ struct HTTP2ResetLifecycleTests {
 
     @Test(
         "a reset mid-streaming-response unwinds the producer and spares its siblings",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: windows)
     func resetUnwindsTheProducerAndSparesSiblings(window: UInt32) async throws {
         let writes = AsyncEventProbe<Int>()
@@ -186,7 +186,9 @@ struct HTTP2ResetLifecycleTests {
         await serving.value
     }
 
-    @Test("a reset cancels a BUFFERED request's handler", .timeLimit(.minutes(1)))
+    @Test(
+        "a reset cancels a BUFFERED request's handler",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func resetCancelsABufferedHandler() async throws {
         // Finding 6 applied the canceller to streaming routes and tunnels only. A buffered handler has
         // no body stream to abandon, so nothing whatsoever stopped it: the server ran it to completion

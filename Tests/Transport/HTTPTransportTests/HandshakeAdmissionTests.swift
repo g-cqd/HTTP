@@ -32,7 +32,7 @@
     struct HandshakeAdmissionTests {
         @Test(
             "a peer that connects and never sends a ClientHello still holds its slot",
-            .timeLimit(.minutes(1))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1))
         )
         func stalledHandshakeHoldsItsSlot() async throws {
             let gate = ConnectionAdmission(

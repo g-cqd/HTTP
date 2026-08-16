@@ -96,7 +96,7 @@ struct BindContractShutdownTests {
 
     @Test(
         "shutdown() is still suspended while its listener close sits on a parked loop",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: loopBackedBackbones)
     func shutdownStaysSuspendedUntilTheCloseRuns(_ backbone: TransportBackbone) async throws {
         let transport = try TransportFactory.make(
@@ -148,7 +148,7 @@ struct BindContractShutdownTests {
 
     @Test(
         "a shutdown() that loses the close to another caller still waits for that close",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: loopBackedBackbones)
     func aJoiningShutdownWaitsForTheCloseItDidNotPerform(_ backbone: TransportBackbone) async throws
     {
@@ -210,7 +210,7 @@ struct BindContractShutdownTests {
 
     @Test(
         "shutdown() is idempotent under concurrent and repeated calls, and still frees the port",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: posixBackbones)
     func shutdownIsIdempotentAndStillReleasesThePort(_ backbone: TransportBackbone) async throws {
         // One configured port across every cycle: if any of the overlapping shutdowns resolved before

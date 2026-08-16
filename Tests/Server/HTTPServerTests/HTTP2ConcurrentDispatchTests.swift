@@ -23,7 +23,7 @@ import Testing
 struct HTTP2ConcurrentDispatchTests {
     @Test(
         "a slow handler on one stream does not stall a sibling stream's response (TTFB ≈ 0)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func slowHandlerDoesNotStallSibling() async {
         let slowGate = AsyncGate()  // /slow blocks here until the test releases it
         let router = Router {
@@ -70,7 +70,7 @@ struct HTTP2ConcurrentDispatchTests {
     // have: two requests arriving in separate TCP reads still serialized at the batch boundary.
     @Test(
         "a request in a SEPARATE later TCP read is not stalled behind a slow handler in an earlier read (cross-batch)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func slowHandlerInEarlierBatchDoesNotStallLaterBatch() async throws {
         let slowGate = AsyncGate()  // /slow blocks here until the test releases it
         let router = Router {
@@ -118,7 +118,7 @@ struct HTTP2ConcurrentDispatchTests {
     // is required to reach completion before the other's first chunk (or, here, its whole body) appears.
     @Test(
         "two concurrently-streaming responses progress independently — neither blocks the other to completion",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func concurrentNativeStreamingResponsesDoNotBlockEachOther() async throws {
         let gateA = AsyncGate()  // /a's producer parks here after its first chunk
         let chunk1 = Array("first-".utf8)

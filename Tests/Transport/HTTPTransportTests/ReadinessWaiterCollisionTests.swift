@@ -35,7 +35,7 @@ import Testing
 struct ReadinessWaiterCollisionTests {
     @Test(
         "two connection receives do not overwrite one another's cached continuation",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func connectionReceivesResumeIndependently() async throws {
         let loop = try KqueueEventLoop()
         loop.start()
@@ -79,7 +79,7 @@ struct ReadinessWaiterCollisionTests {
 
     @Test(
         "two connection sends do not overwrite one another's cached continuation",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func connectionSendsResumeIndependently() async throws {
         let loop = try KqueueEventLoop()
         loop.start()

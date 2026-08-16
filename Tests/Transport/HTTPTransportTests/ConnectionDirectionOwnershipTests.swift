@@ -60,7 +60,7 @@
         /// single-slot resumer this reports "only 1 recorded" for every N.
         @Test(
             "every same-direction receive resumes with its own octet",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [2, 4, 8])
         func receivesResumeIndependently(_ concurrency: Int) async throws {
             let fixture = try RawConnectionFixture()
@@ -83,7 +83,7 @@
         /// continuation strands a half-written response.
         @Test(
             "every same-direction send completes and delivers its whole payload",
-            .timeLimit(.minutes(2)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 2)),
             arguments: [2, 3])
         func sendsResumeIndependently(_ concurrency: Int) async throws {
             let fixture = try RawConnectionFixture(window: 2_048)
@@ -106,7 +106,7 @@
         /// and hang this test — trading a lost wakeup for a bottleneck on every connection served.
         @Test(
             "a parked receive does not delay a send on the same connection",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func receiveAndSendStayIndependent() async throws {
             let fixture = try RawConnectionFixture()
             let taken = AsyncEventProbe<Int>()
@@ -131,7 +131,7 @@
         /// cancelling it closed the connection and stranded the owner.
         @Test(
             "cancelling a queued receive leaves the operation ahead of it intact",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func cancellingQueuedReceiveSparesTheOwner() async throws {
             let fixture = try RawConnectionFixture()
             let taken = AsyncEventProbe<Int>()
@@ -155,7 +155,7 @@
         /// path either. Only the survivor unwound; the rest stayed suspended.
         @Test(
             "closing unwinds every receive on the direction",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [2, 4])
         func closeUnwindsEveryReceive(_ concurrency: Int) async throws {
             let fixture = try RawConnectionFixture()
@@ -175,7 +175,7 @@
         /// zero-length result, so each returns `nil` rather than hanging on a stream that has ended.
         @Test(
             "every receive observes the peer's half-close",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [2, 4])
         func halfCloseReachesEveryReceive(_ concurrency: Int) async throws {
             let fixture = try RawConnectionFixture()
@@ -197,7 +197,7 @@
         /// of raising a fatal signal (audit T-F1) — the failure has to reach every waiting sender.
         @Test(
             "a send to a departed peer fails rather than hanging",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [2, 3])
         func departedPeerFailsEverySend(_ concurrency: Int) async throws {
             let fixture = try RawConnectionFixture(window: 2_048)
@@ -218,7 +218,7 @@
         /// sync, so teardown is the only honest outcome — and every sender on the direction must resume.
         @Test(
             "tearing down a partially-written send unwinds the whole direction",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [2, 3])
         func cancellingPartialWriteUnwindsTheDirection(_ concurrency: Int) async throws {
             let fixture = try RawConnectionFixture(window: 2_048)
@@ -241,7 +241,7 @@
         /// either way the fresh connection has to work.
         @Test(
             "a reused descriptor number carries no state from the closed connection",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func reusedDescriptorCarriesNoState() async throws {
             let settled = AsyncEventProbe<Int>()
             let first = try RawConnectionFixture()

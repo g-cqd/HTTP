@@ -32,7 +32,7 @@
     struct PortableTLSTransportTests {
         @Test(
             "the transport accepts a libssl client, negotiates ALPN h2, and round-trips bytes",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func transportAcceptsHandshakesAndEchoes() async throws {
             let transport = try Self.startedTransport()
             let connections = try await transport.start()
@@ -101,7 +101,7 @@
 
         @Test(
             "curl interops over TLS through the transport (a real non-Network client)",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func curlInterop() async throws {
             guard let curl = Self.which("curl") else {
                 return  // no curl on this host — skip the interop proof
@@ -137,7 +137,7 @@
 
         @Test(
             "the transport reports the realized bound endpoint, read back from the kernel",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func boundEndpointReportsTheRealizedListener() async throws {
             let transport = try Self.startedTransport()
             let connections = try await transport.start()

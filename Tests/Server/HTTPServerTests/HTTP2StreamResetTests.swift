@@ -51,7 +51,7 @@ struct HTTP2StreamResetTests {
 
     @Test(
         "RST_STREAM mid-body ends the handler's body stream as a truncation, not a hang",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: codes)
     func resetTruncatesTheBodyStream(code: UInt32) async throws {
         let observed = AsyncEventProbe<Int>()
@@ -90,7 +90,7 @@ struct HTTP2StreamResetTests {
 
     @Test(
         "a sibling stream completes normally across a reset",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: codes)
     func siblingSurvivesAReset(code: UInt32) async throws {
         // This is the latent connection-kill. Before the `isStreamOpen` guard, the reset stream's
@@ -150,7 +150,9 @@ struct HTTP2StreamResetTests {
         await serving.value
     }
 
-    @Test("RST_STREAM cancels the streaming handler's task", .timeLimit(.minutes(1)))
+    @Test(
+        "RST_STREAM cancels the streaming handler's task",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func resetCancelsTheHandlerTask() async throws {
         // Abandoning the body channel unblocks a handler parked *reading*; it does nothing for one
         // parked anywhere else. The canceller is what covers that, and it is the difference between
@@ -184,7 +186,9 @@ struct HTTP2StreamResetTests {
         await serving.value
     }
 
-    @Test("RST_STREAM on a tunnel fires onClose exactly once", .timeLimit(.minutes(1)))
+    @Test(
+        "RST_STREAM on a tunnel fires onClose exactly once",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func resetClosesATunnelExactlyOnce() async throws {
         let closes = AsyncEventProbe<Int>()
         let counter = CloseCounter()
@@ -214,7 +218,9 @@ struct HTTP2StreamResetTests {
         #expect(counter.value == 1)
     }
 
-    @Test("a reset returns the connection's accounting to zero", .timeLimit(.minutes(1)))
+    @Test(
+        "a reset returns the connection's accounting to zero",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func resetReturnsAccountingToZero() async throws {
         // Directly assertable now that the dispatch count is a set of stream ids rather than a counter,
         // and the credit ledger is exposed. Both were silently wrong on the reset path before.

@@ -38,7 +38,9 @@ struct DirectionOwnerTests {
     /// task is parked on a continuation nothing will resume and nothing can cancel: awaiting it here
     /// would hang the process to the `.timeLimit` below and report only that it did. See
     /// ``ResumptionOracle`` for why an in-process watchdog is sufficient and a subprocess is not.
-    @Test("the resumer refuses to displace a pending continuation", .timeLimit(.minutes(1)))
+    @Test(
+        "the resumer refuses to displace a pending continuation",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func resumerRefusesDisplacement() async throws {
         let resumer = OnceResumer<Int>()
         let oracle = ResumptionOracle(direction: .inbound, operation: "receive")
@@ -104,7 +106,9 @@ struct DirectionOwnerTests {
     ///
     /// Deterministic by construction: `waitForQueued(atLeast:)` returns exactly when the second caller
     /// is registered, so the assertions below run at the contended moment rather than near it.
-    @Test("a second operation queues behind the owner", .timeLimit(.minutes(1)))
+    @Test(
+        "a second operation queues behind the owner",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func secondOperationQueuesBehindTheOwner() async throws {
         let owner = DirectionOwner<Int>()
         let entered = AsyncEventProbe<Int>()
@@ -135,7 +139,7 @@ struct DirectionOwnerTests {
     /// already waiting.
     @Test(
         "queued operations are admitted first-in, first-out",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: [2, 4, 8])
     func queuedOperationsAreAdmittedInOrder(_ concurrency: Int) async throws {
         let owner = DirectionOwner<Int>()
@@ -177,7 +181,9 @@ struct DirectionOwnerTests {
     ///
     /// The connection-level consequence: cancelling a receive that never started must not tear the
     /// connection down, because the operation ahead of it owns the direction and has framing in flight.
-    @Test("cancelling a queued operation spares the owner", .timeLimit(.minutes(1)))
+    @Test(
+        "cancelling a queued operation spares the owner",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func cancellingAQueuedOperationSparesTheOwner() async throws {
         let owner = DirectionOwner<Int>()
         let entered = AsyncEventProbe<Int>()
@@ -206,7 +212,9 @@ struct DirectionOwnerTests {
     ///
     /// The unit-level twin of the full-duplex control in `ConnectionDirectionOwnershipTests`. A fix that
     /// reached for one connection-wide exclusion would hang here.
-    @Test("holding one direction does not gate the other", .timeLimit(.minutes(1)))
+    @Test(
+        "holding one direction does not gate the other",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func directionsAreIndependent() async throws {
         let inbound = DirectionOwner<Int>()
         let outbound = DirectionOwner<Void>()

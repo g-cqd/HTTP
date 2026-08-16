@@ -48,7 +48,7 @@ struct HandlerExecutionIsolationTests {
 
     @Test(
         "under .concurrent, a blocked handler on one connection does not delay another on its loop",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: loopBackbones
     )
     func blockingHandlerDoesNotStallSibling(_ backbone: TransportBackbone) async throws {

@@ -61,7 +61,7 @@
 
         @Test(
             "a receive landing mid-send does not corrupt the record stream",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func aConcurrentReceiveDoesNotCorruptTheSendStream() async throws {
             let identity = try DevTLSIdentity.selfSigned()
             let serverContext = try OpenSSLTLS.serverContext(identity)
@@ -135,7 +135,7 @@
 
         @Test(
             "an ordinary send and receive leave both direction exclusions free",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func bothExclusionsAreReleasedAfterAnExchange() async throws {
             let identity = try DevTLSIdentity.selfSigned()
             let serverContext = try OpenSSLTLS.serverContext(identity)
@@ -191,7 +191,7 @@
 
         @Test(
             "concurrent scratch receives cannot copy bytes decrypted by another caller",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func concurrentScratchReceivesPreserveEveryByteExactlyOnce() async throws {
             let identity = try DevTLSIdentity.selfSigned()
             let serverContext = try OpenSSLTLS.serverContext(identity)

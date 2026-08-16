@@ -96,7 +96,7 @@ struct HTTP2TunnelRetirementTests {
 
     @Test(
         "a denied Extended CONNECT answers the peer and gives the slot back",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: refusals)
     func refusedTunnelRetiresItsStream(refusal: Refusal) async throws {
         let server = HTTPServer(
@@ -136,7 +136,9 @@ struct HTTP2TunnelRetirementTests {
         #expect(state.tasks.isEmpty)
     }
 
-    @Test("refusals do not permanently consume the concurrency cap", .timeLimit(.minutes(1)))
+    @Test(
+        "refusals do not permanently consume the concurrency cap",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func refusalsDoNotExhaustTheStreamCap() async throws {
         // The consequence, stated as the peer experiences it: with a cap of one, a refused Extended
         // CONNECT must not stop the next stream being admitted (RFC 9113 §5.1.2).
@@ -167,7 +169,9 @@ struct HTTP2TunnelRetirementTests {
         #expect(H2ServerWire.resetCode(onStream: 3, in: state.engine.outboundBytes()) == nil)
     }
 
-    @Test("a peer-ended tunnel gives its slot back", .timeLimit(.minutes(1)))
+    @Test(
+        "a peer-ended tunnel gives its slot back",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func peerEndedTunnelRetiresItsStream() async throws {
         let server = HTTPServer(
             transport: FakeTransport(),
