@@ -233,6 +233,86 @@ struct ModernQUICTransportTests {
         return (metadata as? NWProtocolQUIC.Metadata)?.negotiatedALPN
     }
 
+    @Test(
+        "close(errorCode:) closes promptly; the code itself is pinned platform-discarded",
+        .timeLimit(.minutes(1)),
+        arguments: [
+            UInt64(0x010A),  // H3_MISSING_SETTINGS (RFC 9114 §8.1)
+            UInt64(0x0105)  // H3_FRAME_UNEXPECTED (RFC 9114 §8.1)
+        ])
+    func closeCarriesTheApplicationErrorCode(_ code: UInt64) async throws {
+        guard #available(macOS 26, iOS 26, *) else {
+            return
+        }
+        // RFC 9114 §8.1 mandates *specific* application error codes, delivered in the frame type 0x1d
+        // CONNECTION_CLOSE (RFC 9000 §10.2 / §19.19). The engine selects the code and the dispatcher
+        // forwards it to `close(errorCode:)` — but Network.framework's structured teardown emits the
+        // frame with a hardwired code 0, whatever `applicationError` holds (the dominant cause of the
+        // h3spec "HTTP/3 servers" failures; the experiment matrix is in CONFORMANCE.md).
+        //
+        // Two hard guarantees, and one pinned premise:
+        //  1. HARD: the peer observes the close promptly — a close that stops closing (the previous
+        //     record's symptom) or crashes (`nw_quic_set_application_error` segfaults on a nil reason;
+        //     its true cause) fails this test outright.
+        //  2. PINNED (`withKnownIssue`): the peer reads back the code `close(errorCode:)` was asked
+        //     for. Today Apple's stack discards it; the day an SDK starts honoring the recorded
+        //     `applicationError`, the known issue stops reproducing, this test flags it, and the
+        //     platform-blocked rows in CONFORMANCE.md can be lifted.
+        // The probe reproduces the engine's shape at a §8.1 violation: one inbound stream is open and
+        // mid-read when the close is issued.
+        let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
+        let transport = ModernQUICTransport(
+            configuration: TransportConfiguration(
+                host: "127.0.0.1",
+                port: 0,
+                backbone: .networkFramework,
+                tls: tls
+            )
+        )
+        let connections = try await transport.start()
+        let port = transport.boundPort
+
+        let server = Task { await Self.closeFirstConnection(connections, errorCode: code) }
+        defer {
+            server.cancel()
+            Task { await transport.shutdown() }
+        }
+
+        let probe = QUICApplicationCloseProbe(port: port)
+        defer { probe.cancel() }
+        try await probe.ready(within: 10)
+        try await probe.send([0x00])
+        // Hard: the close must arrive inside the deadline (a hang throws and fails the test).
+        let observed = try await probe.observedCloseCode(within: 15)
+        withKnownIssue(
+            "Network.framework discards the QUIC application close code (see CONFORMANCE.md)"
+        ) {
+            #expect(
+                observed == code,
+                "closed with application error \(String(observed, radix: 16)), asked for \(String(code, radix: 16))"
+            )
+        }
+    }
+
+    /// Accepts one connection, parks a read on its first inbound stream (the HTTP/3 engine's shape at
+    /// a §8.1 violation), then closes the whole connection with `errorCode`.
+    private static func closeFirstConnection(
+        _ connections: AsyncStream<any QUICConnection>,
+        errorCode: UInt64
+    ) async {
+        for await connection in connections {
+            var streams = connection.inboundStreams().makeAsyncIterator()
+            guard let stream = await streams.next() else {
+                break
+            }
+            _ = try? await stream.receive()
+            let parked = Task { _ = try? await stream.receive() }
+            await connection.close(errorCode: errorCode)
+            parked.cancel()
+            break
+        }
+    }
+
     /// Echoes every byte of every inbound stream back to the peer, closing with FIN.
     private static func echoServer(_ connections: AsyncStream<any QUICConnection>) async {
         await withDiscardingTaskGroup { group in

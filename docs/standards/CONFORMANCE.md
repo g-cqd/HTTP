@@ -135,15 +135,92 @@ nghttp3 1.18.0, OpenSSL 3.6.3):
   application error code **0** instead of the RFC 9114 §8.1 code the engine selected.
 - **The error code is dropped by the transport, not by the engine.** The engine already emits
   `.closeConnection(code)` with the right §8.1 code and `HTTPServer+HTTP3Dispatch` already forwards
-  it, but both backbones' `close(errorCode:)` discarded the argument. The obvious fix does **not**
-  work and was measured, not assumed: setting `NetworkConnection<QUIC>.applicationError` (modern) or
-  the connection group's `NWProtocolQUIC.Metadata.applicationError` (legacy) before teardown makes
-  Network.framework stop closing the connection **at all** — h3spec goes from 12 failures in 2.3 s to
-  15 failures in 60.1 s, every one a timeout, on both backbones. Whatever the right sequence is, it
-  is not "set the error then tear down"; this is a live follow-up, not a solved problem.
+  it to `close(errorCode:)`. What happens next is a platform limitation, established 2026-08-16 by
+  the experiment matrix below: **Network.framework provides no way to choose the application error
+  code of a CONNECTION_CLOSE** (RFC 9000 §10.2, frame type 0x1d §19.19).
 
 Real third-party HTTP/3 works: `curl --http3-only` gets `HTTP/3 200` on `GET /` and on
 `POST /echo` against `httpd-example 14433 networkFramework tls`.
+
+### The connection-close code is not expressible on Apple's stack — measured, 2026-08-16
+
+The 2026-08-02 note above this one recorded a dead end: "setting `applicationError` before teardown
+makes Network.framework stop closing the connection at all — 15 failures / 60 s of timeouts on both
+backbones". That symptom was real but the reading was wrong. Setting
+`NWProtocolQUIC.Metadata.applicationError` (or the modern `NetworkConnection<QUIC>.applicationError`)
+with a `nil` reason string **segfaults** — `nw_quic_set_application_error` ends in
+`String(cString:)` → `strlen(NULL)` (crash report: `swiftpm-testing-helper`, EXC_BAD_ACCESS at 0x0,
+faulting frame `nw_quic_set_application_error + 120`). A crashed server times out every subsequent
+h3spec case on whichever backbone is selected, which is exactly the "stops closing, both backbones"
+signature. With a non-`nil` reason there is no crash and no stall — and no code on the wire either.
+
+Everything below was measured on arm64 macOS 27.0 (SDK 27), h3spec v0.1.13, with the wire also
+observed by a second Network.framework client (`QUICApplicationCloseProbe` in `HTTPTransportTests`,
+which reads `nw_quic_get_application_error` — "the value received from the peer", `UInt64.max` when
+none arrived):
+
+- **The write lands; nothing reads it.** After `applicationError = .init(code:reason:)`, a *fresh*
+  `metadata(definition:)` copy reads the code back — the value is in live, shared QUIC state. Every
+  teardown path then ignores it:
+  - modern (`NetworkConnection<QUIC>`, structured teardown — the API's only close): emits
+    CONNECTION_CLOSE 0x1d with a **hardwired code 0** (h3spec: `ApplicationProtocolErrorIsReceived
+    (ApplicationProtocolError 0)`), whatever was set;
+  - legacy (`NWConnectionGroup.cancel()`): closes **abortively, with no 0x1d frame at all** — the
+    peer fails with `ENOTCONN` and reads "no error received";
+  - client direction (plain `NWConnection`, set-then-`cancel()`, including pre-arming the error
+    right after `.ready`): identical — the peer reads "no error received". The limitation is the
+    stack's, not the listener side's.
+- **Every other candidate mechanism was tried and does not deliver the code**: setting the error on
+  per-stream metadata (any stream, all streams, streams cancelled first, group cancelled first);
+  riding it on a final send (legacy `ContentContext(metadata:)`, modern `send(_:metadata:)` builder,
+  with and without FIN — the send succeeds, the code never appears; a FIN on the control stream
+  additionally provokes the client into closing with H3_CLOSED_CRITICAL_STREAM); letting the modern
+  `inboundStreams` handlers throw (resets the streams, closes nothing). The public API surface has
+  no other close: `NWConnectionGroup` has no error parameter, the modern `NetworkChannel` has no
+  `cancel()` at all, and `quic_options.h` offers exactly `nw_quic_set_application_error` — which the
+  close paths do not consult.
+- **Stream-level codes DO work.** `nw_quic_set_stream_application_error`
+  (`streamApplicationErrorCode`) is honored on RESET_STREAM/STOP_SENDING — it is why the three
+  header-validation h3spec cases pass with their mandated H3_MESSAGE_ERROR. Only the
+  connection-level close code is inexpressible.
+- **The legacy backbone was never part of the 12-failure figure.** Forced onto
+  `LegacyQUICTransport`, `-m "HTTP/3 servers"` is 15 examples / **15 failures** in 15.1 s: with no
+  0x1d frame ever sent, the 11 cases that at least *see* code 0 on the modern backbone see nothing
+  and time out. The 2026-08-02 "h3spec now discriminates" numbers are modern-backbone numbers.
+
+`close(errorCode:)` in both backbones now records the code (with a non-`nil` reason — the crash
+guard) and tears down, so the mandated §8.1 code is in the connection's QUIC state if Apple's stack
+ever starts consulting it. The premise is **pinned**: `closeCarriesTheApplicationErrorCode` in
+`Legacy`/`ModernQUICTransportTests` hard-asserts that the close arrives promptly and crash-free, and
+wraps the code assertion in `withKnownIssue` — the day an SDK delivers the code, the known issue
+stops reproducing, the test flags it, and the rows below can be lifted.
+
+### The h3spec rows blocked by that platform limitation, by name
+
+The following 11 `-m "HTTP/3 servers"` cases fail **only** because the mandated connection-close
+code cannot be put on the wire — the engine detects each violation and closes the connection (h3spec
+receives the close as `ApplicationProtocolError 0` on the modern backbone), and
+`endpointClosesWithMandatedError` in the gating `h3-conformance` job proves the engine selects the
+mandated code for every one of them. Platform-blocked in the same sense as the `.platform`-stamped
+QUIC-transport rows:
+
+| h3spec case | Mandated code (RFC 9114 §8.1 / RFC 9204 §6) |
+|---|---|
+| DATA received before HEADERS [HTTP/3 4.1] | H3_FRAME_UNEXPECTED (0x0105) |
+| first control frame is not SETTINGS [HTTP/3 6.2.1] | H3_MISSING_SETTINGS (0x010A) |
+| DATA frame on a control stream [HTTP/3 7.2.1] | H3_FRAME_UNEXPECTED (0x0105) |
+| HEADERS frame on a control stream [HTTP/3 7.2.2] | H3_FRAME_UNEXPECTED (0x0105) |
+| second SETTINGS frame [HTTP/3 7.2.4] | H3_FRAME_UNEXPECTED (0x0105) |
+| HTTP/2 settings included [HTTP/3 7.2.4.1] | H3_SETTINGS_ERROR (0x0109) |
+| CANCEL_PUSH in a request stream [HTTP/3 7.2.5] | H3_FRAME_UNEXPECTED (0x0105) |
+| invalid static table index [QPACK 3.1] | QPACK_DECOMPRESSION_FAILED (0x0200) |
+| dynamic table capacity over limit [QPACK 4.1.3] | QPACK_ENCODER_STREAM_ERROR (0x0201) |
+| control stream closed [QPACK 4.2] | H3_CLOSED_CRITICAL_STREAM (0x0104) |
+| Insert Count Increment is 0 [QPACK 4.4.3] | QPACK_DECODER_STREAM_ERROR (0x0202) |
+
+The 12th failure — `H3_MESSAGE_ERROR if mandatory pseudo-header fields are absent [HTTP/3 4.1.3]`,
+"did not get expected exception" — is **not** platform-blocked: its two sibling 4.1.3 cases pass via
+stream-level H3_MESSAGE_ERROR, so this one is an engine-side gap and stays owned here.
 
 ### The excluded checks, by name
 
@@ -162,12 +239,17 @@ reading was an artifact of a handshake that never completed.
 
 ### Promotion trigger
 
-**Not met.** With the listener reachable and `h3` negotiated, `h3spec … -m "HTTP/3 servers"` is
-15 examples / 12 failures — the cases are now meaningful, which is the improvement, but they are
-failing on this repository's code. Promote that step of `h3spec-observation` to a required job when
-those 12 go green; the dominant blocker is the dropped RFC 9114 §8.1 connection-close error code
-described above. Until then the in-repo `h3-conformance` job remains the gate, unweakened. The 34
-transport/TLS cases stay excluded regardless; they test code this project does not own.
+**Not met — and no longer pending on this repository's code.** `h3spec … -m "HTTP/3 servers"`
+remains 15 examples / 12 failures on the modern backbone (34 / 4 on `-m "QUIC servers"`,
+unchanged). Of the 12, the 11 named above are blocked by the platform's inexpressible
+connection-close code, and 1 is an engine-side gap (4.1.3, mandatory pseudo-headers). A promoted
+gate would therefore be able to enforce at most the 3 currently-passing cases, which is not a gate
+worth a required job. Promote when either (a) the pinned `closeCarriesTheApplicationErrorCode`
+probes flag that an SDK started delivering the recorded code, or (b) the 4.1.3 engine gap is closed
+*and* a skip-list gating run is judged worth its maintenance. Until then the in-repo
+`h3-conformance` job remains the gate, unweakened — it asserts the very codes the platform drops,
+at the engine seam. The 34 transport/TLS cases stay excluded regardless; they test code this
+project does not own.
 
 ## HTTP/3 load (h3load)
 
