@@ -13,9 +13,9 @@ It is designed to be a small, reusable **API package** that other projects embed
 > route-scoped WebSocket with a broadcast hub, streaming request/response bodies, per-route body
 > limits, mutual TLS with the full peer identity as request context, static files with
 > `sendfile(2)` zero-copy on the POSIX backbones, hot certificate/responder reload, and an
-> observability module. Remaining tails are tracked in
-> `docs/roadmap/` (conformance-CI promotion, gated perf items, staged h2
-> back-pressure refinement).
+> observability module. The 2026-06 roadmaps under `docs/roadmap/` are closed out and marked
+> superseded; remaining gaps (gated perf items, the inactive benchmark drift gate) are tracked,
+> with closure annotations, in `docs/audit/2026-07-31-codebase-review.md`.
 
 ## Why
 
@@ -36,7 +36,7 @@ It is designed to be a small, reusable **API package** that other projects embed
 | **Zero-copy first** | Parsing runs over borrowed buffers via a bounds-checked `ByteReader` that returns offsets/ranges — never intermediate copies. Bytes become owned values only when they must outlive the receive buffer. |
 | **Multithreaded** | Work scales across cores: each connection is served by its own `Task` off a discarding task group, and the hot path holds no global locks — per-connection state is isolated and guarded by `Mutex`/`Atomic` from `Synchronization`. |
 | **Minimal allocation** | Reused scratch space and ring-buffer compression tables on top of the zero-copy reader — targeting 200k rps. |
-| **Own currency types** | First-party `HTTPRequest`/`HTTPResponse`/`HTTPFields`/`HTTPStatus`/`HTTPMethod` (RFC 9110), shared across h1/h2/h3 — **zero external dependencies**. |
+| **Own currency types** | First-party `HTTPRequest`/`HTTPResponse`/`HTTPFields`/`HTTPStatus`/`HTTPMethod` (RFC 9110), shared across h1/h2/h3 — no third-party dependencies; the byte substrate takes exactly one first-party package (`ADFoundation`'s SIMD kernels), pinned to an exact revision and CI-enforced. |
 
 ## Standards
 
