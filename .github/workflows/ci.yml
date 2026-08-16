@@ -298,10 +298,10 @@ jobs:
   # Optional-feature manifest paths the DEFAULT graph never compiles, so a regression in them is
   # otherwise invisible until a downstream first opts in: the portable libssl-over-POSIX TLS backbone
   # (HTTP_PORTABLE_TLS — C++ interop + the vendored BoringSSL build) and the Zstandard content coding
-  # (HTTP_ZSTD — the libzstd shim, Homebrew-prefix path). These are the most fragile manifest branches;
-  # build them under warnings-as-errors so a manifest or shim break is caught here. (The Linux zstd path
-  # is exercised by codings-linux; this is the macOS Homebrew-prefix path plus the TLS backbone, which
-  # has no CI lane at all. Running the gated suites — only compiled under these flags — is a follow-up.)
+  # (the SE-0450 `Zstd` package trait — the libzstd shim, Homebrew-prefix path). These are the most
+  # fragile manifest branches; build them under warnings-as-errors so a manifest or shim break is caught
+  # here. (The Linux zstd path is exercised by codings-linux; this is the macOS Homebrew-prefix path plus
+  # the TLS backbone, which has no CI lane at all. Running the gated suites is a follow-up.)
   # ---------------------------------------------------------------------------
   optional-features:
     runs-on: macos-26
@@ -317,13 +317,10 @@ jobs:
         env:
           HTTP_PORTABLE_TLS: "1"
         run: swift build --scratch-path "$SCRATCH/opt-tls"
-      - name: Build — Zstandard coding (HTTP_ZSTD)
-        env:
-          HTTP_ZSTD: "1"
-          HTTP_ZSTD_PREFIX: /opt/homebrew/opt/zstd
+      - name: Build — Zstandard coding (--traits Zstd)
         run: |
           brew list zstd >/dev/null 2>&1 || brew install zstd
-          swift build --scratch-path "$SCRATCH/opt-zstd"
+          swift build --scratch-path "$SCRATCH/opt-zstd" --traits Zstd
 
   # ---------------------------------------------------------------------------
   # The Django comparison's "ours" subject (Benchmarking/Django/ours) is its OWN package, so nothing in
@@ -456,23 +453,20 @@ jobs:
   # ---------------------------------------------------------------------------
   # Opt-in content codings on Linux (G0): Brotli (libbrotli) + zstd (libzstd), the system-lib codings the
   # default graph never links. apt-install the dev packages, then run the coding round-trip suites under
-  # HTTP_BROTLI/HTTP_ZSTD (prefix /usr). gzip needs no flag — system zlib, covered by build-test-linux.
+  # the SE-0450 `Zstd`/`Brotli` package traits (no prefix hints needed — the distro dev packages land on
+  # the default search paths). gzip needs no trait — system zlib, covered by build-test-linux.
   # ---------------------------------------------------------------------------
   codings-linux:
     runs-on: ubuntu-latest
     container: swiftlang/swift:nightly-6.4.x-jammy
     env:
-      HTTP_BROTLI: "1"
-      HTTP_BROTLI_PREFIX: /usr
-      HTTP_ZSTD: "1"
-      HTTP_ZSTD_PREFIX: /usr
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Install libbrotli + libzstd
         run: apt-get update -qq && apt-get install -y -qq libbrotli-dev libzstd-dev
       - name: Coding round-trips (Brotli + zstd + Linux gzip/inflate)
-        run: swift test --scratch-path "$SCRATCH" --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+        run: swift test --scratch-path "$SCRATCH" --traits Zstd,Brotli --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
 
   # ---------------------------------------------------------------------------
   # The single REQUIRED check for the Linux platform — this is the one to name in branch protection.
