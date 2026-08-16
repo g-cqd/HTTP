@@ -3,10 +3,12 @@
 //  HTTPTransportTests
 //
 //  One column of the bind-contract matrix: a listener implementation that must answer the
-//  ``BindContractCase`` rows the same way as every other. Covers BOTH protocols (TCP and QUIC) and
-//  BOTH Network.framework generations, because "the legacy path serves the floor" is exactly how a
-//  backbone gets left behind — audit F-04 fixed the modern QUIC port while the legacy QUIC host was
-//  still ignored, and F-05 fixed the TCP host while QUIC had neither.
+//  ``BindContractCase`` rows the same way as every other. Covers BOTH protocols (TCP and QUIC), BOTH
+//  Network.framework generations, and the trait-gated portable TLS backbone, because "the legacy
+//  path serves the floor" is exactly how a backbone gets left behind — audit F-04 fixed the modern
+//  QUIC port while the legacy QUIC host was still ignored, F-05 fixed the TCP host while QUIC had
+//  neither, and PortableTLS sat outside the matrix entirely until its opt-in build hid a Linux port
+//  leak (and a build break) for months.
 //
 //  A column that cannot run a row says so by name through ``skipReason(for:)``. A missing row and a
 //  passing row read identically in a test report, which is the failure mode this file exists to avoid.
@@ -28,6 +30,9 @@ enum BindContractBackbone: String, Sendable, CaseIterable, CustomTestStringConve
     case swiftSystem
     /// TCP over BSD sockets with an `epoll(7)` readiness loop — Linux only.
     case posixEpoll
+    /// TCP + TLS 1.3 over the portable libssl backbone — the opt-in `HTTP_PORTABLE_TLS` build, on
+    /// both macOS and Linux. Every non-failing cell dials with a real TLS handshake.
+    case portableTLS
     /// QUIC over the legacy `NWListener` + `NWConnectionGroup` path (macOS 15.6 / iOS 18 floor).
     case quicLegacy
     /// QUIC over the modern typed `NetworkListener<QUIC>` path (macOS 26+).
@@ -51,6 +56,8 @@ enum BindContractBackbone: String, Sendable, CaseIterable, CustomTestStringConve
                 .swiftSystem
             case .posixEpoll:
                 .posixEpoll
+            case .portableTLS:
+                .portableTLS
             case .quicLegacy, .quicModern:
                 nil
         }
@@ -64,22 +71,34 @@ enum BindContractBackbone: String, Sendable, CaseIterable, CustomTestStringConve
         if let platform = platformSkipReason {
             return platform
         }
-        // Platform availability is the ONLY reason a cell may skip. There used to be a second one — the
-        // POSIX backbones took `ServerTransport.boundEndpoint`'s `nil` default, so their
-        // endpoint-reporting assertion was relaxed and the row recorded a skip instead. All four report
-        // what `getsockname(2)` gives now, so the relaxation is gone rather than permanent.
+        // Availability of the build — platform or trait — is the ONLY reason a cell may skip. There
+        // used to be a second one: the POSIX backbones took `ServerTransport.boundEndpoint`'s `nil`
+        // default, so their endpoint-reporting assertion was relaxed and the row recorded a skip
+        // instead. All backbones report what `getsockname(2)` gives now, so the relaxation is gone
+        // rather than permanent.
         _ = row
         return nil
     }
 
-    /// Why this column cannot run at all on the host executing the suite.
+    /// Why this column cannot run at all in the build executing the suite.
     ///
-    /// Platform, not preference. The two sets are disjoint and complementary: `posixEpoll` exists
-    /// only where `Glibc` does, and every other column is compiled out where `Network` does not —
+    /// Availability, not preference — and on two axes. Platform: `posixEpoll` exists only where
+    /// `Glibc` does, and every Network.framework column is compiled out where `Network` does not —
     /// Package.swift drops `Network/`, `POSIXKqueue/`, `SwiftSystem/`, `POSIXDispatch/*Transport` and
-    /// the QUIC sources from the Linux build. So a full picture needs BOTH jobs, and this string is
-    /// what tells a reader of one run which half it did not see.
+    /// the QUIC sources from the Linux build. Build trait: `portableTLS` exists on BOTH platforms but
+    /// only in the opt-in `HTTP_PORTABLE_TLS` build, which is exactly how its defects hid — a column
+    /// that is absent by default needs its absence stated, per run, in so many words. So a full
+    /// picture needs the macOS job, the Linux job, AND the trait-gated legs of both, and this string
+    /// is what tells a reader of one run which parts it did not see.
     var platformSkipReason: String? {
+        if self == .portableTLS {
+            #if canImport(CHTTPBoringSSLShims)
+                return nil  // the trait is on; this column runs, on macOS and Linux alike
+            #else
+                return "PortableTLS is `#if canImport(CHTTPBoringSSLShims)`; this column runs only "
+                    + "in the opt-in portable build (HTTP_PORTABLE_TLS=1), on both platforms"
+            #endif
+        }
         #if canImport(Glibc)
             switch self {
                 case .posixEpoll:

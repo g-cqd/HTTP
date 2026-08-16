@@ -37,7 +37,7 @@ import Testing
 
 @Suite("Bind contract — every backbone, the same table", .realNetwork)
 struct BindContractTests {
-    // `.serialized` because every cell binds a real listener and dials it: seventy-seven of those at
+    // `.serialized` because every cell binds a real listener and dials it: eighty-eight of those at
     // once saturates the shared real-network permit pool and pushes unrelated suites past their time
     // limits. Serially the whole matrix is a few seconds, and the ordering is reproducible.
     @Test(
