@@ -35,10 +35,14 @@ struct HTTP2RequestMapperTests {
     }
 
     /// A minimal valid pseudo-header set, plus any extra fields.
+    ///
+    /// `:authority` is part of the minimal set: an "https" request without it (or a `Host` field)
+    /// is malformed (RFC 9113 §8.3.1), so a fixture that omits it would fail for the wrong reason.
     private func request(adding extras: [HPACKField]) -> [HPACKField] {
         [
             HPACKField(name: ":method", value: "GET"),
             HPACKField(name: ":scheme", value: "https"),
+            HPACKField(name: ":authority", value: "example.com"),
             HPACKField(name: ":path", value: "/")
         ] + extras
     }
@@ -85,6 +89,30 @@ struct HTTP2RequestMapperTests {
     @Test("a missing required pseudo-header is malformed (§8.3.1)")
     func missingRequired() {
         #expect(errorCode([HPACKField(name: ":method", value: "GET")]) == .protocolError)
+    }
+
+    /// The mapper is shared with HTTP/3, whose h3spec 4.1.3 case sends exactly this shape — the
+    /// HTTP/2 wording is RFC 9113 §8.3.1: a scheme with a mandatory authority component requires a
+    /// non-empty `:authority` or `Host`.
+    @Test("an https request without :authority or Host is malformed (§8.3.1)")
+    func missingAuthorityAndHost() {
+        #expect(
+            errorCode([
+                HPACKField(name: ":method", value: "GET"),
+                HPACKField(name: ":scheme", value: "https"),
+                HPACKField(name: ":path", value: "/")
+            ]) == .protocolError)
+    }
+
+    @Test("a Host field satisfies the https authority requirement (§8.3.1)")
+    func hostSatisfiesAuthorityRequirement() throws {
+        let mapped = try make([
+            HPACKField(name: ":method", value: "GET"),
+            HPACKField(name: ":scheme", value: "https"),
+            HPACKField(name: ":path", value: "/"),
+            HPACKField(name: "host", value: "example.com")
+        ])
+        #expect(mapped.headerFields[.host] == "example.com")
     }
 
     @Test("an empty :path is malformed (§8.3.1)")

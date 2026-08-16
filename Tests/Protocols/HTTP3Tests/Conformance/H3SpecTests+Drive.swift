@@ -116,9 +116,14 @@ extension H3SpecTests {
                 )
             },
             "a mandatory pseudo-header field is absent": { connection in
+                // Byte-for-byte what h3spec v0.1.13 sends for this row (`illegalHeader0`, QPACK
+                // static indexes 17/23/1): `:method`+`:scheme`+`:path` with no `:authority` and no
+                // `Host`. The absent mandatory element is the authority an "https" request MUST
+                // carry (RFC 9114 §4.3.1) — not `:method`/`:scheme`/`:path`.
                 let fields = [
                     HeaderField(name: ":method", value: "GET"),
-                    HeaderField(name: ":scheme", value: "https")
+                    HeaderField(name: ":scheme", value: "https"),
+                    HeaderField(name: ":path", value: "/")
                 ]
                 _ = try? connection.receive(
                     request,

@@ -6,9 +6,11 @@
 //  HTTP/3) into an ``HTTPRequest``. The two protocols share these rules verbatim: the request
 //  pseudo-headers (:method, :scheme, :authority, :path) carry the control data and MUST precede the
 //  regular fields, each appear at most once, and be drawn only from that set; field names MUST be
-//  lowercase (§8.2.1 / §4.2); and connection-specific fields are forbidden (§8.2.2 / §4.2). The only
-//  per-protocol difference is the error a violation maps to, so the engine passes a `malformed`
-//  factory and this stays the single source of truth for both. Iterative; no recursion.
+//  lowercase (§8.2.1 / §4.2); connection-specific fields are forbidden (§8.2.2 / §4.2); and a scheme
+//  with a mandatory authority component (http/https) requires a non-empty :authority or Host
+//  (§8.3.1 / §4.3.1). The only per-protocol difference is the error a violation maps to, so the
+//  engine passes a `malformed` factory and this stays the single source of truth for both.
+//  Iterative; no recursion.
 //
 
 /// Maps a decoded header-field list onto an ``HTTPRequest`` (RFC 9113 §8.3 / RFC 9114 §4.3), shared by
@@ -91,9 +93,12 @@ public enum RequestMapper {
             }
         }
         else {
-            guard scheme != nil, let path, !path.isEmpty else {
+            guard let scheme, let path, !path.isEmpty else {
                 throw malformed("missing or empty :scheme or :path")
             }
+            try requireAuthority(
+                scheme: scheme, authority: authority, fields: headerFields, malformed: malformed
+            )
         }
         // `:protocol` is only valid on a CONNECT request (RFC 8441 §4 / RFC 9220).
         if connectProtocol != nil, parsedMethod != .connect {
@@ -107,6 +112,46 @@ public enum RequestMapper {
             headerFields: headerFields
         )
         return (request, connectProtocol)
+    }
+
+    /// Enforces the authority rule for schemes with a mandatory authority component (RFC 9113
+    /// §8.3.1 / RFC 9114 §4.3.1).
+    ///
+    /// A request whose `:scheme` has a mandatory authority component — "http" and "https" — MUST
+    /// carry either an `:authority` pseudo-header field or a `Host` field, and a present field MUST
+    /// NOT be empty; omitting both (or an empty `:authority`) is a malformed request, a stream
+    /// error of type PROTOCOL_ERROR / H3_MESSAGE_ERROR (RFC 9113 §8.1.1 / RFC 9114 §4.1.2). This
+    /// is the exact shape h3spec's "mandatory pseudo-header fields are absent [HTTP/3 4.1.3]" case
+    /// sends: `:method` + `:scheme https` + `:path` and nothing naming the authority.
+    private static func requireAuthority<E: Error>(
+        scheme: String,
+        authority: String?,
+        fields: HTTPFields,
+        malformed: (String) -> E
+    ) throws(E) {
+        // Scheme names are case-insensitive (RFC 3986 §3.1); the wire form is lowercase, so the
+        // exact comparison is the fast path and `lowercased()` only runs for unusual spellings.
+        guard isMandatoryAuthorityScheme(scheme) else {
+            return
+        }
+        if let authority {
+            guard !authority.isEmpty else {
+                throw malformed("an empty :authority")
+            }
+            return
+        }
+        guard let host = fields[.host], !host.isEmpty else {
+            throw malformed("a \(scheme) request without :authority or Host")
+        }
+    }
+
+    /// Whether `scheme` has a mandatory authority component (RFC 9113 §8.3.1 / RFC 9114 §4.3.1).
+    private static func isMandatoryAuthorityScheme(_ scheme: String) -> Bool {
+        if scheme == "https" || scheme == "http" {
+            return true
+        }
+        let lowered = scheme.lowercased()
+        return lowered == "https" || lowered == "http"
     }
 
     /// Assigns one request pseudo-header, rejecting duplicates and unknown names (§8.3 / §4.3.1).
