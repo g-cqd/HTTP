@@ -475,10 +475,22 @@ two values. Encode 16 random bytes or zero-pad each 64-bit component.
 
 ## Feature-completion and operational gaps
 
-- HTTP/3 CI remains advisory and current `h3spec` integration reports 48 of 49
+- ~~HTTP/3 CI remains advisory and current `h3spec` integration reports 48 of 49
   failures due to a transport-expectation mismatch. It is not a conformance
-  gate.
+  gate.~~ **Superseded.** HTTP/3 conformance now gates: the required
+  `h3-conformance` job runs the in-repo suite that mirrors h3spec's catalog
+  row-for-row (`fc8f7bd`, 2026-08-01), with external h3spec retained as
+  dispatch-only evidence (`h3spec-observation`). On the modern backbone that
+  evidence run is 15 examples / 11 failures: the 11 are platform-blocked
+  connection-close-code rows, each named in `docs/standards/CONFORMANCE.md`
+  (`3019d67`), and the twelfth — the one engine-owned failure, §4.1.3 mandatory
+  pseudo-headers — was a missing `:authority` check, fixed with a regression
+  test in `48d1f4d` (2026-08-16).
 - HTTP/3 load testing is advisory; Linux HTTP/3 remains intentionally absent.
+  *[2026-08-16: still true, and the advisory status is now a written decision —
+  the `bench-h3load` job's comment in `ci.yml` records that shared-runner load
+  figures are noise and the leg guards only "the h3 path serves under load".
+  Linux HTTP/3 is unchanged (roadmap decision D3, Darwin-only v1).]*
 - ~~Streaming response compression is explicitly unimplemented in
   `Sources/Server/HTTPServer/Middleware/CompressionMiddleware.swift:71`.~~
   **Implemented.** A streamed body is coded incrementally through a
@@ -486,33 +498,84 @@ two values. Encode 16 random bytes or zero-pad each 64-bit component.
   `ContentEncoderStream` seam; `Content-Length` is dropped and h1 frames it
   chunked. gzip and Brotli stream on Darwin; the `CZlibCoding`, `CBrotli` and
   `CZstd` shims are one-shot only, so those builds fall through to identity
-  rather than buffering the body to code it.
-- Strict Memory Safety remains deferred. Unsafe regions should be isolated,
+  rather than buffering the body to code it. *[2026-08-16: the Linux half of
+  that sentence has since narrowed — `CZlibCoding` gained a resumable deflate
+  stream, so gzip streams on Linux too, byte-identical to the buffered coding
+  (`fdc6e2a`, 2026-08-02); the Brotli and zstd shims remain one-shot and still
+  fall through to identity for streamed bodies.]*
+- ~~Strict Memory Safety remains deferred. Unsafe regions should be isolated,
   marked with explicit invariants, and tested before enabling the package trait
-  as a gate.
-- `Package.swift` depends on `ADFoundation` via mutable `branch: "main"` and
+  as a gate.~~ **Closed as a staged gate** (ADR 0009, `d3c76db`, 2026-08-01):
+  `.strictMemorySafety()` is enforced on the zero-count targets via
+  `strictMemorySafeTargets` in `Package.swift`, and the remaining targets are
+  held by the `strict-memory-safety` CI job's counted budget
+  (`.github/strict-memory-safety-budget.tsv` — may fall, never rise). A second
+  ratchet counts suppressions (`@unchecked Sendable` and friends) at exact
+  equality so silencing a diagnostic cannot read as progress (`7215af7`,
+  2026-08-02). The ADR's "Known blind spots" section records what the counts
+  do not prove.
+- ~~`Package.swift` depends on `ADFoundation` via mutable `branch: "main"` and
   the root `Package.resolved` is ignored. Builds are not reproducible. Pin a
   release or exact reviewed revision, automate updates, and generate dependency
-  review/SBOM output.
+  review/SBOM output.~~ **Closed (the pin), open (the tooling).** `Package.swift`
+  pins an exact reviewed revision (`b5d22fa`, 2026-07-31) and the
+  `dependency-pinning` CI job (`b543a1b`, `scripts/dependency-pinning.py`)
+  fails on a `branch:` reappearing or a `Package.resolved` being committed —
+  the resolved file stays ignored deliberately, since a library's consumers
+  must resolve their own graph. Update automation and dependency-review/SBOM
+  output have not been built.
 - There is no committed benchmark-regression baseline, so CI executes a harness
   without enforcing drift. Establish hardware-specific baselines and compare
   statistically stable distributions rather than a single RPS number.
+  *[2026-08-16: still true, but now a documented decision rather than an
+  omission — the `benchmarks` job comment in `ci.yml` (PERF-2, 2026-08-01)
+  records that a baseline captured on a loaded developer box pads the ±5 %
+  instruction gate by up to 15× and would never fire; a baseline must come from
+  the CI runner class and pass a self-reproduction check before it is
+  committed. Harness health (build + every benchmark runs) is a required gate
+  meanwhile.]*
 - The restored June results include runs below the stated 200k RPS goal; they
   are from different harness/configuration states and must not be compared
   directly with one another or presented as current results.
 - Documentation is materially stale:
-  - `docs/Security.md` still describes accept backoff as pending.
-  - `docs/standards/README.md` and `docs/standards/CONFORMANCE.md` still describe
+  - ~~`docs/Security.md` still describes accept backoff as pending.~~ **Closed
+    same day** (`1924e44`, 2026-07-31): the kqueue/epoll accept back-off (T-F8 /
+    F-EMFILE, implemented in `734e211`) is recorded as resolved, and the one
+    genuine residue — the portable TLS accept loop's inline `usleep`
+    (`PortableTLSTransport.swift`) — replaced it in the pending table, scoped
+    honestly to that backbone. Re-verified against the tree 2026-08-16: that
+    residue is still real.
+  - ~~`docs/standards/README.md` and `docs/standards/CONFORMANCE.md` still describe
     HTTP/3, QPACK, WebSocket, priority, and Autobahn states that conflict with
-    code and CI.
+    code and CI.~~ **Closed.** Both were corrected the same day (`1924e44`), and
+    CONFORMANCE.md's HTTP/3 section has since been rewritten around the required
+    `h3-conformance` gate and the named platform-blocked h3spec rows
+    (`fc8f7bd` → `3019d67` → `1c16966`).
   - body-stream and decompression comments still describe capabilities as
     reserved or memory-bounded when current implementations contradict them.
-- Deadwood marks `HTTPServer+Streaming.swift:85 bufferedResponse(_:)` as an
-  unused production candidate. Other reported test tags may be intentional
+    *[2026-08-16: partially stale as written — the h2/h3 body-stream headers
+    this describes were corrected in `91a60e4`, which is part of the tree this
+    review examined. The decompression/coding notes went away with the
+    streaming-coding work (`8b97dcf`, `fdc6e2a`) and the CWE-409 bound
+    deduplication (`5eea938`).]*
+- ~~Deadwood marks `HTTPServer+Streaming.swift:85 bufferedResponse(_:)` as an
+  unused production candidate.~~ **Stale as written**: `bufferedResponse(_:)`
+  was removed in `91a60e4` (2026-07-26), which is in the tree this review
+  examined — the finding came from the restored June-era tool reports, not from
+  the reviewed sources. The full nine-candidate deadwood list was adjudicated
+  in `5eea938` (2026-08-01): four keepers the report was wrong about (including
+  the `.fuzz` and `.conformance` test tags this bullet worried over), five
+  deletions. Other reported test tags may be intentional
   public test API and should not be deleted blindly.
 - The 182 clone groups include generated tables and protocol symmetry. Deduplicate
   only where it improves invariant ownership without introducing abstraction
-  overhead on a measured hot path.
+  overhead on a measured hot path. **Done on exactly those terms** (`5eea938`,
+  2026-08-01): the 182 groups were triaged — 65 are the deliberately parallel
+  POSIX backbones, 35 are RFC registries whose "duplication" is the
+  specifications', 4 were stale — and the one duplicated *security invariant*
+  (the CWE-409 decompression-bomb bound, written twice with the reasoning in
+  only one copy) was deduplicated; the remaining duplicated-invariant
+  candidates are recorded in that commit's message rather than guessed at.
 
 ## Proposed execution plan
 
