@@ -39,6 +39,28 @@
         #endif
     }
 
+    /// Poisons a listening descriptor with `shutdown(2)` `SHUT_RDWR`, ahead of its `close(2)`.
+    ///
+    /// This is the Linux half of releasing a blocking-`accept(2)` listener, and it must come FIRST.
+    /// POSIX.1-2017 does not specify what `close(2)` does to a thread blocked in `accept(2)` on the
+    /// same descriptor, and the two kernels answer differently (measured, 2026-08): Darwin releases
+    /// the bound port inside `close(2)` and wakes the blocked accept (`ECONNABORTED`); Linux does
+    /// neither — the socket stays bound through the accept's file reference until a connection
+    /// arrives, which after a shutdown is never. `shutdown(2)` on the listening socket is what Linux
+    /// answers with: it releases the port immediately (before the woken thread has left the syscall)
+    /// and wakes the accept with `EINVAL`. On Darwin the call fails `ENOTCONN` — a listening socket
+    /// is not connected — but still wakes an already-blocked accept, and the `close(2)` that follows
+    /// does the rest, so the pair is correct on both platforms in every interleaving.
+    private func poisonFD(_ descriptor: Int32) {
+        #if canImport(Darwin)
+            _ = Darwin.shutdown(descriptor, SHUT_RDWR)
+        #else
+            // Glibc surfaces `SHUT_RDWR` as `Int` — the same import divergence `POSIXSocket`
+            // normalizes for `SOCK_STREAM`.
+            _ = Glibc.shutdown(descriptor, Int32(SHUT_RDWR))
+        #endif
+    }
+
     /// The portable libssl-over-POSIX-socket TLS backbone (`HTTP_PORTABLE_TLS`), event-driven (audit R4).
     ///
     /// State lives in a `Mutex`; the blocking `accept()` runs on `acceptQueue`, each accepted connection
@@ -74,6 +96,11 @@
             var boundPort: UInt16 = 0
             /// The endpoint `getsockname(2)` reports for the listener, `nil` before binding.
             var boundEndpoint: BindEndpoint?
+            /// Signalled once the listening descriptor is genuinely closed and its port released.
+            ///
+            /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
+            /// see ``ListenerCloseLatch``.
+            var closeLatch: ListenerCloseLatch?
             var isRunning = false
             /// The admission policy applied between `accept(2)` and `SSL_new` (audit F8), ungated
             /// until ``start(admission:)`` installs the server's gate.
@@ -157,6 +184,7 @@
                 $0.listenDescriptor = listener.descriptor
                 $0.boundPort = listener.port
                 $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
+                $0.closeLatch = ListenerCloseLatch()
                 $0.isRunning = true
                 $0.gate = AcceptGate(admission: admission)
             }
@@ -180,23 +208,49 @@
             return stream
         }
 
-        /// Closes the listening socket (ending the accept loop, which frees the `SSL_CTX`) and stops the
+        /// Closes the listening socket — not returning until its port is released — and stops the
         /// event loops.
+        ///
+        /// The woken accept thread ends the connection stream and frees the `SSL_CTX`.
+        ///
+        /// The close is `shutdown(2)`-then-`close(2)`, in that order, because this backbone accepts
+        /// with a *blocking* `accept(2)` on a dedicated thread and the close-only version leaks the
+        /// port on Linux: see ``poisonFD(_:)`` for the measured per-kernel semantics. By the time the
+        /// pair has run, POSIX's `EADDRINUSE` window is over on both platforms — a caller that then
+        /// rebinds the same port must succeed, which is the bind-contract `rebind after stop` row.
+        ///
+        /// Idempotent, and synchronous for EVERY caller, not just the one that performs the close.
+        /// The state swap below is the arbiter — exactly one caller sees the live descriptor — and
+        /// the losers of that race await the same ``ListenerCloseLatch`` the winner signals, because
+        /// ``start(admission:)`` wires `continuation.onTermination` to shut down, so a consumer
+        /// dropping the stream races an explicit `shutdown()` by construction; a loser that returned
+        /// through the `nil` it found would resolve with the port possibly still held.
         public func shutdown() async {
-            let (descriptor, loops): (Int32?, [TLSEventLoop]) = state.withLock {
+            // `closeLatch` is deliberately NOT cleared: a caller that arrives after the close still
+            // has to find it, and find it already signalled.
+            let (descriptor, loops, latch) = state.withLock {
                 let fd = $0.listenDescriptor
                 let loops = $0.loops
                 $0.listenDescriptor = nil
                 $0.loops = []
                 $0.isRunning = false
-                return (fd, loops)
+                return (fd, loops, $0.closeLatch)
             }
             if let descriptor {
-                closeFD(descriptor)
+                poisonFD(descriptor)  // wakes the blocked accept; releases the port on Linux
+                closeFD(descriptor)  // releases the port on Darwin; drops the fd-table entry
             }
             // The accept thread may be parked on the admission gate; closing the listener alone would
             // not wake it, so signal too. (`isRunning` is already false, so it exits its park loop.)
             admissionResume.signal()
+            if let latch {
+                if descriptor != nil {
+                    latch.signal()  // the performer: the poison + close above released the port
+                }
+                // Every caller waits here, including the ones that found the descriptor already
+                // taken. A never-started transport has no latch, and nothing to wait for.
+                await latch.wait()
+            }
             for loop in loops {
                 loop.stop()
             }
