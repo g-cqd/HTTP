@@ -1,5 +1,24 @@
 # HTTP Server — Completion Roadmap (progress tracker)
 
+> **Editorial note (2026-08-16) — superseded.** This tracker is the record of the 2026-06 completion
+> campaign; it predates the 2026-07-31 codebase review and the closeout campaign that followed on
+> `audit/2026-07-31-closeout` (250+ commits). Do not read its open boxes as current state — the live
+> gap record is [the 2026-07-31 codebase review](../audit/2026-07-31-codebase-review.md), whose gap
+> list is annotated as items close. Where this document's two open phases stand now:
+>
+> - **P10 — shipped.** Autobahn is a **required** CI gate (`autobahn` job, promoted 2026-07-02);
+>   HTTP/3 conformance gates as the **required** `h3-conformance` job driven by the in-repo suite
+>   that mirrors h3spec's catalog row-for-row (`fc8f7bd`, 2026-08-01), with external h3spec retained
+>   as dispatch-only evidence (`h3spec-observation` — 15 examples / 11 failures since 2026-08-16,
+>   every failure a platform-blocked close-code row named in
+>   [CONFORMANCE.md](../standards/CONFORMANCE.md)); the h3 load leg exists as the deliberately
+>   non-gating `bench-h3load` smoke. "Flip low-noise benchmark baseline gates" is half-flipped:
+>   harness health is required (`benchmarks` job), while the drift gate is inactive by a written
+>   decision (PERF-2, 2026-08-01, in that job's own comment) until a runner-class baseline passes
+>   its self-reproduction check.
+> - **P11 — still open.** The HPACK verdict recorded below stands (measured, kept O(n)); the h3
+>   receive-side borrow, Network.framework zero-copy receive, and h3 0-RTT items remain unclaimed.
+
 Durable, in-repo progress tracker for the feature-completion campaign. Sequential, on `main`, no
 worktrees. Each phase lands behind the project gates (build + full tests + ASan/fuzz on touched paths +
 swift-format/SwiftLint `--strict`, signed commit). Tick a box only when its gate is green and committed.

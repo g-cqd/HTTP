@@ -1,5 +1,24 @@
 # HTTP Server — Gap-Closing Roadmap (production readiness)
 
+> **Editorial note (2026-08-16) — superseded.** Historical tracker: it predates the 2026-07-31
+> codebase review and the closeout campaign that followed on `audit/2026-07-31-closeout`. Its body
+> markers also lag its own change log — the 2026-06-28 / 2026-07-02 entries close items the section
+> headers still show `[~]`/`[ ]` — so where they disagree, the change log and the tree govern. The
+> live gap record is [the 2026-07-31 codebase review](../audit/2026-07-31-codebase-review.md).
+> Everything still shown open in the body has since closed:
+>
+> - **G5 `sendfile`/zero-copy — shipped** (`28beee9`, 2026-07-02): `TransportConnection.sendFile`
+>   with kernel `sendfile(2)` on the kqueue/swift-system/epoll backbones
+>   (`Sources/Transport/HTTPTransport/Abstraction/UnleasedTransportConnection+SendFile.swift`);
+>   h2/h3 keep the copying pump by design, as the change log records.
+> - **G3 mTLS-pairing docs note — done**: `docs/Security.md` § "Mutual TLS + application
+>   authentication" documents the layered composition; the full-SAN/chain follow-up also shipped,
+>   as the `TLSPeerIdentity` request context (`6735dd5`, 2026-07-02).
+> - **G6 conformance CI — closed**: Autobahn is a **required** gate (`autobahn` job, promoted
+>   2026-07-02); HTTP/3 conformance gates as the **required** `h3-conformance` job (`fc8f7bd`,
+>   2026-08-01), with external h3spec kept as dispatch-only evidence (`h3spec-observation`); the
+>   h3 load leg is the deliberately non-gating `bench-h3load` smoke.
+
 Durable, in-repo tracker for closing the feature gaps found in the
 [server feature gap analysis](../audit/2026-06-25-server-feature-gap-analysis.md) (gaps **G0–G7**). It
 takes the server from a *feature-rich, security-ahead Apple-platform app-server library* to a *deployable,
