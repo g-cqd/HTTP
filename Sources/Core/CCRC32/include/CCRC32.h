@@ -6,7 +6,7 @@
 //  the pure-Swift `CRC32` facade. Every function returns the *final* checksum (the value gzip appends)
 //  of `buf[0..<len]`, and all agree bit-for-bit with the portable reference; the CPU-specific ones fall
 //  back to the table when their feature is unavailable. All are one-shots except `ccrc32_update`, the
-//  seeded form a streaming encoder folds chunk by chunk.
+//  seeded form a streaming encoder folds chunk by chunk. Self-contained C — no system libraries.
 //
 
 #ifndef CCRC32_H
@@ -15,7 +15,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/// The fastest backend available on this CPU (ARM CRC32 / zlib-on-x86 / slicing-by-8 table).
+/// The fastest backend available on this CPU (ARM CRC32 / x86 PCLMULQDQ / slicing-by-8 table).
 uint32_t ccrc32(const uint8_t *buf, size_t len);
 
 /// Folds `buf[0..<len]` into a running checksum and returns the checksum *so far*.
@@ -33,14 +33,13 @@ uint32_t ccrc32_slice8(const uint8_t *buf, size_t len);
 /// The naive one-octet-at-a-time table (the original algorithm) — the comparison baseline.
 uint32_t ccrc32_slice1(const uint8_t *buf, size_t len);
 
-/// zlib's `crc32()` — correct polynomial, internally hardware-accelerated (PCLMULQDQ on x86).
-uint32_t ccrc32_zlib(const uint8_t *buf, size_t len);
-
 /// ARMv8 CRC32 instructions (`__crc32*`); falls back to the table off aarch64.
 uint32_t ccrc32_arm(const uint8_t *buf, size_t len);
 
-/// x86-64 hardware path: zlib's PCLMULQDQ-accelerated `crc32` (the SSE4.2 `crc32` instruction is the
-/// CRC-32C/Castagnoli polynomial, which is *wrong* for gzip); falls back to the table off x86-64.
+/// The x86 hardware path — an in-house PCLMULQDQ carry-less-multiply folding kernel, dispatched at
+/// runtime via CPUID on both x86-64 and i686 (the SSE4.2 `crc32` instruction is the CRC-32C /
+/// Castagnoli polynomial, which is *wrong* for gzip). Falls back to the table off x86 or when the
+/// CPU lacks PCLMULQDQ/SSE2.
 uint32_t ccrc32_x86(const uint8_t *buf, size_t len);
 
 /// Whether a genuine hardware backend is active for this arch (1) or it fell back to the table (0).

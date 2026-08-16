@@ -303,12 +303,12 @@ let package = Package(
         // Test/tooling-only; never shipped in an app binary. No dependencies, default C settings.
         .target(name: "CHTTPTestMalloc", path: "Sources/Core/CHTTPTestMalloc"),
         // A C shim exposing hardware/SWAR CRC-32 backends for the gzip integrity checksum: the ARMv8
-        // CRC32 instructions, zlib's PCLMULQDQ-accelerated `crc32` (the correct x86 hardware path),
-        // and a portable slicing-by-8 table. Links the system zlib. Default C settings.
+        // CRC32 instructions, an in-house CPUID-dispatched PCLMULQDQ folding kernel on x86, and a
+        // portable slicing-by-8 table. Self-contained — with the former zlib borrow gone, HTTPCore's
+        // unconditional graph links no system libraries. Default C settings.
         .target(
             name: "CCRC32",
-            path: "Sources/Core/CCRC32",
-            linkerSettings: [.linkedLibrary("z")]
+            path: "Sources/Core/CCRC32"
         ),
         // A C shim over the system zlib for RFC 7692 permessage-deflate: raw DEFLATE with `Z_SYNC_FLUSH`
         // (the flush mode that frames a WebSocket message, which Apple's Compression cannot express).
