@@ -32,7 +32,7 @@
     struct PortableTLSReloadTests {
         @Test(
             "reload swaps the served certificate for new connections",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func reloadSwapsServedCertificate() async throws {
             let identityA = try DevTLSIdentity.selfSigned(commonName: "reload-cert-a")
             let transport = PortableTLSTransport(

@@ -55,4 +55,39 @@ struct TestLivenessBudgetTests {
         #expect(TestLivenessBudget.pollInterval == .milliseconds(5))
         #expect(TestLivenessBudget.pollInterval < TestLivenessBudget.nominal)
     }
+
+    /// A `.timeLimit(_:)` budget is a liveness guard too: the scale can only ever widen it.
+    ///
+    /// Asserted through the real trait — `TimeLimitTrait.timeLimit(_:)` resolved back to a
+    /// `Swift.Duration` — so the pin covers Testing's own minutes-to-duration conversion, not just
+    /// our arithmetic.
+    @Test("the time-limit budget never shortens", arguments: [1, 2])
+    func timeLimitNeverShortens(minutes: Int) {
+        #expect(TestLivenessBudget.timeLimitMinutes(minutes) >= minutes)
+        let trait = TimeLimitTrait.timeLimit(TestLivenessBudget.timeLimit(minutes: minutes))
+        #expect(trait.timeLimit >= .seconds(60 * minutes))
+    }
+
+    /// The minute count is `ceil(minutes × scale)`: the scale applied exactly once, then rounded up.
+    ///
+    /// Whole-minute rounding is Swift Testing's constraint (`TimeLimitTrait.Duration` constructs
+    /// from minutes and nothing else), so exact linearity in `scale` is not expressible — the ceil
+    /// relationship is the linear law pre-rounding, and it is the strongest pin available. It also
+    /// carries the double-scaling hazard already pinned for `nominal`: applying the scale twice
+    /// yields `ceil(minutes × scale²)`, which passes by coincidence at scale 1 and diverges on
+    /// every host that sets the knob. At scale 1 it degenerates to the identity, which is what
+    /// makes the swept call sites byte-identical to the `.minutes(n)` literals they replaced.
+    @Test("the time-limit budget applies the scale exactly once, rounding up", arguments: [1, 2, 7])
+    func timeLimitAppliesScaleOnceRoundingUp(minutes: Int) {
+        let onceScaled = Int((Double(minutes) * TestLivenessBudget.scale).rounded(.up))
+        #expect(TestLivenessBudget.timeLimitMinutes(minutes) == onceScaled)
+    }
+
+    /// The trait's resolved duration is exactly the scaled minute count — no unit drift in between.
+    @Test("the time-limit trait resolves to the scaled minute count", arguments: [1, 2])
+    func timeLimitTraitMatchesMinutes(minutes: Int) {
+        let trait = TimeLimitTrait.timeLimit(TestLivenessBudget.timeLimit(minutes: minutes))
+        let expected = Duration.seconds(60 * TestLivenessBudget.timeLimitMinutes(minutes))
+        #expect(trait.timeLimit == expected)
+    }
 }

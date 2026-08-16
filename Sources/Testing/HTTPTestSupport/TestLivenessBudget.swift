@@ -25,6 +25,7 @@
 //
 
 internal import Foundation
+public import Testing
 
 /// The real-time budget async test helpers race against, and the one knob that widens it.
 ///
@@ -82,6 +83,33 @@ public enum TestLivenessBudget {
         }
         return max(1, parsed)
     }()
+
+    /// The resolved budget for a Swift Testing `.timeLimit(_:)` trait.
+    ///
+    /// A liveness guard with the same contract as ``nominal``: it exists to turn a wedged test into a
+    /// failure that names it, never to assert that the test finishes quickly — so the environment
+    /// knob can only ever widen it. Prefer this over a bare `.minutes(_:)` literal; an ad-hoc
+    /// real-time deadline calibrated on an idle machine is exactly what audit FLAKE-1 was.
+    ///
+    /// Swift Testing only accepts whole minutes (`TimeLimitTrait.Duration` constructs from minutes
+    /// and nothing else), so the scale multiplies the *minute count*, rounding up:
+    /// `HTTP_TEST_TIMEOUT_SCALE=1.5` turns `minutes: 1` into a two-minute limit, not a 90-second one.
+    public static func timeLimit(minutes: Int) -> TimeLimitTrait.Duration {
+        .minutes(timeLimitMinutes(minutes))
+    }
+
+    /// The scaled whole-minute count behind ``timeLimit(minutes:)``: `ceil(minutes × scale)`.
+    ///
+    /// Split out (and rounded *up*, so a fractional scale can never shorten the guard) because
+    /// `TimeLimitTrait.Duration` is opaque: this is the layer the guard tests pin the scaling
+    /// arithmetic against. Clamped rather than trapping on a pathological scale.
+    public static func timeLimitMinutes(_ minutes: Int) -> Int {
+        let resolved = (Double(minutes) * scale).rounded(.up)
+        guard resolved < Double(Int.max) else {
+            return Int.max
+        }
+        return max(minutes, Int(resolved))
+    }
 
     /// Widens `base` by ``scale``.
     ///

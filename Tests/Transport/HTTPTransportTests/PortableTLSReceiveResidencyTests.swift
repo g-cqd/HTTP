@@ -50,7 +50,7 @@
 
         @Test(
             "an ordinary request over TLS leaves the floor resident, not the 16 KiB ceiling",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func anOrdinaryRequestHoldsOnlyTheFloor() async throws {
             let identity = try DevTLSIdentity.selfSigned()
             let serverContext = try OpenSSLTLS.serverContext(identity)
@@ -149,7 +149,7 @@
 
         @Test(
             "constructing a connection allocates no ciphertext pump buffer at all",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func constructionAllocatesNoPumpBuffer() throws {
             let identity = try DevTLSIdentity.selfSigned()
             let serverContext = try OpenSSLTLS.serverContext(identity)

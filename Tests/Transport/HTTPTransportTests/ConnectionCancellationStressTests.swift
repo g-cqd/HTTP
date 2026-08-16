@@ -61,7 +61,7 @@
         /// out from under an owner with framing in flight.
         @Test(
             "a receive cancelled before it enqueues spares the owner and the stream",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [1, 4])
         func cancelBeforeEnqueueStealsNothing(_ latecomers: Int) async throws {
             let fixture = try RawConnectionFixture()
@@ -109,7 +109,7 @@
         /// taken by the owner.
         @Test(
             "a receive cancelled while queued consumes no readiness",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [1, 4])
         func cancelWhileQueuedStealsNoReadiness(_ queued: Int) async throws {
             let fixture = try RawConnectionFixture()
@@ -152,7 +152,7 @@
         /// it: the FIFO must close over the hole rather than strand what is behind it (CWE-833).
         @Test(
             "the surviving waiter is admitted after cancellations around it",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [1, 3])
         func survivingWaiterMakesProgress(_ cancelled: Int) async throws {
             let fixture = try RawConnectionFixture()
@@ -187,7 +187,7 @@
         /// — and every operation behind it must resume, exactly once, rather than be stranded.
         @Test(
             "cancelling the owner unwinds every receive exactly once",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: [1, 4])
         func cancelAfterAcquisitionUnwindsEveryone(_ queued: Int) async throws {
             let fixture = try RawConnectionFixture()
@@ -218,7 +218,7 @@
         /// cancellation land on a half-written response rather than between two whole ones.
         @Test(
             "cancelling a send mid-payload unwinds the direction exactly once",
-            .timeLimit(.minutes(2)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 2)),
             arguments: [2, 3])
         func cancelDuringPartialWriteUnwindsOnce(_ concurrency: Int) async throws {
             let fixture = try RawConnectionFixture(window: 2_048)
@@ -247,7 +247,7 @@
         /// taken at most once — never by two receives, and never by a cancelled one on its way out.
         @Test(
             "cancelling at the lease handover neither double-admits nor steals",
-            .timeLimit(.minutes(2)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 2)),
             arguments: [2, 8])
         func cancelAtLeaseTransferIsExclusive(_ queued: Int) async throws {
             for _ in 0 ..< 12 {

@@ -22,7 +22,9 @@ import Testing
 
 @Suite("Transport — UNIX-domain-socket backbone (AF_UNIX)", .realNetwork)
 struct UnixSocketTransportTests {
-    @Test("accepts a connection at a socket path and round-trips bytes", .timeLimit(.minutes(1)))
+    @Test(
+        "accepts a connection at a socket path and round-trips bytes",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func roundTripsOverSocketPath() async throws {
         let path = FileManager.default.temporaryDirectory
             .appendingPathComponent("uds-\(UInt32.random(in: 0 ... .max)).sock").path

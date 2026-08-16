@@ -61,7 +61,9 @@ struct HTTP2TunnelBackpressureTests {
         return frame
     }
 
-    @Test("a blocked tunnel handler stalls its peer at the stream window", .timeLimit(.minutes(1)))
+    @Test(
+        "a blocked tunnel handler stalls its peer at the stream window",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func blockedHandlerStallsThePeer() async throws {
         let blocked = AsyncGate()
         let handler = ClosureWebSocketHandler { _ in
@@ -103,7 +105,7 @@ struct HTTP2TunnelBackpressureTests {
 
     @Test(
         "memory stays flat across 64 MiB of offered tunnel DATA against a blocked handler",
-        .timeLimit(.minutes(2)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 2)))
     func memoryIsStableAcrossALargeOffer() async {
         let blocked = AsyncGate()
         let handler = ClosureWebSocketHandler { _ in
@@ -153,7 +155,7 @@ struct HTTP2TunnelBackpressureTests {
 
     @Test(
         "a sibling tunnel with a live handler keeps exchanging frames across a blocked one",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func siblingTunnelKeepsRunning() async throws {
         let blocked = AsyncGate()
         let stuck = ClosureWebSocketHandler { _ in

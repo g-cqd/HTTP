@@ -39,7 +39,7 @@ struct AdmissionOrderTests {
 
     @Test(
         "a gated backbone never yields a connection over the cap, so no serve task is created for it",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: [(cap: 1, excess: 3), (cap: 2, excess: 3), (cap: 4, excess: 4)]
     )
     func overCapConnectionsAreNeverQueuedOrServed(
@@ -79,7 +79,7 @@ struct AdmissionOrderTests {
 
     @Test(
         "the server adopts the transport's ticket instead of charging a second slot",
-        .timeLimit(.minutes(1))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1))
     )
     func adoptedTicketIsNotDoubleCharged() async throws {
         // The cap is exactly the number of inbound connections: if the server charged its own slot on
@@ -105,7 +105,7 @@ struct AdmissionOrderTests {
 
     @Test(
         "an ungated backbone's connections are still capped, before any serve work",
-        .timeLimit(.minutes(1))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1))
     )
     func ungatedBackboneIsCappedByTheServer() async throws {
         // `FakeTransport` charges nothing (its connections are built by the test, so it has no accept
@@ -138,7 +138,7 @@ struct AdmissionOrderTests {
 
     @Test(
         "a per-host rejection does not stop the gate admitting other hosts",
-        .timeLimit(.minutes(1))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1))
     )
     func perHostRejectionDoesNotStarveOtherHosts() async throws {
         // One noisy source (three connections, per-client cap 1) interleaved with two other peers: the

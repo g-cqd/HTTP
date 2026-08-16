@@ -69,7 +69,7 @@ struct NetworkFrameworkTLSTests {
 
     @Test(
         "negotiates ALPN h2 over TLS and reports it on the accepted connection",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func negotiatesHTTP2OverTLS() async throws {
         let tls = try SharedDevTLSIdentity.value()
         let transport = NetworkFrameworkTransport(

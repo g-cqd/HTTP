@@ -57,7 +57,7 @@
 
         @Test(
             "a saturating job source does not stop a second socket being serviced",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func aJobFloodDoesNotStarveReadiness() async throws {
             let loop = try KqueueEventLoop()
             loop.start()

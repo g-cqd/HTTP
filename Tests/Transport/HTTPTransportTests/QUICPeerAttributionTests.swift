@@ -39,7 +39,7 @@ struct QUICPeerAttributionTests {
 
     @Test(
         "two h3 peers occupy two per-host admission buckets",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: ["legacy", "modern"]
     )
     func peersGetSeparateBuckets(backbone: String) async throws {
@@ -66,7 +66,7 @@ struct QUICPeerAttributionTests {
 
     @Test(
         "an h3 connection reports the peer's address, not the listener's",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: ["legacy", "modern"]
     )
     func peerIsNotTheBindAddress(backbone: String) async throws {

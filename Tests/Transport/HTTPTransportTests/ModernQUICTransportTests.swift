@@ -24,7 +24,7 @@ import Testing
 struct ModernQUICTransportTests {
     @Test(
         "the modern backbone binds the configured nonzero port",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func configuredPort() async throws {
         guard #available(macOS 26, iOS 26, *) else {
             return
@@ -58,7 +58,7 @@ struct ModernQUICTransportTests {
 
     @Test(
         "port 0 stays an explicit ephemeral request on the modern backbone",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func ephemeralPortIsStillEphemeral() async throws {
         guard #available(macOS 26, iOS 26, *) else {
             return
@@ -83,7 +83,8 @@ struct ModernQUICTransportTests {
 
     @Test(
         "an unbindable configured host fails closed instead of binding somewhere else",
-        .timeLimit(.minutes(1)), arguments: ["192.0.2.1", "quic-bind-target.invalid"])
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
+        arguments: ["192.0.2.1", "quic-bind-target.invalid"])
     func unbindableHostFailsClosed(_ host: String) async throws {
         guard #available(macOS 26, iOS 26, *) else {
             return
@@ -107,7 +108,7 @@ struct ModernQUICTransportTests {
 
     @Test(
         "a second QUIC listener on the same UDP port fails closed",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func portConflictFailsClosed() async throws {
         guard #available(macOS 26, iOS 26, *) else {
             return
@@ -148,7 +149,7 @@ struct ModernQUICTransportTests {
 
     @Test(
         "a QUIC stream round-trips through the modern backbone over loopback",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func loopbackEcho() async throws {
         guard #available(macOS 26, iOS 26, *) else {
             return
@@ -186,7 +187,7 @@ struct ModernQUICTransportTests {
 
     @Test(
         "the modern backbone offers h3 whatever ALPN list the shared TLS identity carries",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: [["h2", "http/1.1"], ["h2"], [], ["h3"], ["h3", "h2"]])
     func http3IsOfferedRegardlessOfTheTCPProtocolList(_ configured: [String]) async throws {
         guard #available(macOS 26, iOS 26, *) else {
@@ -235,7 +236,7 @@ struct ModernQUICTransportTests {
 
     @Test(
         "close(errorCode:) closes promptly; the code itself is pinned platform-discarded",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: [
             UInt64(0x010A),  // H3_MISSING_SETTINGS (RFC 9114 §8.1)
             UInt64(0x0105)  // H3_FRAME_UNEXPECTED (RFC 9114 §8.1)

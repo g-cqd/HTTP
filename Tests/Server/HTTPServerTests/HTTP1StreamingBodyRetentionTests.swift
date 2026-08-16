@@ -93,7 +93,7 @@ struct HTTP1StreamingBodyRetentionTests {
 
     @Test(
         "a 256 MiB content-length upload leaves the keep-alive buffer small",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func contentLengthUploadDoesNotRetainTheBody() async {
         let log = ChunkLog()
         let head = Array(
@@ -134,7 +134,7 @@ struct HTTP1StreamingBodyRetentionTests {
 
     @Test(
         "a 256 MiB chunked upload streams in window-bounded chunks",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func chunkedUploadStreamsInBoundedChunks() async {
         let log = ChunkLog()
         let head = Array(
@@ -176,7 +176,7 @@ struct HTTP1StreamingBodyRetentionTests {
 
     @Test(
         "the producer suspends until the handler takes each chunk",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func producerParksUntilTheHandlerConsumes() async throws {
         let gate = AsyncGate()
         let router = Router {
@@ -224,7 +224,7 @@ struct HTTP1StreamingBodyRetentionTests {
 
     @Test(
         "a handler that abandons the body still drains the wire and keeps the pipeline aligned",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func abandonedBodyStillDrainsTheWire() async {
         let router = Router {
             Route.post("/upload") { _, _, _ in .text("IGNORED") }.streamingBody()
@@ -266,7 +266,7 @@ struct HTTP1StreamingBodyRetentionTests {
 
     @Test(
         "a large buffered upload does not leave its peak capacity on the connection",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func bufferedUploadReleasesItsPeakCapacity() async {
         // The *buffered* path is the one that legitimately accumulates a body in the connection read
         // buffer — `frameBody` needs the whole thing to build a `ParsedRequest`. Streaming no longer
@@ -315,7 +315,7 @@ struct HTTP1StreamingBodyRetentionTests {
 
     @Test(
         "a streamed chunked body over the route limit is refused mid-stream (RFC 9112 §7.1)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func chunkedStreamedBodyStillHonorsTheRouteLimit() async {
         let log = ChunkLog()
         let cap = 128 * 1_024

@@ -72,7 +72,7 @@ struct WebSocketUpgradeGenerationTests {
 
     @Test(
         "HTTP/2: a reload between the CONNECT head and the upgrade keeps one generation",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http2TunnelUpgradesOnTheHeadsGeneration() async throws {
         let asked = AsyncEventProbe<String>()
         let server = HTTPServer(
@@ -114,7 +114,7 @@ struct WebSocketUpgradeGenerationTests {
 
     @Test(
         "HTTP/2: an Extended CONNECT whose head filed no plan is refused, not re-resolved",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http2TunnelWithoutAPlanIsRefused() async throws {
         // The fail-closed half: with no plan there is no generation, and falling back to the live
         // snapshot is the bug. `/chat` routes on the live table, so a fallback would answer `200`.
@@ -155,7 +155,7 @@ struct WebSocketUpgradeGenerationTests {
 
     @Test(
         "HTTP/3: a reload between the CONNECT head and the upgrade keeps one generation",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http3TunnelUpgradesOnTheHeadsGeneration() async throws {
         let asked = AsyncEventProbe<String>()
         let server = HTTPServer(
@@ -196,7 +196,7 @@ struct WebSocketUpgradeGenerationTests {
 
     @Test(
         "HTTP/3: an Extended CONNECT whose head filed no plan is refused, not re-resolved",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http3TunnelWithoutAPlanIsRefused() async throws {
         let asked = AsyncEventProbe<String>()
         let server = HTTPServer(

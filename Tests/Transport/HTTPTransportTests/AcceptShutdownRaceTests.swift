@@ -46,7 +46,7 @@ struct AcceptShutdownRaceTests {
 
     @Test(
         "shutting down while the accept source is suspended neither traps nor hangs",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: AcceptBackpressureTests.gatedBackbones
     )
     func shutdownDuringAdmissionSuspension(_ backbone: TransportBackbone) async throws {

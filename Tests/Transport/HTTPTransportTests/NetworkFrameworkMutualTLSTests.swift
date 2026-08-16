@@ -23,7 +23,7 @@ import Testing
 struct NetworkFrameworkMutualTLSTests {
     @Test(
         "required client-auth surfaces the presented client certificate subject",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func requiredClientAuthSurfacesSubject() async throws {
         let clientCN = "mTLS-test-client"
         let clientIdentity = try Self.clientIdentity(commonName: clientCN)
@@ -63,7 +63,7 @@ struct NetworkFrameworkMutualTLSTests {
 
     @Test(
         "required client-auth rejects a client that presents no certificate",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func requiredClientAuthRejectsNoCertificate() async throws {
         // `.required` demands an explicit verify hook (audit F4); the rejection here is by the missing
         // client cert, not the hook, so accept-any is fine.
@@ -86,7 +86,7 @@ struct NetworkFrameworkMutualTLSTests {
 
     @Test(
         "a verifyPeer pin rejects a client whose certificate is not allowed",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func verifyPeerPinRejectsDisallowedCertificate() async throws {
         let clientIdentity = try Self.clientIdentity(commonName: "unpinned-client")
         // A pin that refuses every presented chain — no chain can satisfy an empty allowlist.
@@ -96,7 +96,7 @@ struct NetworkFrameworkMutualTLSTests {
 
     @Test(
         "a verifyPeer pin receives the DER chain leaf-first and admits a match",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func verifyPeerPinAdmitsMatchingChain() async throws {
         let clientIdentity = try Self.clientIdentity(commonName: "pinned-client")
         let sawNonEmptyLeaf = Mutex(false)

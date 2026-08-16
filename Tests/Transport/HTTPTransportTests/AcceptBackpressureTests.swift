@@ -64,7 +64,7 @@
 
         @Test(
             "at the global ceiling the transport stops accepting, and resumes when slots free",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: gatedBackbones
         )
         func suspendsAtCapacityAndResumes(_ backbone: TransportBackbone) async throws {
@@ -110,7 +110,7 @@
 
         @Test(
             "a per-host rejection is closed at accept time and never yielded, and draining continues",
-            .timeLimit(.minutes(1)),
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
             arguments: gatedBackbones
         )
         func perHostRejectionClosesAtAcceptTime(_ backbone: TransportBackbone) async throws {

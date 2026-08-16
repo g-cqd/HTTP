@@ -153,7 +153,9 @@
         /// millisecond, so the marker lands near the FRONT. With an unbounded drain — the pre-PERF-1
         /// `while !isEmpty` — every job runs first and the marker is necessarily LAST. Those two
         /// outcomes are separated by the whole length of the flood, so no timing margin is involved.
-        @Test("a job flood does not starve socket readiness (PERF-1)", .timeLimit(.minutes(1)))
+        @Test(
+            "a job flood does not starve socket readiness (PERF-1)",
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func jobFloodDoesNotStarveReadiness() async throws {
             let loop = try EpollEventLoop()
             loop.start()

@@ -30,7 +30,7 @@
     struct PortableTLSSNITests {
         @Test(
             "the handshake's server_name selects the matching certificate, else the default",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func sniSelectsPerNameCertificate() async throws {
             let transport = try Self.sniTransport()
             let connections = try await transport.start()

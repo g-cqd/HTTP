@@ -21,7 +21,8 @@ import Testing
 @Suite("Legacy QUIC transport — loopback", .realNetwork)
 struct LegacyQUICTransportTests {
     @Test(
-        "a QUIC stream round-trips through the abstraction over loopback", .timeLimit(.minutes(1)))
+        "a QUIC stream round-trips through the abstraction over loopback",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func loopbackEcho() async throws {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         let transport = LegacyQUICTransport(
@@ -55,7 +56,7 @@ struct LegacyQUICTransportTests {
 
     @Test(
         "the legacy backbone offers h3 whatever ALPN list the shared TLS identity carries",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: [["h2", "http/1.1"], ["h2"], [], ["h3"], ["h3", "h2"]])
     func http3IsOfferedRegardlessOfTheTCPProtocolList(_ configured: [String]) async throws {
         // The same defect as the modern backbone's, measured the same way: both derive the QUIC ALPN
@@ -99,7 +100,7 @@ struct LegacyQUICTransportTests {
 
     @Test(
         "close(errorCode:) closes promptly; the code itself is pinned platform-discarded",
-        .timeLimit(.minutes(1)),
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: [
             UInt64(0x010A),  // H3_MISSING_SETTINGS (RFC 9114 §8.1)
             UInt64(0x0105)  // H3_FRAME_UNEXPECTED (RFC 9114 §8.1)
@@ -177,7 +178,7 @@ struct LegacyQUICTransportTests {
 
     @Test(
         "the legacy backbone binds the configured host and port, and reports what it bound",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func configuredEndpointIsHonored() async throws {
         // This backbone always applied the configured port, but built its `NWParameters` without a
         // required local endpoint — so the configured *host* was ignored and a loopback-configured h3
@@ -204,7 +205,8 @@ struct LegacyQUICTransportTests {
 
     @Test(
         "an unbindable configured host fails closed on the legacy backbone",
-        .timeLimit(.minutes(1)), arguments: ["192.0.2.1", "legacy-quic-bind.invalid"])
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
+        arguments: ["192.0.2.1", "legacy-quic-bind.invalid"])
     func unbindableHostFailsClosed(_ host: String) async throws {
         // RFC 5737 TEST-NET-1 and RFC 2606 §2's `.invalid` are both unbindable, so `start()` must
         // throw rather than silently widen the listener to another interface (CWE-668).

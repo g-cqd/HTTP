@@ -17,7 +17,7 @@ import Testing
 struct HoldUntilCancelledTests {
     @Test(
         "stays parked with no periodic resume, then resumes promptly on cancellation",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func resumesWhenCancelledAfterParking() async {
         let finished = AsyncEventProbe<Void>()
         let task = Task {
@@ -40,7 +40,7 @@ struct HoldUntilCancelledTests {
 
     @Test(
         "resumes under a cancel-before-park race, repeated — never hangs, never double-resumes",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func resumesUnderCancelRace() async {
         // A group child cancelled the instant it is added: sometimes cancellation lands before the
         // child parks (the already-cancelled path), sometimes after (the parked path). Either way the
