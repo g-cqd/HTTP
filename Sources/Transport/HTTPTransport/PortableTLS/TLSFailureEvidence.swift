@@ -12,10 +12,12 @@
 //  This type exists because of a failure this project observed once and could not explain: a healthy
 //  session's `SSL_read error 1` carrying `PEER_DID_NOT_RETURN_A_CERTIFICATE` — an entry belonging to
 //  a different connection — roughly one run in twelve, never reproduced. The presumed mechanism (a
-//  stale pre-call queue) was disproven by `PortableTLSErrorQueueTests`; the cause remains open. So a
-//  fatal classification now carries the record that report lacked: every queue entry verbatim, the
-//  connection the engine belongs to, the thread whose queue was drained, and which call failed. It
-//  records; it claims nothing about why.
+//  stale pre-call queue) was disproven by `PortableTLSErrorQueueTests`, whose header now records
+//  where the investigation closed: every window such an entry could enter through is shut on every
+//  committed tree, and the reconstruction at the observing commit's parent would not reproduce it
+//  under ~340x the field exposure. So a fatal classification carries the record that report lacked —
+//  every queue entry verbatim, the connection the engine belongs to, the thread whose queue was
+//  drained, and which call failed. It records; it claims nothing about why.
 //
 //  Reached only from ``PortableTLSEngine/classify(_:in:)``'s fatal arm — after `SSL_get_error` has
 //  already ruled out every retryable outcome — so the ordinary read/write/handshake path never

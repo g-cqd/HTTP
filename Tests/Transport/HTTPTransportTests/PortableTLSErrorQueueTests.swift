@@ -60,10 +60,40 @@
 //     real classification path, for all three calls. Stated as an outcome rather than a mechanism, so
 //     it stays true and stays meaningful under either owner of the clear.
 //
-//  Honest limit: neither test fails if `clearThreadErrorQueue()` is deleted today. Verified, not
-//  assumed — see the commit message for the mutation output. The field report this began with
-//  (`SSL_read error 1` carrying `PEER_DID_NOT_RETURN_A_CERTIFICATE`, ~1 run in 12) is therefore NOT
-//  explained by a stale pre-call queue on this library, and its real cause is still open.
+//  Honest limit: neither of those two tests fails if `clearThreadErrorQueue()` is deleted today.
+//  Verified, not assumed — see the commit message for the mutation output. The field report this
+//  began with (`SSL_read error 1` carrying `PEER_DID_NOT_RETURN_A_CERTIFICATE`, ~1 run in 12) is
+//  therefore NOT explained by a stale pre-call queue on this library.
+//
+//  ## Where the investigation closed (2026-08)
+//
+//  A poisoned classification on this library requires entries added AFTER the classified call
+//  entered (the entry-point clear wipes everything earlier), which leaves exactly three windows,
+//  and every committed tree closes all three:
+//
+//  1. A gap between the `SSL_*` call and its `SSL_get_error` — closed by the call+classify pairing
+//     inside one `Mutex` acquisition (`2364847`), which predates the observation (`86815d8`'s
+//     parent `6f38b55` already contains it). The SPLIT-classification test below pins the
+//     mechanism that gap would reopen: `SSL_get_error` peeks the per-thread queue first, so a
+//     classify separated from its call inherits whatever the thread ran in between. This is the
+//     only mechanism consistent with the field report, and no committed engine ever had the split.
+//  2. A BIO operation between call and classify — none exists: `decrypt`/`encrypt`/
+//     `acceptHandshake` classify adjacent to their calls, and every `BIO_*` call lives in methods
+//     that classify nothing.
+//  3. Misattribution via shared state — the `SSL_CTX` is per transport (and per test harness),
+//     `SSL_new` copies `verify_mode` at creation, and `reload(tls:)` swaps the context pointer
+//     rather than mutating it, so a `.required` failure mode cannot reach another connection's
+//     session; a `.none` server never sends CertificateRequest, so its own `SSL_read` cannot push
+//     this entry (`tls13_both.cc:302` is unreachable).
+//
+//  Reconstructed empirically at the observing commit's parent (`6f38b55`, WITHOUT the engine's
+//  clear): a `.required` transport refusing ~6,000 certificate-less handshakes — each leaving this
+//  exact entry on a pool thread, ~1,000 poisonings per thread — while 400 dribbled echo sessions
+//  decrypted under 32 concurrent receivers each. Zero healthy receives inherited the entry, at
+//  ~340x the total exposure of the 18-run field sample (whose 18/18-clean, at a true 1-in-12,
+//  would come up anyway about one time in five). `PortableTLSCrossConnectionStressTests` keeps
+//  that reconstruction in the suite as the sentinel; a recurrence now names its queue, connection,
+//  thread, and call by itself (`TLSFailureEvidence`).
 //
 //  Standards: BoringSSL `include/openssl/ssl.h` (`SSL_get_error`, `SSL_ERROR_SSL`) and
 //  `include/openssl/err.h` (`ERR_clear_error`, "clears the error queue for the current thread").
@@ -108,6 +138,33 @@
                 "\(call) left a neighbour's error on the queue for SSL_get_error to read"
             )
             #expect(CHTTPBoringSSL_SSL_get_error(session, result) == SSL_ERROR_WANT_READ)
+        }
+
+        @Test(
+            "a classification SPLIT from its call inherits whatever the thread ran in between",
+            arguments: ClassifiedTLSCall.allCases
+        )
+        func splitClassificationInheritsInterimErrors(_ call: ClassifiedTLSCall) throws {
+            let session = try Self.makeAcceptStateSession()
+            defer {
+                CHTTPBoringSSL_SSL_free(session)
+                CHTTPBoringSSL_ERR_clear_error()
+            }
+            // The call itself is healthy: nothing fed to the read BIO, so it waits on the peer.
+            let result = Self.performRaw(call, on: session)
+            #expect(CHTTPBoringSSL_SSL_get_error(session, result) == SSL_ERROR_WANT_READ)
+            // Interim work on this thread — another connection's failed handshake, in the gap a
+            // call/classify split would leave open. `SSL_get_error` peeks the per-THREAD queue
+            // before it reads this session's own state (`ssl_lib.cc:1180`), so the classification
+            // now reports the neighbour's fatal error for a session that only wanted more bytes.
+            Self.poison()
+            #expect(
+                CHTTPBoringSSL_SSL_get_error(session, result) == SSL_ERROR_SSL,
+                """
+                \(call): a split classification no longer inherits the thread's interim errors — \
+                the premise behind the engine's one-acquisition call+classify pairing has moved
+                """
+            )
         }
 
         // MARK: - The contract, at the engine
