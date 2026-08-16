@@ -42,6 +42,11 @@
 
     internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
+    #if canImport(Darwin)
+        internal import Darwin
+    #elseif canImport(Glibc)
+        internal import Glibc
+    #endif
     internal import HTTPConcurrency
     internal import Synchronization
 
