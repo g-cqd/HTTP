@@ -128,6 +128,24 @@ report_paired() {
     ' "$1"
 }
 
+# report_spread_max <aggregate-tsv> -> the widest max/min RPS spread across all measured cells,
+# or "-" when nothing was measured.
+#
+# This is the COUNTER-SIGNAL printed beside the run grade. The 2026-08-02 runs graded every round
+# not-clean while every cell's spread sat at 1.01–1.03 — five repeats agreeing to a percent is
+# evidence about the run worth recording next to the verdict. It must never OVERRIDE the verdict:
+# a box that is uniformly slow for the whole run (steady external load) produces a tight spread
+# around numbers that are all equally wrong.
+report_spread_max() {
+    awk -F'\t' '
+        $11 == "ok" && $6 + 0 > 0 {
+            s = $7 / $6
+            if (s > best) { best = s; found = 1 }
+        }
+        END { if (found) printf "%.2f", best; else printf "-" }
+    ' "$1"
+}
+
 # report_markdown <aggregate-tsv> <scenario-key> <scenario-label> <statistic-label>
 #
 # One table per scenario, sorted by median RPS. The `spread` column is max/min across rounds — the

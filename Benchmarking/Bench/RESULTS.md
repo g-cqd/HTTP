@@ -149,7 +149,7 @@ holds up; the framing does not. Full detail there, in summary:
 ## Reproduce
 
 ```sh
-./Benchmarking/Bench/selftest.sh                                       # 27 assertions, no network
+./Benchmarking/Bench/selftest.sh                                       # 33 assertions, no network
 ./Benchmarking/Bench/run.sh                                            # full field, both profiles
 SERVERS=ours BACKBONES=posixKqueue ROUNDS=11 DURATION=3s ./Benchmarking/Bench/run.sh   # the A/B above
 MODES=floor SERVERS="ours rust" ROUNDS=5 ./Benchmarking/Bench/run.sh   # what Rule 2 needs, quiet box

@@ -30,8 +30,12 @@
 #     box whose one-minute load moved 5.31 -> 16.77 between two of the rounds with unrelated work at
 #     ~140 % CPU. Whatever ran last was penalised, consistently. FIXED: the order is shuffled per
 #     round from a recorded seed, and the host state is sampled at the start and the end of every
-#     round into the results file (lib/host.sh); a round whose load drifts past `LOAD_DRIFT_MAX` is
-#     marked and dropped from the headline aggregate when a clean round exists to replace it.
+#     round into the results file (lib/host.sh). The contention gate grades EXTERNAL load — a
+#     pre-run baseline plus per-round samples that subtract the harness's own process tree — because
+#     its first version graded the total load average, which the benchmark itself saturates, and so
+#     marked every round `contended` even on an idle box. A round whose external load exceeds
+#     `LOAD_CEILING_PER_CPU` or moves past `LOAD_DRIFT_MAX` is marked and dropped from the headline
+#     aggregate when a clean round exists to replace it.
 #
 #  4. TWO STATISTICS, NEVER STATED TOGETHER. The committed RESULTS.md was best-of-1; the two reviews
 #     hand-recomputed medians of 3. That alone can explain a double-digit difference between rounds.
@@ -84,8 +88,10 @@ ECHO_BODY="${ECHO_BODY:-{\"x\":1\}}"
 # makes our full profile gzip while every peer returns identity — a different payload and a cost no
 # peer pays. Set this to a real negotiation list to price content coding as its own question.
 ACCEPT_ENCODING="${ACCEPT_ENCODING:-identity}"
-# Load-drift gate. A round whose one-minute load moves more than this fraction (normalised against a
-# floor of 1.0) is marked `drifted`; a round whose load per CPU exceeds the ceiling is `contended`.
+# External-contention gate, graded on load the benchmark did NOT cause (see lib/host.sh). A round
+# is `contended` when the pre-run baseline load per CPU, or the external busy-per-CPU fraction at
+# either end of the round, exceeds the ceiling; it is `drifted` when the external fraction moves by
+# more than LOAD_DRIFT_MAX across the round.
 LOAD_DRIFT_MAX="${LOAD_DRIFT_MAX:-0.25}"
 LOAD_CEILING_PER_CPU="${LOAD_CEILING_PER_CPU:-0.5}"
 # Byte-equivalence is a hard gate by default. Setting this to 0 records the mismatch and continues —
@@ -109,6 +115,11 @@ PORT_GO=8084; PORT_BUN=8085; PORT_RUST=8086; PORT_DJANGO=8087; PORT_VAPOR=8088
 for tool in oha jq curl; do
     command -v "$tool" >/dev/null || { echo "error: '$tool' not found — brew install $tool" >&2; exit 1; }
 done
+
+# The baseline is sampled BEFORE anything is built or started: at this moment every runnable thread
+# on the box is someone else's, so this is the one load figure that is purely external. A box that
+# is already past the ceiling here rejects every round of the run (lib/host.sh).
+BASELINE_LOAD="$(host_load1)"
 
 SERVER_PID=""
 reap_port() { local pids; pids=$(lsof -ti "tcp:$1" 2>/dev/null) && [ -n "$pids" ] && kill $pids 2>/dev/null; }
@@ -277,6 +288,7 @@ STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo
 echo "subjects=${#SUBJECTS[@]}  scenarios=[$SCENARIOS]  connections=$CONNECTIONS  duration=$DURATION"
 echo "rounds=$ROUNDS  statistic=median-of-$ROUNDS  accept-encoding='$ACCEPT_ENCODING'  seed=$SEED  ncpu=$NCPU"
+echo "baseline load1=$BASELINE_LOAD (sampled before the build — the purely external figure)"
 echo
 
 # --- phase 1: byte equivalence, before a single timed request ----------------------------------------
@@ -351,7 +363,8 @@ for round in $(seq 1 "$ROUNDS"); do
     while IFS= read -r line; do ORDER+=("$line"); done < <(shuffle "$round_seed" "${SUBJECTS[@]}")
     start_sample="$(host_sample start)"
     start_load="$(printf '%s' "$start_sample" | cut -f3)"
-    echo "════ round $round/$ROUNDS — seed $round_seed, load1 $start_load ════"
+    ext_start="$(host_external_cpu $$)"
+    echo "════ round $round/$ROUNDS — seed $round_seed, load1 $start_load, external $ext_start/cpu ════"
     echo "     order: ${ORDER[*]}"
     for id in "${ORDER[@]}"; do
         label="$(subject_label "$id")"; mode="$(subject_mode "$id")"
@@ -368,32 +381,41 @@ for round in $(seq 1 "$ROUNDS"); do
     done
     end_sample="$(host_sample end)"
     end_load="$(printf '%s' "$end_sample" | cut -f3)"
-    verdict="$(host_round_verdict "$start_load" "$end_load" "$LOAD_DRIFT_MAX" "$NCPU" \
-        "$LOAD_CEILING_PER_CPU")"
-    drift="$(host_drift_fraction "$start_load" "$end_load")"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$round" "$round_seed" "$start_load" "$end_load" "$drift" "$verdict" "${ORDER[*]}" \
-        >>"$ROUNDS_TSV"
-    echo "  round $round: load $start_load → $end_load (drift $drift) — $verdict"
+    ext_end="$(host_external_cpu $$)"
+    verdict="$(host_round_verdict "$BASELINE_LOAD" "$ext_start" "$ext_end" "$LOAD_DRIFT_MAX" \
+        "$NCPU" "$LOAD_CEILING_PER_CPU")"
+    drift="$(host_ext_drift "$ext_start" "$ext_end")"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$round" "$round_seed" "$start_load" "$end_load" "$ext_start" "$ext_end" "$drift" \
+        "$verdict" "${ORDER[*]}" >>"$ROUNDS_TSV"
+    echo "  round $round: load $start_load → $end_load," \
+        "external $ext_start → $ext_end (Δ$drift) — $verdict"
 done
 FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # --- phase 3: aggregate, render, emit ------------------------------------------------------------------
 # Eligible rounds: the clean ones, unless there are none — in which case every round is used and the
 # whole run is stamped NOT DECISION-GRADE rather than silently reported as if it were.
-CLEAN_ROUNDS="$(awk -F'\t' '$6 == "clean" {printf "%s ", $1}' "$ROUNDS_TSV")"
+CLEAN_ROUNDS="$(awk -F'\t' '$8 == "clean" {printf "%s ", $1}' "$ROUNDS_TSV")"
 GRADE=decision-grade
 if [ -z "$CLEAN_ROUNDS" ]; then
     CLEAN_ROUNDS="$(awk -F'\t' '{printf "%s ", $1}' "$ROUNDS_TSV")"
-    GRADE="NOT-decision-grade (no clean round: every round drifted or ran on a contended host)"
+    GRADE="NOT-decision-grade (no clean round: external load drifted or contended every round)"
 elif [ "$(printf '%s' "$CLEAN_ROUNDS" | wc -w | tr -d ' ')" -lt "$ROUNDS" ]; then
     GRADE="partial ($(printf '%s' "$CLEAN_ROUNDS" | wc -w | tr -d ' ')/$ROUNDS rounds clean)"
 fi
 report_aggregate "$SAMPLES_TSV" "$CLEAN_ROUNDS" >"$RESULTS_DIR/_aggregate.tsv"
 STATISTIC="median of $(printf '%s' "$CLEAN_ROUNDS" | wc -w | tr -d ' ') round(s)"
+# The counter-signal beside the grade, never a substitute for it: rounds that agree to a percent
+# are evidence the run was stable, but a steadily-contended box is stable too (lib/report.sh).
+SPREAD_MAX="$(report_spread_max "$RESULTS_DIR/_aggregate.tsv")"
 
 echo
 echo "## Comparative matrix — $STATISTIC — $GRADE"
+if [ "$SPREAD_MAX" != "-" ]; then
+    echo "(counter-signal: widest cell spread across eligible rounds ${SPREAD_MAX}x — a tight" \
+        "spread supports stability but does not clear a contended or drifted grade)"
+fi
 echo
 for scen in $SCENARIOS; do
     report_markdown "$RESULTS_DIR/_aggregate.tsv" "$(scenario_key "$scen")" \
@@ -428,6 +450,7 @@ jq -n \
     --arg duration "$DURATION" --arg warmup "$WARMUP" --arg connections "$CONNECTIONS" \
     --arg rounds "$ROUNDS" --arg ncpu "$NCPU" --arg scenarios "$SCENARIOS" \
     --arg driftMax "$LOAD_DRIFT_MAX" --arg loadCeiling "$LOAD_CEILING_PER_CPU" \
+    --arg baseline "$BASELINE_LOAD" --arg spreadMax "$SPREAD_MAX" \
     --arg uname "$(uname -srm)" --arg model "$(sysctl -n hw.model 2>/dev/null || echo unknown)" \
     --rawfile samples "$SAMPLES_TSV" --rawfile roundsTsv "$ROUNDS_TSV" \
     --rawfile parityTsv "$PARITY_DIR/_parity.tsv" --rawfile aggregateTsv "$RESULTS_DIR/_aggregate.tsv" \
@@ -437,9 +460,9 @@ jq -n \
         | map(select(length > 0) | split("\t"))
         | map([$names, .] | transpose | map({(.[0]): .[1]}) | add);
     {
-      schema: "http-bench/2",
+      schema: "http-bench/3",
       startedAt: $startedAt, finishedAt: $finishedAt,
-      statistic: $statistic, grade: $grade,
+      statistic: $statistic, grade: $grade, spreadMax: $spreadMax,
       config: {
         rounds: ($rounds | tonumber), connections: ($connections | tonumber),
         duration: $duration, warmup: $warmup, acceptEncoding: $encoding,
@@ -447,12 +470,16 @@ jq -n \
         loadDriftMax: ($driftMax | tonumber), loadCeilingPerCPU: ($loadCeiling | tonumber),
         eligibleRounds: ($eligible | split(" ") | map(select(length > 0) | tonumber))
       },
-      host: { uname: $uname, model: $model, ncpu: ($ncpu | tonumber) },
+      host: {
+        uname: $uname, model: $model, ncpu: ($ncpu | tonumber),
+        baselineLoad1: ($baseline | tonumber)
+      },
       parity: {
         status: $parity,
         probes: rows($parityTsv; ["scenkey","subject","status","bytes","sha256","contentType"])
       },
-      rounds: rows($roundsTsv; ["round","seed","loadStart","loadEnd","drift","verdict","order"]),
+      rounds: rows($roundsTsv;
+        ["round","seed","loadStart","loadEnd","extStart","extEnd","extDrift","verdict","order"]),
       paired: rows($pairedTsv;
         ["subject","scenkey","rounds","ratioMedian","ratioMin","ratioMax","fullSlowerCount"]),
       samples: (rows($samples;
@@ -463,6 +490,9 @@ jq -n \
     }' >"$RESULTS_DIR/results.json"
 
 echo "grade:  $GRADE"
+echo "spread: widest cell ${SPREAD_MAX}x across eligible rounds (counter-signal only)"
 echo "parity: $PARITY_STATUS"
 echo "json:   $RESULTS_DIR/results.json"
-awk -F'\t' '{printf "round %s: load %s → %s (drift %s) — %s\n", $1, $3, $4, $5, $6}' "$ROUNDS_TSV"
+awk -F'\t' \
+    '{printf "round %s: load %s → %s, external %s → %s (Δ%s) — %s\n", $1, $3, $4, $5, $6, $7, $8}' \
+    "$ROUNDS_TSV"
