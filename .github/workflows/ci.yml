@@ -210,20 +210,89 @@ jobs:
         run: python3 scripts/strict-memory-safety.py --verbose
 
   # ---------------------------------------------------------------------------
-  # Data-race & memory checks. Parsers must stay clean under ASan/TSan.
+  # Data-race & memory checks. Parsers must stay clean under ASan/TSan/UBSan.
+  #
+  # ADDRESS + THREAD run the FULL suite on the default (swiftbuild) build system, as before.
+  #
+  # UNDEFINED is scoped and configured differently, for reasons MEASURED on 2026-08-16 (arm64
+  # macOS 27, Swift 6.4 toolchain) — recorded here so the choices are not re-litigated:
+  #
+  #   • BUILD SYSTEM. `swift test --sanitize=undefined` on the DEFAULT swiftbuild build system fails
+  #     to LINK the test bundles: the C targets (CCRC32, CWSDeflate, and the ADFoundation CADFKernels)
+  #     are UBSan-instrumented and emit `___ubsan_handle_*` references, but swiftbuild does not link the
+  #     UBSan runtime into an xctest bundle, so every one is an undefined symbol at link
+  #     (`ld: symbol(s) not found ... ___ubsan_handle_add_overflow ... in CCRC32.o`). This is the
+  #     toolchain limitation the old follow-up note recorded. `--build-system native` DOES link the
+  #     runtime and run, so UBSan is reachable after all — at the cost of the (currently deprecated)
+  #     native build system. Revisit the flag when swiftbuild links the UBSan runtime.
+  #   • HALT_ON_ERROR. UBSan's default is print-and-CONTINUE: a genuine UB prints `runtime error: ...`
+  #     but the process exits 0, so the gate would be GREEN with a live UB. `halt_on_error=1` makes the
+  #     first finding abort with a non-zero exit — without it this leg is vacuous. (Proven both ways
+  #     against a scratch signed-overflow: silent-green without the flag, red `SUMMARY:
+  #     UndefinedBehaviorSanitizer` with it.)
+  #   • SCOPE. The FULL suite was run under UBSan and is CLEAN — zero `runtime error:` across all 1735
+  #     tests. It cannot GATE the full suite, though: UBSan's instrumentation slowdown times out the
+  #     network/QUIC/TLS/large-upload tests (they carry their own in-code deadlines, not a CLI timeout
+  #     we could raise), producing red on ~136 timing failures with no UB behind any of them. The leg
+  #     therefore runs the codec/parser suites — the actual UB surface (integer/shift/bounds in the
+  #     Huffman, varint, frame, and deflate/CRC paths), plus the Structured-Fields fuzz suite — which
+  #     are CPU-only, finish in seconds, and stay green. 764 tests, clean.
   # ---------------------------------------------------------------------------
   sanitizers:
     runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, thread]
+        sanitizer: [address, thread, undefined]
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
         uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Test under ${{ matrix.sanitizer }} sanitizer
-        run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.sanitizer }}" = "undefined" ]; then
+            # See the block comment: native build system (swiftbuild cannot link the UBSan runtime into
+            # test bundles), halt_on_error (else UBSan prints and continues green), scoped to the
+            # codec/parser UB surface (the full suite times out under instrumentation; measured clean).
+            UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+              swift test --build-system native --sanitize=undefined --scratch-path "$SCRATCH" \
+                --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
+                --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
+          else
+            swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+          fi
+
+  # ---------------------------------------------------------------------------
+  # The single REQUIRED check for the macOS sanitizer matrix — name THIS in branch protection
+  # alongside `linux-required`, not the individual `sanitizers (address|thread|undefined)` legs.
+  #
+  # Same rationale and same shape as `linux-required` (read that job's comment): the matrix legs are
+  # separately nameable and a required-checks list that enumerates them drifts the instant a sanitizer
+  # is added or a leg renamed. Depending on the matrix here means branch protection names ONE check
+  # that cannot silently lose coverage — add a sanitizer, and protection follows via `needs`.
+  #
+  # `if: always()` + an explicit per-result `success` test is deliberate and load-bearing: GitHub
+  # reports a SKIPPED required check as PASSING, so without it a skipped/cancelled matrix leg would let
+  # this aggregate be skipped too and read as green. Only `success` on every leg is accepted. (Until
+  # this landed the macOS sanitizers were advisory — no aggregate depended on them; this is the
+  # promotion.)
+  # ---------------------------------------------------------------------------
+  sanitizers-required:
+    runs-on: macos-26
+    if: always()
+    needs: [sanitizers]
+    steps:
+      - name: Every macOS sanitizer leg must have succeeded
+        run: |
+          set -euo pipefail
+          result='${{ needs.sanitizers.result }}'
+          echo "macOS sanitizers matrix result: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::The macOS sanitizer matrix did not succeed (saw '$result'). ASan/TSan/UBSan are a required gate: a skipped or failed leg is not a pass."
+            exit 1
+          fi
+          echo "All macOS sanitizer legs succeeded."
 
   # ---------------------------------------------------------------------------
   # Optional-feature manifest paths the DEFAULT graph never compiles, so a regression in them is
@@ -348,17 +417,41 @@ jobs:
       - name: Test (release)
         run: swift test -c release --scratch-path "$SCRATCH"
 
+  # UNDEFINED is scoped exactly as the macOS `sanitizers` job scopes it (see that block comment): the
+  # full suite is UBSan-clean but its network/large-upload tests time out under instrumentation, so the
+  # leg runs the codec/parser UB surface, and `halt_on_error=1` is what makes a UB abort rather than
+  # print-and-continue-green. Linux differs in ONE respect: swiftbuild is macOS-only, so the Linux
+  # default build system IS the native one — the `--build-system native` flag the macOS UBSan leg needs
+  # (to link the UBSan runtime into test bundles) is neither needed nor passed here.
+  #
+  # This leg was structurally mirrored from the (measured-green) macOS one but could NOT be run to
+  # green locally, because the whole Linux test build is currently broken upstream of it: on the
+  # closeout HEAD, `Tests/.../QUICApplicationCloseProbe.swift` does `import Network` unconditionally
+  # and is not in Package.swift's `darwinOnlyTransportTestSources`, so `HTTPTransportTests` fails to
+  # compile on Linux with `no such module 'Network'` — reproduced by a plain, non-sanitizer
+  # `swift build --build-tests` too, i.e. it reds `build-test-linux` and every other Linux leg equally.
+  # Once that exclusion is added, this leg builds like its siblings; whoever clears it should confirm
+  # the UBSan runtime links on Linux native here (ASan/TSan already do, so it is expected to).
   sanitizers-linux:
     runs-on: ubuntu-latest
     container: swiftlang/swift:nightly-6.4.x-jammy
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, thread]
+        sanitizer: [address, thread, undefined]
     steps:
       - uses: actions/checkout@v4
       - name: Test under ${{ matrix.sanitizer }} sanitizer (Linux)
-        run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.sanitizer }}" = "undefined" ]; then
+            UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+              swift test --sanitize=undefined --scratch-path "$SCRATCH" \
+                --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
+                --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
+          else
+            swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+          fi
 
   # ---------------------------------------------------------------------------
   # Opt-in content codings on Linux (G0): Brotli (libbrotli) + zstd (libzstd), the system-lib codings the
@@ -771,5 +864,10 @@ jobs:
 #   • Benchmark baseline gate — harness health is REQUIRED now; the low-noise drift check
 #     (malloc zero-delta + instructions ±5%) activates when a runner-class baseline is committed
 #     under Benchmarking/Benchmarks/.benchmarkBaselines/ (capture via dispatch update_baseline).
-#   • UBSan (-sanitize=undefined) — the UBSan runtime fails to link the test bundles on the current
-#     6.4 toolchain; revisit when the toolchain ships a linkable UBSan runtime.
+#   • UBSan (-sanitize=undefined) — now GATED as the `undefined` leg of both sanitizer matrices.
+#     The swiftbuild-build-system link failure that stalled this (the runtime does not link into an
+#     xctest bundle) is worked around with `--build-system native` on macOS; the full suite is UBSan-
+#     clean but its network/large-upload tests time out under instrumentation, so the leg is scoped to
+#     the codec/parser UB surface with `halt_on_error=1`. Full rationale in the `sanitizers` job
+#     comment. Follow-up: drop `--build-system native` once swiftbuild links the UBSan runtime, and
+#     widen the scope if the toolchain makes the network suite fast enough under UBSan to gate.
