@@ -61,8 +61,18 @@ struct BindContractSubject: Sendable {
         guard let selected = backbone.transportBackbone else {
             throw TransportError.unsupported("\(backbone.rawValue) is not a TCP backbone")
         }
+        // The portableTLS column listens with a TLS identity and is dialed with a real handshake —
+        // its plaintext is inside the TLS session, so a cleartext `connect(2)` + echo would prove
+        // reachability of the port but not that the listener behind it serves. Same dial-don't-trust
+        // rule as every other column, one protocol layer up.
+        let secured = selected == .portableTLS
         let transport = try TransportFactory.make(
-            TransportConfiguration(host: host, port: port, backbone: selected)
+            TransportConfiguration(
+                host: host,
+                port: port,
+                backbone: selected,
+                tls: secured ? try Self.portableTLSIdentity() : nil
+            )
         )
         let stream = try await transport.start()
         // The stream is captured by every closure below, so it outlives the call: releasing it
@@ -72,7 +82,11 @@ struct BindContractSubject: Sendable {
         return Self(
             boundPort: { transport.boundPort },
             boundEndpoint: { transport.boundEndpoint },
-            dial: { endpoint in await tcpRoundTrip(to: endpoint) },
+            dial: { endpoint in
+                secured
+                    ? await portableTLSRoundTrip(to: endpoint)
+                    : await tcpRoundTrip(to: endpoint)
+            },
             stop: {
                 echo.cancel()
                 await transport.shutdown()
@@ -265,7 +279,11 @@ struct BindContractSubject: Sendable {
     // MARK: - Raw client sockets
 
     /// Opens a blocking client connection to a numeric endpoint (no name resolution in the path).
-    private static func connect(to endpoint: BindEndpoint) -> Int32 {
+    ///
+    /// Internal rather than private: the portableTLS column's dial
+    /// (`BindContractSubject+PortableTLS.swift`) reuses it, so both dials reach a listener the same
+    /// way and differ only in what they speak once connected.
+    static func connect(to endpoint: BindEndpoint) -> Int32 {
         switch endpoint.family {
             case .ipv4:
                 var target = sockaddr_in()
@@ -293,7 +311,10 @@ struct BindContractSubject: Sendable {
     }
 
     /// Bounds every blocking read and write on `descriptor` (POSIX.1-2017 `SO_RCVTIMEO`/`SO_SNDTIMEO`).
-    private static func setDeadline(_ descriptor: Int32, seconds: Int = 5) {
+    ///
+    /// Internal for the same reason as ``connect(to:)`` — the TLS dial's handshake and reads carry
+    /// the same bound as the cleartext dial's.
+    static func setDeadline(_ descriptor: Int32, seconds: Int = 5) {
         var deadline = timeval(tv_sec: seconds, tv_usec: 0)
         let size = socklen_t(MemoryLayout<timeval>.size)
         _ = setsockopt(descriptor, SOL_SOCKET, SO_RCVTIMEO, &deadline, size)

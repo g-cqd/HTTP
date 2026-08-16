@@ -19,9 +19,14 @@ import Testing
 @Suite("Bind-contract coverage — the matrix cannot silently narrow")
 struct BindContractCoverageTests {
     /// The full grid size, pinned so adding a backbone or a row without thinking fails here first.
-    @Test("the matrix is 7 backbones x 11 rows")
+    ///
+    /// Eight in EVERY build configuration: the `portableTLS` column exists — and states why it is
+    /// not running — even when `HTTP_PORTABLE_TLS` is off and the transport itself is compiled out.
+    /// A column that vanishes with its build flag is a column nobody misses, which is how that
+    /// backbone went unasserted in the first place.
+    @Test("the matrix is 8 backbones x 11 rows")
     func gridIsTheExpectedSize() {
-        #expect(BindContractBackbone.allCases.count == 7)
+        #expect(BindContractBackbone.allCases.count == 8)
         #expect(BindContractCase.allCases.count == 11)
     }
 
@@ -44,12 +49,14 @@ struct BindContractCoverageTests {
     ///
     /// Anything else skipping is a silent narrowing.
     ///
-    /// On this host (macOS 26+, no Glibc) the only whole-column skip is `posixEpoll`; `quicModern`
-    /// runs. On the Linux job the reverse holds — `posixEpoll` runs and both Network.framework
-    /// columns are absent from the build entirely (Package.swift excludes `Network/` and the QUIC
-    /// sources), which is why the assertion below is written against `platformSkipReason` rather than
-    /// a hard-coded list.
-    @Test("the skipped columns are exactly the ones this platform cannot build")
+    /// Pinned per build configuration, on both axes. Platform: on macOS (no Glibc) `posixEpoll` is
+    /// the platform skip and `quicModern` runs; on the Linux job the reverse holds — `posixEpoll`
+    /// runs and the Network.framework columns are absent from the build entirely (Package.swift
+    /// excludes `Network/` and the QUIC sources). Build trait: `portableTLS` runs on BOTH platforms
+    /// when `HTTP_PORTABLE_TLS` is on and skips by name when it is off — asserted in each of the four
+    /// configurations, so the pin is exact everywhere and vacuous nowhere. That is why the assertion
+    /// is written against `platformSkipReason` rather than a hard-coded list.
+    @Test("the skipped columns are exactly the ones this build cannot run")
     func skippedColumnsArePinned() {
         var skipped: [String] = []
         for backbone in BindContractBackbone.allCases {
@@ -62,16 +69,39 @@ struct BindContractCoverageTests {
             print("BIND-CONTRACT SKIPPED COLUMN \(line)")
         }
         #if canImport(Glibc)
-            // Linux builds only the epoll column; the other six are excluded from the package there.
-            #expect(skipped.count == 6, "expected six excluded columns on Linux, got \(skipped)")
             #expect(BindContractBackbone.posixEpoll.platformSkipReason == nil)
+            #if canImport(CHTTPBoringSSLShims)
+                // Linux, portable build: epoll and portableTLS run; the six Darwin columns skip.
+                #expect(
+                    skipped.count == 6,
+                    "expected six excluded columns on portable Linux, got \(skipped)"
+                )
+                #expect(BindContractBackbone.portableTLS.platformSkipReason == nil)
+            #else
+                // Linux, default build: only the epoll column runs.
+                #expect(
+                    skipped.count == 7,
+                    "expected seven excluded columns on default Linux, got \(skipped)"
+                )
+                #expect(BindContractBackbone.portableTLS.platformSkipReason != nil)
+            #endif
         #else
-            // macOS builds every column but epoll, which needs Glibc.
-            #expect(
-                skipped.count == 1,
-                "on macOS only posixEpoll may skip for platform reasons; got \(skipped)"
-            )
             #expect(BindContractBackbone.posixEpoll.platformSkipReason != nil)
+            #if canImport(CHTTPBoringSSLShims)
+                // macOS, portable build: every column but epoll runs, portableTLS included.
+                #expect(
+                    skipped.count == 1,
+                    "on portable macOS only posixEpoll may skip; got \(skipped)"
+                )
+                #expect(BindContractBackbone.portableTLS.platformSkipReason == nil)
+            #else
+                // macOS, default build: epoll (platform) and portableTLS (trait) skip, nothing else.
+                #expect(
+                    skipped.count == 2,
+                    "on default macOS only posixEpoll and portableTLS may skip; got \(skipped)"
+                )
+                #expect(BindContractBackbone.portableTLS.platformSkipReason != nil)
+            #endif
         #endif
     }
 
@@ -79,11 +109,11 @@ struct BindContractCoverageTests {
     ///
     /// `BindContractBackbone` used to carry a `reportsBoundEndpoint` flag that was `false` for the four
     /// POSIX backbones, and the matrix recorded a named skip instead of asserting their endpoint — four
-    /// of seven columns not under contract for the thing the contract is about. All four report what
-    /// `getsockname(2)` gives now, so platform availability is the only skip reason left in the grid.
-    /// Asserted rather than assumed, because "no relaxations left" is exactly the property that decays
-    /// silently once the commit that removed them scrolls out of view.
-    @Test("platform availability is the only reason any cell skips")
+    /// of seven columns not under contract for the thing the contract is about. Every backbone reports
+    /// what `getsockname(2)` gives now, so build availability (platform or trait) is the only skip
+    /// reason left in the grid. Asserted rather than assumed, because "no relaxations left" is exactly
+    /// the property that decays silently once the commit that removed them scrolls out of view.
+    @Test("build availability is the only reason any cell skips")
     func theOnlySkipReasonIsPlatform() {
         for backbone in BindContractBackbone.allCases {
             for row in BindContractCase.allCases {
