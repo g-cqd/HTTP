@@ -12,6 +12,13 @@
 
 #include "CZstd.h"
 
+// Compiled to an EMPTY translation unit unless the `Zstd` package trait is enabled: the trait drives
+// a `.define("HTTP_TRAIT_ZSTD", .when(traits: ["Zstd"]))` cSetting in the manifest. The target itself
+// is always declared (an SE-0450 trait cannot conditionally declare one), so this #ifdef is what keeps
+// a default build from referencing <zstd.h> — which need not even be installed. Replaces the retired
+// `HTTP_ZSTD` env-var gate.
+#ifdef HTTP_TRAIT_ZSTD
+
 #include <zstd.h>
 
 size_t czstd_compress_bound(size_t src_size) {
@@ -50,3 +57,5 @@ size_t czstd_frame_content_size(const uint8_t *src, size_t src_len) {
     }
     return (size_t)size;
 }
+
+#endif /* HTTP_TRAIT_ZSTD */

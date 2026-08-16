@@ -22,7 +22,7 @@ import PackageDescription
 // Foundation's JSONSerialization for the /json + /echo routes. It is an unpublished sibling checkout
 // (`../../../../ADJSON`), so depending on it unconditionally made this package unresolvable anywhere
 // that sibling is absent — every CI runner, and every clone that is not a full workspace. Gated behind
-// `BENCH_ADJSON`, mirroring how the root manifest gates HTTP_PORTABLE_TLS / HTTP_ZSTD: the DEFAULT
+// `BENCH_ADJSON`, mirroring how the root manifest gates HTTP_PORTABLE_TLS: the DEFAULT
 // graph is this repository alone, and the investigation is one env var away for whoever has the
 // sibling. `run.sh` sets it when OURS_JSON=adjson.
 let adjson = Context.environment["BENCH_ADJSON"] != nil

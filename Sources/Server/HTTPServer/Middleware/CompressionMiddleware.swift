@@ -7,7 +7,7 @@
 //  selected from `Accept-Encoding` by q-value, with the server preference br > zstd > gzip breaking
 //  a tie. `Content-Encoding`/`Content-Length` are updated and `Vary: Accept-Encoding` is set so
 //  caches key on it. Brotli uses Darwin's level-2 encoder (the portable/Linux `libbrotlienc` shim
-//  is gap G0); zstd is the opt-in `CZstd` shim over the system libzstd (`HTTP_ZSTD`), absent from
+//  is gap G0); zstd is the opt-in `CZstd` shim over the system libzstd (the `Zstd` trait), absent from
 //  the default graph and guarded by `#if canImport(CZstd)`. The body-transform shape of
 //  ``HTTPMiddleware``.
 //

@@ -8,8 +8,9 @@
 //  The middleware uses only the compressor (the server emits `zstd`, never inflates it here); the
 //  matching single-frame decompressor is provided so a round-trip test can verify a produced frame
 //  against the real library (the inbound `zstd` request path is a separate, future concern). The
-//  whole `CZstd` target is opt-in via the `HTTP_ZSTD` build flag, so the default build graph never
-//  sees libzstd; the Swift integration guards on `#if canImport(CZstd)`.
+//  whole `CZstd` module is opt-in via the `Zstd` package trait (SE-0450), so the default build graph
+//  never sees libzstd; the Swift integration guards on `#if canImport(CZstd)`. Only prototypes live
+//  here — the definitions in czstd.c sit behind the trait-driven `HTTP_TRAIT_ZSTD` define.
 //
 
 #ifndef CZSTD_H

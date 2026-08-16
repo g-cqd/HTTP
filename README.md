@@ -65,9 +65,11 @@ test suite runs on both (CI: `ubuntu-latest` + macOS; locally, `scripts/linux-te
 **HTTP/3 is Apple-only** in v1 — QUIC is provided by Network.framework; a portable QUIC story is a separate
 follow-up.
 
-† Opt-in build flags: `HTTP_ZSTD` (zstd) and `HTTP_BROTLI` (Brotli, via system libbrotli) codings, and
-`HTTP_PORTABLE_TLS` (the vendored, symbol-prefixed BoringSSL TLS backbone — the default Apple build uses
-Network.framework's TLS). On Linux gzip is always available (system zlib). See
+† Opt-in: the `Zstd` (system libzstd) and `Brotli` (system libbrotli) codings are SE-0450 package
+traits — build with `swift build --traits Zstd,Brotli`, or depend with
+`.package(url: …, from: …, traits: ["Zstd"])`. `HTTP_PORTABLE_TLS` (env var) enables the vendored,
+symbol-prefixed BoringSSL TLS backbone — the default Apple build uses Network.framework's TLS. On
+Linux gzip is always available (system zlib). See
 [ADR 0004](docs/adr/0004-portable-tls-backbone.md).
 
 ## Requirements
