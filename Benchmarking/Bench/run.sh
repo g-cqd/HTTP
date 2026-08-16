@@ -66,6 +66,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 . "$SCRIPT_DIR/lib/parity.sh"
 # shellcheck source=lib/report.sh
 . "$SCRIPT_DIR/lib/report.sh"
+# shellcheck source=lib/schedule.sh
+. "$SCRIPT_DIR/lib/schedule.sh"
 
 # --- configuration (all overridable via env) --------------------------------------------------------
 DURATION="${DURATION:-5s}"
@@ -97,6 +99,10 @@ LOAD_CEILING_PER_CPU="${LOAD_CEILING_PER_CPU:-0.5}"
 # Byte-equivalence is a hard gate by default. Setting this to 0 records the mismatch and continues —
 # for diagnosing WHICH server disagrees, never for producing a number anyone quotes.
 PARITY_ENFORCE="${PARITY_ENFORCE:-1}"
+# The paired floor-vs-full estimator uses a pair only when its cells sat within this many order
+# slots of each other (lib/report.sh). The scheduler keeps pairs back-to-back, so the default is 1;
+# raise it only to re-analyse data recorded by a scheduler that did not.
+PAIR_GAP_MAX="${PAIR_GAP_MAX:-1}"
 SEED="${SEED:-$RANDOM}"
 
 NCPU="$(host_ncpu)"
@@ -323,9 +329,14 @@ fi
 echo
 
 # --- phase 2: the rounds ------------------------------------------------------------------------------
-# bench_one <label> <mode> <round> <url> <method> <scenario-key>
+# bench_one <label> <mode> <round> <url> <method> <scenario-key> <order-pos>
+#
+# <order-pos> is the subject's 1-based slot in the round's measurement order. It is recorded with
+# every sample because the paired estimator refuses pairs whose cells sat far apart in the order —
+# the round's own load moves underneath it, and a pair split across the round compares two
+# different machines (lib/report.sh).
 bench_one() {
-    local label="$1" mode="$2" round="$3" url="$4" method="$5" key="$6" json slug
+    local label="$1" mode="$2" round="$3" url="$4" method="$5" key="$6" pos="$7" json slug
     slug="$(printf '%s' "${label}_${mode}_${key}_r${round}" | tr -c 'A-Za-z0-9_' '_')"
     json="$RESULTS_DIR/oha__$slug.json"
     local common=(-c "$CONNECTIONS" --no-tui -H "Accept-Encoding: $ACCEPT_ENCODING")
@@ -333,8 +344,8 @@ bench_one() {
     [ "$method" = "POST" ] && common+=(-m POST -d "$ECHO_BODY" -H "Content-Type: application/json")
     [ "$WARMUP" != "0" ] && oha -z "$WARMUP" "${common[@]}" "$url" >/dev/null 2>&1
     if ! oha -z "$DURATION" "${common[@]}" --output-format json "$url" >"$json" 2>/dev/null; then
-        printf '%s\t%s\t%s\t%s\t-\t0\t0\t0\t0\tfailed\n' "$round" "$label" "$mode" "$key" \
-            >>"$SAMPLES_TSV"
+        printf '%s\t%s\t%s\t%s\t-\t0\t0\t0\t0\tfailed\t%s\n' "$round" "$label" "$mode" "$key" \
+            "$pos" >>"$SAMPLES_TSV"
         return
     fi
     # A cell counts only when >=99 % of responses are 2xx: oha's success rate treats a 4xx as a
@@ -343,30 +354,41 @@ bench_one() {
     total=$(jq -r '[.statusCodeDistribution[]?] | add // 0' "$json")
     twoxx=$(jq -r '[.statusCodeDistribution | to_entries[]? | select(.key|startswith("2")) | .value] | add // 0' "$json")
     if [ "${total:-0}" = "0" ] || awk "BEGIN{exit !($twoxx < 0.99 * $total)}"; then
-        printf '%s\t%s\t%s\t%s\t-\t0\t0\t0\t0\tna\n' "$round" "$label" "$mode" "$key" >>"$SAMPLES_TSV"
+        printf '%s\t%s\t%s\t%s\t-\t0\t0\t0\t0\tna\t%s\n' "$round" "$label" "$mode" "$key" "$pos" \
+            >>"$SAMPLES_TSV"
         return
     fi
-    jq -r --arg r "$round" --arg l "$label" --arg m "$mode" --arg k "$key" \
+    jq -r --arg r "$round" --arg l "$label" --arg m "$mode" --arg k "$key" --arg p "$pos" \
         '[$r, $l, $m, $k, "-",
           (.summary.requestsPerSec // 0 | tostring),
           ((.latencyPercentiles."p50"   // 0) * 1000 | tostring),
           ((.latencyPercentiles."p99"   // 0) * 1000 | tostring),
           ((.latencyPercentiles."p99.9" // 0) * 1000 | tostring),
-          "ok"] | @tsv' "$json" >>"$SAMPLES_TSV"
+          "ok", $p] | @tsv' "$json" >>"$SAMPLES_TSV"
 }
 
-printf 'round\tsubject\tmode\tscenkey\tscenario\trps\tp50\tp99\tp999\tstatus\n' >"$SAMPLES_TSV"
+# The shuffle permutes UNITS, not subjects: our floor and full cells for one backbone run
+# back-to-back so the paired estimator has pairs it can defend (lib/schedule.sh).
+UNITS=()
+while IFS= read -r line; do UNITS+=("$line"); done \
+    < <(printf '%s\n' "${SUBJECTS[@]}" | schedule_units)
+
+printf 'round\tsubject\tmode\tscenkey\tscenario\trps\tp50\tp99\tp999\tstatus\tpos\n' >"$SAMPLES_TSV"
 : >"$ROUNDS_TSV"
 for round in $(seq 1 "$ROUNDS"); do
     round_seed=$(( SEED + round ))
     ORDER=()
-    while IFS= read -r line; do ORDER+=("$line"); done < <(shuffle "$round_seed" "${SUBJECTS[@]}")
+    while IFS= read -r unit; do
+        while IFS= read -r line; do ORDER+=("$line"); done < <(schedule_expand "$round" "$unit")
+    done < <(shuffle "$round_seed" "${UNITS[@]}")
     start_sample="$(host_sample start)"
     start_load="$(printf '%s' "$start_sample" | cut -f3)"
     ext_start="$(host_external_cpu $$)"
     echo "════ round $round/$ROUNDS — seed $round_seed, load1 $start_load, external $ext_start/cpu ════"
     echo "     order: ${ORDER[*]}"
+    pos=0
     for id in "${ORDER[@]}"; do
+        pos=$((pos + 1))
         label="$(subject_label "$id")"; mode="$(subject_mode "$id")"
         printf '  → %-22s [%-5s] … ' "$label" "$mode"
         if ! subject_start "$id"; then
@@ -374,7 +396,8 @@ for round in $(seq 1 "$ROUNDS"); do
         fi
         base="http://127.0.0.1:$(subject_port "$id")"
         for scen in $SCENARIOS; do
-            bench_one "$label" "$mode" "$round" "$base${scen#*:}" "${scen%%:*}" "$(scenario_key "$scen")"
+            bench_one "$label" "$mode" "$round" "$base${scen#*:}" "${scen%%:*}" \
+                "$(scenario_key "$scen")" "$pos"
         done
         echo "done"
         subject_stop "$id"
@@ -422,22 +445,33 @@ for scen in $SCENARIOS; do
         "$(printf '%s %s' "${scen%%:*}" "${scen#*:}")" "$STATISTIC"
 done
 
-# The floor-vs-full price, paired within each round so common-mode drift cancels. Only meaningful
-# when both profiles were measured for the same subject, i.e. MODES covered both.
-report_paired "$SAMPLES_TSV" "$CLEAN_ROUNDS" >"$RESULTS_DIR/_paired.tsv"
+# The floor-vs-full price, paired back-to-back within each round so common-mode drift cancels.
+# Only meaningful when both profiles were measured for the same subject, i.e. MODES covered both.
+# The estimator refuses pairs that sat apart in the order and refuses to quote a negative cost —
+# `full` contains `floor`, so "full faster" is a diagnosis of the run, not a price (lib/report.sh).
+report_paired "$SAMPLES_TSV" "$CLEAN_ROUNDS" "$PAIR_GAP_MAX" >"$RESULTS_DIR/_paired.tsv"
 if [ -s "$RESULTS_DIR/_paired.tsv" ]; then
-    echo "### What the middleware chain costs (paired within each round)"
+    echo "### What the middleware chain costs (paired back-to-back within each round)"
     echo
-    echo "\`cost\` = 1 − median(full ÷ floor) over rounds that measured both, seconds apart on the"
-    echo "same box. \`full slower\` is the sign count — the claim that survives a noisy host."
+    echo "\`cost\` = 1 − median(full ÷ floor) over usable pairs: both cells measured within"
+    echo "$PAIR_GAP_MAX order slot(s), seconds apart on the same box. \`full slower\` is the sign"
+    echo "count — the claim that survives a noisy host."
     echo
-    echo '| subject | scenario | rounds | cost | ratio range | full slower |'
+    echo '| subject | scenario | pairs | cost | ratio range | full slower |'
     echo '|---|---|---:|---:|---:|---:|'
-    while IFS=$'\t' read -r subject key rounds med lo hi slower; do
-        printf '| %s | %s | %s | %s | %s–%s | %s/%s |\n' "$subject" "$key" "$rounds" \
-            "$(awk -v m="$med" 'BEGIN{printf "%.1f %%", (1 - m) * 100}')" \
-            "$(awk -v v="$lo" 'BEGIN{printf "%.2f", v}')" \
-            "$(awk -v v="$hi" 'BEGIN{printf "%.2f", v}')" "$slower" "$rounds"
+    while IFS=$'\t' read -r subject key used med lo hi slower beyond verdict; do
+        case "$verdict" in
+            ok) cost="$(awk -v m="$med" 'BEGIN{printf "%.1f %%", (1 - m) * 100}')" ;;
+            sign-artifact)
+                cost="unresolvable: full measured FASTER (ratio $med) — impossible, so the run's"
+                cost="$cost artifact floor exceeds the effect" ;;
+            *) cost="unresolvable: $beyond pair(s) beyond the order-gap bound" ;;
+        esac
+        if [ "$med" = "-" ]; then range="-"; else
+            range="$(awk -v a="$lo" -v b="$hi" 'BEGIN{printf "%.2f–%.2f", a, b}')"
+        fi
+        printf '| %s | %s | %s | %s | %s | %s/%s |\n' \
+            "$subject" "$key" "$used" "$cost" "$range" "$slower" "$used"
     done <"$RESULTS_DIR/_paired.tsv"
     echo
 fi
@@ -451,6 +485,7 @@ jq -n \
     --arg rounds "$ROUNDS" --arg ncpu "$NCPU" --arg scenarios "$SCENARIOS" \
     --arg driftMax "$LOAD_DRIFT_MAX" --arg loadCeiling "$LOAD_CEILING_PER_CPU" \
     --arg baseline "$BASELINE_LOAD" --arg spreadMax "$SPREAD_MAX" \
+    --arg pairGapMax "$PAIR_GAP_MAX" \
     --arg uname "$(uname -srm)" --arg model "$(sysctl -n hw.model 2>/dev/null || echo unknown)" \
     --rawfile samples "$SAMPLES_TSV" --rawfile roundsTsv "$ROUNDS_TSV" \
     --rawfile parityTsv "$PARITY_DIR/_parity.tsv" --rawfile aggregateTsv "$RESULTS_DIR/_aggregate.tsv" \
@@ -460,7 +495,7 @@ jq -n \
         | map(select(length > 0) | split("\t"))
         | map([$names, .] | transpose | map({(.[0]): .[1]}) | add);
     {
-      schema: "http-bench/3",
+      schema: "http-bench/4",
       startedAt: $startedAt, finishedAt: $finishedAt,
       statistic: $statistic, grade: $grade, spreadMax: $spreadMax,
       config: {
@@ -468,6 +503,7 @@ jq -n \
         duration: $duration, warmup: $warmup, acceptEncoding: $encoding,
         scenarios: ($scenarios | split(" ")), seed: $seed,
         loadDriftMax: ($driftMax | tonumber), loadCeilingPerCPU: ($loadCeiling | tonumber),
+        pairGapMax: ($pairGapMax | tonumber),
         eligibleRounds: ($eligible | split(" ") | map(select(length > 0) | tonumber))
       },
       host: {
@@ -481,9 +517,11 @@ jq -n \
       rounds: rows($roundsTsv;
         ["round","seed","loadStart","loadEnd","extStart","extEnd","extDrift","verdict","order"]),
       paired: rows($pairedTsv;
-        ["subject","scenkey","rounds","ratioMedian","ratioMin","ratioMax","fullSlowerCount"]),
+        ["subject","scenkey","pairsUsed","ratioMedian","ratioMin","ratioMax","fullSlowerCount",
+         "pairsBeyondGap","verdict"]),
       samples: (rows($samples;
-        ["round","subject","mode","scenkey","scenario","rps","p50","p99","p999","status"]) | .[1:]),
+        ["round","subject","mode","scenkey","scenario","rps","p50","p99","p999","status","pos"])
+        | .[1:]),
       aggregate: rows($aggregateTsv;
         ["subject","mode","scenkey","rounds","rpsMedian","rpsMin","rpsMax",
          "p50Median","p99Median","p999Median","status"])

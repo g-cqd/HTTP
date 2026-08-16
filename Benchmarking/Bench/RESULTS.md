@@ -5,12 +5,35 @@ was committed before the numbers existed (`952bc1d`, one commit ahead of this fi
 superseded pre-2026-08-01 rounds, and an audit of the claims made from them, are in
 [`history/`](history/README.md).
 
+## 2026-08-16 — every middleware-cost MAGNITUDE below is superseded
+
+The paired estimator that produced them was defective, and it produced two contradictory answers
+that between them make neither quotable:
+
+- **"6–16 %, full slower 42/55"** (Rule 1 below) came from a host at load 15–37 on 10 cores, where
+  the per-round ratios ran 0.42–1.58. The contention gate of the time could not separate that box
+  from a quiet one, because it graded the *total* load — which the benchmark itself saturates.
+- **"−0.4 % to −1.9 %"** (2026-08-02 runs, never written up here) reported the chain as *faster*
+  than the floor it strictly contains — a physically impossible sign. Forensics on the retained
+  data: in the full-field run the two profiles sat 4–8 shuffled slots apart and the estimator
+  paired them anyway; in the isolation run every cell — floor and full, 13 B and 1 KiB — pinned at
+  a ~66.4k RPS client-side ceiling, so the run measured the load generator's ceiling, not the
+  server, and full/floor > 1 in 24 of 25 reconstructed cells regardless of order.
+
+What still stands is the **direction**: `full` slower than `floor` in 42 of 55 paired rounds, and in
+28 of 35 even when full held the favored order slot. What does not stand is any magnitude: **no
+recorded run can price the chain honestly.** The estimator now schedules pairs back-to-back, refuses
+pairs beyond an order-gap bound, and verdicts an impossible sign as `sign-artifact` instead of
+printing it (see [`README.md`](README.md)); a run on a quiet host at a non-saturated operating point
+(vary `CONNECTIONS`, or set `RATE`) is required before any cost figure is quoted again.
+
 ## Verdict, in one paragraph
 
 **The harness is fixed; the host is not, and it is the host that decides.** The byte-equivalence gate
 found five ways the field had been answering differently — one of which had our server gzipping
 `/payload` to 58 bytes while every peer sent 1024 — and the field now demonstrably serves identical
 bytes. With that fixed, the two-mode matrix says our middleware chain costs **6–16 % of throughput**
+(superseded 2026-08-16 — see the banner: direction only, no magnitude is quotable)
 and is slower in **42 of 55 paired rounds**, so the direction is established; the magnitude is not,
 because every round on this machine was contended and the pre-registered invalidation clause fires.
 **Rule 1 does not fire. Rule 2 may not fire at all.** No default changes on this evidence, which is
@@ -51,6 +74,9 @@ pinned to `identity`, and the gate proves the consequence rather than asserting 
 After the fixes, all five scenarios PASS across all eleven subjects.
 
 ## Rule 1 — what the middleware costs
+
+> **Superseded 2026-08-16** (see the banner above): the magnitudes in this section are products of
+> the defective estimator and must not be quoted. The 42/55 sign count stands.
 
 Paired within each round, `ours(posixKqueue)`, 11 rounds, 3 s each, `identity` coding.
 `cost` = 1 − median(full ÷ floor); `full slower` is the sign count.
@@ -149,7 +175,7 @@ holds up; the framing does not. Full detail there, in summary:
 ## Reproduce
 
 ```sh
-./Benchmarking/Bench/selftest.sh                                       # 33 assertions, no network
+./Benchmarking/Bench/selftest.sh                                       # 48 assertions, no network
 ./Benchmarking/Bench/run.sh                                            # full field, both profiles
 SERVERS=ours BACKBONES=posixKqueue ROUNDS=11 DURATION=3s ./Benchmarking/Bench/run.sh   # the A/B above
 MODES=floor SERVERS="ours rust" ROUNDS=5 ./Benchmarking/Bench/run.sh   # what Rule 2 needs, quiet box
