@@ -75,7 +75,7 @@ report_aggregate() {
     ' "$1"
 }
 
-# report_paired <samples-tsv> <eligible-rounds-space-separated>
+# report_paired <samples-tsv> <eligible-rounds-space-separated> [max-order-gap]
 #
 # The floor-vs-full price, computed as a PAIRED statistic: within a round the two profiles are
 # measured seconds apart on the same box, so the per-round ratio full/floor cancels the common-mode
@@ -87,9 +87,26 @@ report_aggregate() {
 # survives a noisy box, because it needs no magnitude — under a null of "no difference" it is a coin
 # flip, so 42 of 55 is evidence of direction even when every individual ratio is unusable.
 #
-# Emits: subject, scenkey, n, ratioMedian, ratioMin, ratioMax, fullSlowerCount
+# TWO REFUSALS, both learned from runs that reported the middleware chain as FASTER than the floor
+# it strictly contains — a physically impossible sign:
+#
+#   * THE ORDER-GAP BOUND. A pair is usable only when its two cells sat within <max-order-gap>
+#     positions of each other in the round's shuffled order (default 1: back-to-back, which is what
+#     run.sh now schedules — see lib/schedule.sh). In the 2026-08-02 full-field run the profiles
+#     landed 4–8 slots apart while the round's own load moved underneath, so the pair compared two
+#     different machines. Pairs beyond the bound, and pairs from data recorded without positions,
+#     price nothing and are counted in the `pairsBeyondGap` column instead of hidden.
+#   * THE SIGN GUARD. `full` runs `floor`'s code plus the whole chain, so a median ratio above 1.0
+#     cannot be a property of the server; it is proof the run's measurement artifact exceeds the
+#     effect (the 2026-08-02 isolation run pinned every cell at a ~66.4k RPS client-side ceiling
+#     and read full "faster" by 0.4 %). Such a row is verdicted `sign-artifact`: the measurement is
+#     still shown, but it is a diagnosis of the run, never a quotable negative cost.
+#
+# Emits: subject, scenkey, pairsUsed, ratioMedian, ratioMin, ratioMax, fullSlowerCount,
+#        pairsBeyondGap, verdict("ok" | "sign-artifact" | "unusable")
+# Ratio columns are "-" when no pair was usable.
 report_paired() {
-    awk -F'\t' -v eligible=" $2 " '
+    awk -F'\t' -v eligible=" $2 " -v maxgap="${3:-1}" '
         function median(arr, n,   i, j, tmp) {
             for (i = 2; i <= n; i++) {
                 tmp = arr[i]
@@ -102,29 +119,57 @@ report_paired() {
         NR == 1 && $1 == "round" { next }
         eligible !~ (" " $1 " ") || $10 != "ok" { next }
         { rps[$2 SUBSEP $4 SUBSEP $1 SUBSEP $3] = $6 + 0
+          pos[$2 SUBSEP $4 SUBSEP $1 SUBSEP $3] = $11
           if (!(($2 SUBSEP $4) in seen)) { cells[++n] = $2 SUBSEP $4; seen[$2 SUBSEP $4] = 1 }
           if (!($1 in roundSeen)) { rounds[++rn] = $1; roundSeen[$1] = 1 } }
         END {
             for (i = 1; i <= n; i++) {
                 split(cells[i], f, SUBSEP)
-                count = 0; slower = 0
+                count = 0; slower = 0; beyond = 0
                 for (r = 1; r <= rn; r++) {
-                    lo = rps[f[1] SUBSEP f[2] SUBSEP rounds[r] SUBSEP "floor"]
-                    hi = rps[f[1] SUBSEP f[2] SUBSEP rounds[r] SUBSEP "full"]
+                    key = f[1] SUBSEP f[2] SUBSEP rounds[r]
+                    lo = rps[key SUBSEP "floor"]; hi = rps[key SUBSEP "full"]
                     if (lo <= 0 || hi <= 0) continue
+                    pf = pos[key SUBSEP "floor"]; pu = pos[key SUBSEP "full"]
+                    gap = pu - pf; if (gap < 0) gap = -gap
+                    if (pf == "" || pu == "" || gap > maxgap) { beyond++; continue }
                     ratio[++count] = hi / lo
                     if (hi < lo) slower++
                 }
-                if (count == 0) continue
+                if (count == 0 && beyond == 0) continue
+                if (count == 0) {
+                    printf "%s\t%s\t0\t-\t-\t-\t0\t%d\tunusable\n", f[1], f[2], beyond
+                    continue
+                }
                 lowest = ratio[1]; highest = ratio[1]
                 for (k = 1; k <= count; k++) {
                     if (ratio[k] < lowest) lowest = ratio[k]
                     if (ratio[k] > highest) highest = ratio[k]
                 }
-                printf "%s\t%s\t%d\t%.4f\t%.4f\t%.4f\t%d\n", \
-                    f[1], f[2], count, median(ratio, count), lowest, highest, slower
+                med = median(ratio, count)
+                verdict = (med > 1) ? "sign-artifact" : "ok"
+                printf "%s\t%s\t%d\t%.4f\t%.4f\t%.4f\t%d\t%d\t%s\n", \
+                    f[1], f[2], count, med, lowest, highest, slower, beyond, verdict
             }
         }
+    ' "$1"
+}
+
+# report_spread_max <aggregate-tsv> -> the widest max/min RPS spread across all measured cells,
+# or "-" when nothing was measured.
+#
+# This is the COUNTER-SIGNAL printed beside the run grade. The 2026-08-02 runs graded every round
+# not-clean while every cell's spread sat at 1.01–1.03 — five repeats agreeing to a percent is
+# evidence about the run worth recording next to the verdict. It must never OVERRIDE the verdict:
+# a box that is uniformly slow for the whole run (steady external load) produces a tight spread
+# around numbers that are all equally wrong.
+report_spread_max() {
+    awk -F'\t' '
+        $11 == "ok" && $6 + 0 > 0 {
+            s = $7 / $6
+            if (s > best) { best = s; found = 1 }
+        }
+        END { if (found) printf "%.2f", best; else printf "-" }
     ' "$1"
 }
 

@@ -14,7 +14,7 @@ wall-clock, many-servers comparison.
 
 ```sh
 brew install oha jq                 # required: load generator + JSON parser (curl ships with macOS)
-./Benchmarking/Bench/selftest.sh    # the harness's own tests — 27 assertions, no network needed
+./Benchmarking/Bench/selftest.sh    # the harness's own tests — 48 assertions, no network needed
 ./Benchmarking/Bench/run.sh         # every installed server, both profiles, 3 rounds
 ```
 
@@ -37,6 +37,22 @@ Selected with `HTTPD_PROFILE`; the default is `full` and only the exact string `
 anything, so a typo cannot downgrade a real deployment. `floor` is a benchmark posture, not a
 recommendation — it serves no `Date` (RFC 9110 §6.6.1), no security headers and no conditional
 requests.
+
+The chain's price is a **paired** statistic with three defenses, each bought by a run that fooled
+its predecessor:
+
+- **the pair runs back-to-back.** The shuffle permutes *units*: floor and full for one backbone
+  travel together, inner order alternating by round. In the 2026-08-02 full-field run the two
+  profiles landed 4–8 shuffled slots apart while the round's own load moved underneath, and the
+  estimator read the chain as *faster* than the floor it strictly contains.
+- **an order-gap bound.** Every sample records its slot in the round's order; a pair whose cells sat
+  more than `PAIR_GAP_MAX` slots apart (default 1) prices nothing and is counted as unusable rather
+  than hidden. Data recorded without positions cannot pair at all.
+- **a sign guard.** `full` runs `floor`'s code plus the whole chain, so a median full/floor ratio
+  above 1.0 cannot be a property of the server — it is proof the run's measurement artifact exceeds
+  the effect (the 2026-08-02 isolation run pinned every cell, 13 B and 1 KiB alike, at a ~66.4k RPS
+  client-side ceiling and read the chain at −0.4 %). Such a cell is verdicted `sign-artifact` and
+  its cost is reported as *unresolvable*, never as a negative percentage.
 
 **Only `ours` runs `full`.** `full` means *our* middleware chain; a peer has no such thing.
 Re-implementing an equivalent in Rust, Go and JS would swap a measured confound for an unprovable
@@ -63,16 +79,31 @@ guessed: `oha` sends `accept-encoding: gzip, compress, deflate, br` by default, 
 it to a real negotiation list — and read the parity table, which will correctly refuse to compare the
 compressing subject against the identity ones.
 
-### 2. Rotated order, on a recorded host
+### 2. Rotated order, on a recorded host — graded on *external* load
 
 The server order is a seeded shuffle, re-drawn each round; the seed and the order actually used are
 recorded. The load average and thermal notes are sampled at the **start and the end** of every round.
 
-A round whose load moves more than `LOAD_DRIFT_MAX` is `drifted`; a round on a box already past
-`LOAD_CEILING_PER_CPU` is `contended`. The headline aggregate uses the clean rounds; when there are
-none, the whole run is stamped **NOT-decision-grade** rather than reported as if it were. The drift
-fraction is normalised against a floor of 1.0, so a quiet box moving 0.05 → 0.30 is not rejected for
-a 500 % relative change that means nothing.
+The contention gate grades load the benchmark **did not cause**. Its first version graded the total
+one-minute load average — which `oha` at 64 connections plus the server under test saturate by
+design — so on a 10-core box every round graded `contended` even with nothing else running (measured
+2026-08-02: single subject, load 1.54 → 10.63, back to 2.73 within 90 s of the run ending). Two
+signals replace it:
+
+- a **baseline** load average sampled before anything is built or started — at that moment the whole
+  load is someone else's. A box already past `LOAD_CEILING_PER_CPU` here rejects **every** round, so
+  the poisoned runs the gate was built for (load 16–30 from concurrent agent worktrees) stay
+  rejected.
+- per-round **external CPU**: the summed `ps` %cpu of every process outside the harness's own
+  process tree (and excluding `kernel_task`, whose time tracks our own workload), normalised per
+  CPU. Above the ceiling at either end of a round → `contended`; moving more than `LOAD_DRIFT_MAX`
+  across the round → `drifted`.
+
+The headline aggregate uses the clean rounds; when there are none, the whole run is stamped
+**NOT-decision-grade** rather than reported as if it were. Beside the grade the runner prints the
+widest per-cell `spread` across the eligible rounds as a **counter-signal**: rounds agreeing to a
+percent are evidence of a stable run, but a tight spread never clears a contended or drifted grade —
+a box under steady external load is stable *and* wrong.
 
 ### 3. One statistic: the median
 
@@ -87,9 +118,10 @@ above 1.5x. A median over three rounds that disagree by more than half is a numb
 
 ### 4. A machine-readable record
 
-`results/results.json` (`schema: http-bench/2`) carries the config, the per-round host samples and
-verdicts, the parity digests, every individual sample and the aggregate — so two runs can be diffed
-without re-reading prose.
+`results/results.json` (`schema: http-bench/4`) carries the config, the pre-run baseline load, the
+per-round host samples (total load *and* external CPU) and verdicts, the parity digests, every
+individual sample with its slot in the round's order, the paired verdicts and the aggregate — so
+two runs can be diffed without re-reading prose.
 
 ## The field
 
@@ -146,9 +178,10 @@ all and its catch-all returned 200 with nothing, which the ≥99 %-2xx check hap
 | `RATE` | _(unset)_ | per-connection rate → **open loop**, coordinated-omission-free latency |
 | `ACCEPT_ENCODING` | `identity` | pinned content coding — the parity gate enforces the consequence |
 | `SEED` | random | recorded; reuse it to reproduce an order |
-| `LOAD_DRIFT_MAX` | `0.25` | fraction of movement that marks a round `drifted` |
-| `LOAD_CEILING_PER_CPU` | `0.5` | load per CPU above which a round is `contended` |
+| `LOAD_DRIFT_MAX` | `0.25` | absolute movement of the external busy-per-CPU fraction that marks a round `drifted` |
+| `LOAD_CEILING_PER_CPU` | `0.5` | external busy-per-CPU (baseline load, or in-round external CPU) above which a round is `contended` |
 | `PARITY_ENFORCE` | `1` | `0` records a mismatch and continues — diagnosis only, never for a number |
+| `PAIR_GAP_MAX` | `1` | widest order-slot gap at which a floor/full pair is still usable by the paired estimator |
 | `ECHO_BODY` | `{"x":1}` | request body for `POST /echo` |
 
 ```sh

@@ -101,3 +101,20 @@ statement that this host cannot.
 - Two consecutive clean-host runs disagreeing by more than the spread flag would mean the whole
   loopback methodology is unsound at this resolution and the comparison should move to a fixed-rate
   open-loop measurement (`RATE=`) or off the box entirely.
+
+## Addendum, 2026-08-16 — Rule 1 has not fired, and its earlier inputs are void
+
+Recorded after the fact, as this file's own rule requires it to be visible. Two harness defects
+were found and fixed (see the commits touching `lib/host.sh` and `lib/report.sh`, and the
+supersession banner in [`RESULTS.md`](RESULTS.md)):
+
+1. the contention gate graded the *total* load average, which the benchmark itself saturates, so
+   `clean` was unreachable and NOT-decision-grade stopped meaning anything;
+2. the paired estimator ignored where in the shuffled order its two cells ran, and would print a
+   physically impossible negative cost rather than admit a run could not resolve the effect.
+
+Consequently the **6–16 %** figure quoted against Rule 1, and the **−0.4 % to −1.9 %** from the
+2026-08-02 reruns, are both void as inputs to Rule 1 — in opposite directions, which is exactly why
+neither may be kept. The 42/55 sign count stands as direction. `D` remains unmeasured; Rule 1 waits
+for a clean-host run of the fixed harness at an operating point that is not client-saturated. No
+rule text above this line changed.
