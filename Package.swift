@@ -497,17 +497,16 @@ let package = Package(
             path: "Sources/Examples/httpd-example"
         ),
         // G1 — opt-in observability bridges over the dependency-free `HTTPMetrics` / middleware seams:
-        // a swift-metrics sink rendered by swift-prometheus at `/metrics`, a swift-log structured access
-        // log, `/healthz` + `/readyz`, and a swift-distributed-tracing span per request. ISOLATED: it
-        // depends on HTTPServer one-way, so its dependencies never enter a core consumer's resolved graph
-        // — the bridge stays opt-in.
+        // a swift-metrics sink rendered by the in-house Prometheus text-exposition backend (0.0.4) at
+        // `/metrics`, a swift-log structured access log, `/healthz` + `/readyz`, and a
+        // swift-distributed-tracing span per request. ISOLATED: it depends on HTTPServer one-way, so its
+        // dependencies never enter a core consumer's resolved graph — the bridge stays opt-in.
         .target(
             name: "HTTPObservability",
             dependencies: [
                 "HTTPServer",
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Metrics", package: "swift-metrics"),
-                .product(name: "Prometheus", package: "swift-prometheus"),
                 .product(name: "Tracing", package: "swift-distributed-tracing"),
                 .product(name: "Instrumentation", package: "swift-distributed-tracing"),
                 .product(name: "ServiceContextModule", package: "swift-service-context")
@@ -517,7 +516,7 @@ let package = Package(
         .testTarget(
             name: "HTTPObservabilityTests",
             dependencies: [
-                "HTTPObservability", "HTTPServer", "HTTPCore",
+                "HTTPObservability", "HTTPServer", "HTTPCore", "HTTPTestSupport",
                 .product(name: "Metrics", package: "swift-metrics"),
                 .product(name: "Prometheus", package: "swift-prometheus"),
                 .product(name: "Logging", package: "swift-log"),
