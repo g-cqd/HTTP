@@ -72,6 +72,8 @@
             var loops: [TLSEventLoop] = []
             var listenDescriptor: Int32?
             var boundPort: UInt16 = 0
+            /// The endpoint `getsockname(2)` reports for the listener, `nil` before binding.
+            var boundEndpoint: BindEndpoint?
             var isRunning = false
             /// The admission policy applied between `accept(2)` and `SSL_new` (audit F8), ungated
             /// until ``start(admission:)`` installs the server's gate.
@@ -95,6 +97,18 @@
         /// The actual bound port (meaningful after ``start()`` returns).
         public var boundPort: UInt16 {
             state.withLock(\.boundPort)
+        }
+
+        /// The local endpoint actually bound (meaningful after ``start()`` returns), or `nil` before
+        /// binding.
+        ///
+        /// Read back from the kernel with `getsockname(2)` at bind time, not derived from the
+        /// configuration: `port` `0` means "whichever the OS chose" and `host` may have been a name or
+        /// a wildcard, so the realized answer is the only one an operator log or an `Alt-Svc`
+        /// advertisement (RFC 7838) can use. Same shape as the four POSIX backbones — this transport
+        /// binds through the shared ``POSIXSocket`` helper, so the answer comes from the same call.
+        public var boundEndpoint: BindEndpoint? {
+            state.withLock(\.boundEndpoint)
         }
 
         /// Builds the shared `SSL_CTX`, spins up N event loops, binds the listening socket, and accepts.
@@ -142,6 +156,7 @@
                 $0.loops = loops
                 $0.listenDescriptor = listener.descriptor
                 $0.boundPort = listener.port
+                $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
                 $0.isRunning = true
                 $0.gate = AcceptGate(admission: admission)
             }

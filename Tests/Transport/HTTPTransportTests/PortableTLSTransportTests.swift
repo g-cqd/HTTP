@@ -135,6 +135,27 @@
             await transport.shutdown()
         }
 
+        @Test(
+            "the transport reports the realized bound endpoint, read back from the kernel",
+            .timeLimit(.minutes(1)))
+        func boundEndpointReportsTheRealizedListener() async throws {
+            let transport = try Self.startedTransport()
+            let connections = try await transport.start()
+            let endpoint = try #require(
+                transport.boundEndpoint,
+                "PortableTLS reported no bound endpoint after start()"
+            )
+            #expect(endpoint.family == .ipv4)
+            #expect(endpoint.address == "127.0.0.1")
+            #expect(endpoint.port != 0)
+            #expect(endpoint.port == transport.boundPort)
+            await transport.shutdown()
+            withExtendedLifetime(connections) {
+                // Held until the listener is down, so the stream's `onTermination` shutdown does not
+                // race the explicit one mid-assertion.
+            }
+        }
+
         // MARK: - Helpers
 
         /// A `PortableTLSTransport` on an ephemeral port with a fresh dev identity (ALPN h2 / http1.1).
