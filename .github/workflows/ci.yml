@@ -629,20 +629,19 @@ jobs:
   # `.platform`-stamped, i.e. enforced by Apple's QUIC/TLS stack rather than by any code here. That
   # file is the authoritative exclusion list; it is asserted complete by `H3SpecTests`.
   #
-  # STATUS 2026-08-02: the handshake blocker is FIXED (the QUIC listener never offered the `h3` ALPN
-  # — RFC 9114 §3.1 — because both backbones reused the TCP `applicationProtocols` list; see
-  # `QUICApplicationProtocols.swift`). h3spec now reaches the HTTP/3 layer and discriminates:
-  # step 1 is 15 examples / 12 failures in ~2.3s (was 15/15 in 0.06s, all `TLSInternalError`), and
-  # step 2 is 34 examples / 4 failures (was 34/34). `curl --http3-only` gets `HTTP/3 200`.
-  #
-  # It is therefore STILL NOT PROMOTED, but for a new and better reason: the 12 remaining failures are
-  # this repository's own, not handshake noise. Nearly all report QUIC application error code 0 where
-  # RFC 9114 §8.1 mandates a specific code — the engine selects it and the dispatcher forwards it, but
-  # `Modern/LegacyQUICConnection.close(errorCode:)` discards it. Promote step 1 to a required job when
-  # those 12 go green. Do not promote it by weakening `h3-conformance`, which stays the gate.
-  # (Measured dead end, so nobody repeats it: setting `applicationError` before teardown makes
-  # Network.framework stop closing the connection at all — 15 failures / 60s of timeouts on BOTH
-  # backbones. See docs/standards/CONFORMANCE.md.)
+  # STATUS 2026-08-16: step 1's 12 failures are now attributed all the way down, and 11 of them are
+  # PLATFORM-BLOCKED — Network.framework provides no way to choose the application error code of a
+  # CONNECTION_CLOSE (RFC 9000 §10.2 / §19.19): the modern structured teardown hardwires code 0 and
+  # `NWConnectionGroup.cancel()` sends no 0x1d frame at all, whatever `applicationError` holds. The
+  # engine selects the mandated RFC 9114 §8.1 code, `close(errorCode:)` records it in the QUIC state
+  # (inert today), and the full experiment matrix plus the 11 rows BY NAME are in
+  # docs/standards/CONFORMANCE.md. The 12th failure (4.1.3 mandatory pseudo-headers) is engine-owned.
+  # The premise is pinned by `closeCarriesTheApplicationErrorCode` (withKnownIssue) in
+  # `Legacy`/`ModernQUICTransportTests`: if an SDK starts delivering the code, that test flags it —
+  # revisit promotion then. Do not promote step 1 by weakening `h3-conformance`, which stays the gate.
+  # (The 2026-08-02 "set applicationError → connection stops closing" dead end was a misread crash:
+  # `nw_quic_set_application_error` segfaults on a nil reason string, and the dead server timed out
+  # every following case. With a non-nil reason there is no crash — and no code on the wire either.)
   # ---------------------------------------------------------------------------
   h3spec-observation:
     if: github.event_name == 'workflow_dispatch'
