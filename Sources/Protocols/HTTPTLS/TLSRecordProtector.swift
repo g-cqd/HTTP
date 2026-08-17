@@ -39,7 +39,9 @@ public struct TLSRecordProtector {
     /// The reused 5-octet header buffer (the AEAD's additional data, §5.2).
     private var headerScratch: [UInt8]
     /// The next record's sequence number (§5.3; starts at 0 on every key change).
-    public private(set) var sequenceNumber: UInt64 = 0
+    ///
+    /// Internally settable so the §5.5 limit behavior is testable without 2^24 seals.
+    public internal(set) var sequenceNumber: UInt64 = 0
     /// How many §7.2 ratchets this direction has taken (generation 0 = the installed secret).
     public private(set) var generation = 0
 
