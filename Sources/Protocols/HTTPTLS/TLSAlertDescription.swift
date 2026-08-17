@@ -27,6 +27,10 @@ public struct TLSAlertDescription: RawRepresentable, Sendable, Equatable, Hashab
     public static let recordOverflow = Self(rawValue: 22)
     /// `handshake_failure(40)` — no acceptable set of security parameters (§6.2).
     public static let handshakeFailure = Self(rawValue: 40)
+    /// `bad_certificate(42)` — a certificate was corrupt or otherwise unusable (§6.2).
+    public static let badCertificate = Self(rawValue: 42)
+    /// `unsupported_certificate(43)` — a certificate was of an unsupported type (§6.2).
+    public static let unsupportedCertificate = Self(rawValue: 43)
     /// `illegal_parameter(47)` — a field was incorrect or inconsistent (§6.2).
     public static let illegalParameter = Self(rawValue: 47)
     /// `decode_error(50)` — a message could not be decoded (§6.2).
@@ -45,6 +49,8 @@ public struct TLSAlertDescription: RawRepresentable, Sendable, Equatable, Hashab
     public static let unsupportedExtension = Self(rawValue: 110)
     /// `unrecognized_name(112)` — no server exists identified by the client's SNI (§6.2).
     public static let unrecognizedName = Self(rawValue: 112)
+    /// `certificate_required(116)` — a required client certificate was absent (§4.4.2.4/§6.2).
+    public static let certificateRequired = Self(rawValue: 116)
     /// `no_application_protocol(120)` — ALPN offered no protocol the server supports (RFC 7301).
     public static let noApplicationProtocol = Self(rawValue: 120)
 }

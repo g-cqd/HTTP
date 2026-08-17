@@ -76,6 +76,20 @@ extension TLSHashFunction {
         }
     }
 
+    /// Constant-time HMAC validation — §4.4.4's Finished check and §4.2.11.2's binder check
+    /// both compare attacker-supplied MACs, so the comparison rides swift-crypto's
+    /// `isValidAuthenticationCode` (never `==` over octets).
+    public func isValidAuthenticationCode(
+        _ code: ArraySlice<UInt8>, key: SymmetricKey, message: [UInt8]
+    ) -> Bool {
+        switch self {
+            case .sha256:
+                HMAC<SHA256>.isValidAuthenticationCode(code, authenticating: message, using: key)
+            case .sha384:
+                HMAC<SHA384>.isValidAuthenticationCode(code, authenticating: message, using: key)
+        }
+    }
+
     /// Encodes §7.1's `HkdfLabel`: `uint16 length` ∥ `opaque label<7..255>` (with the `"tls13 "`
     /// prefix) ∥ `opaque context<0..255>`.
     static func hkdfLabelInfo(label: String, context: [UInt8], length: Int) -> [UInt8] {
