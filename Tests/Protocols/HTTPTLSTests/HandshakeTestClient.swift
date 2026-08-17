@@ -43,6 +43,11 @@ struct HandshakeTestClient {
     var applicationData: [[UInt8]] = []
     /// Alerts received from the server.
     var alerts: [TLSAlert] = []
+    /// The raw ClientHello handshake message as sent.
+    ///
+    /// 3c tests rebuild partial transcripts from it — e.g. the hash through the server
+    /// Certificate for §4.4.3 signature verification.
+    private(set) var helloMessageRaw: [UInt8] = []
 
     /// Builds the ClientHello record, drives the §7.1 early secret, and (when resuming)
     /// computes the real §4.2.11.2 binder.
@@ -61,10 +66,12 @@ struct HandshakeTestClient {
             let binder = try computeBinder(overTruncated: message)
             message.replaceSubrange((message.count - 32)..., with: binder)
             transcript.append(message)
+            helloMessageRaw = message
             return TestClientHello.plaintextRecord(message)
         }
         let message = hello.message()
         transcript.append(message)
+        helloMessageRaw = message
         return TestClientHello.plaintextRecord(message)
     }
 

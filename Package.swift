@@ -16,6 +16,9 @@
 //    Sources/Transport   — HTTPTransport      Sources/Server   — HTTPServer
 //    Sources/Testing     — HTTPTestSupport    Sources/Examples — httpd-example
 
+// swiftlint:disable file_length - one manifest per package is a SwiftPM invariant: its 30+ targets
+// cannot be split across files, and the RFC/ADR rationale comments (which do not count) belong
+// beside the declarations they justify.
 import PackageDescription
 
 // MARK: - Strict, *reusable-safe* build settings
@@ -60,7 +63,8 @@ let strictMemorySafeTargets: Set<String> = [
     "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
     "HTTPAuth",  // already 0 — pure crypto/middleware over swift-crypto
     "HTTPDeflate",  // strict from birth (annotated sites only at the [UInt8] ⇄ Span seam)
-    "HTTPTLS"  // strict from birth (annotated sites only at the SymmetricKey byte seams)
+    "HTTPTLS",  // strict from birth (annotated sites only at the SymmetricKey byte seams)
+    "HTTPTLSRSA"  // strict from birth (Phase 3c: pure swift-crypto `_RSA` calls, no unsafe seams)
 ]
 
 // G0 — the Darwin-only transport backbones are absent from the Linux build graph, where the portable
@@ -254,6 +258,7 @@ let package = Package(
         .library(name: "HTTP3", targets: ["HTTP3"]),
         .library(name: "WebSocket", targets: ["WebSocket"]),
         .library(name: "HTTPTLS", targets: ["HTTPTLS"]),
+        .library(name: "HTTPTLSRSA", targets: ["HTTPTLSRSA"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
         .library(name: "HTTPObservability", targets: ["HTTPObservability"]),
@@ -319,6 +324,22 @@ let package = Package(
         // `P256.Signing.PublicKey`/`ECDSASignature`, `_RSA.Signing.PublicKey`/`RSASignature`) is
         // unchanged across the 4.0 boundary, whose sole release note is the WWDC25 refresh.
         .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+        // apple/swift-certificates (ADR 0004 Phase 3c) — X.509 for the from-scratch TLS 1.3 engine:
+        // identity-chain validation at load time and RFC 5280 §6 client-chain path validation
+        // (`Verifier` + `RFC5280Policy`), plus the test PKI the mTLS gates mint (its
+        // `Certificate(...)` builder replaces `openssl` shelling for the engine's fixtures).
+        // Products: `X509` → `HTTPTLS` only. apple/* — allowed by CLAUDE.md; declares NO
+        // `platforms:` floor (verified at 1.19.4), so the macOS 15.6 / iOS 18 floor is untouched,
+        // and its swift-crypto range (`3.12.3..<5.0.0`) embraces our 4.0.0 pin. X509 links
+        // `_CryptoExtras` internally for RSA certificate signatures; that stays swift-certificates'
+        // implementation detail — HTTPTLS itself still never imports `_CryptoExtras` (the recorded
+        // 3b decision: RSA handshake signing/verification lives in the separate `HTTPTLSRSA`).
+        .package(url: "https://github.com/apple/swift-certificates.git", from: "1.19.4"),
+        // apple/swift-asn1 — swift-certificates' DER substrate, surfaced explicitly (not left
+        // transitive) because `HTTPTLS` imports it directly to parse PKCS#8/SEC1 private keys at
+        // identity load (RFC 5958/RFC 5915) — a target must declare what it imports
+        // (`--explicit-target-dependency-import-check error`). apple/* — allowed by CLAUDE.md.
+        .package(url: "https://github.com/apple/swift-asn1.git", from: "1.4.0"),
         // The one first-party dependency: shared SIMD byte kernels (see `adFoundationDependency`).
         adFoundationDependency()
     ],
@@ -526,13 +547,34 @@ let package = Package(
         // per-connection by the transport, like its siblings — Core holds substrates and codecs.
         .target(
             name: "HTTPTLS",
-            dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+            dependencies: [
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "X509", package: "swift-certificates"),
+                .product(name: "SwiftASN1", package: "swift-asn1")
+            ],
             path: "Sources/Protocols/HTTPTLS"
+        ),
+        // ADR 0004 Phase 3c — the RSA sidecar of the TLS 1.3 engine: RSA-PSS CertificateVerify
+        // signing (server identities with RSA keys, e.g. every `DevTLSIdentity`) and verification
+        // (RSA client certificates). A separate target because it needs `_CryptoExtras` (RSA rides
+        // a BoringSSL graph) and the recorded 3b decision keeps that OUT of `HTTPTLS` — the engine
+        // stays pure swift-crypto; deployments that face RSA link this one extra module.
+        .target(
+            name: "HTTPTLSRSA",
+            dependencies: [
+                "HTTPTLS",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "_CryptoExtras", package: "swift-crypto")
+            ],
+            path: "Sources/Protocols/HTTPTLSRSA"
         ),
         .testTarget(
             name: "HTTPTLSTests",
             dependencies: [
-                "HTTPTLS", "HTTPTestSupport", .product(name: "Crypto", package: "swift-crypto")
+                "HTTPTLS", "HTTPTLSRSA", "HTTPTestSupport", "HTTPTransport",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "X509", package: "swift-certificates"),
+                .product(name: "SwiftASN1", package: "swift-asn1")
             ],
             path: "Tests/Protocols/HTTPTLSTests"
         ),
