@@ -523,7 +523,7 @@ let package = Package(
         .target(
             name: "WebSocket",
             dependencies: [
-                "HTTPCore", "CWSDeflate", .product(name: "AemiKernels", package: "aemi")
+                "HTTPCore", "HTTPDeflate", .product(name: "AemiKernels", package: "aemi")
             ],
             path: "Sources/Protocols/WebSocket"
         ),
