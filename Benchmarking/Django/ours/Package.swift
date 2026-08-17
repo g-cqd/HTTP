@@ -39,7 +39,7 @@ var dependencies: [Package.Dependency] = [
 
 if adjson {
     // The Foundation-free `ADJSONCore` product only (tape parse + JSONValue + cursor encode); the
-    // umbrella's Codable/Schema/macros are not needed here. ADJSON resolves its own ADFoundation
+    // umbrella's Codable/Schema/macros are not needed here. ADJSON resolves its own AemiFoundation
     // dependency from github.com/g-cqd@main.
     dependencies.append(.package(path: "../../../../ADJSON"))
 }

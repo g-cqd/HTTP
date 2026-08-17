@@ -229,10 +229,10 @@ func codingShim(
 //
 // To advance it: review the target revision, update the constant below, delete `Package.resolved`, and
 // re-resolve.
-let adFoundationRevision = "2b90a625c668fa2e76aaf7ec48f9d415e7c86b30"
+let adFoundationRevision = "35a7356cde384b7880c79d9a1f4d250f4a3123a2"
 
 func adFoundationDependency() -> Package.Dependency {
-    .package(url: "https://github.com/g-cqd/ADFoundation.git", revision: adFoundationRevision)
+    .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: adFoundationRevision)
 }
 
 let package = Package(
@@ -335,8 +335,8 @@ let package = Package(
         .target(
             name: "HTTPCore",
             dependencies: [
-                "CCRC32", .product(name: "ADFKernels", package: "ADFoundation"),
-                .product(name: "ADFCore", package: "ADFoundation")
+                "CCRC32", .product(name: "AemiKernels", package: "aemi"),
+                .product(name: "AemiKernel", package: "aemi")
             ],
             path: "Sources/Core/HTTPCore"
         ),
@@ -510,7 +510,7 @@ let package = Package(
         .target(
             name: "WebSocket",
             dependencies: [
-                "HTTPCore", "CWSDeflate", .product(name: "ADFKernels", package: "ADFoundation")
+                "HTTPCore", "CWSDeflate", .product(name: "AemiKernels", package: "aemi")
             ],
             path: "Sources/Protocols/WebSocket"
         ),

@@ -7,7 +7,7 @@
 //  smuggling, so they are intentionally strict and allocation-free.
 //
 
-import ADFKernels
+import AemiKernels
 
 /// Validators for the low-level grammar shared by all HTTP versions (RFC 9110).
 ///
@@ -121,7 +121,7 @@ public enum FieldValidation {
         // kernel; short values keep the inlined SWAR below (measured flat at 24 B). Same predicate:
         // illegal iff `(< 0x20 && != 0x09) || == 0x7F`, obs-text legal.
         if count >= Self.kernelValidateMinBytes {
-            return ADFKernels.firstDisallowedText(
+            return AemiKernels.firstDisallowedText(
                 base: base, count: count, minAllowed: 0x20, allowTab: true
             ) == count
         }
@@ -209,7 +209,7 @@ public enum FieldValidation {
         // Long targets (URLs + query strings to several KB) take the SIMD kernel; short ones keep the
         // inlined SWAR. Same predicate: illegal iff `<= 0x20 || == 0x7F`, obs-text legal.
         if count >= Self.kernelValidateMinBytes {
-            return ADFKernels.firstDisallowedText(
+            return AemiKernels.firstDisallowedText(
                 base: base, count: count, minAllowed: 0x21, allowTab: false
             ) == count
         }

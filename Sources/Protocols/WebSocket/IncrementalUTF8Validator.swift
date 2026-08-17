@@ -9,7 +9,7 @@
 //  Allocation-free; a single forward pass; no recursion.
 //
 
-import ADFKernels
+import AemiKernels
 
 /// An incremental UTF-8 validator (RFC 3629): feed bytes across calls, then check ``isComplete``.
 struct IncrementalUTF8Validator {
@@ -50,7 +50,7 @@ struct IncrementalUTF8Validator {
         while index < count {
             if pending == 0 {
                 if buffer[index] < 0x80 {
-                    index += ADFKernels.firstNonASCII(base: base + index, count: count - index)
+                    index += AemiKernels.firstNonASCII(base: base + index, count: count - index)
                     if index >= count { break }
                 }
                 guard let sequence = Self.sequence(forLead: buffer[index]) else {

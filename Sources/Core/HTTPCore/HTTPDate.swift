@@ -7,7 +7,7 @@
 //  algorithm), so it needs no `Foundation` and no allocation beyond the result string. Iterative.
 //
 
-import ADFCore
+import AemiKernel
 
 /// Formats and parses HTTP dates (RFC 9110 §5.6.7) — IMF-fixdate is the form generated.
 public enum HTTPDate {
@@ -86,7 +86,7 @@ public enum HTTPDate {
 
     /// Parses an HTTP-date into seconds since the Unix epoch (UTC), or nil if malformed.
     ///
-    /// RFC 9110 §5.6.7. Delegates to the shared, Foundation-free ``ADFCore/HTTPDateParser`` — the one
+    /// RFC 9110 §5.6.7. Delegates to the shared, Foundation-free ``AemiKernel/HTTPDateParser`` — the one
     /// place the AD* family's HTTP-date parsing lives (also used by `ADServeCore`) — accepting the
     /// preferred IMF-fixdate plus the obsolete rfc850 / asctime forms a recipient must still accept.
     public static func parse(_ value: String) -> Int? {
