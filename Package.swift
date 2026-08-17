@@ -58,7 +58,8 @@ let strictMemorySafeTargets: Set<String> = [
     "HPACK",  // 2 sites annotated (RFC 7541 §5.2 string materialization)
     "QPACK",  // 2 sites annotated (RFC 9204 §4.1.2 string materialization)
     "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
-    "HTTPAuth"  // already 0 — pure crypto/middleware over swift-crypto
+    "HTTPAuth",  // already 0 — pure crypto/middleware over swift-crypto
+    "HTTPDeflate"  // strict from birth (annotated sites only at the [UInt8] ⇄ Span seam)
 ]
 
 // G0 — the Darwin-only transport backbones are absent from the Linux build graph, where the portable
@@ -245,6 +246,7 @@ let package = Package(
     products: [
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
         .library(name: "HTTPConcurrency", targets: ["HTTPConcurrency"]),
+        .library(name: "HTTPDeflate", targets: ["HTTPDeflate"]),
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HPACK", targets: ["HPACK"]),
         .library(name: "QPACK", targets: ["QPACK"]),
@@ -338,6 +340,23 @@ let package = Package(
             name: "HTTPCoreTests",
             dependencies: ["HTTPCore", "HTTPTestSupport"],
             path: "Tests/Core/HTTPCoreTests"
+        ),
+        // RFC 1951 DEFLATE (inflate + deflate) and the RFC 1952 gzip / RFC 1950 zlib containers,
+        // from scratch in portable Swift — no system zlib anywhere in the graph. Sans-I/O push/pull
+        // streams (`Span` in, `OutputSpan` out, zero steady-state allocation); the inflate side is the
+        // attacker-facing half and fails closed with typed errors. Backs RFC 7692 permessage-deflate
+        // (WebSocket, every platform) and the Linux gzip content codings; Darwin response codings stay
+        // on Apple's Compression framework. Strict memory safety from birth.
+        .target(name: "HTTPDeflate", dependencies: ["HTTPCore"], path: "Sources/Core/HTTPDeflate"),
+        .testTarget(
+            name: "HTTPDeflateTests",
+            // CZlibCoding + CWSDeflate are the differential-fuzz oracle: system zlib through the
+            // shims this codec replaces. Deleted with the shims once the replacement sweep lands
+            // (the house pattern — prove equivalence in one tree, then delete).
+            dependencies: [
+                "HTTPDeflate", "HTTPCore", "HTTPTestSupport", "CZlibCoding", "CWSDeflate"
+            ],
+            path: "Tests/Core/HTTPDeflateTests"
         ),
         // Shipped-safe concurrency seams: the `TaskProvider` (so untracked `Task { }` spawns become
         // injectable + settle-able) and the `MonotonicNowProvider` (so the HTTP/2 Rapid Reset window
