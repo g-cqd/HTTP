@@ -26,7 +26,9 @@ public struct TLSNegotiatedParameters: Sendable, Equatable {
     /// The client's certificate chain, leaf first, DER (§4.4.2) — empty when the client sent
     /// none or was never asked.
     ///
-    /// Signature-verified (§4.4.3); chain validation is Phase 3c's.
+    /// Signature-verified (§4.4.3) and — when a
+    /// ``TLSServerConfiguration/clientChainValidator`` is configured — path-validated
+    /// (RFC 5280 §6) before the handshake completed.
     public let clientCertificateChainDER: [[UInt8]]
     /// The peer's RFC 8449 `record_size_limit`, when it sent one (already honored outbound).
     public let peerRecordSizeLimit: Int?

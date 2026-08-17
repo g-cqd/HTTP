@@ -31,6 +31,10 @@ public struct TLSAlertDescription: RawRepresentable, Sendable, Equatable, Hashab
     public static let badCertificate = Self(rawValue: 42)
     /// `unsupported_certificate(43)` — a certificate was of an unsupported type (§6.2).
     public static let unsupportedCertificate = Self(rawValue: 43)
+    /// `certificate_expired(45)` — a certificate has expired or is not currently valid (§6.2).
+    public static let certificateExpired = Self(rawValue: 45)
+    /// `unknown_ca(48)` — the chain's CA could not be matched with a known trust anchor (§6.2).
+    public static let unknownCA = Self(rawValue: 48)
     /// `illegal_parameter(47)` — a field was incorrect or inconsistent (§6.2).
     public static let illegalParameter = Self(rawValue: 47)
     /// `decode_error(50)` — a message could not be decoded (§6.2).

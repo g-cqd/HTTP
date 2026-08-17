@@ -76,6 +76,11 @@ public enum TLSHandshakeError: Error, Sendable, Equatable {
     /// The client's certificate message was structurally bad — undecodable DER, no leaf, or a
     /// nonempty `certificate_request_context` (§4.4.2 — `bad_certificate`).
     case badCertificate(String)
+    /// The client's presented chain failed the configured trust policy (RFC 5280 §6 via
+    /// ``TLSServerConfiguration/clientChainValidator``); the rejection carries its own §6.2
+    /// alert class (`unknown_ca` / `certificate_expired` / `bad_certificate`). Fail closed
+    /// in every requesting mode — present-but-unvalidatable aborts even under `.optional`.
+    case clientChainRejected(TLSChainVerdict.Rejection)
     /// A client Certificate entry carried an extension our CertificateRequest never offered
     /// (§4.4.2: "extensions in the Certificate message from the client MUST correspond to
     /// extensions in the CertificateRequest" — §6.2 `unsupported_extension`).
@@ -127,6 +132,8 @@ public enum TLSHandshakeError: Error, Sendable, Equatable {
                 .unsupportedCertificate
             case .badCertificate:
                 .badCertificate
+            case .clientChainRejected(let rejection):
+                rejection.alertDescription
             case .unrequestedCertificateExtension:
                 .unsupportedExtension
             case .signingFailed, .internalError:
