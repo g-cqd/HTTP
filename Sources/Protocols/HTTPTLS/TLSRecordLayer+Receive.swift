@@ -182,7 +182,10 @@ extension TLSRecordLayer {
     /// side reaches the application epoch (≈ the peer's Finished). Anything else — a protected
     /// CCS, a malformed body, or one outside the window — aborts with `unexpected_message`.
     private func tolerateChangeCipherSpec(body: ArraySlice<UInt8>) throws(TLSRecordError) {
-        guard sawHandshakeRecord, readEpoch < .application, Array(body) == [1] else {
+        guard
+            sawHandshakeRecord, readEpoch < .application,
+            body.count == 1, body[body.startIndex] == 1
+        else {
             throw .unexpectedChangeCipherSpec
         }
     }
