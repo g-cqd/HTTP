@@ -149,9 +149,9 @@ let strictMemorySafeTargets: Set<String> = [
     // `ContentEncoderStreamTests` and `StreamingCompressionTests` are NOT here any more. They were,
     // because `GzipEncoder.makeStream()` returned nil off Darwin and every streamed response fell
     // through to identity — the exclusion was a symptom of a missing feature, not a portability
-    // defect in the tests. The feature exists now (`ZlibDeflateStream` over the `CZlibCoding` shim's
-    // resumable `deflate`), so both suites run here, and their byte-identity case is what holds the
-    // Linux streamed and buffered codings to the same octets. Keep it that way.
+    // defect in the tests. The feature exists (today over the in-house `HTTPDeflate` codec), so both
+    // suites run here, and their byte-identity case is what holds the Linux streamed and buffered
+    // codings to the same octets. Keep it that way.
     let serverTestExclusions = [
         "HTTPServerHTTP3Tests.swift",
         "HTTPServerWebSocketHTTP3Tests.swift",
@@ -568,8 +568,10 @@ let package = Package(
                 // first-party implementation rather than an in-house one (see the `swift-crypto`
                 // dependency comment). `Crypto` only — never `_CryptoExtras`.
                 .product(name: "Crypto", package: "swift-crypto"),
-                // Linux gzip coding (zlib); on Darwin gzip is Apple's Compression, so this stays off the graph.
-                .target(name: "CZlibCoding", condition: .when(platforms: [.linux])),
+                // The in-house DEFLATE/gzip codec: the Linux content codings run on it, and the
+                // WebSocket permessage-deflate path (via the WebSocket target) on every platform.
+                // On Darwin the buffered/streamed response codings stay on Apple's Compression.
+                "HTTPDeflate",
                 // The opt-in codings: trait-conditional edges, so `#if canImport(CZstd)` /
                 // `#if canImport(CBrotli)` in the middleware flip with the trait.
                 .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
@@ -582,8 +584,7 @@ let package = Package(
             name: "HTTPServerTests",
             dependencies: [
                 "HTTPServer", "HTTP1", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket",
-                "HTTPTransport", "HTTPTestSupport",
-                .target(name: "CZlibCoding", condition: .when(platforms: [.linux])),
+                "HTTPTransport", "HTTPTestSupport", "HTTPDeflate",
                 // The self-gating coding suites (`#if canImport(CZstd)` / `#if canImport(CBrotli)`)
                 // compile only when the trait puts the shim in the graph.
                 .target(name: "CZstd", condition: .when(traits: ["Zstd"])),

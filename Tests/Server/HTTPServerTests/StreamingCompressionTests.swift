@@ -286,9 +286,9 @@ private func dechunk(_ body: [UInt8]) throws -> [UInt8] {
 /// header and the 8-octet trailer and inflated the middle with Apple's `compression_decode_buffer`,
 /// which pinned the whole suite to Darwin for the sake of one assertion — and which, by discarding
 /// the trailer, could not have noticed a truncated or corrupt member at all. ``Inflate`` is vended
-/// with this exact signature on both platforms (Apple `Compression` in `Inflate.swift`, zlib via the
-/// `CZlibCoding` shim in `InflateLinux.swift`), and its gzip path validates the header, the CRC-32
-/// and the ISIZE trailer. So the oracle got stronger and portable in the same move.
+/// with this exact signature on both platforms (Apple `Compression` in `Inflate.swift`, the
+/// in-house HTTPDeflate codec in `InflateLinux.swift`), and its gzip path validates the header,
+/// the CRC-32 and the ISIZE trailer. So the oracle got stronger and portable in the same move.
 private func gunzip(_ member: [UInt8]) -> [UInt8]? {
     Inflate.decompress(member, encoding: "gzip", maxOutput: 1 << 20)
 }

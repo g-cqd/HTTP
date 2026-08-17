@@ -34,10 +34,8 @@ public struct DecompressionMiddleware: HTTPMiddleware {
     /// claimed where one is present (else a `br` body passes through, rather than being wrongly rejected).
     #if canImport(Compression) || canImport(CBrotli)
         private static let supported: Set<String> = ["gzip", "x-gzip", "deflate", "br"]
-    #elseif canImport(CZlibCoding)
-        private static let supported: Set<String> = ["gzip", "x-gzip", "deflate"]
     #else
-        private static let supported: Set<String> = []
+        private static let supported: Set<String> = ["gzip", "x-gzip", "deflate"]
     #endif
 
     private let maxDecompressedSize: Int
@@ -115,48 +113,40 @@ public struct DecompressionMiddleware: HTTPMiddleware {
         guard !coded.isEmpty else {
             return await next.respond(to: request, body: .collected(coded), context: context)
         }
-        #if canImport(Compression) || canImport(CZlibCoding)
-            guard let peeled = peel(coded, list: list) else {
-                return ServerResponse(HTTPResponse(status: .contentTooLarge))
-            }
-            return await next.respond(
-                to: Self.rewriting(request, to: peeled),
-                body: .collected(peeled.bytes),
-                context: context
-            )
-        #else
-            // No inbound decoder in this build; `supported` is empty, so this is unreachable — the
-            // body is forwarded exactly as an unrecognized coding would be.
-            return await next.respond(to: request, body: .collected(coded), context: context)
-        #endif
+        guard let peeled = peel(coded, list: list) else {
+            return ServerResponse(HTTPResponse(status: .contentTooLarge))
+        }
+        return await next.respond(
+            to: Self.rewriting(request, to: peeled),
+            body: .collected(peeled.bytes),
+            context: context
+        )
     }
 
-    #if canImport(Compression) || canImport(CZlibCoding)
-        /// Undoes the codings from the right until one is not ours, or nil if any layer breaches a cap.
-        ///
-        /// RFC 9110 §8.4.1 lists codings in the order they were applied, so the last is the outermost.
-        /// The cap is computed **once, from the octets the peer actually sent**, and applies to every
-        /// layer: stacking codings therefore cannot buy more amplification than a single one, which is
-        /// the property a per-layer ratio would have lost (CWE-409).
-        private func peel(
-            _ coded: [UInt8],
-            list: ContentCodingList
-        ) -> (bytes: [UInt8], remaining: ArraySlice<String>)? {
-            let product = coded.count.multipliedReportingOverflow(by: maxRatio)
-            let cap = min(maxDecompressedSize, product.overflow ? Int.max : product.partialValue)
-            var bytes = coded
-            var remaining = list.codings[...]
-            while let coding = remaining.last, Self.supported.contains(coding) {
-                guard let decoded = Inflate.decompress(bytes, encoding: coding, maxOutput: cap)
-                else {
-                    return nil
-                }
-                bytes = decoded
-                remaining = remaining.dropLast()
+    /// Undoes the codings from the right until one is not ours, or nil if any layer breaches a cap.
+    ///
+    /// RFC 9110 §8.4.1 lists codings in the order they were applied, so the last is the outermost.
+    /// The cap is computed **once, from the octets the peer actually sent**, and applies to every
+    /// layer: stacking codings therefore cannot buy more amplification than a single one, which is
+    /// the property a per-layer ratio would have lost (CWE-409).
+    private func peel(
+        _ coded: [UInt8],
+        list: ContentCodingList
+    ) -> (bytes: [UInt8], remaining: ArraySlice<String>)? {
+        let product = coded.count.multipliedReportingOverflow(by: maxRatio)
+        let cap = min(maxDecompressedSize, product.overflow ? Int.max : product.partialValue)
+        var bytes = coded
+        var remaining = list.codings[...]
+        while let coding = remaining.last, Self.supported.contains(coding) {
+            guard let decoded = Inflate.decompress(bytes, encoding: coding, maxOutput: cap)
+            else {
+                return nil
             }
-            return (bytes, remaining)
+            bytes = decoded
+            remaining = remaining.dropLast()
         }
-    #endif
+        return (bytes, remaining)
+    }
 
     /// `request` with `Content-Encoding` reduced to the codings still applied (removed when none are)
     /// and `Content-Length` restated for the decoded body.
