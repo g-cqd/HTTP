@@ -219,20 +219,14 @@ func codingShim(
 // ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
 // UTF-8 validator uses the ASCII-run skip. This is the one first-party dependency HTTP takes.
 //
-// Pinned to an exact reviewed revision, not `branch: "main"` (2026-07-31 audit). A moving branch means
-// two checkouts of the same HTTP commit can resolve different dependency code, so a build is not
-// reproducible, a benchmark result is not attributable, and a CI green is not evidence about any
-// particular input. `Package.resolved` stays gitignored on purpose — this is a reusable library and its
-// consumers must resolve their own graph — so this pin is what makes *this* package's own builds
-// deterministic. Note the scope honestly: the rest of the graph is version-ranged and still floats
-// within its ranges; only this first-party, unversioned dependency is nailed down here.
-//
-// To advance it: review the target revision, update the constant below, delete `Package.resolved`, and
-// re-resolve.
-let adFoundationRevision = "35a7356cde384b7880c79d9a1f4d250f4a3123a2"
-
+// `branch: "main"`, matching every other AD*-family consumer of the aemi kernel package. The previous
+// exact-revision pin (2026-07-31 audit) was reproducibility-motivated, but SwiftPM rejects a graph in
+// which one package requires aemi by revision while a sibling (ADJSON, ADServe, …) requires it by
+// branch — "required using two different revision-based requirements". Since HTTP is consumed inside
+// those graphs, the pin must match the family-wide `branch: "main"` convention. The last reviewed
+// revision was 35a7356cde384b7880c79d9a1f4d250f4a3123a2 (the ADFoundation→aemi absorption commit).
 func adFoundationDependency() -> Package.Dependency {
-    .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: adFoundationRevision)
+    .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
 }
 
 let package = Package(
