@@ -23,13 +23,22 @@ extension TLSServerConnection {
         clientShare: TLSKeyShareEntry
     ) async throws(TLSHandshakeError) {
         var ladder = try establishEarlySecret(hello, message: message, suite: suite)
+        // FAIL FAST, before any output: the signature-scheme intersection (§4.2.3/§9.2)
+        // and the peer share's validity (§4.2.8.2) are both decidable now — a violation
+        // must die as ONE plaintext alert, not a ServerHello followed by a sealed alert.
+        let candidates = resumed ? [] : try selectSignatureSchemes(hello)
+        let privateKey = configuration.entropy.ephemeralPrivateKey(for: group)
+        let shared = try TLSKeyExchange.sharedSecret(
+            group: group, privateKey: privateKey, peerShare: clientShare.keyExchange
+        )
         var running = transcript ?? TLSTranscriptHash(suite.hash)
         running.append(message.raw)  // §4.4.1: the ClientHello enters the transcript
         let serverHandshakeSecret = try beginKeyExchange(
             hello,
             suite: suite,
             group: group,
-            clientShare: clientShare,
+            privateKey: privateKey,
+            sharedSecret: shared,
             ladder: &ladder,
             running: &running
         )
@@ -37,7 +46,8 @@ extension TLSServerConnection {
             hello,
             ladder: ladder,
             running: &running,
-            serverHandshakeSecret: serverHandshakeSecret
+            serverHandshakeSecret: serverHandshakeSecret,
+            signatureSchemes: candidates
         )
         try emit(handshake: flight)  // one send — §5.1 coalescing, trace-exact
         try promoteToApplicationKeys(suite: suite, ladder: &ladder, running: running)
@@ -78,12 +88,14 @@ extension TLSServerConnection {
         return ladder
     }
 
-    /// §4.1.3 + §7.4: ServerHello out (unprotected), ECDHE run, handshake traffic keys in.
+    /// §4.1.3 + §7.4: ServerHello out (unprotected), the already-run ECDHE folded in,
+    /// handshake traffic keys installed.
     private mutating func beginKeyExchange(
         _ hello: TLSClientHello,
         suite: TLSCipherSuite,
         group: TLSNamedGroup,
-        clientShare: TLSKeyShareEntry,
+        privateKey: [UInt8],
+        sharedSecret: SharedSecret,
         ladder: inout TLSKeySchedule,
         running: inout TLSTranscriptHash
     ) throws(TLSHandshakeError) -> SymmetricKey {
@@ -91,7 +103,6 @@ extension TLSServerConnection {
         guard serverRandom.count == 32 else {
             throw .internalError("server random length")  // §4.1.3
         }
-        let privateKey = configuration.entropy.ephemeralPrivateKey(for: group)
         let serverHello = TLSServerHelloEncoder.serverHello(
             random: serverRandom,
             sessionIDEcho: hello.legacySessionID,
@@ -103,11 +114,8 @@ extension TLSServerConnection {
         running.append(serverHello)
         try emit(handshake: serverHello)  // plaintext epoch — §5.1
         emitCompatibilityCCSIfNeeded()  // D.4, before any write keys exist
-        let shared = try TLSKeyExchange.sharedSecret(
-            group: group, privateKey: privateKey, peerShare: clientShare.keyExchange
-        )
         do {
-            try ladder.deriveHandshakeSecret(sharedSecret: shared)
+            try ladder.deriveHandshakeSecret(sharedSecret: sharedSecret)
         }
         catch {
             throw .internalError("handshake secret stage")
@@ -141,7 +149,8 @@ extension TLSServerConnection {
         _ hello: TLSClientHello,
         ladder: TLSKeySchedule,
         running: inout TLSTranscriptHash,
-        serverHandshakeSecret: SymmetricKey
+        serverHandshakeSecret: SymmetricKey,
+        signatureSchemes: [TLSSignatureScheme]
     ) async throws(TLSHandshakeError) -> [UInt8] {
         var flight = TLSEncryptedExtensionsEncoder.encryptedExtensions(
             supportedGroupsHint: configuration.supportedGroupsHint,
@@ -163,7 +172,9 @@ extension TLSServerConnection {
             flight += request
         }
         if !resumed {
-            flight += try await appendCertificateAndVerify(hello, running: &running)
+            flight += try await appendCertificateAndVerify(
+                schemes: signatureSchemes, running: &running
+            )
         }
         let finished = TLSFinishedCodec.finished(
             verifyData: ladder.finishedVerifyData(
@@ -175,11 +186,11 @@ extension TLSServerConnection {
         return flight
     }
 
-    /// §4.4.2/§4.4.3: the certificate chain and its transcript signature via the identity
-    /// seam (§4.2.3 scheme negotiation happened against the client's offer).
-    private mutating func appendCertificateAndVerify(
-        _ hello: TLSClientHello, running: inout TLSTranscriptHash
-    ) async throws(TLSHandshakeError) -> [UInt8] {
+    /// §4.2.3/§9.2: the CertificateVerify scheme candidates — the client's offer ∩ the
+    /// configuration, in server-preference order; checked BEFORE any output leaves.
+    private func selectSignatureSchemes(
+        _ hello: TLSClientHello
+    ) throws(TLSHandshakeError) -> [TLSSignatureScheme] {
         guard let offered = hello.signatureAlgorithms, !offered.isEmpty else {
             throw .missingExtension(.signatureAlgorithms)  // §9.2: mandatory for cert auth
         }
@@ -189,6 +200,14 @@ extension TLSServerConnection {
         guard !candidates.isEmpty else {
             throw .negotiationFailed("signature schemes")  // §4.1.1
         }
+        return candidates
+    }
+
+    /// §4.4.2/§4.4.3: the certificate chain and its transcript signature via the identity
+    /// seam (`schemes` — the precomputed §4.2.3 candidates).
+    private mutating func appendCertificateAndVerify(
+        schemes candidates: [TLSSignatureScheme], running: inout TLSTranscriptHash
+    ) async throws(TLSHandshakeError) -> [UInt8] {
         let chain = identity.certificateChainDER
         guard !chain.isEmpty else {
             throw .internalError("identity provided no certificate")  // §4.4.2 needs a leaf

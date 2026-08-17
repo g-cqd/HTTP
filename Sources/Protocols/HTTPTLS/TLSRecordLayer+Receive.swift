@@ -19,6 +19,14 @@ extension TLSRecordLayer {
     public mutating func receive(
         _ bytes: [UInt8]
     ) throws(TLSRecordError) -> [TLSRecordEvent] {
+        try receive(bytes[...])
+    }
+
+    /// The slice-based twin of ``receive(_:)-swift.method`` — the handshake machine feeds one
+    /// record at a time (its §5.1 splitter) without copying each record out of the feed.
+    public mutating func receive(
+        _ bytes: ArraySlice<UInt8>
+    ) throws(TLSRecordError) -> [TLSRecordEvent] {
         var events: [TLSRecordEvent] = []
         var cursor = bytes.startIndex
         while true {
@@ -66,14 +74,14 @@ extension TLSRecordLayer {
     }
 
     /// Copies the unconsumed tail (always < one record) into the holdback.
-    private mutating func stash(_ bytes: [UInt8], from cursor: inout Int) {
+    private mutating func stash(_ bytes: ArraySlice<UInt8>, from cursor: inout Int) {
         holdback.append(contentsOf: bytes[cursor...])
         cursor = bytes.endIndex
     }
 
     /// Moves octets into the holdback until it holds `target` octets or input runs dry.
     private mutating func topUpHoldback(
-        from bytes: [UInt8], cursor: inout Int, to target: Int
+        from bytes: ArraySlice<UInt8>, cursor: inout Int, to target: Int
     ) {
         let take = min(target - holdback.count, bytes.endIndex - cursor)
         guard take > 0 else {

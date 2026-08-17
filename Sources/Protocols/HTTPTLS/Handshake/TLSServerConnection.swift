@@ -12,9 +12,14 @@
 //  state, one typed error reported — and no path leaves keys half-installed, because keys only
 //  move inside `process…` steps that either complete or funnel.
 //
-//  This file owns state and the funnel; ClientHello handling lives in +ClientHello, the
-//  server flight in +Flight, PSK resumption in +Resumption, the client's second flight in
-//  +ClientFlight, and §4.6 post-handshake traffic in +PostHandshake.
+//  Inbound octets are split at §5.1 record boundaries HERE, and each record's events are
+//  handled before the next record is deprotected: one feed can straddle a key installation
+//  (ClientHello ∥ rejected early data, client Finished ∥ application data, KeyUpdate ∥ data
+//  under the new keys), so batch-deprotecting a whole feed would open records with stale keys.
+//
+//  This file owns state, the funnel, and the splitter; ClientHello handling lives in
+//  +ClientHello, the server flight in +Flight, PSK resumption in +Resumption, the client's
+//  second flight in +ClientFlight, and §4.6 post-handshake traffic in +PostHandshake.
 //
 
 public import Crypto
@@ -73,6 +78,8 @@ public struct TLSServerConnection {
     var sentCookie: [UInt8]?
     /// Whether the D.4 compatibility CCS already went out (at most one).
     var sentCompatibilityCCS = false
+    /// Whether our `close_notify` went out (§6.1 — each side sends exactly one).
+    var sentCloseNotify = false
     /// The §4.2.3 schemes offered in our CertificateRequest (bounds the client's choice).
     var clientAuthSchemes: [TLSSignatureScheme] = []
     /// The client's presented chain, leaf first, DER (§4.4.2).
@@ -81,6 +88,9 @@ public struct TLSServerConnection {
     var ticketNonceCounter: UInt64 = 0
     /// Whether a KeyUpdate with `update_requested` is outstanding (§4.6.3, from our side).
     var requestedPeerKeyUpdate = false
+    /// Trailing partial-record octets awaiting the next feed (the splitter's buffer,
+    /// capacity fixed at one max record — a length lie cannot grow it).
+    var inboundHoldback: [UInt8] = []
 
     /// Creates a server connection for one accepted transport connection.
     public init(configuration: TLSServerConfiguration, identity: any TLSIdentityProvider) {
@@ -88,6 +98,9 @@ public struct TLSServerConnection {
         self.identity = identity
         coalescer = TLSHandshakeCoalescer(
             maximumMessageLength: configuration.maxHandshakeMessageLength
+        )
+        inboundHoldback.reserveCapacity(
+            TLSRecordLimits.headerLength + TLSRecordLimits.maxCiphertextLength
         )
     }
 
@@ -101,19 +114,50 @@ public struct TLSServerConnection {
         guard !state.isTerminal else {
             throw TLSHandshakeError.connectionClosed
         }
-        let recordEvents: [TLSRecordEvent]
+        var events: [TLSServerEvent] = []
+        var cursor = bytes.startIndex
         do {
-            recordEvents = try record.receive(bytes)
+            while !state.isTerminal,
+                let recordEvents = try pumpOneRecord(bytes, cursor: &cursor)
+            {
+                for event in recordEvents {
+                    try await handle(event, into: &events)
+                    if state.isTerminal {
+                        break  // §6.1: octets after close_notify are ignored
+                    }
+                }
+            }
+            try maintainKeyUpdates()
         }
         catch {
-            throw fail(.record(error))
+            throw fail(error)
+        }
+        return events
+    }
+
+    /// The synchronous steady-state twin of ``receive(_:)`` for the post-ClientHello states.
+    ///
+    /// Every post-ClientHello message is processed without suspension (only the identity
+    /// seam's signing is async), and the allocation oracle needs a synchronous body to
+    /// measure. A ClientHello through this path is `unexpected_message`, which is the §4
+    /// answer in every state this method is legal in.
+    mutating func receiveConnected(
+        _ bytes: [UInt8]
+    ) throws(TLSHandshakeError) -> [TLSServerEvent] {
+        guard !state.isTerminal else {
+            throw TLSHandshakeError.connectionClosed
         }
         var events: [TLSServerEvent] = []
+        var cursor = bytes.startIndex
         do {
-            for event in recordEvents {
-                try await handle(event, into: &events)
-                if state.isTerminal {
-                    break  // §6.1: octets after close_notify are ignored
+            while !state.isTerminal,
+                let recordEvents = try pumpOneRecord(bytes, cursor: &cursor)
+            {
+                for event in recordEvents {
+                    try handleSynchronous(event, into: &events)
+                    if state.isTerminal {
+                        break
+                    }
                 }
             }
             try maintainKeyUpdates()
@@ -144,14 +188,20 @@ public struct TLSServerConnection {
         }
     }
 
-    /// Sends `close_notify` (§6.1) and ends the connection — the graceful exit.
+    /// Sends `close_notify` (§6.1) and closes the write direction — the graceful exit.
+    ///
+    /// Legal after the peer's own `close_notify` too (§6.1: "each party MUST send a
+    /// close_notify ... before closing its write side"); a no-op once failed or already sent.
     public mutating func close() {
-        guard !state.isTerminal else {
+        if case .failed = state {
             return
         }
-        try? record.send(
-            alert: TLSAlert(level: TLSAlert.warningLevel, description: .closeNotify)
-        )
+        if !sentCloseNotify {
+            try? record.send(
+                alert: TLSAlert(level: TLSAlert.warningLevel, description: .closeNotify)
+            )
+            sentCloseNotify = true
+        }
         state = .closed
     }
 
@@ -172,6 +222,80 @@ public struct TLSServerConnection {
         return error
     }
 
+    // MARK: the §5.1 record splitter
+
+    /// Cuts exactly one record out of the feed (or the cross-feed holdback) and runs it
+    /// through the record layer; nil when only a partial record remains (stashed).
+    private mutating func pumpOneRecord(
+        _ bytes: [UInt8], cursor: inout Int
+    ) throws(TLSHandshakeError) -> [TLSRecordEvent]? {
+        if inboundHoldback.isEmpty {
+            guard cursor < bytes.endIndex else {
+                return nil
+            }
+            let needed = recordLengthNeeded(bytes[cursor...])
+            guard bytes.endIndex - cursor >= needed else {
+                inboundHoldback.append(contentsOf: bytes[cursor...])
+                cursor = bytes.endIndex
+                return nil
+            }
+            let slice = bytes[cursor ..< cursor + needed]
+            cursor += needed
+            return try feedRecordLayer(slice)
+        }
+        topUpInboundHoldback(bytes, cursor: &cursor)  // header first, then the body
+        let needed = recordLengthNeeded(inboundHoldback[...])
+        guard inboundHoldback.count >= TLSRecordLimits.headerLength,
+            inboundHoldback.count >= needed
+        else {
+            return nil
+        }
+        let events = try feedRecordLayer(inboundHoldback[..<needed])
+        inboundHoldback.removeAll(keepingCapacity: true)
+        return events
+    }
+
+    /// Tops the holdback up to the record header, re-derives the full length, then tops up
+    /// to the whole record (never past it).
+    private mutating func topUpInboundHoldback(_ bytes: [UInt8], cursor: inout Int) {
+        for _ in 0 ..< 2 {  // once for the header, once for the body it reveals
+            let needed = recordLengthNeeded(inboundHoldback[...])
+            let take = min(needed - inboundHoldback.count, bytes.endIndex - cursor)
+            guard take > 0 else {
+                return
+            }
+            inboundHoldback.append(contentsOf: bytes[cursor ..< cursor + take])
+            cursor += take
+        }
+    }
+
+    /// How many octets the record at the slice's head occupies: the header alone until the
+    /// length field is visible — or when the length lies past the §5.2 cap, in which case the
+    /// bare header is fed and the record layer's own `validateHeader` raises the right error.
+    private func recordLengthNeeded(_ bytes: ArraySlice<UInt8>) -> Int {
+        let base = bytes.startIndex
+        guard bytes.count >= TLSRecordLimits.headerLength else {
+            return TLSRecordLimits.headerLength
+        }
+        let bodyLength = Int(bytes[base + 3]) << 8 | Int(bytes[base + 4])
+        guard bodyLength <= TLSRecordLimits.maxCiphertextLength else {
+            return TLSRecordLimits.headerLength  // fed bare; the layer throws record_overflow
+        }
+        return TLSRecordLimits.headerLength + bodyLength
+    }
+
+    /// Runs one record through the layer, converting its failures to the funnel's currency.
+    private mutating func feedRecordLayer(
+        _ slice: ArraySlice<UInt8>
+    ) throws(TLSHandshakeError) -> [TLSRecordEvent] {
+        do {
+            return try record.receive(slice)
+        }
+        catch {
+            throw .record(error)
+        }
+    }
+
     // MARK: record-event dispatch
 
     /// Routes one record event; §5.1's no-interleaving rule guards the non-handshake arms.
@@ -187,6 +311,37 @@ public struct TLSServerConnection {
                         return
                     }
                 }
+            case .applicationData, .alert:
+                try handleNonHandshake(event, into: &events)
+        }
+    }
+
+    /// The synchronous dispatch twin (see ``receiveConnected(_:)``): identical semantics,
+    /// with the ClientHello arm folded into `unexpected_message`.
+    private mutating func handleSynchronous(
+        _ event: TLSRecordEvent, into events: inout [TLSServerEvent]
+    ) throws(TLSHandshakeError) {
+        switch event {
+            case .handshake(let fragment):
+                coalescer.feed(fragment)
+                while let message = try coalescer.next() {
+                    try processSynchronous(message, into: &events)
+                    if state.isTerminal {
+                        return
+                    }
+                }
+            case .applicationData, .alert:
+                try handleNonHandshake(event, into: &events)
+        }
+    }
+
+    /// The shared application-data/alert arms of both dispatchers.
+    private mutating func handleNonHandshake(
+        _ event: TLSRecordEvent, into events: inout [TLSServerEvent]
+    ) throws(TLSHandshakeError) {
+        switch event {
+            case .handshake:
+                throw .internalError("handshake event in the non-handshake dispatch")
             case .applicationData(let content):
                 guard !coalescer.hasPartialMessage else {
                     throw .interleavedHandshake(.applicationData)  // §5.1
@@ -219,6 +374,16 @@ public struct TLSServerConnection {
             case (.expectingClientHello, .clientHello),
                 (.expectingRetriedClientHello, .clientHello):
                 try await processClientHello(message)
+            default:
+                try processSynchronous(message, into: &events)
+        }
+    }
+
+    /// The gate's synchronous arms — everything after the ClientHello.
+    private mutating func processSynchronous(
+        _ message: TLSHandshakeCoalescer.Message, into events: inout [TLSServerEvent]
+    ) throws(TLSHandshakeError) {
+        switch (state, message.type) {
             case (.expectingClientCertificate, .certificate):
                 try processClientCertificate(message)
             case (.expectingClientCertificateVerify, .certificateVerify):
