@@ -284,12 +284,12 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.6.0"),
         // Observability bridges (gap G1) — resolved ONLY by the isolated `HTTPObservability` module,
         // never by a core/protocol/transport/server target, so a consumer of the bare server never pulls
-        // them in. All are apple/* or swift-server/* (allowed by CLAUDE.md). swift-metrics records into
-        // swift-prometheus' registry for the `/metrics` exposition; swift-log backs the structured access
-        // log; swift-distributed-tracing (over swift-service-context) opens a span per request.
+        // them in. All are apple/* (per the dependency policy). swift-metrics records into the module's
+        // own `PrometheusRegistry` for the `/metrics` text exposition (0.0.4, in-house — swift-prometheus
+        // left the graph); swift-log backs the structured access log; swift-distributed-tracing (over
+        // swift-service-context) opens a span per request.
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-metrics.git", from: "2.4.0"),
-        .package(url: "https://github.com/swift-server/swift-prometheus.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.1.0"),
         .package(url: "https://github.com/apple/swift-service-context.git", from: "1.1.0"),
         // apple/swift-crypto (gap G7) — every keyed primitive on a security boundary. Two products,
@@ -588,17 +588,16 @@ let package = Package(
             path: "Sources/Examples/httpd-example"
         ),
         // G1 — opt-in observability bridges over the dependency-free `HTTPMetrics` / middleware seams:
-        // a swift-metrics sink rendered by swift-prometheus at `/metrics`, a swift-log structured access
-        // log, `/healthz` + `/readyz`, and a swift-distributed-tracing span per request. ISOLATED: it
-        // depends on HTTPServer one-way, so its dependencies never enter a core consumer's resolved graph
-        // — the bridge stays opt-in.
+        // a swift-metrics sink rendered by the in-house Prometheus text-exposition backend (0.0.4) at
+        // `/metrics`, a swift-log structured access log, `/healthz` + `/readyz`, and a
+        // swift-distributed-tracing span per request. ISOLATED: it depends on HTTPServer one-way, so its
+        // dependencies never enter a core consumer's resolved graph — the bridge stays opt-in.
         .target(
             name: "HTTPObservability",
             dependencies: [
                 "HTTPServer",
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Metrics", package: "swift-metrics"),
-                .product(name: "Prometheus", package: "swift-prometheus"),
                 .product(name: "Tracing", package: "swift-distributed-tracing"),
                 .product(name: "Instrumentation", package: "swift-distributed-tracing"),
                 .product(name: "ServiceContextModule", package: "swift-service-context")
@@ -608,9 +607,8 @@ let package = Package(
         .testTarget(
             name: "HTTPObservabilityTests",
             dependencies: [
-                "HTTPObservability", "HTTPServer", "HTTPCore",
+                "HTTPObservability", "HTTPServer", "HTTPCore", "HTTPTestSupport",
                 .product(name: "Metrics", package: "swift-metrics"),
-                .product(name: "Prometheus", package: "swift-prometheus"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Tracing", package: "swift-distributed-tracing"),
                 .product(name: "Instrumentation", package: "swift-distributed-tracing"),
