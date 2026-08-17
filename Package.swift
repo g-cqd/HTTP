@@ -109,7 +109,7 @@ let strictSwiftSettings: [SwiftSetting] = [
 // ADFoundation supplies the shared runtime-dispatched SIMD byte kernels (`ADFKernels`) — the WebSocket
 // UTF-8 validator uses the ASCII-run skip. This is the one first-party dependency HTTP takes.
 func adFoundationDependency() -> Package.Dependency {
-    .package(url: "https://github.com/g-cqd/ADFoundation.git", branch: "main")
+    .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
 }
 
 let package = Package(
@@ -166,8 +166,8 @@ let package = Package(
         .target(
             name: "HTTPCore",
             dependencies: [
-                "CCRC32", .product(name: "ADFKernels", package: "ADFoundation"),
-                .product(name: "ADFCore", package: "ADFoundation")
+                "CCRC32", .product(name: "AemiKernels", package: "aemi"),
+                .product(name: "AemiKernel", package: "aemi")
             ],
             path: "Sources/Core/HTTPCore"
         ),
@@ -317,7 +317,7 @@ let package = Package(
         .target(
             name: "WebSocket",
             dependencies: [
-                "HTTPCore", "CWSDeflate", .product(name: "ADFKernels", package: "ADFoundation")
+                "HTTPCore", "CWSDeflate", .product(name: "AemiKernels", package: "aemi")
             ],
             path: "Sources/Protocols/WebSocket"
         ),

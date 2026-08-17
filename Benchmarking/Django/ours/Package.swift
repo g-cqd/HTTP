@@ -21,7 +21,7 @@ let package = Package(
         // its tape parser / encoder beats Foundation's JSONSerialization for our /json + /echo routes.
         // We depend on the Foundation-free `ADJSONCore` product only (tape parse + JSONValue + cursor
         // encode); the umbrella's Codable/Schema/macros are not needed here. ADJSON resolves its own
-        // ADFoundation dependency, which it resolves from github.com/g-cqd@main
+        // AemiFoundation dependency, which it resolves from github.com/g-cqd@main
         // (run.sh sets it) — keeping this a "locally only" investigation with no network fetch of the
         // AD-family. (swift-collections / swift-syntax still resolve from upstream but, since ADJSONCore
         // doesn't depend on the macro target, swift-syntax is fetched, not compiled.)
