@@ -19,6 +19,14 @@ extension TLSRecordLayer {
     public mutating func receive(
         _ bytes: [UInt8]
     ) throws(TLSRecordError) -> [TLSRecordEvent] {
+        try receive(bytes[...])
+    }
+
+    /// The slice-based twin of ``receive(_:)-swift.method`` — the handshake machine feeds one
+    /// record at a time (its §5.1 splitter) without copying each record out of the feed.
+    public mutating func receive(
+        _ bytes: ArraySlice<UInt8>
+    ) throws(TLSRecordError) -> [TLSRecordEvent] {
         var events: [TLSRecordEvent] = []
         var cursor = bytes.startIndex
         while true {
@@ -66,14 +74,14 @@ extension TLSRecordLayer {
     }
 
     /// Copies the unconsumed tail (always < one record) into the holdback.
-    private mutating func stash(_ bytes: [UInt8], from cursor: inout Int) {
+    private mutating func stash(_ bytes: ArraySlice<UInt8>, from cursor: inout Int) {
         holdback.append(contentsOf: bytes[cursor...])
         cursor = bytes.endIndex
     }
 
     /// Moves octets into the holdback until it holds `target` octets or input runs dry.
     private mutating func topUpHoldback(
-        from bytes: [UInt8], cursor: inout Int, to target: Int
+        from bytes: ArraySlice<UInt8>, cursor: inout Int, to target: Int
     ) {
         let take = min(target - holdback.count, bytes.endIndex - cursor)
         guard take > 0 else {
@@ -134,7 +142,26 @@ extension TLSRecordLayer {
         guard var protector = readProtector else {
             throw .unexpectedPlaintextRecord(.applicationData)
         }
-        let opened = try protector.open(header: header, body: body)
+        let opened: (type: TLSContentType, content: [UInt8])
+        do {
+            opened = try protector.open(header: header, body: body)
+        }
+        catch {
+            // §4.2.10: a server that rejected offered early data "skips past early data by
+            // attempting to deprotect received records using the handshake traffic key,
+            // discarding records which fail deprotection (up to the configured
+            // max_early_data_size)". The window exists only at the handshake read epoch and
+            // only for the uniform §5.2 deprotection failure — every other error stays fatal.
+            if error == .badRecordMac, readEpoch == .handshake, let budget = earlyDataSkipBudget {
+                let remaining = budget - body.count
+                guard remaining >= 0 else {
+                    throw error  // the skip budget is exhausted — fail closed
+                }
+                earlyDataSkipBudget = remaining
+                return
+            }
+            throw error
+        }
         readProtector = protector
         guard opened.type != .changeCipherSpec else {
             throw .unexpectedProtectedRecord(.changeCipherSpec)  // §5: CCS is never protected
