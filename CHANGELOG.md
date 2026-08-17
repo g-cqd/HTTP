@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — in-house DEFLATE: system zlib leaves the package (2026-08-17)
+
+`HTTPDeflate` is a from-scratch, pure-Swift RFC 1951 DEFLATE codec (inflate + deflate) with the
+RFC 1952 gzip and RFC 1950 zlib containers — sans-I/O (`Span` in, `OutputSpan` out), typed
+`InflateError`s on the attacker-facing half, zero steady-state allocations, strict memory safety
+from birth. It replaces the last two system-zlib borrows: `CWSDeflate` (RFC 7692
+permessage-deflate, previously linked on every platform) and `CZlibCoding` (the Linux gzip content
+codings). Equivalence against zlib was proven differentially on both platforms' system libraries
+before the shims were deleted; `linkedLibrary("z")` no longer appears in the manifest and a
+from-scratch verbose build contains zero `-lz`.
+
+### Added
+- The `HTTPDeflate` library product: `Deflator`/`Inflator` (raw RFC 1951, sync-flush and finish
+  boundaries, context takeover + `reset()`), `GzipDeflator`/`GzipInflator`/`ZlibInflator`
+  (verified CRC-32/ISIZE and Adler-32 trailers), `DeflateCodec` one-shots, `DeflateLevel`
+  (store/fast/balanced), `CodecProgress`, `DeflateFlush`, `InflateError`.
+- gzip request decoding and gzip response coding now exist on **every** build — the
+  "no gzip backend" fallbacks in the middleware are gone.
+
+### Changed
+- WebSocket permessage-deflate and the Linux `gzip`/`deflate` codings ride `HTTPDeflate`;
+  Darwin's buffered/streamed response codings stay on Apple's Compression framework.
+- The `deflate` request coding now decodes its spec'd RFC 1950 envelope (raw RFC 1951 fallback)
+  and `gzip` strictly RFC 1952 — the shim's header auto-detect had accepted mislabeled bodies.
+
+### Removed (breaking for no supported configuration)
+- The `CWSDeflate` and `CZlibCoding` targets and their system-zlib links.
+
 ## Unreleased — TOCTOU-safe static file serving (2026-07-31)
 
 `FileResponder` resolved a request path by string (`resolvingSymlinksInPath()` + a `hasPrefix`
