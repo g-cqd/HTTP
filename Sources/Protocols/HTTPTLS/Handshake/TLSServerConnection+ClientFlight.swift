@@ -14,10 +14,11 @@
 internal import Crypto
 
 extension TLSServerConnection {
-    /// §4.4.2: the client Certificate — chain captured for Phase 3c, emptiness judged by mode.
+    /// §4.4.2: the client Certificate — emptiness judged by mode, a presented chain run
+    /// through the 3c trust seam (async — hence this arm lives on the async dispatch).
     mutating func processClientCertificate(
         _ message: TLSHandshakeCoalescer.Message
-    ) throws(TLSHandshakeError) {
+    ) async throws(TLSHandshakeError) {
         let chain = try TLSCertificateCodec.parseClientCertificate(message)
         transcript?.append(message.raw)
         clientCertificateChain = chain
@@ -27,6 +28,18 @@ extension TLSServerConnection {
             }
             state = .expectingClientFinished  // §4.4.2: no cert ⇒ no CertificateVerify
             return
+        }
+        if let validator = configuration.clientChainValidator {
+            // RFC 5280 §6 path validation at Certificate receipt — before the
+            // CertificateVerify is even read (§4.4.2.4: "If the server ... the certificate
+            // chain ... is unacceptable ... it MAY ... abort the handshake"; this engine
+            // does, fail closed, with the verdict's §6.2 alert).
+            switch await validator.validate(chainDER: chain) {
+                case .accepted:
+                    break
+                case .rejected(let rejection):
+                    throw .clientChainRejected(rejection)
+            }
         }
         state = .expectingClientCertificateVerify
     }

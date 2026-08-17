@@ -43,6 +43,16 @@ public struct TLSServerConfiguration: Sendable {
     /// verifier for RSA clients.
     public var certificateVerifier: any TLSCertificateSignatureVerifier =
         TLSECDSACertificateVerifier()
+    /// Validates a PRESENTED client chain against a trust policy (RFC 5280 §6; Phase 3c).
+    ///
+    /// Consulted only when ``clientAuthentication`` requested a certificate and the client
+    /// sent a non-empty chain — after §4.4.2 decoding, before the flight proceeds; the
+    /// verdict's §6.2 alert (`unknown_ca` / `certificate_expired` / `bad_certificate`)
+    /// aborts on rejection. Nil accepts any presented chain once its CertificateVerify
+    /// verifies (§4.4.3) — the portable backbone's nil-`verifyPeer` semantics. Wire
+    /// ``TLSX509ChainValidator`` for pinned-roots path validation, or pass an existing
+    /// `verifyPeer` hook through ``TLSVerifyPeerHookValidator``.
+    public var clientChainValidator: (any TLSClientChainValidator)?
     /// The ticket vault (§4.6.1).
     ///
     /// Nil = no tickets issued, no resumption accepted.

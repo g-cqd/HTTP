@@ -28,8 +28,9 @@ public import Crypto
 public struct TLSServerConnection {
     /// The listener contract this connection negotiates under.
     let configuration: TLSServerConfiguration
-    /// The certificate/signing identity (Phase 3c's seam).
-    let identity: any TLSIdentityProvider
+    /// The identity seam (Phase 3c): resolved per handshake from the ClientHello's SNI —
+    /// which is also what makes hot reload work (see ``TLSIdentityStore``).
+    let identitySelector: any TLSIdentitySelector
     /// The §5 record layer (Phase 3a).
     var record = TLSRecordLayer()
     /// §5.1 handshake-message reassembly.
@@ -92,10 +93,22 @@ public struct TLSServerConnection {
     /// capacity fixed at one max record — a length lie cannot grow it).
     var inboundHoldback: [UInt8] = []
 
-    /// Creates a server connection for one accepted transport connection.
+    /// Creates a server connection serving one fixed identity (no SNI multi-cert).
     public init(configuration: TLSServerConfiguration, identity: any TLSIdentityProvider) {
+        self.init(
+            configuration: configuration,
+            identitySelector: TLSIdentityCatalog(defaultIdentity: identity)
+        )
+    }
+
+    /// Creates a server connection resolving its identity per handshake (RFC 6066 SNI
+    /// multi-cert and/or hot reload) — pass the listener's long-lived
+    /// ``TLSIdentityStore`` or a fixed ``TLSIdentityCatalog``.
+    public init(
+        configuration: TLSServerConfiguration, identitySelector: any TLSIdentitySelector
+    ) {
         self.configuration = configuration
-        self.identity = identity
+        self.identitySelector = identitySelector
         coalescer = TLSHandshakeCoalescer(
             maximumMessageLength: configuration.maxHandshakeMessageLength
         )
@@ -135,12 +148,13 @@ public struct TLSServerConnection {
         return events
     }
 
-    /// The synchronous steady-state twin of ``receive(_:)`` for the post-ClientHello states.
+    /// The synchronous steady-state twin of ``receive(_:)`` for the post-handshake states.
     ///
-    /// Every post-ClientHello message is processed without suspension (only the identity
-    /// seam's signing is async), and the allocation oracle needs a synchronous body to
-    /// measure. A ClientHello through this path is `unexpected_message`, which is the §4
-    /// answer in every state this method is legal in.
+    /// Every steady-state message is processed without suspension (only the identity seam's
+    /// signing and the 3c trust seam's chain validation are async), and the allocation
+    /// oracle needs a synchronous body to measure. A ClientHello — or a client
+    /// Certificate — through this path is `unexpected_message`, which is the §4 answer in
+    /// every state this method is legal in (`.connected`, where both are out of order).
     mutating func receiveConnected(
         _ bytes: [UInt8]
     ) throws(TLSHandshakeError) -> [TLSServerEvent] {
@@ -374,6 +388,9 @@ public struct TLSServerConnection {
             case (.expectingClientHello, .clientHello),
                 (.expectingRetriedClientHello, .clientHello):
                 try await processClientHello(message)
+            case (.expectingClientCertificate, .certificate):
+                // Async since 3c: chain validation rides the (async) trust seam.
+                try await processClientCertificate(message)
             default:
                 try processSynchronous(message, into: &events)
         }
@@ -384,8 +401,6 @@ public struct TLSServerConnection {
         _ message: TLSHandshakeCoalescer.Message, into events: inout [TLSServerEvent]
     ) throws(TLSHandshakeError) {
         switch (state, message.type) {
-            case (.expectingClientCertificate, .certificate):
-                try processClientCertificate(message)
             case (.expectingClientCertificateVerify, .certificateVerify):
                 try processClientCertificateVerify(message)
             case (.expectingClientFinished, .finished):
