@@ -3,7 +3,7 @@
 //  HTTPServerTests
 //
 //  A plain ``ContentEncoder`` — the shape every consumer-supplied encoder had before the streaming seam
-//  existed, and the shape `CZstd`/`CZlibCoding`/`CBrotli` still have. It must keep working for buffered
+//  existed, and the shape `CZstd`/`CBrotli` still have. It must keep working for buffered
 //  responses and must leave a *streamed* response uncoded rather than being buffered to code it.
 //
 //  A distinct type rather than a mode of ``ProbeContentEncoder`` because the thing under test is the

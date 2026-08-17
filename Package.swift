@@ -58,7 +58,8 @@ let strictMemorySafeTargets: Set<String> = [
     "HPACK",  // 2 sites annotated (RFC 7541 §5.2 string materialization)
     "QPACK",  // 2 sites annotated (RFC 9204 §4.1.2 string materialization)
     "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
-    "HTTPAuth"  // already 0 — pure crypto/middleware over swift-crypto
+    "HTTPAuth",  // already 0 — pure crypto/middleware over swift-crypto
+    "HTTPDeflate"  // strict from birth (annotated sites only at the [UInt8] ⇄ Span seam)
 ]
 
 // G0 — the Darwin-only transport backbones are absent from the Linux build graph, where the portable
@@ -89,9 +90,8 @@ let strictMemorySafeTargets: Set<String> = [
         "Quic/QUICTransportFactory.swift"
     ]
     // The outbound/inbound codings built on Apple's `Compression` framework (Brotli RFC 7932, gzip
-    // RFC 1952, inflate) — absent on Linux, where the `CompressionMiddleware`/`DecompressionMiddleware`
-    // gate them off `#if canImport(Compression)` and zstd (the `CZstd` shim, the `Zstd` trait) is the
-    // cross-platform coding. zlib-gzip + `libbrotli` for Linux are a G0 follow-up.
+    // RFC 1952, inflate) — absent on Linux, where their `#if !canImport(Compression)` twins ride the
+    // in-house `HTTPDeflate` codec (gzip/inflate) and the opt-in `CBrotli`/`CZstd` shims.
     let appleCompressionSources = [
         "Middleware/Brotli.swift",
         "Middleware/Gzip.swift",
@@ -148,9 +148,9 @@ let strictMemorySafeTargets: Set<String> = [
     // `ContentEncoderStreamTests` and `StreamingCompressionTests` are NOT here any more. They were,
     // because `GzipEncoder.makeStream()` returned nil off Darwin and every streamed response fell
     // through to identity — the exclusion was a symptom of a missing feature, not a portability
-    // defect in the tests. The feature exists now (`ZlibDeflateStream` over the `CZlibCoding` shim's
-    // resumable `deflate`), so both suites run here, and their byte-identity case is what holds the
-    // Linux streamed and buffered codings to the same octets. Keep it that way.
+    // defect in the tests. The feature exists (today over the in-house `HTTPDeflate` codec), so both
+    // suites run here, and their byte-identity case is what holds the Linux streamed and buffered
+    // codings to the same octets. Keep it that way.
     let serverTestExclusions = [
         "HTTPServerHTTP3Tests.swift",
         "HTTPServerWebSocketHTTP3Tests.swift",
@@ -245,6 +245,7 @@ let package = Package(
     products: [
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
         .library(name: "HTTPConcurrency", targets: ["HTTPConcurrency"]),
+        .library(name: "HTTPDeflate", targets: ["HTTPDeflate"]),
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HPACK", targets: ["HPACK"]),
         .library(name: "QPACK", targets: ["QPACK"]),
@@ -339,6 +340,23 @@ let package = Package(
             dependencies: ["HTTPCore", "HTTPTestSupport"],
             path: "Tests/Core/HTTPCoreTests"
         ),
+        // RFC 1951 DEFLATE (inflate + deflate) and the RFC 1952 gzip / RFC 1950 zlib containers,
+        // from scratch in portable Swift — no system zlib anywhere in the graph. Sans-I/O push/pull
+        // streams (`Span` in, `OutputSpan` out, zero steady-state allocation); the inflate side is the
+        // attacker-facing half and fails closed with typed errors. Backs RFC 7692 permessage-deflate
+        // (WebSocket, every platform) and the Linux gzip content codings; Darwin response codings stay
+        // on Apple's Compression framework. Strict memory safety from birth.
+        .target(name: "HTTPDeflate", dependencies: ["HTTPCore"], path: "Sources/Core/HTTPDeflate"),
+        .testTarget(
+            name: "HTTPDeflateTests",
+            // The differential-fuzz suite against system zlib (through the deleted CZlibCoding /
+            // CWSDeflate shims) lived here while the incumbent was still in the tree — equivalence
+            // was proven on both platforms' zlibs, then the oracle left with the shims (the house
+            // pattern). The RFC vectors, round-trips, sync-flush, chunk-stability, fuzz and
+            // allocation suites remain.
+            dependencies: ["HTTPDeflate", "HTTPCore", "HTTPTestSupport"],
+            path: "Tests/Core/HTTPDeflateTests"
+        ),
         // Shipped-safe concurrency seams: the `TaskProvider` (so untracked `Task { }` spawns become
         // injectable + settle-able) and the `MonotonicNowProvider` (so the HTTP/2 Rapid Reset window
         // is deterministically pinnable). Zero external dependencies, no I/O — reuse-safe.
@@ -362,23 +380,6 @@ let package = Package(
         .target(
             name: "CCRC32",
             path: "Sources/Core/CCRC32"
-        ),
-        // A C shim over the system zlib for RFC 7692 permessage-deflate: raw DEFLATE with `Z_SYNC_FLUSH`
-        // (the flush mode that frames a WebSocket message, which Apple's Compression cannot express).
-        // Keeps the unsafe `z_stream` plumbing in auditable C, like CCRC32. Links the system zlib.
-        .target(
-            name: "CWSDeflate",
-            path: "Sources/Protocols/CWSDeflate",
-            linkerSettings: [.linkedLibrary("z")]
-        ),
-        // G0 — a one-shot gzip (RFC 1952) compress + gzip/zlib/raw inflate C shim over the system zlib,
-        // for the Linux content codings (Apple's Compression framework is absent there). Links the system
-        // zlib like CCRC32/CWSDeflate; depended on only `.when(platforms: [.linux])`, so it never enters
-        // the apple graph (where Darwin Compression backs gzip).
-        .target(
-            name: "CZlibCoding",
-            path: "Sources/Core/CZlibCoding",
-            linkerSettings: [.linkedLibrary("z")]
         ),
         // The RFC 8878 `zstd` content coding shim over the system libzstd (Apple's Compression
         // framework has no Zstandard codec, on any platform). Opt-in via the `Zstd` package trait:
@@ -504,7 +505,7 @@ let package = Package(
         .target(
             name: "WebSocket",
             dependencies: [
-                "HTTPCore", "CWSDeflate", .product(name: "AemiKernels", package: "aemi")
+                "HTTPCore", "HTTPDeflate", .product(name: "AemiKernels", package: "aemi")
             ],
             path: "Sources/Protocols/WebSocket"
         ),
@@ -549,8 +550,10 @@ let package = Package(
                 // first-party implementation rather than an in-house one (see the `swift-crypto`
                 // dependency comment). `Crypto` only — never `_CryptoExtras`.
                 .product(name: "Crypto", package: "swift-crypto"),
-                // Linux gzip coding (zlib); on Darwin gzip is Apple's Compression, so this stays off the graph.
-                .target(name: "CZlibCoding", condition: .when(platforms: [.linux])),
+                // The in-house DEFLATE/gzip codec: the Linux content codings run on it, and the
+                // WebSocket permessage-deflate path (via the WebSocket target) on every platform.
+                // On Darwin the buffered/streamed response codings stay on Apple's Compression.
+                "HTTPDeflate",
                 // The opt-in codings: trait-conditional edges, so `#if canImport(CZstd)` /
                 // `#if canImport(CBrotli)` in the middleware flip with the trait.
                 .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
@@ -563,8 +566,7 @@ let package = Package(
             name: "HTTPServerTests",
             dependencies: [
                 "HTTPServer", "HTTP1", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket",
-                "HTTPTransport", "HTTPTestSupport",
-                .target(name: "CZlibCoding", condition: .when(platforms: [.linux])),
+                "HTTPTransport", "HTTPTestSupport", "HTTPDeflate",
                 // The self-gating coding suites (`#if canImport(CZstd)` / `#if canImport(CBrotli)`)
                 // compile only when the trait puts the shim in the graph.
                 .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
@@ -644,7 +646,7 @@ let package = Package(
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
 let nonSwiftTargets: Set<String> = [
-    "CHTTPTestMalloc", "CCRC32", "CEpoll", "CZlibCoding", "CZstd", "CBrotli"
+    "CHTTPTestMalloc", "CCRC32", "CEpoll", "CZstd", "CBrotli"
 ]
 
 for target in package.targets where !nonSwiftTargets.contains(target.name) {

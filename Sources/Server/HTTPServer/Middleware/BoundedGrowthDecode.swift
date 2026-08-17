@@ -2,10 +2,10 @@
 //  BoundedGrowthDecode.swift
 //  HTTPServer
 //
-//  The decompression-bomb bound (CWE-409) for the ONE-SHOT decode shims: `InflateLinux` (zlib, over
-//  `CZlibCoding`) and `BrotliLinux` (libbrotli, over `CBrotli`). Both wrap a C entry point that
-//  decodes a whole stream into a caller-sized destination and cannot say "would not fit" other than
-//  by failing, so both have to retry into a larger destination — which is where the bound lives.
+//  The decompression-bomb bound (CWE-409) for the ONE-SHOT decoders: `InflateLinux` (the in-house
+//  HTTPDeflate codec's capacity-bounded one-shot) and `BrotliLinux` (libbrotli, over `CBrotli`).
+//  Both decode a whole stream into a caller-sized destination and report "would not fit" only by
+//  failing, so both retry into a larger destination — which is where the bound lives.
 //
 //  It lives here, once, because it was written twice and the copies had already started explaining
 //  themselves by reference to each other ("for the same reasons as InflateLinux, which carries the

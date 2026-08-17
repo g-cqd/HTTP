@@ -3,43 +3,55 @@
 //  HTTPServer
 //
 //  The incremental `gzip` content coding (RFC 1952) for the non-Apple (Linux) build — the streaming
-//  counterpart of ``Gzip/compress(_:)`` there, as GzipEncoderStream.swift is on Darwin. Compiled only
-//  where the `CZlibCoding` shim is present (`#if canImport(CZlibCoding)`, i.e. the Linux graph, where
-//  GzipEncoderStream.swift's `#if canImport(Compression)` compiles to nothing), so the two never
-//  co-exist — the Gzip.swift / GzipLinux.swift split, one layer up.
+//  counterpart of ``Gzip/compress(_:)`` there, as GzipEncoderStream.swift is on Darwin. Compiled
+//  only where Apple's Compression framework is absent (`#if !canImport(Compression)`), so the two
+//  never co-exist — the Gzip.swift / GzipLinux.swift split, one layer up.
 //
-//  Unlike the Darwin twin there is no envelope to maintain here. That one frames a *raw* DEFLATE stream
-//  by hand: it emits ``Gzip/header``, folds the CRC-32 and the wrapping ISIZE as the octets go past, and
-//  appends them itself, because Apple's `COMPRESSION_ZLIB` produces no gzip member. zlib's windowBits 31
-//  produces the whole member — header, DEFLATE, CRC-32, ISIZE — so this is ``ZlibDeflateStream`` with
-//  nothing added, and it inherits byte-identity with ``Gzip/compress(_:)`` from sharing that codec's one
-//  initialization site rather than from re-deriving the trailer the same way twice.
+//  Byte-identity with the buffered path is the property ``CompressionMiddleware`` depends on, and
+//  it is structural here: ``Gzip/compress(_:)`` and this stream are the SAME ``GzipDeflator`` at
+//  the same ``Gzip/level``, driven with different chunk sizes, and that codec's output under
+//  no-flush pumping is a function of the input octets alone, never of the chunking — pinned by
+//  `ContentEncoderStreamTests` on both platforms and by the codec's own chunk-stability suite.
 //
 
-#if canImport(CZlibCoding)
+#if !canImport(Compression)
 
-    /// An incremental gzip member (RFC 1952) over the system zlib's resumable `deflate`.
+    internal import HTTPDeflate
+
+    /// An incremental gzip member (RFC 1952) over the in-house ``GzipDeflator``.
     final class GzipEncoderStream: ContentEncoderStream {
-        private let deflate: ZlibDeflateStream
+        private var encoder: GzipDeflator
+        /// Whether ``finish()`` has sealed the member — further input is a caller defect.
+        private var finished = false
 
-        /// Starts a gzip member, or nil when zlib will not start one.
+        /// Starts a gzip member (never nil — the in-house codec has no failure mode; the zlib
+        /// shim this replaced could fail on OOM).
         init?() {
-            guard let deflate = ZlibDeflateStream(level: Gzip.level) else {
-                return nil
-            }
-            self.deflate = deflate
+            encoder = GzipDeflator(level: Gzip.level)
         }
 
         deinit {
-            // The codec state is the `ZlibDeflateStream`'s to free; ARC releases it here.
+            // The codec state is plain Swift storage; ARC releases it here — including on the
+            // cancellation path, where a disconnected client leaves `finish` uncalled.
         }
 
         func update(_ input: [UInt8]) throws(ContentEncodingError) -> [UInt8] {
-            try deflate.process(input, finalize: false)
+            guard !finished else {
+                throw .streamFinished
+            }
+            var output: [UInt8] = []
+            encoder.pump(input, appendingTo: &output)
+            return output
         }
 
         func finish() throws(ContentEncodingError) -> [UInt8] {
-            try deflate.process([], finalize: true)
+            guard !finished else {
+                throw .streamFinished
+            }
+            finished = true
+            var output: [UInt8] = []
+            encoder.pump([], appendingTo: &output, flush: .finish)
+            return output
         }
     }
 

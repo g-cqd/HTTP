@@ -80,7 +80,7 @@ func brotliStreamMatchesOneShot(chunk: Int) throws {
 
 @Test("RFC 1952 — the `gzip` coding streams on every build that can encode it")
 func gzipStreamsWhereverItEncodes() {
-    // The regression guard for the Linux streaming gap: `encode` went through the `CZlibCoding` shim
+    // The regression guard for the Linux streaming gap: `encode` had a backend (then a zlib shim)
     // while `makeStream` returned nil, so a streamed response silently fell through to identity — the
     // client got an uncompressed body with no error and no way to tell. Stated as an equivalence
     // rather than as `!= nil` so it also holds on a build with no gzip backend at all, where the

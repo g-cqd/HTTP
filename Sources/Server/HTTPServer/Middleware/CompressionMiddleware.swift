@@ -45,9 +45,7 @@ public struct CompressionMiddleware: HTTPMiddleware {
         #if canImport(CZstd)
             encoders.append(ZstdEncoder())
         #endif
-        #if canImport(Compression) || canImport(CZlibCoding)
-            encoders.append(GzipEncoder())
-        #endif
+        encoders.append(GzipEncoder())  // gzip has an in-house backend on every build
         return encoders
     }
 
