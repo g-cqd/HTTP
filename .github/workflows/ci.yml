@@ -218,7 +218,7 @@ jobs:
   # macOS 27, Swift 6.4 toolchain) — recorded here so the choices are not re-litigated:
   #
   #   • BUILD SYSTEM. `swift test --sanitize=undefined` on the DEFAULT swiftbuild build system fails
-  #     to LINK the test bundles: the C targets (CCRC32, CWSDeflate, and the ADFoundation CADFKernels)
+  #     to LINK the test bundles: the C targets (CCRC32 and the ADFoundation CADFKernels)
   #     are UBSan-instrumented and emit `___ubsan_handle_*` references, but swiftbuild does not link the
   #     UBSan runtime into an xctest bundle, so every one is an undefined symbol at link
   #     (`ld: symbol(s) not found ... ___ubsan_handle_add_overflow ... in CCRC32.o`). This is the

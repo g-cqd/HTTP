@@ -4,7 +4,7 @@
 //
 //  RFC 7932 `br` content coding over libbrotli (one-shot encode + decode). Each wrapper funnels
 //  libbrotli's `BROTLI_BOOL` / `BrotliDecoderResult` to "octets written, or 0 on failure" so the Swift
-//  side reads 0 as "could not encode/decode" (mirroring CZstd / CZlibCoding). No state is held across
+//  side reads 0 as "could not encode/decode" (mirroring CZstd). No state is held across
 //  calls; the caller owns the buffers.
 //
 

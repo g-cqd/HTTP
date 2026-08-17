@@ -24,9 +24,9 @@ HTTPTransport	147	10
 HTTPServer	79	3
 HTTPCore	76	0
 HTTPTestSupport	75	1
-WebSocket	29	0
 HTTP1	23	0
 HTTP2	21	0
+WebSocket	13	0
 HTTP3	8	0
 httpd-example	4	0
 HTTPAuth	0	1

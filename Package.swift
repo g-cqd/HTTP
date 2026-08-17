@@ -90,9 +90,8 @@ let strictMemorySafeTargets: Set<String> = [
         "Quic/QUICTransportFactory.swift"
     ]
     // The outbound/inbound codings built on Apple's `Compression` framework (Brotli RFC 7932, gzip
-    // RFC 1952, inflate) — absent on Linux, where the `CompressionMiddleware`/`DecompressionMiddleware`
-    // gate them off `#if canImport(Compression)` and zstd (the `CZstd` shim, the `Zstd` trait) is the
-    // cross-platform coding. zlib-gzip + `libbrotli` for Linux are a G0 follow-up.
+    // RFC 1952, inflate) — absent on Linux, where their `#if !canImport(Compression)` twins ride the
+    // in-house `HTTPDeflate` codec (gzip/inflate) and the opt-in `CBrotli`/`CZstd` shims.
     let appleCompressionSources = [
         "Middleware/Brotli.swift",
         "Middleware/Gzip.swift",
@@ -350,12 +349,12 @@ let package = Package(
         .target(name: "HTTPDeflate", dependencies: ["HTTPCore"], path: "Sources/Core/HTTPDeflate"),
         .testTarget(
             name: "HTTPDeflateTests",
-            // CZlibCoding + CWSDeflate are the differential-fuzz oracle: system zlib through the
-            // shims this codec replaces. Deleted with the shims once the replacement sweep lands
-            // (the house pattern — prove equivalence in one tree, then delete).
-            dependencies: [
-                "HTTPDeflate", "HTTPCore", "HTTPTestSupport", "CZlibCoding", "CWSDeflate"
-            ],
+            // The differential-fuzz suite against system zlib (through the deleted CZlibCoding /
+            // CWSDeflate shims) lived here while the incumbent was still in the tree — equivalence
+            // was proven on both platforms' zlibs, then the oracle left with the shims (the house
+            // pattern). The RFC vectors, round-trips, sync-flush, chunk-stability, fuzz and
+            // allocation suites remain.
+            dependencies: ["HTTPDeflate", "HTTPCore", "HTTPTestSupport"],
             path: "Tests/Core/HTTPDeflateTests"
         ),
         // Shipped-safe concurrency seams: the `TaskProvider` (so untracked `Task { }` spawns become
@@ -381,23 +380,6 @@ let package = Package(
         .target(
             name: "CCRC32",
             path: "Sources/Core/CCRC32"
-        ),
-        // A C shim over the system zlib for RFC 7692 permessage-deflate: raw DEFLATE with `Z_SYNC_FLUSH`
-        // (the flush mode that frames a WebSocket message, which Apple's Compression cannot express).
-        // Keeps the unsafe `z_stream` plumbing in auditable C, like CCRC32. Links the system zlib.
-        .target(
-            name: "CWSDeflate",
-            path: "Sources/Protocols/CWSDeflate",
-            linkerSettings: [.linkedLibrary("z")]
-        ),
-        // G0 — a one-shot gzip (RFC 1952) compress + gzip/zlib/raw inflate C shim over the system zlib,
-        // for the Linux content codings (Apple's Compression framework is absent there). Links the system
-        // zlib like CCRC32/CWSDeflate; depended on only `.when(platforms: [.linux])`, so it never enters
-        // the apple graph (where Darwin Compression backs gzip).
-        .target(
-            name: "CZlibCoding",
-            path: "Sources/Core/CZlibCoding",
-            linkerSettings: [.linkedLibrary("z")]
         ),
         // The RFC 8878 `zstd` content coding shim over the system libzstd (Apple's Compression
         // framework has no Zstandard codec, on any platform). Opt-in via the `Zstd` package trait:
@@ -664,7 +646,7 @@ let package = Package(
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
 let nonSwiftTargets: Set<String> = [
-    "CHTTPTestMalloc", "CCRC32", "CEpoll", "CZlibCoding", "CZstd", "CBrotli"
+    "CHTTPTestMalloc", "CCRC32", "CEpoll", "CZstd", "CBrotli"
 ]
 
 for target in package.targets where !nonSwiftTargets.contains(target.name) {
