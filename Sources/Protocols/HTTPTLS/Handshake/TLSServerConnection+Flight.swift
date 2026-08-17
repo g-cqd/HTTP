@@ -27,6 +27,10 @@ extension TLSServerConnection {
         // and the peer share's validity (§4.2.8.2) are both decidable now — a violation
         // must die as ONE plaintext alert, not a ServerHello followed by a sealed alert.
         let candidates = resumed ? [] : try selectSignatureSchemes(hello)
+        // The identity is resolved HERE — after the SNI is parsed, before the ServerHello
+        // (RFC 6066 §3; the portable backbone's `servername` callback point). Resolving
+        // per handshake is also what makes ``TLSIdentityStore`` reload work.
+        let identity = identitySelector.identity(forServerName: clientServerName)
         let privateKey = configuration.entropy.ephemeralPrivateKey(for: group)
         let shared = try TLSKeyExchange.sharedSecret(
             group: group, privateKey: privateKey, peerShare: clientShare.keyExchange
@@ -44,6 +48,7 @@ extension TLSServerConnection {
         )
         let flight = try await buildServerFlight(
             hello,
+            identity: identity,
             ladder: ladder,
             running: &running,
             serverHandshakeSecret: serverHandshakeSecret,
@@ -147,6 +152,7 @@ extension TLSServerConnection {
     /// CertificateVerify] ∥ Finished, appended to the transcript as built.
     private mutating func buildServerFlight(
         _ hello: TLSClientHello,
+        identity: any TLSIdentityProvider,
         ladder: TLSKeySchedule,
         running: inout TLSTranscriptHash,
         serverHandshakeSecret: SymmetricKey,
@@ -173,7 +179,7 @@ extension TLSServerConnection {
         }
         if !resumed {
             flight += try await appendCertificateAndVerify(
-                schemes: signatureSchemes, running: &running
+                identity, schemes: signatureSchemes, running: &running
             )
         }
         let finished = TLSFinishedCodec.finished(
@@ -206,7 +212,9 @@ extension TLSServerConnection {
     /// §4.4.2/§4.4.3: the certificate chain and its transcript signature via the identity
     /// seam (`schemes` — the precomputed §4.2.3 candidates).
     private mutating func appendCertificateAndVerify(
-        schemes candidates: [TLSSignatureScheme], running: inout TLSTranscriptHash
+        _ identity: any TLSIdentityProvider,
+        schemes candidates: [TLSSignatureScheme],
+        running: inout TLSTranscriptHash
     ) async throws(TLSHandshakeError) -> [UInt8] {
         let chain = identity.certificateChainDER
         guard !chain.isEmpty else {

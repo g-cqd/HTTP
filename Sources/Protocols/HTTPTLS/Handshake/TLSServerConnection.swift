@@ -28,8 +28,9 @@ public import Crypto
 public struct TLSServerConnection {
     /// The listener contract this connection negotiates under.
     let configuration: TLSServerConfiguration
-    /// The certificate/signing identity (Phase 3c's seam).
-    let identity: any TLSIdentityProvider
+    /// The identity seam (Phase 3c): resolved per handshake from the ClientHello's SNI —
+    /// which is also what makes hot reload work (see ``TLSIdentityStore``).
+    let identitySelector: any TLSIdentitySelector
     /// The §5 record layer (Phase 3a).
     var record = TLSRecordLayer()
     /// §5.1 handshake-message reassembly.
@@ -92,10 +93,22 @@ public struct TLSServerConnection {
     /// capacity fixed at one max record — a length lie cannot grow it).
     var inboundHoldback: [UInt8] = []
 
-    /// Creates a server connection for one accepted transport connection.
+    /// Creates a server connection serving one fixed identity (no SNI multi-cert).
     public init(configuration: TLSServerConfiguration, identity: any TLSIdentityProvider) {
+        self.init(
+            configuration: configuration,
+            identitySelector: TLSIdentityCatalog(defaultIdentity: identity)
+        )
+    }
+
+    /// Creates a server connection resolving its identity per handshake (RFC 6066 SNI
+    /// multi-cert and/or hot reload) — pass the listener's long-lived
+    /// ``TLSIdentityStore`` or a fixed ``TLSIdentityCatalog``.
+    public init(
+        configuration: TLSServerConfiguration, identitySelector: any TLSIdentitySelector
+    ) {
         self.configuration = configuration
-        self.identity = identity
+        self.identitySelector = identitySelector
         coalescer = TLSHandshakeCoalescer(
             maximumMessageLength: configuration.maxHandshakeMessageLength
         )
