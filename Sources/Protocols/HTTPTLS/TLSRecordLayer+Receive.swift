@@ -134,7 +134,26 @@ extension TLSRecordLayer {
         guard var protector = readProtector else {
             throw .unexpectedPlaintextRecord(.applicationData)
         }
-        let opened = try protector.open(header: header, body: body)
+        let opened: (type: TLSContentType, content: [UInt8])
+        do {
+            opened = try protector.open(header: header, body: body)
+        }
+        catch {
+            // §4.2.10: a server that rejected offered early data "skips past early data by
+            // attempting to deprotect received records using the handshake traffic key,
+            // discarding records which fail deprotection (up to the configured
+            // max_early_data_size)". The window exists only at the handshake read epoch and
+            // only for the uniform §5.2 deprotection failure — every other error stays fatal.
+            if error == .badRecordMac, readEpoch == .handshake, let budget = earlyDataSkipBudget {
+                let remaining = budget - body.count
+                guard remaining >= 0 else {
+                    throw error  // the skip budget is exhausted — fail closed
+                }
+                earlyDataSkipBudget = remaining
+                return
+            }
+            throw error
+        }
         readProtector = protector
         guard opened.type != .changeCipherSpec else {
             throw .unexpectedProtectedRecord(.changeCipherSpec)  // §5: CCS is never protected

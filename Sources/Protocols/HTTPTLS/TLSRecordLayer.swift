@@ -37,6 +37,15 @@ public struct TLSRecordLayer {
     /// The §5.4 padding policy for sealed records: each inner plaintext is rounded up to a
     /// multiple of this many octets (0 or 1 = no padding).
     public var paddingGranularity = 0
+    /// The outbound fragmentation cap — §5.1's 2^14 by default, lowered when the peer
+    /// negotiates a smaller RFC 8449 `record_size_limit` (the limit covers the whole
+    /// `TLSInnerPlaintext`, so the driver sets `limit - 1` here).
+    public var maxOutboundFragmentLength = TLSRecordLimits.maxPlaintextLength
+    /// RFC 8446 §4.2.10's early-data skip window: while non-nil (the handshake machine opens
+    /// it after REJECTING offered early data, §7.1 handshake read epoch only), records that
+    /// fail deprotection are silently discarded and their ciphertext octets charged here;
+    /// exhausting the budget — the "configured max_early_data_size" — is fatal.
+    public var earlyDataSkipBudget: Int?
 
     /// Creates a record layer at the unprotected epoch in both directions.
     public init() {

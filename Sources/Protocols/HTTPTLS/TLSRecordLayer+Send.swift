@@ -45,13 +45,15 @@ extension TLSRecordLayer {
         outbound.append(1)
     }
 
-    /// Fragments `content` at the §5.1 cap and frames/seals each fragment.
+    /// Fragments `content` at the §5.1 cap — or the peer's negotiated RFC 8449 limit,
+    /// whichever is smaller — and frames/seals each fragment.
     private mutating func enqueue(
         type: TLSContentType, content: [UInt8]
     ) throws(TLSRecordError) {
+        let cap = min(max(maxOutboundFragmentLength, 1), TLSRecordLimits.maxPlaintextLength)
         var start = content.startIndex
         repeat {
-            let end = min(start + TLSRecordLimits.maxPlaintextLength, content.endIndex)
+            let end = min(start + cap, content.endIndex)
             try enqueueRecord(type: type, fragment: content[start ..< end])
             start = end
         } while start < content.endIndex
