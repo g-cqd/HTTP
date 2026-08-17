@@ -59,7 +59,8 @@ let strictMemorySafeTargets: Set<String> = [
     "QPACK",  // 2 sites annotated (RFC 9204 §4.1.2 string materialization)
     "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
     "HTTPAuth",  // already 0 — pure crypto/middleware over swift-crypto
-    "HTTPDeflate"  // strict from birth (annotated sites only at the [UInt8] ⇄ Span seam)
+    "HTTPDeflate",  // strict from birth (annotated sites only at the [UInt8] ⇄ Span seam)
+    "HTTPTLS"  // strict from birth (annotated sites only at the SymmetricKey byte seams)
 ]
 
 // G0 — the Darwin-only transport backbones are absent from the Linux build graph, where the portable
@@ -252,6 +253,7 @@ let package = Package(
         .library(name: "HTTP2", targets: ["HTTP2"]),
         .library(name: "HTTP3", targets: ["HTTP3"]),
         .library(name: "WebSocket", targets: ["WebSocket"]),
+        .library(name: "HTTPTLS", targets: ["HTTPTLS"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
         .library(name: "HTTPObservability", targets: ["HTTPObservability"]),
@@ -513,6 +515,26 @@ let package = Package(
             name: "WebSocketTests",
             dependencies: ["WebSocket", "HTTPTestSupport"],
             path: "Tests/Protocols/WebSocketTests"
+        ),
+        // RFC 8446 — the sans-I/O TLS 1.3 SERVER engine (ADR 0004 Phase 3a: record layer + key
+        // schedule; the handshake state machine is 3b, X.509 is 3c). TLS 1.3 ONLY — no 1.2, no
+        // renegotiation, no compression, AEAD-only by construction. Every constant-time primitive
+        // (AES-GCM, ChaCha20-Poly1305, HKDF-SHA256/384, X25519, P-256, SHA-2) comes from
+        // apple/swift-crypto; this target is purely the protocol engine — the same species as the
+        // HTTP/2/3/QPACK engines. Gated byte-exactly against the RFC 8448 handshake traces.
+        // Lives in Protocols/ (not Core/) because it is an RFC wire-protocol state machine driven
+        // per-connection by the transport, like its siblings — Core holds substrates and codecs.
+        .target(
+            name: "HTTPTLS",
+            dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+            path: "Sources/Protocols/HTTPTLS"
+        ),
+        .testTarget(
+            name: "HTTPTLSTests",
+            dependencies: [
+                "HTTPTLS", "HTTPTestSupport", .product(name: "Crypto", package: "swift-crypto")
+            ],
+            path: "Tests/Protocols/HTTPTLSTests"
         ),
         // G0 — a C shim re-exporting Linux `<sys/epoll.h>` (the platform `Glibc` module surfaces none of
         // epoll), consumed only by the `POSIXEpoll` backbone. Header-guarded `#if __linux__` (inert
