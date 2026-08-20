@@ -240,7 +240,10 @@ public struct TLSServerConnection {
 
     /// Cuts exactly one record out of the feed (or the cross-feed holdback) and runs it
     /// through the record layer; nil when only a partial record remains (stashed).
-    private mutating func pumpOneRecord(
+    ///
+    /// Internal (not private) since Phase 3d: the synchronous drive (+Synchronous) is the
+    /// third caller of the one splitter — three drives, ONE record-boundary implementation.
+    mutating func pumpOneRecord(
         _ bytes: [UInt8], cursor: inout Int
     ) throws(TLSHandshakeError) -> [TLSRecordEvent]? {
         if inboundHoldback.isEmpty {
@@ -349,8 +352,9 @@ public struct TLSServerConnection {
         }
     }
 
-    /// The shared application-data/alert arms of both dispatchers.
-    private mutating func handleNonHandshake(
+    /// The shared application-data/alert arms of every dispatcher — the two here and Phase
+    /// 3d's full-synchronous one (+Synchronous).
+    mutating func handleNonHandshake(
         _ event: TLSRecordEvent, into events: inout [TLSServerEvent]
     ) throws(TLSHandshakeError) {
         switch event {
@@ -397,7 +401,10 @@ public struct TLSServerConnection {
     }
 
     /// The gate's synchronous arms — everything after the ClientHello.
-    private mutating func processSynchronous(
+    ///
+    /// Internal since Phase 3d: the full-synchronous dispatch (+Synchronous) falls through
+    /// to the same arms.
+    mutating func processSynchronous(
         _ message: TLSHandshakeCoalescer.Message, into events: inout [TLSServerEvent]
     ) throws(TLSHandshakeError) {
         switch (state, message.type) {

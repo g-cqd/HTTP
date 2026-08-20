@@ -15,7 +15,7 @@ internal import SwiftASN1
 internal import X509
 
 /// A server certificate identity: validated chain + signing key (RFC 8446 §4.4.2/§4.4.3).
-public struct TLSCertificateIdentity: TLSIdentityProvider {
+public struct TLSCertificateIdentity: TLSSynchronousIdentityProvider {
     /// The certificate chain, leaf first, DER-encoded (§4.4.2 `CertificateEntry` order).
     public let certificateChainDER: [[UInt8]]
     /// The §4.4.3 signer for the leaf's key.
@@ -70,6 +70,14 @@ public struct TLSCertificateIdentity: TLSIdentityProvider {
     public func signature(
         over content: [UInt8], algorithms: [TLSSignatureScheme]
     ) async throws -> TLSSignature {
+        try signatureSynchronously(over: content, algorithms: algorithms)
+    }
+
+    /// The same delegation without suspension — a ``TLSIdentitySigner`` is synchronous by
+    /// design, which is what lets this identity serve the synchronous drive (Phase 3d).
+    public func signatureSynchronously(
+        over content: [UInt8], algorithms: [TLSSignatureScheme]
+    ) throws -> TLSSignature {
         try signer.signature(over: content, candidates: algorithms)
     }
 

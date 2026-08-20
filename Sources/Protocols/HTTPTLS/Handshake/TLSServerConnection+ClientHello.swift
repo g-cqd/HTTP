@@ -11,10 +11,43 @@
 internal import Crypto
 
 extension TLSServerConnection {
+    /// A ClientHello that passed every §4.1.2/§4.2 gate and has a usable key share — what
+    /// the (async or synchronous) flight builds from.
+    struct AdmittedClientHello {
+        /// The parsed hello.
+        let hello: TLSClientHello
+        /// The §4.1.1-selected suite.
+        let suite: TLSCipherSuite
+        /// The §4.2.8-selected group.
+        let group: TLSNamedGroup
+        /// The client's share for that group.
+        let share: TLSKeyShareEntry
+    }
+
     /// Processes an initial or retried ClientHello end to end.
     mutating func processClientHello(
         _ message: TLSHandshakeCoalescer.Message
     ) async throws(TLSHandshakeError) {
+        guard let admitted = try examineClientHello(message) else {
+            return  // the single permitted HelloRetryRequest went out instead
+        }
+        try await completeHandshakeFlight(
+            admitted.hello,
+            message: message,
+            suite: admitted.suite,
+            group: admitted.group,
+            clientShare: admitted.share
+        )
+    }
+
+    /// Every synchronous step of ClientHello admission (Phase 3d's shared prefix).
+    ///
+    /// Parse, version gate, negotiation, retry contract — identical for the async and
+    /// synchronous drives. Returns nil when the HelloRetryRequest round was sent instead
+    /// of a flight.
+    mutating func examineClientHello(
+        _ message: TLSHandshakeCoalescer.Message
+    ) throws(TLSHandshakeError) -> AdmittedClientHello? {
         let hello = try TLSClientHello.parse(message)
         try validateVersion(hello)
         guard hello.compressionMethods == [0] else {
@@ -40,12 +73,10 @@ extension TLSServerConnection {
         let group = try selectGroup(clientGroups: groups, shares: shares)
         guard let share = shares.first(where: { $0.group == group }) else {
             try sendHelloRetryRequest(hello, message: message, suite: suite, group: group)
-            return
+            return nil
         }
         try negotiateApplicationParameters(hello)
-        try await completeHandshakeFlight(
-            hello, message: message, suite: suite, group: group, clientShare: share
-        )
+        return AdmittedClientHello(hello: hello, suite: suite, group: group, share: share)
     }
 
     /// §4.2.1 + Appendix D: the version gate of a 1.3-only server.

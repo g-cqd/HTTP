@@ -19,15 +19,8 @@ extension TLSServerConnection {
     mutating func processClientCertificate(
         _ message: TLSHandshakeCoalescer.Message
     ) async throws(TLSHandshakeError) {
-        let chain = try TLSCertificateCodec.parseClientCertificate(message)
-        transcript?.append(message.raw)
-        clientCertificateChain = chain
-        guard !chain.isEmpty else {
-            guard configuration.clientAuthentication != .required else {
-                throw .certificateRequired  // §4.4.2.4 — abort, fail closed
-            }
-            state = .expectingClientFinished  // §4.4.2: no cert ⇒ no CertificateVerify
-            return
+        guard let chain = try admitClientCertificate(message) else {
+            return  // empty chain, allowed by mode — no CertificateVerify follows
         }
         if let validator = configuration.clientChainValidator {
             // RFC 5280 §6 path validation at Certificate receipt — before the
@@ -42,6 +35,26 @@ extension TLSServerConnection {
             }
         }
         state = .expectingClientCertificateVerify
+    }
+
+    /// The synchronous §4.4.2 Certificate intake shared by both drives (Phase 3d).
+    ///
+    /// Decode, transcript, the emptiness-by-mode gate. Returns the presented chain still
+    /// owing trust validation, or nil when an EMPTY chain already settled the state.
+    mutating func admitClientCertificate(
+        _ message: TLSHandshakeCoalescer.Message
+    ) throws(TLSHandshakeError) -> [[UInt8]]? {
+        let chain = try TLSCertificateCodec.parseClientCertificate(message)
+        transcript?.append(message.raw)
+        clientCertificateChain = chain
+        guard !chain.isEmpty else {
+            guard configuration.clientAuthentication != .required else {
+                throw .certificateRequired  // §4.4.2.4 — abort, fail closed
+            }
+            state = .expectingClientFinished  // §4.4.2: no cert ⇒ no CertificateVerify
+            return nil
+        }
+        return chain
     }
 
     /// §4.4.3: the client CertificateVerify — scheme in our CertificateRequest offer, leaf
