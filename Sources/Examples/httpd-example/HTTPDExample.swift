@@ -301,13 +301,23 @@ enum HTTPDExample {
     /// A throwaway self-signed TLS identity when `tls` appears in the arguments (dev/test only).
     ///
     /// Advertises ALPN `h2` + `http/1.1`, so a `--http2` client negotiates HTTP/2 over TLS
-    /// (RFC 9113 §3.3). Honored only by the Network.framework backbone.
+    /// (RFC 9113 §3.3). The Network.framework backbone takes the PKCS#12 form; the portable
+    /// TLS backbone (Phase 3d, the HTTPTLS engine) takes PEM — its intake parses no PKCS#12.
     private static func makeTLS() -> TransportTLS? {
         guard CommandLine.arguments.contains("tls") else {
             return nil
         }
         do {
-            return try DevTLSIdentity.selfSigned()
+            guard parseBackbone() == .portableTLS else {
+                return try DevTLSIdentity.selfSigned()
+            }
+            let pem = try DevTLSIdentity.selfSignedPEM()
+            return TransportTLS(
+                pem: TransportTLS.PEMIdentity(
+                    certificateChainPEM: pem.certificatePEM,
+                    privateKeyPEM: pem.privateKeyPEM
+                )
+            )
         }
         catch {
             print("httpd-example: TLS disabled — \(error)")
