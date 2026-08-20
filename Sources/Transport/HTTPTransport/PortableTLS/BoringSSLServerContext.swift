@@ -21,6 +21,10 @@
     internal import CHTTPBoringSSLShims
 
     /// The listener context of the portable TLS backbone on the legacy BoringSSL engine.
+    // SAFETY: `@unchecked Sendable` on the same terms as the `ContextBox` it replaces: the
+    // one stored property is an immutable `SSL_CTX` pointer, and BoringSSL's `ssl.h`
+    // documents the `SSL_CTX` as thread-safe (unlike any `SSL` it mints) — crossing the
+    // accept-thread hop with it is exactly what the previous inline code did.
     final class PortableTLSServerContext: @unchecked Sendable {
         /// The shared server `SSL_CTX` — thread-safe per `ssl.h`, unlike any `SSL` it mints.
         private let pointer: OpaquePointer

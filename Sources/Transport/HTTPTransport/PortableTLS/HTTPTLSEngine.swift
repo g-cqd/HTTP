@@ -47,6 +47,11 @@
     internal import HTTPTLS
 
     /// The HTTPTLS session for one connection, with the buffers that move bytes in and out.
+    // SAFETY: `@unchecked Sendable` on the usual Mutex-payload terms (the same terms the
+    // BoringSSL flavor carried): the ONLY reference to a constructed engine is the
+    // `Mutex<PortableTLSEngine>` inside `PortableTLSConnection`, `~Copyable` forbids lifting
+    // a copy past that lock, and every stored property is a plain value (no shared mutable
+    // state) — the annotation exists solely so the value may live inside the `Mutex`.
     struct PortableTLSEngine: ~Copyable, @unchecked Sendable {
         /// What one engine call did — the same classification vocabulary the pumps have
         /// always driven (see the file comment for the old → new mapping).
