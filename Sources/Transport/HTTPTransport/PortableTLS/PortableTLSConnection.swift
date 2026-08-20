@@ -32,16 +32,20 @@
 //  ciphertext is actually owed to the socket; that wait is bounded by the peer draining TCP, and the
 //  connection's idle watchdog reaps a peer that never does.
 //
-//  Gated `#if canImport(CHTTPBoringSSLShims)` (the opt-in `HTTP_PORTABLE_TLS` build).
+//  Since Phase 3d the engine behind the `Mutex` is a build-time choice — the HTTPTLS flavor
+//  under `HTTP_PORTABLE_TLS` (pure Swift; `wantWrite`/`transportEnded` arms unreachable, see
+//  `HTTPTLSEngine.swift`) or the legacy BoringSSL flavor under the temporary
+//  `HTTP_BORINGSSL_TLS` A/B gate — and everything in THIS file (the pumps, the exclusions,
+//  the lease discipline) is engine-blind. The libssl citations above document the contract
+//  the serialization was designed against; the sans-I/O engine keeps the same one-lock shape
+//  because two tasks still share the connection.
 //
 //  Standards: TLS 1.3 (RFC 8446) + ALPN (RFC 7301) over a POSIX.1-2017 TCP (RFC 9293) socket; readiness
 //  via BSD kqueue / Linux epoll.
 //
 
-#if canImport(CHTTPBoringSSLShims)
+#if canImport(CHTTPBoringSSLShims) || HTTP_PORTABLE_TLS_SWIFT
 
-    internal import CHTTPBoringSSL
-    internal import CHTTPBoringSSLShims
     #if canImport(Darwin)
         internal import Darwin
     #elseif canImport(Glibc)
@@ -107,9 +111,7 @@
         init(
             id: TransportConnectionID,
             peer: TransportAddress,
-            ssl: OpaquePointer,
-            readBIO: UnsafeMutablePointer<BIO>,
-            writeBIO: UnsafeMutablePointer<BIO>,
+            engine: consuming PortableTLSEngine,
             descriptor: Int32,
             eventLoop: TLSEventLoop,
             clientAuth: TransportTLS.ClientAuth,
@@ -118,9 +120,7 @@
         ) {
             self.id = id
             self.peer = peer
-            engine = Mutex(
-                PortableTLSEngine(ssl: ssl, readBIO: readBIO, writeBIO: writeBIO, connectionID: id)
-            )
+            self.engine = Mutex(engine)
             self.descriptor = descriptor
             self.eventLoop = eventLoop
             self.clientAuth = clientAuth
@@ -450,9 +450,13 @@
                         try await drainCiphertext()
                         _ = try await fillCiphertext()
                     case .closedByPeer:
-                        throw TransportError.ioFailed("SSL_write error \(SSL_ERROR_ZERO_RETURN)")
+                        throw TransportError.ioFailed(
+                            "SSL_write error \(PortableTLSEngine.peerClosedStatus)"
+                        )
                     case .transportEnded:
-                        throw TransportError.ioFailed("SSL_write error \(SSL_ERROR_SYSCALL)")
+                        throw TransportError.ioFailed(
+                            "SSL_write error \(PortableTLSEngine.transportEndedStatus)"
+                        )
                     case .failed(let evidence):
                         // Renders as `SSL_write error <status>` plus the capture, matching the
                         // spellings of the two arms above — see ``TLSFailureEvidence``.

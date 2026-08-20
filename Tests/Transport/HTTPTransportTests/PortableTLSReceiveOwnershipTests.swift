@@ -247,7 +247,7 @@
         private final class Harness {
             let connection: PortableTLSConnection
             private let loop: TLSEventLoop
-            private let serverContext: OpaquePointer
+            private let serverContext: PortableTLSServerContext
             private let clientDescriptor: Int32
             private let client: (ssl: OpaquePointer, context: OpaquePointer)
             /// Joins the background client before ``tearDown()`` frees the `SSL` it is still using.
@@ -255,8 +255,9 @@
             private var startedClient = false
 
             init() throws {
-                let identity = try DevTLSIdentity.selfSigned()
-                serverContext = try OpenSSLTLS.serverContext(identity)
+                serverContext = try PortableTLSLoopback.makeServerContext(
+                    try PortableTLSLoopback.devTLS()
+                )
                 let pair = PortableTLSLoopback.makeSocketPair()
                 clientDescriptor = pair.client
                 loop = try TLSEventLoop()
@@ -326,7 +327,7 @@
                 CHTTPBoringSSL_SSL_free(client.ssl)
                 CHTTPBoringSSL_SSL_CTX_free(client.context)
                 _ = close(clientDescriptor)
-                CHTTPBoringSSL_SSL_CTX_free(serverContext)
+                serverContext.release()
                 loop.stop()
             }
         }

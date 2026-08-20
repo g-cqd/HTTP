@@ -287,12 +287,19 @@ public struct TLSServerConnection {
     }
 
     /// How many octets the record at the slice's head occupies: the header alone until the
-    /// length field is visible — or when the length lies past the §5.2 cap, in which case the
-    /// bare header is fed and the record layer's own `validateHeader` raises the right error.
+    /// length field is visible — or when the header is already condemnable (an unknown §5.1
+    /// content type, a length past the §5.2 cap), in which case the bare header is fed and
+    /// the record layer's own `validateHeader` raises the right error NOW rather than after
+    /// a phantom body. The content-type check is what makes a cleartext mis-dial (an HTTP
+    /// request where a ClientHello belongs) die at its first five octets — the answer the
+    /// libssl engine always gave — instead of stalling for a body the peer will never send.
     private func recordLengthNeeded(_ bytes: ArraySlice<UInt8>) -> Int {
         let base = bytes.startIndex
         guard bytes.count >= TLSRecordLimits.headerLength else {
             return TLSRecordLimits.headerLength
+        }
+        guard TLSContentType(rawValue: bytes[base]) != nil else {
+            return TLSRecordLimits.headerLength  // fed bare; unknown_content_type, fail fast
         }
         let bodyLength = Int(bytes[base + 3]) << 8 | Int(bytes[base + 4])
         guard bodyLength <= TLSRecordLimits.maxCiphertextLength else {

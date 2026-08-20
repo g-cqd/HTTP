@@ -160,7 +160,7 @@
 
         /// A `PortableTLSTransport` on an ephemeral port with a fresh dev identity (ALPN h2 / http1.1).
         private static func startedTransport() throws -> PortableTLSTransport {
-            let identity = try DevTLSIdentity.selfSigned()
+            let identity = try PortableTLSLoopback.devTLS()
             let configuration = TransportConfiguration(
                 port: 0, backbone: .portableTLS, tls: identity
             )

@@ -10,7 +10,9 @@
 //  call to the engine and not adding it here is the mistake this enum exists to make visible.
 //
 
-#if canImport(CHTTPBoringSSLShims)
+// LEGACY-ENGINE ONLY (Phase 3d): asserts BoringSSL mechanics of the old engine -
+// compiled solely under the temporary HTTP_BORINGSSL_TLS A/B gate; dies with it in 3e.
+#if canImport(CHTTPBoringSSLShims) && !HTTP_PORTABLE_TLS_SWIFT
 
     @testable import HTTPTransport
 

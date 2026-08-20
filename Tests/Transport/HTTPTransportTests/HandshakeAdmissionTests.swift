@@ -38,7 +38,7 @@
             let gate = ConnectionAdmission(
                 capacity: ConnectionAdmission.Capacity(total: 1, perHost: 1_000)
             )
-            let identity = try DevTLSIdentity.selfSigned()
+            let identity = try PortableTLSLoopback.devTLS()
             let configuration = TransportConfiguration(
                 port: 0,
                 backbone: .portableTLS,

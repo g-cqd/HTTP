@@ -79,26 +79,66 @@
             return (descriptors[0], descriptors[1])
         }
 
-        /// The server side: a ``PortableTLSConnection`` over memory BIOs on the readiness loop.
+        /// A PEM-based dev `TransportTLS` for the server side.
+        ///
+        /// PEM is the identity currency BOTH portable engines read (Phase 3d: the HTTPTLS
+        /// engine does not parse PKCS#12; the legacy engine reads PEM through `use_pem`).
+        /// Callers flip `clientAuth`/`verifyPeer`/`sniIdentities` on the returned value —
+        /// they are plain vars.
+        static func devTLS(commonName: String = "localhost") throws -> TransportTLS {
+            let pem = try DevTLSIdentity.selfSignedPEM(commonName: commonName)
+            return TransportTLS(
+                pem: TransportTLS.PEMIdentity(
+                    certificateChainPEM: pem.certificatePEM,
+                    privateKeyPEM: pem.privateKeyPEM
+                )
+            )
+        }
+
+        /// A PEM-based dev SNI identity for `commonName` (see ``devTLS(commonName:)``).
+        static func devSNIIdentity(
+            commonName: String
+        ) throws -> TransportTLS.SNIIdentity {
+            let pem = try DevTLSIdentity.selfSignedPEM(commonName: commonName)
+            return TransportTLS.SNIIdentity(
+                pem: TransportTLS.PEMIdentity(
+                    certificateChainPEM: pem.certificatePEM,
+                    privateKeyPEM: pem.privateKeyPEM
+                )
+            )
+        }
+
+        /// The server context for `tls` — whichever engine flavor this build compiled.
+        static func makeServerContext(
+            _ tls: TransportTLS
+        ) throws -> PortableTLSServerContext {
+            try PortableTLSServerContext(tls)
+        }
+
+        /// The server side: a ``PortableTLSConnection`` on the readiness loop, its engine
+        /// minted by `context` (an `SSL` over memory BIOs on the legacy flavor, a sans-I/O
+        /// `TLSServerConnection` on the HTTPTLS one).
         static func makeConnection(
-            _ context: OpaquePointer,
+            _ context: PortableTLSServerContext,
             descriptor: Int32,
-            loop: TLSEventLoop
+            loop: TLSEventLoop,
+            clientAuth: TransportTLS.ClientAuth = .none,
+            verifyPeer: (@Sendable ([[UInt8]]) -> Bool)? = nil
         ) throws -> PortableTLSConnection {
-            let ssl = try #require(CHTTPBoringSSL_SSL_new(context))
-            let readBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            let writeBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            CHTTPBoringSSL_SSL_set_bio(ssl, readBIO, writeBIO)
+            let id = TransportConnectionID(1)
+            // `guard let` rather than `#require`: the engine is `~Copyable`, which the
+            // macro's generic parameter cannot carry.
+            guard let engine = context.makeEngine(connectionID: id) else {
+                throw TransportError.tlsConfigurationFailed("the context minted no engine")
+            }
             return PortableTLSConnection(
-                id: TransportConnectionID(1),
+                id: id,
                 peer: TransportAddress(host: "127.0.0.1", port: 0),
-                ssl: ssl,
-                readBIO: readBIO,
-                writeBIO: writeBIO,
+                engine: engine,
                 descriptor: descriptor,
                 eventLoop: loop,
-                clientAuth: .none,
-                verifyPeer: nil
+                clientAuth: clientAuth,
+                verifyPeer: verifyPeer
             )
         }
 
@@ -116,6 +156,23 @@
             let ssl = try #require(CHTTPBoringSSL_SSL_new(context))
             CHTTPBoringSSL_SSL_set_fd(ssl, descriptor)
             return (ssl, context)
+        }
+
+        /// The peer (server) leaf certificate's Common Name on a handshaken client `SSL`.
+        ///
+        /// The client oracle's own reading of which certificate the server served (the SNI
+        /// suites' oracle). Mirrors the legacy `OpenSSLTLS.peerSubject`, owned here because
+        /// the client side stays BoringSSL under both gates.
+        static func peerSubject(of ssl: OpaquePointer) -> String? {
+            var buffer = [CChar](repeating: 0, count: 256)
+            let length = buffer.withUnsafeMutableBufferPointer {
+                CHTTPBoringSSLShims_peer_subject(ssl, $0.baseAddress, Int32($0.count))
+            }
+            guard length >= 0 else {
+                return nil
+            }
+            let bytes = buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }
+            return String(decoding: bytes, as: Unicode.UTF8.self)
         }
 
         /// Reads up to `limit` plaintext octets from a blocking client `SSL`, stopping early on any

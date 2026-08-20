@@ -142,7 +142,9 @@
             clientAuth: TransportTLS.ClientAuth,
             verifyPeer: (@Sendable ([[UInt8]]) -> Bool)? = nil
         ) throws -> PortableTLSTransport {
-            var tls = try DevTLSIdentity.selfSigned()
+            // PEM server identity — both engines' shared intake currency (Phase 3d). The
+            // CLIENT identities below stay PKCS#12: they feed the raw BoringSSL client only.
+            var tls = try PortableTLSLoopback.devTLS()
             tls.clientAuth = clientAuth
             tls.verifyPeer = verifyPeer
             return PortableTLSTransport(

@@ -194,7 +194,7 @@
             let delivered = AsyncEventProbe<[UInt8]>()
 
             private let loop: TLSEventLoop
-            private let serverContext: OpaquePointer
+            private let serverContext: PortableTLSServerContext
             private let clientDescriptor: Int32
             private let peer: (ssl: OpaquePointer, context: OpaquePointer)
             private let bodyURL: URL
@@ -205,8 +205,9 @@
             private var startedPeer = false
 
             init(body: [UInt8]) throws {
-                let identity = try DevTLSIdentity.selfSigned()
-                serverContext = try OpenSSLTLS.serverContext(identity)
+                serverContext = try PortableTLSLoopback.makeServerContext(
+                    try PortableTLSLoopback.devTLS()
+                )
                 let pair = PortableTLSLoopback.makeSocketPair()
                 clientDescriptor = pair.client
                 loop = try TLSEventLoop()
@@ -276,7 +277,7 @@
                 CHTTPBoringSSL_SSL_free(peer.ssl)
                 CHTTPBoringSSL_SSL_CTX_free(peer.context)
                 _ = close(clientDescriptor)
-                CHTTPBoringSSL_SSL_CTX_free(serverContext)
+                serverContext.release()
                 loop.stop()
             }
         }

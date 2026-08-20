@@ -4,23 +4,26 @@
 //
 //  The portable (non-Network.framework) TLS server backbone — ADR 0004, now **event-driven** (audit
 //  R4). Binds a POSIX listening socket via the shared `POSIXSocket` helper, accepts on a dedicated
-//  blocking-`accept()` thread, then wraps each accepted (non-blocking) descriptor in a libssl session
-//  driven through **memory BIOs** on one of N shared kqueue/epoll loops (round-robin) — the handshake
-//  and all TLS I/O run inline on the loop thread, no thread-per-connection. The connection is surfaced
-//  only once its handshake settles. The single shared `SSL_CTX` is built once from the `TransportTLS`
-//  identity and hot-swappable via ``reload(tls:)``.
+//  blocking-`accept()` thread, then wraps each accepted (non-blocking) descriptor in a per-connection
+//  TLS engine driven on one of N shared kqueue/epoll loops (round-robin) — the handshake and all TLS
+//  I/O run inline on the loop thread, no thread-per-connection. The connection is surfaced only once
+//  its handshake settles. The single shared ``PortableTLSServerContext`` is built once from the
+//  `TransportTLS` identity and hot-swappable via ``reload(tls:)``.
 //
-//  Selected by ``TransportFactory`` for ``TransportBackbone/portableTLS``; gated
-//  `#if canImport(CHTTPBoringSSLShims)` (the opt-in `HTTP_PORTABLE_TLS` build).
+//  ENGINE-BLIND since Phase 3d: the context flavor behind that seam is the build's choice — the
+//  HTTPTLS engine under `HTTP_PORTABLE_TLS` (pure Swift, `HTTPTLSServerContext.swift`) or the legacy
+//  BoringSSL `SSL_CTX` under the temporary `HTTP_BORINGSSL_TLS` A/B gate
+//  (`BoringSSLServerContext.swift`, dies in 3e). Everything here — bind, accept, admission,
+//  round-robin, shutdown — is identical either way, which is the point of the seam.
+//
+//  Selected by ``TransportFactory`` for ``TransportBackbone/portableTLS``.
 //
 //  Standards: TCP (RFC 9293) over IPv4 (RFC 791) / IPv6 (RFC 4291) via POSIX.1-2017 sockets, carrying
 //  TLS 1.3 (RFC 8446); ALPN (RFC 7301).
 //
 
-#if canImport(CHTTPBoringSSLShims)
+#if canImport(CHTTPBoringSSLShims) || HTTP_PORTABLE_TLS_SWIFT
 
-    internal import CHTTPBoringSSL
-    internal import CHTTPBoringSSLShims
     #if canImport(Darwin)
         internal import Darwin
     #elseif canImport(Glibc)
@@ -88,8 +91,9 @@
         private let admissionResume = DispatchSemaphore(value: 0)
 
         private struct State {
-            /// The shared server `SSL_CTX`, swappable by ``reload(tls:)``.
-            var context: ContextBox?
+            /// The shared listener context (identity + negotiation contract), swappable by
+            /// ``reload(tls:)``.
+            var context: PortableTLSServerContext?
             /// One loop per shard; each is a dedicated thread serving its assigned TLS connections.
             var loops: [TLSEventLoop] = []
             var listenDescriptor: Int32?
@@ -105,11 +109,6 @@
             /// The admission policy applied between `accept(2)` and `SSL_new` (audit F8), ungated
             /// until ``start(admission:)`` installs the server's gate.
             var gate = AcceptGate(admission: nil)
-        }
-
-        /// Carries the non-`Sendable` `SSL_CTX` pointer across the accept-thread hop.
-        private struct ContextBox: @unchecked Sendable {
-            let pointer: OpaquePointer
         }
 
         /// Creates a portable TLS transport for `configuration` (which must carry a TLS identity).
@@ -138,7 +137,8 @@
             state.withLock(\.boundEndpoint)
         }
 
-        /// Builds the shared `SSL_CTX`, spins up N event loops, binds the listening socket, and accepts.
+        /// Builds the shared listener context, spins up N event loops, binds the listening
+        /// socket, and accepts.
         public func start(
             admission: ConnectionAdmission?
         ) async throws -> AsyncStream<any TransportConnection> {
@@ -147,7 +147,7 @@
                     "the portable TLS backbone requires a TLS identity"
                 )
             }
-            let sslContext = try OpenSSLTLS.serverContext(tls)
+            let context = try PortableTLSServerContext(tls)
             let listener: (descriptor: Int32, port: UInt16)
             do {
                 listener = try POSIXSocket.makeListenSocket(
@@ -159,7 +159,7 @@
                 )
             }
             catch {
-                CHTTPBoringSSL_SSL_CTX_free(sslContext)
+                context.release()
                 throw error
             }
             let loopCount = max(1, configuration.eventLoopCount ?? Self.defaultLoopCount())
@@ -173,13 +173,13 @@
                 }
             }
             catch {
-                CHTTPBoringSSL_SSL_CTX_free(sslContext)
+                context.release()
                 closeFD(listener.descriptor)
                 throw error
             }
             let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
             state.withLock {
-                $0.context = ContextBox(pointer: sslContext)
+                $0.context = context
                 $0.loops = loops
                 $0.listenDescriptor = listener.descriptor
                 $0.boundPort = listener.port
@@ -256,25 +256,25 @@
             }
         }
 
-        /// Hot-reloads the TLS identity (G4b): swaps the shared `SSL_CTX` so new handshakes use `tls`,
-        /// while connections already accepted keep serving on the context they handshook with.
+        /// Hot-reloads the TLS identity (G4b): swaps the shared listener context so new
+        /// handshakes use `tls`, while connections already accepted keep serving on the
+        /// context they handshook with.
         public func reload(tls: TransportTLS) async throws {
-            let newContext = try OpenSSLTLS.serverContext(tls)
-            let outcome: (running: Bool, previous: ContextBox?) = state.withLock { state in
-                guard state.isRunning else {
-                    return (false, nil)
+            let newContext = try PortableTLSServerContext(tls)
+            let outcome: (running: Bool, previous: PortableTLSServerContext?) =
+                state.withLock { state in
+                    guard state.isRunning else {
+                        return (false, nil)
+                    }
+                    let previous = state.context
+                    state.context = newContext
+                    return (true, previous)
                 }
-                let previous = state.context
-                state.context = ContextBox(pointer: newContext)
-                return (true, previous)
-            }
             guard outcome.running else {
-                CHTTPBoringSSL_SSL_CTX_free(newContext)
+                newContext.release()
                 throw TransportError.closed
             }
-            if let previous = outcome.previous {
-                CHTTPBoringSSL_SSL_CTX_free(previous.pointer)
-            }
+            outcome.previous?.release()
         }
 
         // MARK: - Internals
@@ -347,14 +347,12 @@
                 }
             }
             continuation.finish()
-            let context = state.withLock { state -> ContextBox? in
+            let context = state.withLock { state -> PortableTLSServerContext? in
                 let current = state.context
                 state.context = nil
                 return current
             }
-            if let context {
-                CHTTPBoringSSL_SSL_CTX_free(context.pointer)
-            }
+            context?.release()
         }
 
         /// Parks the accept thread until the admission gate clears its saturation latch.
@@ -371,7 +369,7 @@
             }
         }
 
-        /// Wraps an admitted descriptor in a libssl session over memory BIOs, assigns it a loop,
+        /// Wraps an admitted descriptor in a per-connection TLS engine, assigns it a loop,
         /// drives the handshake inline on that loop, and surfaces it once the handshake settles.
         ///
         /// The slot in `ticket` is already charged. If any step below fails the connection is torn
@@ -384,38 +382,24 @@
             loops: [TLSEventLoop],
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
-            // Hold a reference across `SSL_new` so a concurrent ``reload(tls:)`` cannot free the context
-            // under us; the new `SSL` then retains the context it handshakes with.
             guard let context = state.withLock(\.context) else {
                 closeFD(clientFD)
                 return
             }
-            _ = CHTTPBoringSSL_SSL_CTX_up_ref(context.pointer)
-            let ssl = CHTTPBoringSSL_SSL_new(context.pointer)
-            CHTTPBoringSSL_SSL_CTX_free(context.pointer)
-            guard let ssl else {
+            let id = connectionIDs.next()
+            // The context mints the engine (an `SSL` over memory BIOs on the legacy flavor,
+            // a sans-I/O `TLSServerConnection` on the HTTPTLS one) and holds whatever
+            // reference discipline its flavor needs across a concurrent ``reload(tls:)``.
+            guard let engine = context.makeEngine(connectionID: id) else {
                 closeFD(clientFD)
                 return
             }
-            // Memory BIOs: SSL reads ciphertext from `readBIO`, writes ciphertext to `writeBIO`; the
-            // connection pumps both to/from the non-blocking socket. `SSL_set_bio` transfers ownership
-            // (both are freed by `SSL_free`).
-            guard let readBIO = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()),
-                let writeBIO = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
-            else {
-                CHTTPBoringSSL_SSL_free(ssl)
-                closeFD(clientFD)
-                return
-            }
-            CHTTPBoringSSL_SSL_set_bio(ssl, readBIO, writeBIO)
             POSIXSocket.setNonBlocking(clientFD)  // event-driven pump needs a non-blocking fd
             let loop = loops[nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
             let connection = PortableTLSConnection(
-                id: connectionIDs.next(),
+                id: id,
                 peer: peer,
-                ssl: ssl,
-                readBIO: readBIO,
-                writeBIO: writeBIO,
+                engine: engine,
                 descriptor: clientFD,
                 eventLoop: loop,
                 clientAuth: configuration.tls?.clientAuth ?? .none,

@@ -112,14 +112,16 @@ public enum TransportFactory {
         #endif
     }
 
-    /// The portable libssl TLS backbone (ADR 0004), available only in the opt-in build.
+    /// The portable TLS backbone (ADR 0004), available only in the opt-in builds — the
+    /// HTTPTLS engine under `HTTP_PORTABLE_TLS`, the legacy BoringSSL engine under the
+    /// temporary `HTTP_BORINGSSL_TLS` A/B gate (Phase 3d).
     ///
-    /// Compiled only with `HTTP_PORTABLE_TLS`; selecting ``TransportBackbone/portableTLS`` without
-    /// that build is a configuration error — thrown, not trapped.
+    /// Selecting ``TransportBackbone/portableTLS`` without either build is a configuration
+    /// error — thrown, not trapped.
     private static func makePortableTLS(
         _ configuration: TransportConfiguration
     ) throws(TransportError) -> any ServerTransport {
-        #if canImport(CHTTPBoringSSLShims)
+        #if canImport(CHTTPBoringSSLShims) || HTTP_PORTABLE_TLS_SWIFT
             return PortableTLSTransport(configuration: configuration)
         #else
             throw .unsupported(

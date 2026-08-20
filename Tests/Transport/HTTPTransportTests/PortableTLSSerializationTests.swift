@@ -63,9 +63,10 @@
             "a receive landing mid-send does not corrupt the record stream",
             .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func aConcurrentReceiveDoesNotCorruptTheSendStream() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
-            let serverContext = try OpenSSLTLS.serverContext(identity)
-            defer { CHTTPBoringSSL_SSL_CTX_free(serverContext) }
+            let serverContext = try PortableTLSLoopback.makeServerContext(
+                try PortableTLSLoopback.devTLS()
+            )
+            defer { serverContext.release() }
             let (serverDescriptor, clientDescriptor) = Self.makeSocketPair()
             let loop = try TLSEventLoop()
             loop.start()
@@ -137,9 +138,10 @@
             "an ordinary send and receive leave both direction exclusions free",
             .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func bothExclusionsAreReleasedAfterAnExchange() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
-            let serverContext = try OpenSSLTLS.serverContext(identity)
-            defer { CHTTPBoringSSL_SSL_CTX_free(serverContext) }
+            let serverContext = try PortableTLSLoopback.makeServerContext(
+                try PortableTLSLoopback.devTLS()
+            )
+            defer { serverContext.release() }
             let (serverDescriptor, clientDescriptor) = Self.makeSocketPair()
             let loop = try TLSEventLoop()
             loop.start()
@@ -193,9 +195,10 @@
             "concurrent scratch receives cannot copy bytes decrypted by another caller",
             .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func concurrentScratchReceivesPreserveEveryByteExactlyOnce() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
-            let serverContext = try OpenSSLTLS.serverContext(identity)
-            defer { CHTTPBoringSSL_SSL_CTX_free(serverContext) }
+            let serverContext = try PortableTLSLoopback.makeServerContext(
+                try PortableTLSLoopback.devTLS()
+            )
+            defer { serverContext.release() }
             let (serverDescriptor, clientDescriptor) = Self.makeSocketPair()
             let loop = try TLSEventLoop()
             loop.start()
@@ -266,9 +269,10 @@
             )
         }
 
-        /// The server side: a `PortableTLSConnection` over memory BIOs on the readiness loop.
+        /// The server side: a `PortableTLSConnection` driven by this build's engine on the
+        /// readiness loop.
         private static func makeConnection(
-            _ context: OpaquePointer,
+            _ context: PortableTLSServerContext,
             descriptor: Int32,
             loop: TLSEventLoop
         ) throws -> PortableTLSConnection {
