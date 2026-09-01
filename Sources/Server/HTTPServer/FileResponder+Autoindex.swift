@@ -24,6 +24,14 @@ internal import HTTPCore
     internal import Glibc
 #endif
 
+#if canImport(Glibc) && canImport(CoreFoundation)
+    // MemberImportVisibility (SE-0444): with swift-crypto in the portable-TLS transport graph
+    // (Phase 3d), swift-corelibs re-attributes Glibc's `struct stat` members to CoreFoundation
+    // on Linux, and the members go dark without this import. Linux-only by the Glibc arm;
+    // harmless on the default Linux graph, where the module resolves the same way.
+    internal import CoreFoundation
+#endif
+
 extension FileResponder {
     /// One rendered directory entry.
     typealias Entry = (name: String, isDirectory: Bool, size: Int, modified: Int)
