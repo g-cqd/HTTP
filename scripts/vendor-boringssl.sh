@@ -1,16 +1,16 @@
 #!/bin/bash
 #
 #  vendor-boringssl.sh — (re)generate the vendored, symbol-prefixed BoringSSL under
-#  Sources/Core/CHTTPBoringSSL (ADR 0004, Phase 6).
+#  Vendor/CHTTPBoringSSL/Sources/CHTTPBoringSSL (ADR 0004, Phase 6).
 #
-#  Strategy (see Sources/Core/CHTTPBoringSSL/NOTICE.txt): BoringSSL ships no SwiftPM packaging, and
+#  Strategy (see Vendor/CHTTPBoringSSL/Sources/CHTTPBoringSSL/NOTICE.txt): BoringSSL ships no SwiftPM packaging, and
 #  generating the flattened/prefixed/asm tree from upstream is revision-fragile (the prefix tooling has
 #  moved between BoringSSL revisions). We therefore take apple/swift-nio-ssl's already-generated,
 #  proven CNIOBoringSSL tree (Apache-2.0 vendoring of BoringSSL, ISC/OpenSSL-licensed) and deterministically
 #  re-namespace it CNIOBoringSSL -> CHTTPBoringSSL. swift-nio-ssl is NOT a build- or run-time dependency of
 #  this package — only BoringSSL is vendored here. To bump BoringSSL, re-run this against a newer
-#  swift-nio-ssl ref. Re-running clobbers Sources/Core/CHTTPBoringSSL wholesale (the hand-written shim lives
-#  in the separate Sources/Core/CHTTPBoringSSLShims target and is untouched).
+#  swift-nio-ssl ref. Re-running clobbers Vendor/CHTTPBoringSSL/Sources/CHTTPBoringSSL wholesale (the hand-written shim lives
+#  in the separate Vendor/CHTTPBoringSSL/Sources/CHTTPBoringSSLShims target and is untouched).
 #
 #  Usage:   scripts/vendor-boringssl.sh [swift-nio-ssl-ref]
 #  Example: scripts/vendor-boringssl.sh 2.31.0          # a tag, branch, or commit (default: main)
@@ -20,7 +20,7 @@ set -euo pipefail
 REF="${1:-main}"
 REPO="https://github.com/apple/swift-nio-ssl.git"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-DST="$HERE/Sources/Core/CHTTPBoringSSL"
+DST="$HERE/Vendor/CHTTPBoringSSL/Sources/CHTTPBoringSSL"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

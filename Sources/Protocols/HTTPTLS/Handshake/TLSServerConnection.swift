@@ -240,7 +240,10 @@ public struct TLSServerConnection {
 
     /// Cuts exactly one record out of the feed (or the cross-feed holdback) and runs it
     /// through the record layer; nil when only a partial record remains (stashed).
-    private mutating func pumpOneRecord(
+    ///
+    /// Internal (not private) since Phase 3d: the synchronous drive (+Synchronous) is the
+    /// third caller of the one splitter — three drives, ONE record-boundary implementation.
+    mutating func pumpOneRecord(
         _ bytes: [UInt8], cursor: inout Int
     ) throws(TLSHandshakeError) -> [TLSRecordEvent]? {
         if inboundHoldback.isEmpty {
@@ -283,13 +286,22 @@ public struct TLSServerConnection {
         }
     }
 
-    /// How many octets the record at the slice's head occupies: the header alone until the
-    /// length field is visible — or when the length lies past the §5.2 cap, in which case the
-    /// bare header is fed and the record layer's own `validateHeader` raises the right error.
+    /// How many octets the record at the slice's head occupies.
+    ///
+    /// The header alone until the length field is visible — or when the header is already
+    /// condemnable (an unknown §5.1 content type, a length past the §5.2 cap), in which
+    /// case the bare header is fed and the record layer's own `validateHeader` raises the
+    /// right error NOW rather than after a phantom body. The content-type check is what
+    /// makes a cleartext mis-dial (an HTTP request where a ClientHello belongs) die at its
+    /// first five octets — the answer the libssl engine always gave — instead of stalling
+    /// for a body the peer will never send.
     private func recordLengthNeeded(_ bytes: ArraySlice<UInt8>) -> Int {
         let base = bytes.startIndex
         guard bytes.count >= TLSRecordLimits.headerLength else {
             return TLSRecordLimits.headerLength
+        }
+        guard TLSContentType(rawValue: bytes[base]) != nil else {
+            return TLSRecordLimits.headerLength  // fed bare; unknown_content_type, fail fast
         }
         let bodyLength = Int(bytes[base + 3]) << 8 | Int(bytes[base + 4])
         guard bodyLength <= TLSRecordLimits.maxCiphertextLength else {
@@ -349,8 +361,9 @@ public struct TLSServerConnection {
         }
     }
 
-    /// The shared application-data/alert arms of both dispatchers.
-    private mutating func handleNonHandshake(
+    /// The shared application-data/alert arms of every dispatcher — the two here and Phase
+    /// 3d's full-synchronous one (+Synchronous).
+    mutating func handleNonHandshake(
         _ event: TLSRecordEvent, into events: inout [TLSServerEvent]
     ) throws(TLSHandshakeError) {
         switch event {
@@ -397,7 +410,10 @@ public struct TLSServerConnection {
     }
 
     /// The gate's synchronous arms — everything after the ClientHello.
-    private mutating func processSynchronous(
+    ///
+    /// Internal since Phase 3d: the full-synchronous dispatch (+Synchronous) falls through
+    /// to the same arms.
+    mutating func processSynchronous(
         _ message: TLSHandshakeCoalescer.Message, into events: inout [TLSServerEvent]
     ) throws(TLSHandshakeError) {
         switch (state, message.type) {

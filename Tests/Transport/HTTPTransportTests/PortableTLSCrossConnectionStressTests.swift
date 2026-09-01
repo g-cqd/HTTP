@@ -164,7 +164,7 @@
             var rejectedHandshakes: Int { rejected.load(ordering: .acquiring) }
 
             init() throws {
-                var tls = try DevTLSIdentity.selfSigned()
+                var tls = try PortableTLSLoopback.devTLS()
                 tls.clientAuth = .required
                 transport = PortableTLSTransport(
                     configuration: TransportConfiguration(port: 0, backbone: .portableTLS, tls: tls)
@@ -274,15 +274,16 @@
         private final class EchoHarness {
             let connection: PortableTLSConnection
             private let loop: TLSEventLoop
-            private let serverContext: OpaquePointer
+            private let serverContext: PortableTLSServerContext
             private let clientDescriptor: Int32
             private let client: (ssl: OpaquePointer, context: OpaquePointer)
             private let finished = DispatchSemaphore(value: 0)
             private var startedClient = false
 
             init() throws {
-                let identity = try DevTLSIdentity.selfSigned()
-                serverContext = try OpenSSLTLS.serverContext(identity)
+                serverContext = try PortableTLSLoopback.makeServerContext(
+                    try PortableTLSLoopback.devTLS()
+                )
                 let pair = PortableTLSLoopback.makeSocketPair()
                 clientDescriptor = pair.client
                 loop = try TLSEventLoop()
@@ -334,7 +335,7 @@
                 CHTTPBoringSSL_SSL_free(client.ssl)
                 CHTTPBoringSSL_SSL_CTX_free(client.context)
                 _ = close(clientDescriptor)
-                CHTTPBoringSSL_SSL_CTX_free(serverContext)
+                serverContext.release()
                 loop.stop()
             }
         }

@@ -23,7 +23,9 @@
 //  Standards: TLS 1.3 (RFC 8446) over a POSIX.1-2017 (IEEE Std 1003.1-2017) socket pair.
 //
 
-#if canImport(CHTTPBoringSSLShims)
+// LEGACY-ENGINE ONLY (Phase 3d): asserts BoringSSL mechanics of the old engine -
+// compiled solely under the temporary HTTP_BORINGSSL_TLS A/B gate; dies with it in 3e.
+#if canImport(CHTTPBoringSSLShims) && !HTTP_PORTABLE_TLS_SWIFT
 
     internal import CHTTPBoringSSL
     internal import CHTTPBoringSSLShims
@@ -79,9 +81,12 @@
             let connection = PortableTLSConnection(
                 id: TransportConnectionID(1),
                 peer: TransportAddress(host: "127.0.0.1", port: 0),
-                ssl: serverSSL,
-                readBIO: readBIO,
-                writeBIO: writeBIO,
+                engine: PortableTLSEngine(
+                    ssl: serverSSL,
+                    readBIO: readBIO,
+                    writeBIO: writeBIO,
+                    connectionID: TransportConnectionID(1)
+                ),
                 descriptor: serverDescriptor,
                 eventLoop: loop,
                 clientAuth: .none,
@@ -167,9 +172,12 @@
                 built = PortableTLSConnection(
                     id: TransportConnectionID(2),
                     peer: TransportAddress(host: "127.0.0.1", port: 0),
-                    ssl: session.ssl,
-                    readBIO: session.readBIO,
-                    writeBIO: session.writeBIO,
+                    engine: PortableTLSEngine(
+                        ssl: session.ssl,
+                        readBIO: session.readBIO,
+                        writeBIO: session.writeBIO,
+                        connectionID: TransportConnectionID(2)
+                    ),
                     descriptor: -1,
                     eventLoop: loop,
                     clientAuth: .none,
@@ -213,9 +221,12 @@
             return PortableTLSConnection(
                 id: TransportConnectionID(3),
                 peer: TransportAddress(host: "127.0.0.1", port: 0),
-                ssl: session.ssl,
-                readBIO: session.readBIO,
-                writeBIO: session.writeBIO,
+                engine: PortableTLSEngine(
+                    ssl: session.ssl,
+                    readBIO: session.readBIO,
+                    writeBIO: session.writeBIO,
+                    connectionID: TransportConnectionID(3)
+                ),
                 descriptor: -1,
                 eventLoop: loop,
                 clientAuth: .none,

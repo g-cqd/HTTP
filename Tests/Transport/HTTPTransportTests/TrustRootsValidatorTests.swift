@@ -17,7 +17,9 @@ import Testing
 // validator does — Security (Darwin) or BoringSSL (the HTTP_PORTABLE_TLS build) — and is absent
 // by design on the default Linux graph, which has no TLS backbone to hook. The portable-TLS CI
 // leg builds with the shims and runs these; the default Linux legs correctly skip them.
-#if canImport(Security) || canImport(CHTTPBoringSSLShims)
+// On the HTTPTLS-engined portable build (HTTP_PORTABLE_TLS) the library's BoringSSL half is
+// absent, so off-Darwin (no Security) the seam itself is compiled out — mirror that exactly.
+#if canImport(Security) || (canImport(CHTTPBoringSSLShims) && !HTTP_PORTABLE_TLS_SWIFT)
 
     @Suite("G3 — trust-roots verifyPeer seam (RFC 5280 §6 path validation)")
     struct TrustRootsValidatorTests {

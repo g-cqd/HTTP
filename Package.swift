@@ -699,8 +699,9 @@ let package = Package(
             path: "Tests/Server/HTTPAuthTests"
         )
     ],
-    // Vendored BoringSSL (ADR 0004 Phase 6) is C++; pin the standard for its `.cc` sources. Only the
-    // opt-in `CHTTPBoringSSL` target is C++, so this is inert for the default apple-only graph.
+    // No root target is C++ any more — the vendored BoringSSL moved to the `Vendor/CHTTPBoringSSL`
+    // subpackage (Phase 3d), which pins its own `.cxx17`. Kept here as an inert default so a future
+    // C++ target cannot silently pick up a toolchain-dependent standard.
     cxxLanguageStandard: .cxx17
 )
 
@@ -725,52 +726,78 @@ for target in package.targets where !nonSwiftTargets.contains(target.name) {
     target.swiftSettings = settings
 }
 
-// G0 / ADR 0004 — the opt-in portable TLS backbone. Still an ENV-VAR gate (`HTTP_PORTABLE_TLS`),
-// deliberately NOT an SE-0450 trait like `Zstd`/`Brotli`: the 2026-08-17 probe of the pinned Swift 6.4
-// toolchain established that a trait can only *condition* settings and dependency edges on targets that
-// are always declared — it cannot un-declare a root-package target, and the manifest cannot observe
-// traits (no `#if`, no Context API). The codings dodge that shortfall because their shims are 2 files
-// we own, compiled to empty translation units when the trait is off; `CHTTPBoringSSL` is a 399-file
-// vendored C/C++/asm tree, and running all 399 through the compiler on every default build just to
-// produce empty objects is exactly the cost this gate exists to avoid. The gate is BoringSSL-shaped and
-// expires with BoringSSL: when the vendored tree is deleted (planned Phase 3e), the replacement
-// pure-Swift TLS target is ordinary reuse-safe Swift and needs no gate — env var or trait — at all.
+// G0 / ADR 0004 — the opt-in portable TLS backbone, since Phase 3d on the from-scratch HTTPTLS
+// engine. Still an ENV-VAR gate (`HTTP_PORTABLE_TLS`), deliberately NOT an SE-0450 trait like
+// `Zstd`/`Brotli`: the 2026-08-17 probe of the pinned Swift 6.4 toolchain established that a trait can
+// only *condition* settings and dependency edges on targets that are always declared — it cannot
+// un-declare a root-package target, and the manifest cannot observe traits (no `#if`, no Context API).
+// The codings dodge that shortfall because their shims are 2 files we own; `CHTTPBoringSSL` is a
+// 399-file vendored C/C++/asm tree, and running all 399 through the compiler on every default build
+// just to produce empty objects is exactly the cost this gate exists to avoid.
 //
-// Until then: gated by `HTTP_PORTABLE_TLS` so the DEFAULT build graph stays apple/swiftlang-only.
-// Appended after the strict loop above so the C shim never receives Swift-only settings. The portable
-// Swift sources / tests guard on `#if canImport(CHTTPBoringSSLShims)`, so they vanish when the flag is off.
-if Context.environment["HTTP_PORTABLE_TLS"] != nil {
-    // Vendored, symbol-prefixed (`CHTTPBoringSSL_*`) BoringSSL — no system OpenSSL, no
-    // `HTTP_OPENSSL_PREFIX` (ADR 0004 Phase 6). The C/C++/asm sources compile in-tree; SwiftPM links
-    // libc++ for the C++ `.cc`. The whole block stays gated on `HTTP_PORTABLE_TLS`, so the default build
-    // graph is apple-only.
-    package.targets.append(
-        .target(
-            name: "CHTTPBoringSSL",
-            path: "Sources/Core/CHTTPBoringSSL",
-            cSettings: [
-                .define("_GNU_SOURCE"),
-                .define("_POSIX_C_SOURCE", to: "200112L"),
-                .define("_DARWIN_C_SOURCE")
-            ]
-        )
+// TWO gates, mutually exclusive, both expiring (Phase 3d):
+//
+//   HTTP_PORTABLE_TLS   — the portable backbone on the pure-Swift HTTPTLS engine. The LIBRARY graph
+//                         compiles WITHOUT the 399-file BoringSSL target: `HTTPTransport` gains
+//                         HTTPTLS/HTTPTLSRSA/Crypto edges and the `HTTP_PORTABLE_TLS_SWIFT` define
+//                         its gated sources compile under. (The TEST target still links the vendored
+//                         BoringSSL — as the raw TLS *client oracle* the loopback suites drive
+//                         against the server; this package ships no TLS client to replace it with.)
+//                         After 3e deletes the vendored tree, this gate collapses into an ordinary
+//                         always-on backbone and the env var dies with the C target.
+//
+//   HTTP_BORINGSSL_TLS  — the SAME backbone on the legacy BoringSSL engine, kept ONLY for Phase 3d's
+//                         A/B verification (old engine still builds, its suites still pass, the
+//                         interop matrix can be diffed engine-against-engine). TEMPORARY: this gate,
+//                         the engine files it compiles (`PortableTLSEngine.swift`, `OpenSSLTLS.swift`,
+//                         `BoringSSLServerContext.swift`, `TLSFailureEvidence.swift`,
+//                         `BoringSSLChainValidator.swift`) and the vendored tree itself are deleted
+//                         together in Phase 3e once the matrix holds.
+//
+// Appended after the strict loop above so the C shims never receive Swift-only settings.
+let httpTLSPortableEngine = Context.environment["HTTP_PORTABLE_TLS"] != nil
+let boringSSLPortableEngine = Context.environment["HTTP_BORINGSSL_TLS"] != nil
+
+if httpTLSPortableEngine, boringSSLPortableEngine {
+    // Both engines define the same types behind exclusive gates; a build with both set would
+    // double-define them. Fail HERE, with the choice spelled out, not at the compiler.
+    fatalError(
+        "HTTP_PORTABLE_TLS (HTTPTLS engine) and HTTP_BORINGSSL_TLS (legacy A/B engine) are "
+            + "mutually exclusive - set exactly one."
     )
-    // The hand-written macro-wrapper shim — the only place that includes the BoringSSL umbrella and holds
-    // the unsafe interop. Depends on the vendored module.
-    package.targets.append(
-        .target(
-            name: "CHTTPBoringSSLShims",
-            dependencies: ["CHTTPBoringSSL"],
-            path: "Sources/Core/CHTTPBoringSSLShims",
-            cSettings: [.define("_GNU_SOURCE")]
-        )
-    )
-    // The transport (and its tests) consume both the vendored module (prefixed BoringSSL symbols) and the
-    // shim (the macro wrappers). No link flags or header search paths needed — the vendored module carries
-    // its own headers via its modulemap.
+}
+if httpTLSPortableEngine {
+    for target in package.targets where target.name == "HTTPTransport" {
+        target.dependencies.append("HTTPTLSRSA")
+        target.dependencies.append(.product(name: "Crypto", package: "swift-crypto"))
+    }
     for target in package.targets
     where ["HTTPTransport", "HTTPTransportTests"].contains(target.name) {
-        target.dependencies.append("CHTTPBoringSSL")
-        target.dependencies.append("CHTTPBoringSSLShims")
+        target.swiftSettings =
+            (target.swiftSettings ?? []) + [.define("HTTP_PORTABLE_TLS_SWIFT")]
+        target.dependencies.append("HTTPTLS")
+    }
+}
+if httpTLSPortableEngine || boringSSLPortableEngine {
+    // The vendored, symbol-prefixed (`CHTTPBoringSSL_*`) BoringSSL, as a LOCAL SUBPACKAGE
+    // (`Vendor/CHTTPBoringSSL`) since Phase 3d — deliberately not root targets: SwiftPM builds every
+    // declared ROOT target on `swift build`, but a dependency package's targets only when a consumed
+    // product needs them. That is what keeps `HTTP_PORTABLE_TLS=1 swift build` free of the 399-file
+    // compile while `swift test` still gets the raw BoringSSL CLIENT oracle the loopback suites
+    // drive against the server.
+    package.dependencies.append(.package(path: "Vendor/CHTTPBoringSSL"))
+    // The LIBRARY consumes the vendored module + shim only on the legacy engine; the test target
+    // consumes them under either gate (the raw-client oracle). No link flags or header search paths
+    // needed — the vendored module carries its own headers via its modulemap.
+    let boringSSLConsumers =
+        boringSSLPortableEngine
+        ? ["HTTPTransport", "HTTPTransportTests"] : ["HTTPTransportTests"]
+    for target in package.targets where boringSSLConsumers.contains(target.name) {
+        target.dependencies.append(
+            .product(name: "CHTTPBoringSSL", package: "CHTTPBoringSSL")
+        )
+        target.dependencies.append(
+            .product(name: "CHTTPBoringSSLShims", package: "CHTTPBoringSSL")
+        )
     }
 }

@@ -14,6 +14,36 @@
 internal import Crypto
 
 extension TLSServerConnection {
+    /// The server flight prepared through the §4.4.2 Certificate, awaiting only the §4.4.3
+    /// signature — the seam that lets the async and synchronous drives (Phase 3d) share
+    /// every byte of flight construction and differ solely in HOW the signature arrives.
+    struct PendingServerFlight {
+        /// The negotiated suite (§4.1.1).
+        let suite: TLSCipherSuite
+        /// The negotiated group (§4.2.8).
+        let group: TLSNamedGroup
+        /// The §7.1 ladder, advanced through the handshake secret.
+        var ladder: TLSKeySchedule
+        /// The §4.4.1 transcript, appended through the Certificate.
+        var running: TLSTranscriptHash
+        /// `server_handshake_traffic_secret` — feeds the server Finished.
+        let serverHandshakeSecret: SymmetricKey
+        /// EncryptedExtensions ∥ [CertificateRequest] ∥ [Certificate] so far.
+        var flight: [UInt8]
+        /// The §4.4.3 signature still owed, nil on a PSK resumption.
+        let signing: PendingSignature?
+    }
+
+    /// What the §4.4.3 CertificateVerify needs from the identity seam.
+    struct PendingSignature {
+        /// The identity resolved for this handshake (RFC 6066 §3 SNI point).
+        let identity: any TLSIdentityProvider
+        /// The §4.4.3 content to sign (transcript through the Certificate).
+        let content: [UInt8]
+        /// The §4.2.3 candidates (client's offer ∩ configuration, server preference).
+        let candidates: [TLSSignatureScheme]
+    }
+
     /// Runs the full §4 server response: early secret → ServerHello → flight → app write keys.
     mutating func completeHandshakeFlight(
         _ hello: TLSClientHello,
@@ -22,6 +52,40 @@ extension TLSServerConnection {
         group: TLSNamedGroup,
         clientShare: TLSKeyShareEntry
     ) async throws(TLSHandshakeError) {
+        var pending = try prepareHandshakeFlight(
+            hello, message: message, suite: suite, group: group, clientShare: clientShare
+        )
+        let signature = try await signatureIfNeeded(pending.signing)
+        try finishHandshakeFlight(&pending, signature: signature)
+    }
+
+    /// The async identity seam's half: obtains the §4.4.3 signature when one is owed.
+    private func signatureIfNeeded(
+        _ signing: PendingSignature?
+    ) async throws(TLSHandshakeError) -> TLSSignature? {
+        guard let signing else {
+            return nil
+        }
+        do {
+            return try await signing.identity.signature(
+                over: signing.content, algorithms: signing.candidates
+            )
+        }
+        catch {
+            throw .signingFailed
+        }
+    }
+
+    /// Every step of the server flight UP TO the §4.4.3 signature: early secret, fail-fast
+    /// negotiation checks, identity resolution, ServerHello + handshake keys, and the flight
+    /// through the Certificate (transcript included).
+    mutating func prepareHandshakeFlight(
+        _ hello: TLSClientHello,
+        message: TLSHandshakeCoalescer.Message,
+        suite: TLSCipherSuite,
+        group: TLSNamedGroup,
+        clientShare: TLSKeyShareEntry
+    ) throws(TLSHandshakeError) -> PendingServerFlight {
         var ladder = try establishEarlySecret(hello, message: message, suite: suite)
         // FAIL FAST, before any output: the signature-scheme intersection (§4.2.3/§9.2)
         // and the peer share's validity (§4.2.8.2) are both decidable now — a violation
@@ -46,20 +110,50 @@ extension TLSServerConnection {
             ladder: &ladder,
             running: &running
         )
-        let flight = try await buildServerFlight(
+        return try buildFlightThroughCertificate(
             hello,
             identity: identity,
+            suite: suite,
+            group: group,
             ladder: ladder,
-            running: &running,
+            running: running,
             serverHandshakeSecret: serverHandshakeSecret,
             signatureSchemes: candidates
         )
-        try emit(handshake: flight)  // one send — §5.1 coalescing, trace-exact
-        try promoteToApplicationKeys(suite: suite, ladder: &ladder, running: running)
-        transcript = running
-        schedule = ladder
-        selectedSuite = suite
-        selectedGroup = group
+    }
+
+    /// Completes a prepared flight: CertificateVerify (when owed), Finished, the ONE §5.1
+    /// coalesced send, application write keys, and the state commit.
+    mutating func finishHandshakeFlight(
+        _ pending: inout PendingServerFlight, signature: TLSSignature?
+    ) throws(TLSHandshakeError) {
+        if let signing = pending.signing {
+            guard let signature, signing.candidates.contains(signature.scheme) else {
+                throw .signingFailed  // absent, or the seam picked outside the offered list
+            }
+            let verify = TLSCertificateVerify(
+                scheme: signature.scheme, signature: signature.bytes
+            )
+            .encoded()
+            pending.running.append(verify)
+            pending.flight += verify
+        }
+        let finished = TLSFinishedCodec.finished(
+            verifyData: pending.ladder.finishedVerifyData(
+                trafficSecret: pending.serverHandshakeSecret,
+                transcriptHash: pending.running.currentHash
+            )
+        )
+        pending.running.append(finished)
+        pending.flight += finished
+        try emit(handshake: pending.flight)  // one send — §5.1 coalescing, trace-exact
+        try promoteToApplicationKeys(
+            suite: pending.suite, ladder: &pending.ladder, running: pending.running
+        )
+        transcript = pending.running
+        schedule = pending.ladder
+        selectedSuite = pending.suite
+        selectedGroup = pending.group
         // §A.2: WAIT_CERT when we asked for a certificate, WAIT_FINISHED otherwise.
         state = clientAuthSchemes.isEmpty ? .expectingClientFinished : .expectingClientCertificate
     }
@@ -148,16 +242,21 @@ extension TLSServerConnection {
         return serverSecret
     }
 
-    /// §4.3–§4.4: EncryptedExtensions ∥ [CertificateRequest] ∥ [Certificate ∥
-    /// CertificateVerify] ∥ Finished, appended to the transcript as built.
-    private mutating func buildServerFlight(
+    /// §4.3–§4.4: EncryptedExtensions ∥ [CertificateRequest] ∥ [Certificate], appended to
+    /// the transcript as built, with the §4.4.3 signing request computed but NOT yet
+    /// served — the CertificateVerify and Finished belong to
+    /// ``finishHandshakeFlight(_:signature:)``.
+    private mutating func buildFlightThroughCertificate(
         _ hello: TLSClientHello,
         identity: any TLSIdentityProvider,
+        suite: TLSCipherSuite,
+        group: TLSNamedGroup,
         ladder: TLSKeySchedule,
-        running: inout TLSTranscriptHash,
+        running: TLSTranscriptHash,
         serverHandshakeSecret: SymmetricKey,
         signatureSchemes: [TLSSignatureScheme]
-    ) async throws(TLSHandshakeError) -> [UInt8] {
+    ) throws(TLSHandshakeError) -> PendingServerFlight {
+        var running = running
         var flight = TLSEncryptedExtensionsEncoder.encryptedExtensions(
             supportedGroupsHint: configuration.supportedGroupsHint,
             recordSizeLimit: hello.recordSizeLimit == nil ? nil : configuration.recordSizeLimit,
@@ -177,19 +276,33 @@ extension TLSServerConnection {
             running.append(request)
             flight += request
         }
+        var signing: PendingSignature?
         if !resumed {
-            flight += try await appendCertificateAndVerify(
-                identity, schemes: signatureSchemes, running: &running
+            let chain = identity.certificateChainDER
+            guard !chain.isEmpty else {
+                throw .internalError("identity provided no certificate")  // §4.4.2 needs a leaf
+            }
+            let certificate = TLSCertificateCodec.certificate(chainDER: chain)
+            running.append(certificate)
+            flight += certificate
+            signing = PendingSignature(
+                identity: identity,
+                content: TLSCertificateVerify.signedContent(
+                    context: TLSCertificateVerify.serverContext,
+                    transcriptHash: running.currentHash  // §4.4.3: through Certificate
+                ),
+                candidates: signatureSchemes
             )
         }
-        let finished = TLSFinishedCodec.finished(
-            verifyData: ladder.finishedVerifyData(
-                trafficSecret: serverHandshakeSecret, transcriptHash: running.currentHash
-            )
+        return PendingServerFlight(
+            suite: suite,
+            group: group,
+            ladder: ladder,
+            running: running,
+            serverHandshakeSecret: serverHandshakeSecret,
+            flight: flight,
+            signing: signing
         )
-        running.append(finished)
-        flight += finished
-        return flight
     }
 
     /// §4.2.3/§9.2: the CertificateVerify scheme candidates — the client's offer ∩ the
@@ -207,41 +320,6 @@ extension TLSServerConnection {
             throw .negotiationFailed("signature schemes")  // §4.1.1
         }
         return candidates
-    }
-
-    /// §4.4.2/§4.4.3: the certificate chain and its transcript signature via the identity
-    /// seam (`schemes` — the precomputed §4.2.3 candidates).
-    private mutating func appendCertificateAndVerify(
-        _ identity: any TLSIdentityProvider,
-        schemes candidates: [TLSSignatureScheme],
-        running: inout TLSTranscriptHash
-    ) async throws(TLSHandshakeError) -> [UInt8] {
-        let chain = identity.certificateChainDER
-        guard !chain.isEmpty else {
-            throw .internalError("identity provided no certificate")  // §4.4.2 needs a leaf
-        }
-        let certificate = TLSCertificateCodec.certificate(chainDER: chain)
-        running.append(certificate)
-        let content = TLSCertificateVerify.signedContent(
-            context: TLSCertificateVerify.serverContext,
-            transcriptHash: running.currentHash  // §4.4.3: through Certificate
-        )
-        let signature: TLSSignature
-        do {
-            signature = try await identity.signature(over: content, algorithms: candidates)
-        }
-        catch {
-            throw .signingFailed
-        }
-        guard candidates.contains(signature.scheme) else {
-            throw .signingFailed  // the seam picked outside the offered list
-        }
-        let verify = TLSCertificateVerify(
-            scheme: signature.scheme, signature: signature.bytes
-        )
-        .encoded()
-        running.append(verify)
-        return certificate + verify
     }
 
     /// §7.1's third stage after the server Finished: master secret, both application traffic

@@ -20,9 +20,10 @@ Sources/Testing/HTTPTestSupport/ConstrainedStack.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/Network/NetworkFrameworkConnection.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/Network/NetworkFrameworkTLS.swift	nonisolated(unsafe)	1
 Sources/Transport/HTTPTransport/Network/NetworkFrameworkTLS.swift	unsafeDowncast	1
+Sources/Transport/HTTPTransport/PortableTLS/BoringSSLServerContext.swift	@unchecked Sendable	1
+Sources/Transport/HTTPTransport/PortableTLS/HTTPTLSEngine.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/PortableTLS/PortableTLSConnection.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/PortableTLS/PortableTLSEngine.swift	@unchecked Sendable	1
-Sources/Transport/HTTPTransport/PortableTLS/PortableTLSTransport.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/Quic/LegacyQUICConnection.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/Quic/LegacyQUICStream.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/Quic/ModernQUICConnection.swift	@unchecked Sendable	1

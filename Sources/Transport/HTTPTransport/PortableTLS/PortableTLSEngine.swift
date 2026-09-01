@@ -82,6 +82,12 @@
         /// shows it needs the room.
         static let ciphertextWindow = 16_384 + 256 + 5
 
+        /// `SSL_ERROR_ZERO_RETURN`, as the connection's write-path error strings spell it —
+        /// the engine owns the spelling since 3d so the HTTPTLS flavor can match it.
+        static let peerClosedStatus = Int(SSL_ERROR_ZERO_RETURN)
+        /// `SSL_ERROR_SYSCALL`, on the same terms.
+        static let transportEndedStatus = Int(SSL_ERROR_SYSCALL)
+
         private let ssl: OpaquePointer
         /// The connection this engine serves — carried only so a fatal classification can say WHOSE
         /// failure it is describing (``TLSFailureEvidence``); never read on the happy path.

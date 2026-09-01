@@ -52,7 +52,7 @@
             "stop, then bind the same configured port again — four times in a row",
             .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func rebindAfterStopReleasesThePort() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
+            let identity = try PortableTLSLoopback.devTLS()
             let port = try BindContractSubject.unusedPort(BindContractSubject.streamSocketType)
             for cycle in 0 ..< 4 {
                 let transport = PortableTLSTransport(
@@ -94,7 +94,7 @@
             "shutdown() is idempotent under concurrent and repeated calls, and still frees the port",
             .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func shutdownIsIdempotentAndStillReleasesThePort() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
+            let identity = try PortableTLSLoopback.devTLS()
             let port = try BindContractSubject.unusedPort(BindContractSubject.streamSocketType)
             for cycle in 0 ..< 3 {
                 let transport = PortableTLSTransport(

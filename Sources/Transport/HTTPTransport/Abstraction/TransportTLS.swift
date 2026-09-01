@@ -92,17 +92,35 @@ public struct TransportTLS: Sendable {
     /// callers are unaffected.
     public var sniIdentities: [String: SNIIdentity]
 
-    /// A PKCS#12 server identity bound to a server-name in ``sniIdentities`` (SNI multi-cert).
+    /// A server identity bound to a server-name in ``sniIdentities`` (SNI multi-cert):
+    /// a PKCS#12 (RFC 7292) blob, or — since Phase 3d — a PEM identity (RFC 7468).
+    ///
+    /// The HTTPTLS-engined portable backbone (`HTTP_PORTABLE_TLS`) requires ``pem`` — it
+    /// does not parse PKCS#12 (convert once at deployment: `openssl pkcs12 -nodes`); the
+    /// legacy BoringSSL engine reads either form.
     public struct SNIIdentity: Sendable {
         /// A PKCS#12 (RFC 7292) blob holding this name's certificate chain and private key.
+        ///
+        /// Empty when the identity was supplied as PEM instead (``pem``).
         public var pkcs12: [UInt8]
         /// The passphrase protecting ``pkcs12`` (empty if the blob is unencrypted).
         public var passphrase: String
+        /// A PEM identity (RFC 7468) for this name — used instead of ``pkcs12`` when set,
+        /// and the only form the HTTPTLS engine accepts.
+        public var pem: PEMIdentity?
 
         /// Creates an SNI identity from a PKCS#12 blob and its passphrase.
         public init(pkcs12: [UInt8], passphrase: String) {
             self.pkcs12 = pkcs12
             self.passphrase = passphrase
+            self.pem = nil
+        }
+
+        /// Creates an SNI identity from PEM texts (chain + unencrypted key, RFC 7468).
+        public init(pem: PEMIdentity) {
+            self.pkcs12 = []
+            self.passphrase = ""
+            self.pem = pem
         }
     }
 

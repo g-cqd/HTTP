@@ -33,7 +33,7 @@
     extension BindContractSubject {
         /// The dev identity for the portableTLS column, generated ONCE per process.
         ///
-        /// Same economics as the QUIC columns' `cachedIdentity`: `DevTLSIdentity.selfSigned` shells
+        /// Same economics as the QUIC columns' `cachedIdentity`: `DevTLSIdentity.selfSignedPEM` shells
         /// out to `openssl` for an RSA-2048 key, the matrix asks for this listener eleven times, and
         /// the identity is not what any row is about.
         private static let cachedPortableIdentity = Mutex<TransportTLS?>(nil)
@@ -43,7 +43,7 @@
             if let cached = cachedPortableIdentity.withLock(\.self) {
                 return cached
             }
-            let fresh = try DevTLSIdentity.selfSigned()
+            let fresh = try PortableTLSLoopback.devTLS()
             cachedPortableIdentity.withLock { $0 = fresh }
             return fresh
         }

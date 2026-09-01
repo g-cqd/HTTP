@@ -68,7 +68,7 @@ fi
 
 # --- Feature-flag passthrough ------------------------------------------------------------------------
 ENVARGS=()
-for v in HTTP_PORTABLE_TLS HTTP_WARNINGS_AS_ERRORS HTTP_OPENSSL_PREFIX HTTP_ZSTD_PREFIX HTTP_BROTLI_PREFIX; do
+for v in HTTP_PORTABLE_TLS HTTP_BORINGSSL_TLS HTTP_WARNINGS_AS_ERRORS HTTP_OPENSSL_PREFIX HTTP_ZSTD_PREFIX HTTP_BROTLI_PREFIX; do
   if [ -n "${!v:-}" ]; then ENVARGS+=(--env "$v=${!v}"); fi
 done
 CPUARG=()

@@ -35,8 +35,11 @@
             do {
                 CHTTPBoringSSLShims_enable_sni(context)
                 for (name, identity) in tls.sniIdentities {
+                    // PEM when supplied (the 3d SNIIdentity extension), else the PKCS#12
+                    // blob — the same precedence as the default identity's `from(_:)`.
                     let perName = try makeContext(
-                        identity: .pkcs12(identity.pkcs12, passphrase: identity.passphrase),
+                        identity: identity.pem.map(IdentitySource.pem)
+                            ?? .pkcs12(identity.pkcs12, passphrase: identity.passphrase),
                         tls: tls
                     )
                     name.withCString { CHTTPBoringSSLShims_add_sni_context(context, $0, perName) }
