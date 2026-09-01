@@ -45,7 +45,7 @@ struct HTTPServerShutdownTests {
 
     @Test(
         "shutdown force-closes a connection still in flight past the deadline",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func forceClosesStragglerPastDeadline() async {
         let clock = TestClock()
         // Keep the idle watchdog far out, so the force-close — not a keep-alive timeout — closes it.

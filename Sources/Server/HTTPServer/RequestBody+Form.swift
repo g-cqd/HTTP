@@ -21,14 +21,18 @@ extension RequestBody {
 
     /// Decodes a `multipart/form-data` body (RFC 7578) using the boundary from the request's Content-Type.
     ///
-    /// Returns `nil` when `request` is not `multipart/form-data`, or when its body is malformed; collects
-    /// the whole body, so pair it with a per-route limit (``Route/bodyLimited(to:)``) for file uploads.
-    public func multipartForm(for request: HTTPRequest) async -> MultipartFormData? {
+    /// Returns `nil` when `request` is not `multipart/form-data`, when its body is malformed, or when it
+    /// breaches `limits`; collects the whole body, so pair it with a per-route wire cap
+    /// (``Route/bodyLimited(to:)``) for file uploads — the two bound different things.
+    public func multipartForm(
+        for request: HTTPRequest,
+        limits: MultipartLimits = .default
+    ) async -> MultipartFormData? {
         guard let contentType = request.headerFields[.contentType],
             let boundary = MultipartFormData.boundary(ofContentType: contentType)
         else {
             return nil
         }
-        return MultipartFormData.parse(await collect(), boundary: boundary)
+        return MultipartFormData.parse(await collect(), boundary: boundary, limits: limits)
     }
 }

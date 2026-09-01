@@ -44,8 +44,18 @@ public final class SwiftSystemTransport: ServerTransport {
         var listenDescriptor: FileDescriptor?
         var listenFD: Int32 = -1
         var boundPort: UInt16 = 0
+        /// The endpoint `getsockname(2)` reports for the listener.
+        var boundEndpoint: BindEndpoint?
+        /// Signalled once the listening descriptor is closed.
+        ///
+        /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
+        /// see ``ListenerCloseLatch``.
+        var closeLatch: ListenerCloseLatch?
         var isRunning = false
         var continuation: AsyncStream<any TransportConnection>.Continuation?
+        /// The admission policy applied between `accept(2)` and `yield` (audit F8), ungated until
+        /// ``start(admission:)`` installs the server's gate.
+        var gate = AcceptGate(admission: nil)
     }
 
     /// Creates a swift-system transport for `configuration`.
@@ -62,9 +72,20 @@ public final class SwiftSystemTransport: ServerTransport {
         state.withLock(\.boundPort)
     }
 
+    /// The local endpoint actually bound (meaningful after ``start()`` returns), or `nil` before binding.
+    ///
+    /// Read back from the kernel with `getsockname(2)` at bind time, not derived from the configuration:
+    /// `port` `0` means "whichever the OS chose" and `host` may have been a name or a wildcard, so the
+    /// realized answer is the only one an operator log or an `Alt-Svc` advertisement (RFC 7838) can use.
+    public var boundEndpoint: BindEndpoint? {
+        state.withLock(\.boundEndpoint)
+    }
+
     /// Binds one non-blocking listening socket, spins up N event loops, and begins accepting on the
     /// first loop (assigning each connection round-robin to a loop).
-    public func start() async throws -> AsyncStream<any TransportConnection> {
+    public func start(
+        admission: ConnectionAdmission?
+    ) async throws -> AsyncStream<any TransportConnection> {
         let loopCount = max(1, configuration.eventLoopCount ?? Self.defaultLoopCount())
         let listener = try POSIXSocket.makeListenSocket(
             host: configuration.host,
@@ -86,12 +107,30 @@ public final class SwiftSystemTransport: ServerTransport {
             $0.listenDescriptor = FileDescriptor(rawValue: listener.descriptor)
             $0.listenFD = listener.descriptor
             $0.boundPort = listener.port
+            $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
+            $0.closeLatch = ListenerCloseLatch()
             $0.isRunning = true
             $0.continuation = continuation
+            $0.gate = AcceptGate(admission: admission)
         }
         continuation.onTermination = { [weak self] _ in
             Task { await self?.shutdown() }
         }
+        // An immutable snapshot: `loops` is a var (built incrementally above) and the resume closure
+        // runs concurrently on the side queue, so capturing the var there is a data-race smell.
+        let acceptLoops = loops
+        // Re-arm once the gate's live count falls back to its hysteresis watermark, on the side queue
+        // so the `kevent` registration never occupies an event loop.
+        admission?
+            .onResume { [weak self] in
+                self?
+                    .scheduleAcceptRearm(
+                        listenFD: listener.descriptor,
+                        acceptLoop: acceptLoops[0],
+                        loops: acceptLoops,
+                        continuation: continuation
+                    )
+            }
         armAccept(
             listenFD: listener.descriptor,
             acceptLoop: loops[0],
@@ -101,9 +140,16 @@ public final class SwiftSystemTransport: ServerTransport {
         return stream
     }
 
-    /// Closes the listening socket and stops every event loop.
+    /// Closes the listening socket — **waiting for the close to land** — and stops every event loop.
+    ///
+    /// Same contract, same reasoning and the same idempotence argument as
+    /// ``POSIXKqueueTransport/shutdown()``: this backbone shares that one's ``KqueueEventLoop``, so it
+    /// shared the defect too — `shutdown()` enqueued the listening descriptor's close and returned, and
+    /// an immediate rebind of the same port raced it into `EADDRINUSE`. The wait is a continuation the
+    /// loop thread resumes, so no cooperative-pool thread is blocked on it.
     public func shutdown() async {
-        let (loops, listenFD, continuation) = state.withLock {
+        // `closeLatch` is deliberately NOT cleared — see ``POSIXKqueueTransport/shutdown()``.
+        let (loops, listenFD, continuation, latch) = state.withLock {
             let loops = $0.loops
             let fd = $0.listenFD
             let cont = $0.continuation
@@ -112,18 +158,35 @@ public final class SwiftSystemTransport: ServerTransport {
             $0.listenFD = -1
             $0.continuation = nil
             $0.isRunning = false
-            return (loops, fd, cont)
+            return (loops, fd, cont, $0.closeLatch)
         }
         continuation?.finish()
-        if listenFD >= 0, let acceptLoop = loops.first {
-            acceptLoop.closeDescriptor(listenFD)
+        guard let latch else {
+            return  // never started
         }
+        if listenFD >= 0 {
+            if let acceptLoop = loops.first {
+                acceptLoop.closeDescriptor(listenFD) { latch.signal() }
+            }
+            else {
+                close(listenFD)
+                latch.signal()
+            }
+        }
+        await latch.wait()
         for loop in loops {
             loop.stop()
         }
     }
 
     // MARK: - Internals
+
+    /// The loop that watches the listening socket, or `nil` once ``shutdown()`` has taken it.
+    ///
+    /// The shutdown-ordering test seam — see ``POSIXKqueueTransport/acceptLoop``.
+    var acceptLoop: KqueueEventLoop? {
+        state.withLock(\.loops.first)
+    }
 
     /// Auto-sizes the loop count to the performance-core count (Apple Silicon P-cores) — see
     /// ``POSIXKqueueTransport``.
@@ -157,15 +220,26 @@ public final class SwiftSystemTransport: ServerTransport {
         }
     }
 
+    /// Drains every pending connection, charging each against the admission gate BEFORE it is yielded.
+    ///
+    /// The connection stream stays `.unbounded` deliberately. `AsyncStream`'s buffering policy *drops*
+    /// on overflow, and a dropped connection here is a leaked file descriptor — an unbounded-loss bug
+    /// strictly worse than the queue depth it would bound. The bound comes from admission instead:
+    /// because a slot is charged before `yield`, the stream's depth can never exceed the gate's total.
+    /// Do not "fix" this by adding a dropping policy.
     private func acceptPending(
         listenFD: Int32,
         acceptLoop: KqueueEventLoop,
         loops: [KqueueEventLoop],
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        guard state.withLock(\.isRunning) else {
+        let (running, gate) = state.withLock { ($0.isRunning, $0.gate) }
+        guard running else {
             return
         }
+        // A refused connection is closed here, on the accept loop: it was never registered with any
+        // kqueue, so a direct `close(2)` cannot race a readiness handler.
+        let closeRefused: (Int32) -> Void = { close($0) }
         drain: while true {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
@@ -190,24 +264,72 @@ public final class SwiftSystemTransport: ServerTransport {
                         break drain
                 }
             }
-            POSIXSocket.setNonBlocking(clientFD)  // event-driven I/O needs a non-blocking fd
-            POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
-            POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
-            let id = connectionIDs.next()
-            let serveLoop = loops[
-                nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
-            continuation.yield(
-                SwiftSystemConnection(
-                    id: id,
-                    descriptor: FileDescriptor(rawValue: clientFD),
-                    peer: POSIXSocket.peerAddress(from: address),
-                    eventLoop: serveLoop
-                )
-            )
+            let peer = POSIXSocket.peerAddress(from: address)
+            switch gate.admit(descriptor: clientFD, host: peer.host, close: closeRefused) {
+                case .rejectedContinue:
+                    continue  // this peer is over ITS cap; others are not — keep draining
+                case .saturatedStop:
+                    // Return WITHOUT re-arming: the one-shot readiness registration makes "don't
+                    // re-arm" the backpressure. The kernel fills the listen(2) backlog and finally
+                    // refuses SYNs; the gate re-arms us at its hysteresis watermark.
+                    return
+                case .admit(let ticket, let saturated):
+                    yieldConnection(
+                        clientFD,
+                        peer: peer,
+                        ticket: ticket,
+                        loops: loops,
+                        continuation: continuation
+                    )
+                    if saturated {
+                        return  // that was the last slot — same backpressure, no re-arm
+                    }
+            }
         }
         armAccept(
             listenFD: listenFD, acceptLoop: acceptLoop, loops: loops, continuation: continuation
         )
+    }
+
+    /// Configures an admitted descriptor, assigns it a loop, and yields it carrying its slot.
+    private func yieldConnection(
+        _ clientFD: Int32,
+        peer: TransportAddress,
+        ticket: AdmissionTicket?,
+        loops: [KqueueEventLoop],
+        continuation: AsyncStream<any TransportConnection>.Continuation
+    ) {
+        POSIXSocket.setNonBlocking(clientFD)  // event-driven I/O needs a non-blocking fd
+        POSIXSocket.setNoSIGPIPE(clientFD)  // audit T-F1: a peer RST mid-write must not kill us
+        POSIXSocket.setNoDelay(clientFD)  // disable Nagle — flush small responses now (p99.9)
+        let serveLoop = loops[nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
+        continuation.yield(
+            SwiftSystemConnection(
+                id: connectionIDs.next(),
+                descriptor: FileDescriptor(rawValue: clientFD),
+                peer: peer,
+                eventLoop: serveLoop,
+                admissionTicket: ticket
+            )
+        )
+    }
+
+    /// Re-arms accept from the gate's hysteresis resume, on ``backoffQueue`` so the `kevent`
+    /// registration never occupies an event loop.
+    private func scheduleAcceptRearm(
+        listenFD: Int32,
+        acceptLoop: KqueueEventLoop,
+        loops: [KqueueEventLoop],
+        continuation: AsyncStream<any TransportConnection>.Continuation
+    ) {
+        backoffQueue.async { [weak self] in
+            guard let self, state.withLock(\.isRunning) else {
+                return
+            }
+            armAccept(
+                listenFD: listenFD, acceptLoop: acceptLoop, loops: loops, continuation: continuation
+            )
+        }
     }
 
     private func scheduleAcceptBackoff(

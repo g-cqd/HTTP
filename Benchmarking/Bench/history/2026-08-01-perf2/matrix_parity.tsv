@@ -1,0 +1,55 @@
+_plaintext	ours(posixKqueue):floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	ours(posixKqueue):floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	ours(posixKqueue):floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	ours(posixKqueue):floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	ours(posixKqueue):floor	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	unknown
+_plaintext	ours(swiftSystem):floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	ours(swiftSystem):floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	ours(swiftSystem):floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	ours(swiftSystem):floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	ours(swiftSystem):floor	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	unknown
+_plaintext	ours(posixKqueue):full	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	ours(posixKqueue):full	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	ours(posixKqueue):full	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	ours(posixKqueue):full	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	ours(posixKqueue):full	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	unknown
+_plaintext	ours(swiftSystem):full	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	ours(swiftSystem):full	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	ours(swiftSystem):full	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	ours(swiftSystem):full	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	ours(swiftSystem):full	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	unknown
+_plaintext	rust:floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	rust:floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	rust:floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	rust:floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	rust:floor	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	application/json
+_plaintext	go:floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	go:floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	go:floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	go:floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	go:floor	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	application/json
+_plaintext	bun:floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	bun:floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	bun:floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	bun:floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	bun:floor	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	application/json
+_plaintext	hummingbird:floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	hummingbird:floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	hummingbird:floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	hummingbird:floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	hummingbird:floor	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	application/json
+_plaintext	vapor:floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	vapor:floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	vapor:floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	vapor:floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	vapor:floor	ok	7	5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22	application/json
+_plaintext	nginx:floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain
+_json	nginx:floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	nginx:floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain
+_hello_world	nginx:floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain
+_echo	nginx:floor	unimplemented	0	-	-
+_plaintext	caddy:floor	ok	13	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f	text/plain; charset=utf-8
+_json	caddy:floor	ok	27	8811a6f55cb434d10921bccf7108016db61792083bb929eef0e592e376a0db9a	application/json
+_payload	caddy:floor	ok	1024	70514da89e67434782e8844cfc0ff2a874eaca6cbfa4cb10973251898650ba37	text/plain; charset=utf-8
+_hello_world	caddy:floor	ok	14	d9014c4624844aa5bac314773d6b689ad467fa4e1d1a50a1b8a99d5a95f72ff5	text/plain; charset=utf-8
+_echo	caddy:floor	unimplemented	0	-	-

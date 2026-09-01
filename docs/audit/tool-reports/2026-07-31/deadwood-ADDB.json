@@ -1,0 +1,176 @@
+{
+  "analyzedFileCount" : 239,
+  "cacheHits" : 0,
+  "cacheMisses" : 239,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 5,
+      "fingerprint" : "5e5a0aff1754a11d",
+      "line" : 55,
+      "message" : "method 'fixedWidthPlaceholder(capacity:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FreeList.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "c2e21f8d9ab5e048",
+      "line" : 63,
+      "message" : "method 'patchFixedWidth(_:pages:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/FreeList.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "23df4dd880083435",
+      "line" : 250,
+      "message" : "property 'cellBodySize' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBCore\/NodeBuilder.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "d0631d99c546861c",
+      "line" : 93,
+      "message" : "condition 'overBudget' is provably false — the true branch never executes",
+      "note" : "confidence certain — sparse conditional constant propagation",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADDBExec\/JoinExecutor+EquiJoin.swift",
+      "rule" : "dead-branch",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "fa0173840ad56e5b",
+      "line" : 32,
+      "message" : "enum 'FTSScenario' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/FTSScenario.swift",
+      "rule" : "unused-type",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "737a7cba1583aa77",
+      "line" : 32,
+      "message" : "enum 'Scenarios' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/Scenarios.swift",
+      "rule" : "unused-type",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "85212717d1a027af",
+      "line" : 18,
+      "message" : "enum 'StrategyBench' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/StrategyBench.swift",
+      "rule" : "unused-type",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "d8679ecd615c4b81",
+      "line" : 21,
+      "message" : "enum 'TableScenario' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/TableScenario.swift",
+      "rule" : "unused-type",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "f39dacd1e2dc8f66",
+      "line" : 34,
+      "message" : "property 'scenarios' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "7a71f45a7c16eb96",
+      "line" : 37,
+      "message" : "property 'iterator' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "c9b275778b801485",
+      "line" : 82,
+      "message" : "property 'datasets' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "45a6d1810f2b68b2",
+      "line" : 83,
+      "message" : "property 'needsDataset' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLBench\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "ea9fee3a8cba1d32",
+      "line" : 16,
+      "message" : "property 'usage' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLTool\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "b046e493e8d570e3",
+      "line" : 140,
+      "message" : "property 'listing' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Sources\/ADSQLTool\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "3559e2b7c8214e8f",
+      "line" : 33,
+      "message" : "property 'adsqlCLIAvailable' is never referenced from any entry point",
+      "note" : "confidence high — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Tests\/ADSQLTests\/CrossProcessTests.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "b079bc77a394f63c",
+      "line" : 136,
+      "message" : "struct 'Sentinel' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADDB\/Tests\/ADSQLTests\/SQLInsertTests.swift",
+      "rule" : "unused-type",
+      "severity" : "warning"
+    }
+  ],
+  "notes" : [
+
+  ],
+  "suppressed" : [
+
+  ]
+}

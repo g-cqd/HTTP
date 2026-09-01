@@ -1,0 +1,915 @@
+{
+  "analyzedFileCount" : 47,
+  "cacheHits" : 20,
+  "cacheMisses" : 27,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 9,
+      "fingerprint" : "1c49874910ad8d4b",
+      "line" : 71,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiConcurrency\/TaskProvider.swift:90",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiConcurrency\/TaskProvider.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 90,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiConcurrency\/TaskProvider.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "7ffd13eb0bb2f721",
+      "line" : 83,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiConcurrency\/TaskProvider.swift:92",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiConcurrency\/TaskProvider.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiConcurrency\/TaskProvider.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 60,
+      "fingerprint" : "762caf5653895ce",
+      "line" : 117,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:208",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncProbe.swift",
+      "related" : [
+        {
+          "column" : 58,
+          "line" : 208,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "582ee08f57db1f1d",
+      "line" : 122,
+      "message" : "3 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift:92, \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift:97",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncProbe.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift"
+        },
+        {
+          "column" : 50,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "54e7fe2193869c0a",
+      "line" : 122,
+      "message" : "5 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift:92, \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift:97, \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:167, \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:213",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncProbe.swift",
+      "related" : [
+        {
+          "column" : 50,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift"
+        },
+        {
+          "column" : 50,
+          "line" : 97,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift"
+        },
+        {
+          "column" : 50,
+          "line" : 167,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        },
+        {
+          "column" : 50,
+          "line" : 213,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 75,
+      "fingerprint" : "c24958ddb0163a48",
+      "line" : 123,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:214",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncProbe.swift",
+      "related" : [
+        {
+          "column" : 87,
+          "line" : 214,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "db4ea88fe67778dc",
+      "line" : 62,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift:61",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 61,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 22,
+      "fingerprint" : "18ef953719b5b24c",
+      "line" : 66,
+      "message" : "3 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift:66, \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:119",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift",
+      "related" : [
+        {
+          "column" : 22,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift"
+        },
+        {
+          "column" : 68,
+          "line" : 119,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "84e73b057de9760e",
+      "line" : 67,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:188",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 188,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "d3d31a84850e9838",
+      "line" : 87,
+      "message" : "2 duplicated regions of ~105 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:208",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 208,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "e0fdba1dc56806be",
+      "line" : 89,
+      "message" : "2 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift:90",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 90,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "f7ff409e65a7e11b",
+      "line" : 89,
+      "message" : "4 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift:90, \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:164, \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift:210",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/AsyncSemaphore.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 90,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskGate.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 164,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 210,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "92719a15cc8286c6",
+      "line" : 184,
+      "message" : "2 duplicated regions of ~62 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskProviderSpy.swift:201",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskProviderSpy.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 201,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskProviderSpy.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "2bcaa3cbb6ce70ac",
+      "line" : 202,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskProviderSpy.swift:218",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskProviderSpy.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 218,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TaskProviderSpy.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "6dfff871869a2e67",
+      "line" : 71,
+      "message" : "2 duplicated regions of ~73 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift:21",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/AemiSwift\/Sources\/AemiTesting\/TestClock.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 21,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "ca08b5b1899970f",
+      "line" : 54,
+      "message" : "2 duplicated regions of ~75 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Allocations.swift:41",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Allocations.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 41,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Allocations.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "71dac78d247ba5dd",
+      "line" : 8,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbeTimeoutError.swift:17",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 17,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbeTimeoutError.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "8a30e5b115c9d2d6",
+      "line" : 35,
+      "message" : "2 duplicated regions of ~87 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift:19",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 19,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 64,
+      "fingerprint" : "74f21ec2de6c4a2a",
+      "line" : 56,
+      "message" : "2 duplicated regions of ~212 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift:50",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 65,
+          "line" : 50,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "ae2dfb4a5b1104f",
+      "line" : 89,
+      "message" : "2 duplicated regions of ~232 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift:90",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncEventProbe.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 90,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncEventProbe.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 71,
+      "fingerprint" : "45f62cb6fe3c15a1",
+      "line" : 32,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift:42",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 67,
+          "line" : 42,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "228a21ffed4e71aa",
+      "line" : 52,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift:71",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 71,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 40,
+      "fingerprint" : "63b147c721100dd1",
+      "line" : 59,
+      "message" : "2 duplicated regions of ~75 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift:119",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 119,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "584e35d5dc522b07",
+      "line" : 1,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.96)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift:11",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ConstrainedStack.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 11,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 48,
+      "fingerprint" : "1754bddd59ece98b",
+      "line" : 15,
+      "message" : "2 duplicated regions of ~81 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift:21",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ConstrainedStack.swift",
+      "related" : [
+        {
+          "column" : 54,
+          "line" : 21,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "f613b7d4c0779b45",
+      "line" : 33,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift:38",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ConstrainedStack.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 38,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "86ab24acd1d07d19",
+      "line" : 49,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift:58",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ConstrainedStack.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 58,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ConstrainedStack.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "d8ebefc85fd96590",
+      "line" : 66,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.88)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/DepthSweep.swift:15",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ConstrainedStack.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 15,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/DepthSweep.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 87,
+      "fingerprint" : "10813699e843747c",
+      "line" : 73,
+      "message" : "2 duplicated regions of ~85 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/DepthSweep.swift:23",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ConstrainedStack.swift",
+      "related" : [
+        {
+          "column" : 82,
+          "line" : 23,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/DepthSweep.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 46,
+      "fingerprint" : "8b11c38bff351662",
+      "line" : 23,
+      "message" : "2 duplicated regions of ~357 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ContinuationRegistry.swift:31",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ContinuationRegistry.swift",
+      "related" : [
+        {
+          "column" : 44,
+          "line" : 31,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ContinuationRegistry.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "c89b9bbc8373fcee",
+      "line" : 9,
+      "message" : "2 duplicated regions of ~63 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift:13",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Fuzz.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 13,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "7ffd565144ec84dc",
+      "line" : 28,
+      "message" : "2 duplicated regions of ~459 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift:41",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Fuzz.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 41,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "75527d69d2957c9f",
+      "line" : 111,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.88)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift:113",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Fuzz.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 113,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "b1faa444d55d3fef",
+      "line" : 120,
+      "message" : "2 duplicated regions of ~213 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift:124",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Fuzz.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 124,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Fuzz.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 10,
+      "fingerprint" : "7918eb0510480fc8",
+      "line" : 61,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Load.swift:134",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Load.swift",
+      "related" : [
+        {
+          "column" : 14,
+          "line" : 134,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Load.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "3e1017fef06fce87",
+      "line" : 68,
+      "message" : "2 duplicated regions of ~137 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift:18",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Oracles.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 18,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "5fd72f16236736d0",
+      "line" : 92,
+      "message" : "2 duplicated regions of ~140 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift:48",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Oracles.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 48,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "e7f451a2b3637361",
+      "line" : 118,
+      "message" : "2 duplicated regions of ~92 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift:80",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Oracles.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 80,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "23c092e0285d0f27",
+      "line" : 138,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift:101",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/Oracles.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 101,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Oracles.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 58,
+      "fingerprint" : "ed9d8127cecabf96",
+      "line" : 19,
+      "message" : "2 duplicated regions of ~91 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/SeededRNG.swift:20",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/SeededRNG.swift",
+      "related" : [
+        {
+          "column" : 73,
+          "line" : 20,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/SeededRNG.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "e33e0fef78ee3fc7",
+      "line" : 49,
+      "message" : "2 duplicated regions of ~154 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/SeededRNG.swift:40",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/SeededRNG.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 40,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/SeededRNG.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "d8f45a5347311e07",
+      "line" : 83,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Seed.swift:15",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/SeededRNG.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 15,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Seed.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "4451cd7ef9746ff",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TaskProviderSpy.swift:56",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TaskProviderSpy.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 56,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TaskProviderSpy.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 57,
+      "fingerprint" : "55ef21fcefe629ac",
+      "line" : 52,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:84",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift",
+      "related" : [
+        {
+          "column" : 59,
+          "line" : 84,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "c2a85627577cda5f",
+      "line" : 65,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:107",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 107,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "6a6dd9c5f2c930be",
+      "line" : 72,
+      "message" : "2 duplicated regions of ~156 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:157",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/TestClock.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 157,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "3a8debda77353a69",
+      "line" : 12,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ThreadGate.swift:18",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ThreadGate.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 18,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ThreadGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "73761b5c4ea41da",
+      "line" : 43,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ThreadGate.swift:52",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADFoundation\/Sources\/ADTestKit\/ThreadGate.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 52,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/ThreadGate.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "5c697572d9b012ba",
+      "line" : 50,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:87",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "370c052931b58e7f",
+      "line" : 87,
+      "message" : "2 duplicated regions of ~84 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:125",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 33,
+      "fingerprint" : "6ac9dace36b2dffc",
+      "line" : 103,
+      "message" : "2 duplicated regions of ~95 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift:141",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/AsyncGate.swift",
+      "related" : [
+        {
+          "column" : 34,
+          "line" : 141,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/TestClock.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

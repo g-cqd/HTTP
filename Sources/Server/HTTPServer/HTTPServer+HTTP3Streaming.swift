@@ -1,0 +1,222 @@
+//
+//  HTTPServer+HTTP3Streaming.swift
+//  HTTPServer
+//
+//  The two streaming halves of the HTTP/3 runtime (RFC 9114 §4.1), split out of HTTPServer+HTTP3.swift
+//  so the connection/stream driver file stays focused: a streaming *request* route, whose body is fed
+//  off the wire into a back-pressured handoff the handler consumes (Phase 1.4), and a streaming
+//  *response*, whose producer is pumped straight onto the QUIC stream as DATA frames (P6b).
+//
+
+internal import HTTP3
+internal import HTTPCore
+internal import HTTPTransport
+
+extension HTTPServer {
+    /// Drives a streaming-route request on its QUIC stream (Phase 1.4): feed the body off the wire into a
+    /// back-pressured handoff the handler consumes, then send the handler's response on the same stream.
+    ///
+    /// The handler runs in a child task and consumes the body via the stream; the feed loop suspends on a
+    /// full handoff slot until the handler takes each chunk (1-chunk backpressure), and QUIC's per-stream
+    /// flow control back-pressures the sender in turn — bounded memory for an arbitrarily large upload.
+    /// The handler abandons the handoff on return, so the feed loop resumes (dropping the rest) even if
+    /// the handler did not drain the body; the whole body is still read off the wire to FIN.
+    ///
+    /// The body is only *complete* when the engine surfaced a `requestEnd` — QUIC's FIN, with the
+    /// declared content-length validated against it (RFC 9114 §4.1 / §4.1.2). An EOF, a peer reset, or a
+    /// receive failure leaves that unobserved, and the request is then refused with H3_REQUEST_INCOMPLETE
+    /// (§8.1) rather than answered: handing a handler a short body it cannot distinguish from a whole one
+    /// is a request-smuggling-shaped integrity fault (CWE-444), and a `200` for half an upload is worse
+    /// than no answer at all.
+    func serveHTTP3StreamingRequest(
+        _ id: QUICStreamID,
+        request inbound: HTTPRequest,
+        buffered: (chunks: [[UInt8]], ended: Bool),
+        stream: any QUICStream,
+        inbox: HTTP3StreamInbox,
+        in scope: HTTP3ConnectionScope
+    ) async -> HTTP3StreamExit {
+        let deadlines = scope.deadlines
+        let handoff = AsyncHandoff()
+        // The plan this stream's HEADERS resolved (CR-F12 / CR-F19), and the ingress seam (CR-F13):
+        // the sanitized request is what the handler child captures.
+        let plan = scope.registry.plan(for: id) ?? DispatchPlan(snapshot: currentSnapshot)
+        let (request, context) = RequestContext.ingress(
+            inbound, over: scope.quic, matching: plan.match
+        )
+        let handler = Task { [self] in
+            // Seam 6 of 6 (audit CR-F7). `plan` carries this request's generation (CR-F12). The feed
+            // loop below stays on the reactor and keeps sole ownership of `inbox`, `engine.receive`
+            // and the routed-event dispatch; only the handler body moves.
+            let response = await respond(
+                to: request,
+                body: .stream(HTTPRequestBodyStream(handoff: handoff)),
+                context: context,
+                following: plan
+            )
+            await handoff.abandon()  // unblock the feeder if the handler returned without draining
+            return response
+        }
+        var ended = buffered.ended
+        for chunk in buffered.chunks {
+            await handoff.offer(chunk)
+        }
+        // The body feed is a read loop of its own, so it carries the same idle bound (P0.5): a peer
+        // that sends HEADERS and then stalls mid-upload no longer holds the stream open forever. The
+        // watchdog resets the stream on a lapse, which is what unblocks the receive below.
+        defer { deadlines.disarm(id) }
+        armHTTP3(id, phase: .body, in: scope)
+        // The same merged inbox the serve loop was waiting on (audit REG-2) — the stream's reader task
+        // is still the only caller of `receive()`, and a routed deposit still reaches us here.
+        feed: while !ended {
+            switch await inbox.next() {
+                case .ended:
+                    break feed
+                case .routed:
+                    let mail = scope.registry.takeMailbox(id)
+                    ended = await absorbHTTP3Body(mail, into: handoff) || ended
+                case .inbound(let bytes, let fin):
+                    deadlines.disarm(id)  // the read landed; handler time is not a read deadline
+                    // Foreign events are routed here too (audit REG-1): this loop used to *filter*
+                    // them out, which is the same silent drop one layer down — a sibling stream's
+                    // QPACK section can unblock while this one is still uploading.
+                    let own = await receiveHTTP3(id, bytes, fin: fin, in: scope)
+                    ended = await absorbHTTP3Body(own, into: handoff) || ended
+                    if fin {
+                        break feed
+                    }
+            }
+            armHTTP3(id, phase: .body, in: scope)
+        }
+        guard ended else {
+            return await abandonTruncatedHTTP3Request(handoff: handoff, handler: handler)
+        }
+        await handoff.finish()
+        let response = await handler.value
+        await sendHTTP3Response(
+            response,
+            omitBody: request.method == .head,
+            id: id,
+            stream: stream,
+            in: scope
+        )
+        scope.registry.retire(id)
+        return .answered
+    }
+
+    /// Feeds a batch's body chunks into the handler's handoff, reporting whether the body ended.
+    ///
+    /// Shared by the two ways a streaming route's body reaches this loop: the events its own read
+    /// produced, and the ones the connection dispatcher routed to it (RFC 9204 §2.1.2).
+    private func absorbHTTP3Body(
+        _ events: [HTTP3Connection.Event],
+        into handoff: AsyncHandoff
+    ) async -> Bool {
+        var ended = false
+        for event in events {
+            if case .requestBodyChunk(_, let bytes) = event {
+                await handoff.offer(bytes)
+            }
+            else if case .requestEnd = event {
+                ended = true
+            }
+        }
+        return ended
+    }
+
+    /// Refuses a streaming request whose body never reached a valid end (RFC 9114 §8.1).
+    ///
+    /// The handoff is failed rather than finished, so the handler's body iteration ends *without* the
+    /// clean end-of-body it would otherwise be told; the handler task is cancelled and awaited so it
+    /// cannot outlive the stream, and its response is discarded.
+    ///
+    /// The reset itself is the scope's job, not this function's: reporting the ending is all a driver
+    /// does, and the retirement that follows is identical whichever ending it was (R5-P0c).
+    private func abandonTruncatedHTTP3Request(
+        handoff: AsyncHandoff,
+        handler: Task<ServerResponse, Never>
+    ) async -> HTTP3StreamExit {
+        await handoff.fail()
+        handler.cancel()
+        _ = await handler.value
+        return .abandoned(errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue)
+    }
+
+    /// Collects the body chunks (and whether `requestEnd` arrived) that follow a `requestHead` in the
+    /// same event batch — handed to ``serveHTTP3StreamingRequest`` so a HEADERS+DATA+FIN that decoded
+    /// together is not lost before the feed loop starts.
+    static func trailingBody(
+        of events: [HTTP3Connection.Event], after index: Int
+    ) -> (chunks: [[UInt8]], ended: Bool) {
+        var chunks: [[UInt8]] = []
+        var ended = false
+        for event in events[(index + 1)...] {
+            if case .requestBodyChunk(_, let bytes) = event {
+                chunks.append(bytes)
+            }
+            else if case .requestEnd = event {
+                ended = true
+            }
+        }
+        return (chunks, ended)
+    }
+
+    /// Streams a response natively on a QUIC request stream (RFC 9114 §4.1).
+    ///
+    /// The QPACK HEADERS frame goes first (`fin:false`), then each body chunk as a DATA frame as the
+    /// producer yields it, then an empty FIN ends the stream; a HEAD request sends the headers with FIN
+    /// and no body (RFC 9110 §9.3.2). QUIC streams are independent with transport-level backpressure
+    /// (`stream.send` suspends until the transport accepts the bytes), so — unlike HTTP/2's shared,
+    /// window-coupled connection — the producer drives the stream inline with no flow-control deadlock.
+    /// A producer or transport fault mid-body resets the stream with H3_REQUEST_INCOMPLETE (§8.1) so the
+    /// client sees a truncated response rather than a silently short one.
+    func streamHTTP3Response(
+        _ head: HTTPResponse,
+        body: ResponseStream,
+        omitBody: Bool,
+        id: QUICStreamID,
+        on stream: any QUICStream,
+        in scope: HTTP3ConnectionScope
+    ) async {
+        guard let headerBytes = await scope.engine.respondHeaders(to: id, head) else {
+            // The engine refused the head, so its record is still there: retire it with the stream
+            // rather than resetting the wire and leaving the state behind (R5-P0c).
+            await retireHTTP3Stream(
+                id,
+                errorCode: HTTP3ErrorCode.h3InternalError.rawValue,
+                in: scope
+            )
+            return
+        }
+        do {
+            guard !omitBody else {
+                // HEAD: the header section with FIN and no body (RFC 9110 §9.3.2).
+                try await stream.send(headerBytes, fin: true)
+                return
+            }
+            try await stream.send(headerBytes, fin: false)
+            try await body.produce(H3StreamWriter(stream: stream))
+            try await stream.send([], fin: true)  // end-of-body (RFC 9114 §4.1)
+        }
+        catch {
+            await retireHTTP3Stream(
+                id,
+                errorCode: HTTP3ErrorCode.h3RequestIncomplete.rawValue,
+                in: scope
+            )
+        }
+    }
+    /// Writes HTTP/3 response-body chunks as DATA frames (RFC 9114 §7.2.1), one `send` per chunk so the
+    /// QUIC stream's flow control is the backpressure point — no engine round-trip, since the body of an
+    /// independent QUIC stream needs no connection state (RFC 9000 §2).
+    private struct H3StreamWriter: ResponseBodyWriter {
+        let stream: any QUICStream
+
+        func write(_ chunk: [UInt8]) async throws {
+            guard !chunk.isEmpty else {
+                return
+            }
+            try await stream.send(HTTP3Connection.dataFrame(chunk), fin: false)
+        }
+    }
+}

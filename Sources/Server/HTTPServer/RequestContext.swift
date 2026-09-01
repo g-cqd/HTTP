@@ -94,11 +94,25 @@ public struct RequestContext: Sendable {
     /// it — replacing the former `Route.currentParameters` task-local.
     public var parameters: RouteParameters
 
-    /// An optional point in time by which the response should be produced.
+    /// The earliest point in time by which the response should be produced.
     ///
-    /// Carried here for handlers and a future timeout layer to honor; the engine does not enforce it on
-    /// its own. Timed against the continuous clock.
+    /// The *earliest* deadline any layer has imposed: a nested ``TimeoutMiddleware`` narrows this and
+    /// never widens it, so an inner middleware cannot grant a handler more time than an outer one
+    /// allowed. Timed against the continuous clock.
+    ///
+    /// Enforcement is cooperative. ``TimeoutMiddleware`` will stop *waiting* at this instant and answer
+    /// `504`, but a Swift task group cannot return until its children have actually exited, so a
+    /// responder that ignores cancellation still delays that answer by its own runtime. Handlers must
+    /// check this and `Task.isCancelled` at every I/O and loop boundary; see ``timeRemaining(now:)``.
     public var deadline: ContinuousClock.Instant?
+
+    /// The route this request's head matched, resolved once by the server and carried here so the
+    /// ``Router`` can run it without walking its table again (audit CR-F19).
+    ///
+    /// Advisory, never authoritative: the router checks that the match came from *its own* table (and
+    /// for the same method and path) before using it, so a match minted by a different generation or a
+    /// different router is a cache miss and falls back to a normal scan — never a mis-dispatch.
+    var route: RouteMatch?
 
     /// The lazily-allocated, copy-on-write storage bag (see ``subscript(_:)``).
     ///
@@ -119,13 +133,25 @@ public struct RequestContext: Sendable {
         self.id = id
         self.parameters = parameters
         self.deadline = deadline
+        self.route = nil
         self.storage = .empty
     }
 
-    /// Builds the context for a request that arrived over a ``TransportConnection`` (HTTP/1.1, HTTP/2),
-    /// copying its verified metadata and adopting any valid inbound `X-Request-ID`.
-    init(connection: any TransportConnection, request: HTTPRequest) {
-        self.init(
+    /// The ingress seam for a request that arrived over a ``TransportConnection`` (HTTP/1.1, HTTP/2):
+    /// the context built from the connection's verified metadata, and the request with every
+    /// server-asserted field stripped.
+    ///
+    /// The two halves are returned together because they are one operation: an inbound `X-Request-ID`
+    /// is *moved* out of the header section into ``id`` (validated on the way, see
+    /// ``inboundRequestID(_:)``), and every other server-asserted field is dropped outright. Building
+    /// a context is the only way to obtain the request a handler may see, so the strip cannot be
+    /// skipped at a call site (audit CR-F13).
+    static func ingress(
+        _ request: HTTPRequest,
+        over connection: any TransportConnection,
+        matching match: RouteMatch? = nil
+    ) -> (request: HTTPRequest, context: Self) {
+        var context = Self(
             connection: Connection(
                 peer: connection.peer,
                 tlsPeerSubject: connection.tlsPeerSubject,
@@ -136,13 +162,21 @@ public struct RequestContext: Sendable {
             ),
             id: Self.inboundRequestID(request)
         )
+        context.route = match
+        return (Self.stripped(request), context)
     }
 
-    /// Builds the context for a request that arrived over a ``QUICConnection`` (HTTP/3): QUIC is always
-    /// encrypted, so `isSecure` is `true` and the protocol defaults to `"h3"`; the QUIC connection
-    /// exposes no transport-connection id, so ``Connection/id`` is `nil`.
-    init(quic: any QUICConnection, request: HTTPRequest) {
-        self.init(
+    /// The ingress seam for a request that arrived over a ``QUICConnection`` (HTTP/3).
+    ///
+    /// QUIC is always encrypted, so `isSecure` is `true` and the protocol defaults to `"h3"`; the QUIC
+    /// connection exposes no transport-connection id, so ``Connection/id`` is `nil`. The server-asserted
+    /// strip is identical to the ``TransportConnection`` seam above.
+    static func ingress(
+        _ request: HTTPRequest,
+        over quic: any QUICConnection,
+        matching match: RouteMatch? = nil
+    ) -> (request: HTTPRequest, context: Self) {
+        var context = Self(
             connection: Connection(
                 peer: quic.peer,
                 tlsPeerSubject: quic.tlsPeerSubject,
@@ -152,6 +186,36 @@ public struct RequestContext: Sendable {
             ),
             id: Self.inboundRequestID(request)
         )
+        context.route = match
+        return (Self.stripped(request), context)
+    }
+
+    /// `request` with every ``HTTPFieldName/serverAsserted`` field removed (RFC 9110 §17.1).
+    ///
+    /// A handler reading one of these is reading a server assertion, so a value that arrived from the
+    /// wire must not survive to be mistaken for one (CWE-290).
+    ///
+    /// The strip itself lives in ``SanitizedRequest``, whose only initializer performs it — so the rule
+    /// is spelled exactly once and the WebSocket upgrade seam, which cannot route through this
+    /// function, still cannot be handed an unstripped request (audit R5-SEC1).
+    private static func stripped(_ request: HTTPRequest) -> HTTPRequest {
+        SanitizedRequest(request).request
+    }
+
+    /// How long is left before ``deadline``.
+    ///
+    /// `nil` when no deadline is set, and `.zero` once it has already passed — never negative, so a
+    /// caller can pass it straight to a timeout without a sign check.
+    ///
+    /// Returned as a *duration* rather than an instant on purpose: the server is generic over its
+    /// clock, and a `ContinuousClock.Instant` cannot be compared against another clock's instants. A
+    /// remaining duration is meaningful in every clock domain, which is what lets the engine's own
+    /// read/write deadlines honor a request deadline set by middleware.
+    public func timeRemaining(now: ContinuousClock.Instant = ContinuousClock.now) -> Duration? {
+        guard let deadline else {
+            return nil
+        }
+        return now < deadline ? now.duration(to: deadline) : .zero
     }
 
     /// Reads or writes the value middleware stored under `key` — a type-safe, per-request bag for

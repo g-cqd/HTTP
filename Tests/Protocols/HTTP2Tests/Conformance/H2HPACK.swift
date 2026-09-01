@@ -57,9 +57,14 @@ enum H2HPACK {
     /// §6.3 — a dynamic table size update.
     static func sizeUpdate(_ size: Int) -> [UInt8] { [0x20 | UInt8(size)] }
 
-    // Static-table indices used below: 2 = :method GET, 6 = :scheme http, 4 = :path / (RFC 7541 App. A).
-    /// A complete indexed request line (:method GET, :scheme http, :path /).
-    static let base: [UInt8] = indexed(2) + indexed(6) + indexed(4)
-    /// :method + :scheme only — for cases where :path comes from the representation under test.
-    static let methodScheme: [UInt8] = indexed(2) + indexed(6)
+    // Static-table indices used below: 2 = :method GET, 6 = :scheme http, 4 = :path /,
+    // 1 = :authority (RFC 7541 App. A).
+    /// `:authority example.com` as a §6.2.2 literal with the indexed name — an "http" request
+    /// without an authority is malformed (RFC 9113 §8.3.1), so every complete request carries one,
+    /// exactly as h2spec's own generic §5 requests do.
+    static let authority: [UInt8] = withoutIndexing(name: 1, value: "example.com", huffman: false)
+    /// A complete indexed request line (:method GET, :scheme http, :authority, :path /).
+    static let base: [UInt8] = indexed(2) + indexed(6) + authority + indexed(4)
+    /// All but :path — for cases where :path comes from the representation under test.
+    static let methodScheme: [UInt8] = indexed(2) + indexed(6) + authority
 }

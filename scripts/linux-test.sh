@@ -18,14 +18,19 @@
 #    scripts/linux-test.sh build                 # swift build (library + products)
 #    scripts/linux-test.sh test --filter Foo     # any swift subcommand + args
 #    HTTP_PORTABLE_TLS=1 scripts/linux-test.sh    # opt-in feature legs are forwarded
+#    scripts/linux-test.sh test --traits Zstd,Brotli --filter "CBrotli|Zstd"   # SE-0450 trait codings
 #
 #  Env knobs: HTTP_LINUX_IMAGE, HTTP_LINUX_SCRATCH, HTTP_LINUX_MEM (default 8g), HTTP_LINUX_CPUS,
 #  HTTP_LINUX_SEED_SRC (default <repo>/.build), and the package feature flags (HTTP_PORTABLE_TLS,
-#  HTTP_ZSTD, HTTP_BROTLI, HTTP_WARNINGS_AS_ERRORS, HTTP_OPENSSL_PREFIX, HTTP_BROTLI_PREFIX).
+#  HTTP_WARNINGS_AS_ERRORS, HTTP_OPENSSL_PREFIX) plus the coding prefix hints (HTTP_ZSTD_PREFIX,
+#  HTTP_BROTLI_PREFIX). The Zstd/Brotli codings are SE-0450 traits, not env vars: pass --traits.
 #
 set -euo pipefail
 
-IMAGE="${HTTP_LINUX_IMAGE:-docker.io/swiftlang/swift:nightly-noble}"
+# Same tag the required `build-test-linux` CI job pins, so a local pass and a CI pass are statements
+# about one toolchain. nightly-6.4.x tracks the 6.4 RELEASE branch — the language mode this package
+# targets — rather than main, which can break the build for reasons unrelated to the change at hand.
+IMAGE="${HTTP_LINUX_IMAGE:-docker.io/swiftlang/swift:nightly-6.4.x-jammy}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRATCH="${HTTP_LINUX_SCRATCH:-$REPO/.build-linux}"
 SEED_SRC="${HTTP_LINUX_SEED_SRC:-$REPO/.build}"
@@ -63,7 +68,7 @@ fi
 
 # --- Feature-flag passthrough ------------------------------------------------------------------------
 ENVARGS=()
-for v in HTTP_PORTABLE_TLS HTTP_ZSTD HTTP_BROTLI HTTP_WARNINGS_AS_ERRORS HTTP_OPENSSL_PREFIX HTTP_BROTLI_PREFIX; do
+for v in HTTP_PORTABLE_TLS HTTP_BORINGSSL_TLS HTTP_WARNINGS_AS_ERRORS HTTP_OPENSSL_PREFIX HTTP_ZSTD_PREFIX HTTP_BROTLI_PREFIX; do
   if [ -n "${!v:-}" ]; then ENVARGS+=(--env "$v=${!v}"); fi
 done
 CPUARG=()

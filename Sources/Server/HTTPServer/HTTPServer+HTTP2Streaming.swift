@@ -29,18 +29,30 @@ internal import HTTPCore
 internal import HTTPTransport
 
 extension HTTPServer {
-    /// Applies a request's finished response to `streamID`: buffered directly, or — for a `.stream` body
-    /// — HEADERS now plus a dedicated relay task pumping its DATA (P6b / RFC 9113 §8.1), so multiple
-    /// native-streaming responses progress concurrently. Returns true on a connection-fatal fault; the
-    /// caller flushes whatever the engine queued (best-effort GOAWAY) and closes either way.
+    /// Applies a request's finished response to `streamID`.
+    ///
+    /// Buffered directly, or — for a `.stream` body — HEADERS now plus a dedicated relay task pumping
+    /// its DATA (P6b / RFC 9113 §8.1), so multiple native-streaming responses progress concurrently.
+    /// Returns true on a connection-fatal fault; the caller flushes whatever the engine queued
+    /// (best-effort GOAWAY) and closes either way.
     func beginHTTP2Response(
         streamID: HTTP2StreamID,
         response: ServerResponse,
         engine: inout HTTP2Connection,
         group: inout DiscardingTaskGroup,
-        relays: inout [HTTP2StreamID: HTTP2StreamPermit],
+        relays: inout [HTTP2StreamID: HTTP2ResponseRelay],
+        timers: DeadlineWheel,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) -> Bool {
+        // The handler ran off the loop, so its stream may have been reset (RFC 9113 §6.4) or cleanly
+        // closed while the response was in flight. Applying it would throw `internalError` — a
+        // CONNECTION-level fault, so `applyRequestReady` would `cancelAll()` and take every sibling
+        // stream down with it. That is the latent connection-kill audit finding 6 exposes the moment
+        // RST_STREAM stops being silently swallowed: a peer resetting one in-flight request would kill
+        // every other request on the connection. Drop the late response instead.
+        guard engine.isStreamOpen(streamID) else {
+            return false
+        }
         guard let bodyStream = response.stream else {
             do {
                 try engine.respond(to: streamID, withAltSvc(response.head), body: response.body)
@@ -56,11 +68,12 @@ extension HTTPServer {
             try engine.respondHeaders(to: streamID, withAltSvc(response.head))
         }
         catch {
-            return true  // responding to an unknown stream is an internal error — close (matches today)
+            // Responding to an unknown stream is an internal error — close (matches today).
+            return true
         }
         let handoff = AsyncHandoff()
         let permit = HTTP2StreamPermit()
-        relays[streamID] = permit
+        relays[streamID] = HTTP2ResponseRelay(permit: permit, handoff: handoff)
         group.addTask { [self] in
             let producer = Task { [handoff] in
                 do {
@@ -71,7 +84,13 @@ extension HTTPServer {
                     await handoff.fail()
                 }
             }
-            await runHTTP2StreamRelay(streamID: streamID, handoff: handoff, permit: permit, into: continuation)
+            await runHTTP2StreamRelay(
+                streamID: streamID,
+                handoff: handoff,
+                permit: permit,
+                timers: timers,
+                into: continuation
+            )
             producer.cancel()
             // Unblock a producer still parked on an offer (a no-op once it has ended).
             await handoff.fail()
@@ -79,9 +98,11 @@ extension HTTPServer {
         return false
     }
 
-    /// Pumps one native-streaming response's body: waits for the consumer's pull permission, pulls the
-    /// producer's next item through the one-slot handoff, and reports it back — never touching `engine`
-    /// itself (only the consumer may; see ``HTTP2StreamPermit``'s file comment).
+    /// Pumps one native-streaming response's body.
+    ///
+    /// Waits for the consumer's pull permission, pulls the producer's next item through the one-slot
+    /// handoff, and reports it back — never touching `engine` itself (only the consumer may; see the
+    /// ``HTTP2StreamPermit`` file comment).
     ///
     /// A dedicated local ``IdleDeadline`` + watchdog reaps a producer that wedges — never offers a chunk
     /// within `idleTimeout` — independent of the whole-connection deadline (FIX #1 parity for a single
@@ -94,22 +115,29 @@ extension HTTPServer {
     /// several concurrent relays instead of the sole stream that could exist before) rather than
     /// surgically resetting only this one stream — resetting just this stream would need the relay to
     /// mutate `engine` itself, which is exactly what it must never do.
+    ///
+    /// A revoked permit ends the pump (R5-P0d). The stream is gone, so there is nowhere left to send a
+    /// pulled chunk; returning hands control to the task group child's tail, which cancels the producer
+    /// and fails the handoff, so neither task stays parked for the rest of the connection's life.
     private func runHTTP2StreamRelay(
         streamID: HTTP2StreamID,
         handoff: AsyncHandoff,
         permit: HTTP2StreamPermit,
+        timers: DeadlineWheel,
         into continuation: AsyncStream<HTTP2Wakeup>.Continuation
     ) async {
-        let localDeadline = IdleDeadline<C.Instant>()
-        // Auto-cancelled and awaited the moment this function returns (an un-named `async let` binding
-        // is still a fully structured child task) — however it returns, so a finished relay never leaves
-        // a lingering napping watchdog task for the rest of the connection's life.
-        async let _: Void = runLocalIdleWatchdog(localDeadline) {
+        let localDeadline = IdleDeadline(in: timers, escalation: .keepWatching) {
             continuation.yield(.localDeadlineLapsed)
         }
+        // Released however this function returns, so a finished relay never leaves an entry that could
+        // fire against whichever relay next lands on its recycled slot (the ``DeadlineHandle``
+        // generation token makes that final).
+        defer { localDeadline.release() }
         while true {
-            await permit.waitForGrant()
-            localDeadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            guard await permit.waitForGrant() else {
+                return  // the stream was retired out from under this relay
+            }
+            localDeadline.arm(deadlineKey(after: limits.idleTimeout))
             let item = await handoff.next()
             localDeadline.disarm()
             continuation.yield(.streamChunk(streamID, item))
@@ -127,10 +155,10 @@ extension HTTPServer {
     /// relay never reads the engine itself. Cheap to call unconditionally: the relay count is bounded by
     /// how many responses are concurrently streaming, not by request rate.
     func releaseDrainedRelays(
-        _ relays: [HTTP2StreamID: HTTP2StreamPermit], engine: inout HTTP2Connection
+        _ relays: [HTTP2StreamID: HTTP2ResponseRelay], engine: inout HTTP2Connection
     ) async {
-        for (streamID, permit) in relays where engine.pendingBacklog(of: streamID) == 0 {
-            await permit.grant()
+        for (streamID, relay) in relays where engine.pendingBacklog(of: streamID) == 0 {
+            await relay.permit.grant()
         }
     }
 
@@ -146,13 +174,13 @@ extension HTTPServer {
     func flushHTTP2(
         _ engine: inout HTTP2Connection,
         to connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>
+        deadline: IdleDeadline
     ) async -> Bool {
         let outbound = engine.outboundBytes()
         guard !outbound.isEmpty else {
             return false
         }
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+        deadline.arm(deadlineKey(after: limits.idleTimeout))
         defer { deadline.disarm() }
         do {
             try await connection.send(outbound)

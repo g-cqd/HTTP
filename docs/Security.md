@@ -16,7 +16,8 @@ or trap.
 | No out-of-bounds reads on adversarial input | `ByteReader` is `~Escapable` over a `RawSpan`; every accessor is bounds-checked | `Sources/Core/HTTPCore/ByteReader.swift` |
 | No stack exhaustion | All parsers/decoders are iterative — no recursion | `Huffman.swift`, `HPACK*`, `HTTP1/*` |
 | No force-unwrap / force-cast / `try!` / `as Any` | Lint-enforced (SwiftLint `force_*`, `implicitly_unwrapped_optional`) | `.swiftlint.yml` |
-| Data-race safety | Swift 6 language mode, `Sendable` value types, `Mutex`/`Atomic`; ASan+TSan in CI | `Package.swift`, `.github/workflows/ci.yml` |
+| Data-race safety | Swift 6 language mode, `Sendable` value types, `Mutex`/`Atomic`; ASan, TSan and UBSan run as **required** CI gates on macOS and Linux | `Package.swift`, `.github/workflows/ci.yml` (`sanitizers-required`, `sanitizers-linux`) |
+| Unsafe-construct containment | SE-0458 strict memory safety enforced as a build error on the zero-count targets; the rest held by a counted budget that may fall but never rise, with suppressions (`@unchecked Sendable` etc.) ratcheted separately at exact equality | ADR 0009, `Package.swift` (`strictMemorySafeTargets`), `scripts/strict-memory-safety.py` |
 
 ### Request smuggling (RFC 9112)
 | Defense | Reference | Location |
@@ -52,6 +53,20 @@ or trap.
 | HPACK cumulative decoded-list size; string-length; dynamic-table cap (§4.2/§6.3) | HPACK decompression bomb | COMPRESSION_ERROR |
 | `headerReadTimeout` (cumulative), `idleTimeout`, `keepAliveTimeout` | Slowloris / slow-read | 408 / close |
 
+Every limit is `let`, and every value passes one clamp on the way in (audit CR-F15,
+`HTTPLimitsBounds.swift`): the ranges the type documents — RFC 9113 §4.2's 2¹⁴ … 2²⁴−1 frame size,
+§6.9.1's 2³¹−1 window, a strictly positive timeout, a `0...1` accept-resume ratio — are enforced
+rather than described, and the three cross-field invariants (`maxConnectionsPerClient ≤
+maxConnections`, `streamReceiveWindow ≤ connectionReceiveWindow`, `maxDecompressedBodySize ≥
+maxBodySize`) are re-established on every construction. `HTTPLimits.init(validating:)` refuses instead
+of repairing, for configuration that arrives from outside the program. Current defaults: 16 MiB body,
+4 MiB WebSocket message, 64 MiB decompressed, 16 384 / 64 connections.
+
+Lower defaults narrow the window on a memory-exhaustion bug; they do not close it and are not a
+substitute for backpressure. What bounds what one connection can make the server hold is the bounded
+transport→application handoff (`maxQueuedInboundBytes`/`maxQueuedInboundChunks`) and the
+consumption-gated receive windows.
+
 ### HTTP/2 (RFC 9113) — sans-I/O engine (request path)
 Frame-size cap → FRAME_SIZE_ERROR (`HTTP2FrameDecoder.swift`); SETTINGS per-parameter validation
 (`HTTP2Settings.swift`); HEADERS padding validation (`HTTP2HeadersFrame.swift`); pseudo-header
@@ -66,7 +81,7 @@ Rapid-Reset *counter*, `maxConcurrentStreams` enforcement (→ REFUSED_STREAM), 
 are implemented, now with a time-windowed rolling budget (see the audit-hardening note below).
 
 ### Audit-driven hardening (2026-06-22)
-Traced in `Documentation/audit/2026-06-22-standards-and-improvements-audit.md`:
+Traced in `docs/audit/2026-06-22-standards-and-improvements-audit.md`:
 `SO_NOSIGPIPE` on every POSIX socket so a peer RST mid-`write` cannot kill the process (T-F1,
 POSIX.1-2017); a WebSocket `Origin` allowlist hook against cross-site WebSocket hijacking (WS-F1,
 RFC 6455 §10.2 / CWE-1385); an HPACK field-**count** cap closing the header-count bomb (HP-F1,
@@ -81,11 +96,12 @@ CVE-2023-44487); trailers scoped and validated as **stream** errors (H2-F2/F3/F5
 a closed stream reported as **STREAM_CLOSED** via a bounded recently-closed-id set (F1, §5.1).
 
 ### Deep hardening (2026-06-25)
-Traced in `Documentation/audit/2026-06-25-deep-hardening-audit.md`:
-- **Secure-by-default limits.** `maxConnections` / `maxConnectionsPerClient` default to 65 536 / 1 024
-  (were 1 048 576, which defanged the global/per-client caps); `maxConcurrentStreams` stays a bounded
-  128. `HTTPLimits.highThroughput` restores the permissive ceilings for trusted/benchmark use;
-  `HTTPLimits.hardened` tightens them further (CWE-770).
+Traced in `docs/audit/2026-06-25-deep-hardening-audit.md`:
+- **Secure-by-default limits.** `maxConnections` / `maxConnectionsPerClient` were dropped to
+  65 536 / 1 024 (from 1 048 576, which defanged the global/per-client caps) and again to 16 384 / 64
+  by CR-F15 below; `maxConcurrentStreams` stays a bounded 128. `HTTPLimits.highThroughput` restores
+  the permissive ceilings for trusted/benchmark use; `HTTPLimits.hardened` tightens them further
+  (CWE-770).
 - **Chunked body-phase buffer bounded.** An endless chunk-size / chunk-ext / trailer line with no CRLF
   is failed closed by a per-line bound (`ChunkedBodyDecoder.readLine`) rather than buffered without
   limit (RFC 9112 §7.1; CWE-400/770).
@@ -116,30 +132,55 @@ Traced in `Documentation/audit/2026-06-25-deep-hardening-audit.md`:
 Single-source-of-truth refactor: the HTTP/2 and HTTP/3 request mappers were unified into one
 `HTTPCore.RequestMapper`, so the §8.3 / §4.3 pseudo-header + field validation lives in exactly one place.
 
+### Review-driven hardening (2026-07-31 codebase review → closeout)
+
+The security-boundary findings of `docs/audit/2026-07-31-codebase-review.md`, closed with the
+commit that carries each regression test:
+
+- **Server-asserted fields stripped at ingress** (`e05b478`; CWE-290/CWE-807): every inbound request
+  loses `X-Request-ID`, `X-Session-ID`, `X-Auth-Subject` and `X-Client-Cert-Subject`
+  (`HTTPFieldName.serverAsserted`) the moment its head becomes a `RequestContext`, so a handler can
+  only ever read an assertion the server or its middleware actually made. The ingress regression
+  suite is parameterized over the list, so an addition the strip missed fails a test.
+- **In-house keyed crypto deleted in favour of swift-crypto** (`3dafd19`, then swift-crypto 4.x in
+  `5daefa6`): the hand-rolled SHA-256 / HMAC / HKDF primitives are gone from `HTTPCore`; session and
+  JWT signing run on `Crypto`, and key intake is **fail-closed with rotation support** — weak or
+  empty key material is refused rather than accepted (`fb0d5fa`).
+- **Session tokens carry their expiry inside the signature** (`c2d7f64`; R5-SEC2, CWE-613): the
+  signed cookie is `<id>.<expiry>.<mac>`, verified in constant time, so an expired token cannot be
+  refreshed by resending it (`SessionMiddleware.swift` documents the why).
+- **HTTP/3 mandatory `:authority` enforced** (`48d1f4d`; RFC 9114 §4.3.1): a request whose scheme
+  requires an authority and carries neither `:authority` nor `Host` is `H3_MESSAGE_ERROR` — closing
+  the one engine-owned h3spec §4.1.3 failure.
+- **Validated limits** (`21b9b32`, CR-F15) are described in the `HTTPLimits` section above.
+
 ### Mutual TLS + application authentication (G3 + G7)
 Client authentication is **layered**, not either/or — the two stages compose:
 
 1. **Transport (mutual TLS).** With `TransportTLS.clientAuth = .required` (or `.optional`), the TLS
    backbone verifies the client certificate against the `verifyPeer` trust hook (custom CA / pinning)
-   *before any request is read*. The verified leaf subject is captured at handshake
-   (`TransportConnection.tlsPeerSubject`) and stamped by `HTTPServer.stampingClientCertSubject(_:from:)`
-   as the **server-asserted** `X-Client-Cert-Subject` (`HTTPFieldName.xClientCertSubject`) on the request
-   — on the h1, h2, **and** h3 paths. Any inbound value is stripped first, and a subject embedding CR/LF
-   is dropped rather than forged (RFC 9110 §5.5; CWE-93), so a handler only ever sees a subject the server
-   itself verified.
+   *before any request is read*. The verified identity is captured at handshake and reaches handlers as
+   **typed request context** — `RequestContext.connection.tlsPeerSubject` (leaf subject) and
+   `.tlsPeerIdentity` (`TLSPeerIdentity`: SAN entries + DER chain) — on the h1, h2, **and** h3 paths,
+   never as a wire-settable header (the request-seam rework `2f51a6f` replaced the earlier
+   `X-Client-Cert-Subject` header stamp). `X-Client-Cert-Subject` itself is one of the
+   **server-asserted fields stripped from every inbound request** at ingress
+   (`HTTPFieldName.serverAsserted`, `e05b478`; CWE-290/CWE-807), so a handler can never read a
+   client-supplied assertion of it.
 2. **Application (HTTPAuth).** `BasicAuthMiddleware` / `JWTMiddleware` / `ForwardAuthMiddleware` then
    verify a principal and assert it as `X-Auth-Subject` (`HTTPFieldName.xAuthSubject`).
 
 Both can be required at once — e.g. `.required` mTLS **and** `JWTMiddleware` — for zero-trust /
-service-to-service deployments: the caller must present a trusted certificate *and* a valid token. Because
-the verified certificate subject arrives as a request header, an authorization middleware or handler can
-cross-check the two identities (e.g. require `X-Client-Cert-Subject` to match the JWT `sub`).
+service-to-service deployments: the caller must present a trusted certificate *and* a valid token. An
+authorization middleware or handler can cross-check the two identities (e.g. require
+`context.connection.tlsPeerSubject` to match the JWT `sub` asserted on `X-Auth-Subject`).
 `SecurityHeadersMiddleware` is independent of both layers — it stamps response hardening headers
 regardless of how the client authenticated.
 
-> Caveat: only the certificate **leaf subject** is surfaced (a string header). Full SAN / certificate
-> chain as request-scoped context is a documented follow-up — it needs a typed request context (the same
-> shape as richer JWT claims), not a header.
+> The earlier caveat here — "only the leaf subject is surfaced; full SAN / chain is a follow-up" — is
+> resolved: `TLSPeerIdentity` carries the SAN entries and the leaf-first DER chain, with PEM
+> trust-root intake and a `chainValidator(roots:)` seam for custom-CA validation (shipped `6735dd5`,
+> 2026-07-02).
 
 ## Pending (tracked)
 
@@ -147,10 +188,14 @@ These are **not yet enforced** — do not rely on them until the referenced mile
 
 | Gap | Attack | Plan |
 |---|---|---|
-| **transport(kqueue)**: a parked read/write continuation leaks when the fd is closed mid-wait | task/memory leak via the Slowloris-timeout path | drain pending resumers in `KqueueEventLoop.closeDescriptor` (T-F7) |
-| **transport(posix)**: accept-error back-off (`EMFILE`/`ENFILE`) `usleep`s on the shared kqueue/dispatch event-loop queue | FD-pressure latency for all connections | timer-based re-arm off the shared queue (T-F8 / F-EMFILE; the synchronous accept loops can't `await`, so the bounded back-off is the interim) |
+| **transport(portableTLS)**: the blocking accept loop still `usleep`s its `EMFILE`/`ENFILE` back-off inline | FD-pressure latency on that backbone only | give it the timer-based re-arm the kqueue/epoll loops already have (`PortableTLSTransport.swift`, the last remaining inline `usleep`) |
 
-> Resolved since the first review (now implemented): per-client **and** global connection caps; the
+> Resolved since the first review (now implemented): the kqueue parked-continuation leak — T-F7,
+> `KqueueEventLoop.closeDescriptor` now drains and invokes both parked handlers after `close`, so a
+> cancelled receive resumes on `EBADF` instead of hanging; the POSIX accept-error back-off — T-F8 /
+> F-EMFILE, `POSIXSocket` now merely *classifies* the error as `.backoff` and the kqueue and epoll
+> transports each re-arm from a dedicated `backoffQueue` via `asyncAfter`, off every I/O-bearing queue;
+> per-client **and** global connection caps; the
 > CONTINUATION flood guard (CVE-2024-27316); the h1 header-accumulation cap; the HTTP/2 Rapid-Reset
 > *counter*, `maxConcurrentStreams`, and inbound flow control; TLS/ALPN with a TLS 1.3 floor **and**
 > pinned ceiling, plus **strict ALPN rejection** over TLS (F-ALPN — refuse a connection that negotiated

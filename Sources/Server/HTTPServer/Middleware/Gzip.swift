@@ -13,7 +13,11 @@ internal import HTTPCore
 /// Produces gzip members (RFC 1952) by wrapping Darwin's raw-DEFLATE encoder.
 enum Gzip {
     /// The fixed gzip header: magic, CM=deflate, no flags, no mtime, no extra flags, OS=unknown.
-    private static let header: [UInt8] = [
+    ///
+    /// Internal rather than private so ``GzipEncoderStream`` emits the *same* envelope: the streamed
+    /// and buffered codings of one body have to be byte-identical, and two copies of a ten-octet
+    /// constant is exactly how that stops being true.
+    static let header: [UInt8] = [
         0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff
     ]
 
@@ -51,7 +55,8 @@ enum Gzip {
         return destination
     }
 
-    private static func appendLittleEndian(_ value: UInt32, to output: inout [UInt8]) {
+    /// Appends `value` little-endian, the octet order of both gzip trailer fields (RFC 1952 §2.3).
+    static func appendLittleEndian(_ value: UInt32, to output: inout [UInt8]) {
         output.append(UInt8(value & 0xFF))
         output.append(UInt8((value >> 8) & 0xFF))
         output.append(UInt8((value >> 16) & 0xFF))

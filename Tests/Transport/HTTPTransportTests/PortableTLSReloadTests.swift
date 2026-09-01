@@ -20,17 +20,21 @@
         internal import Glibc
     #endif
     internal import Dispatch
+    import HTTPTestSupport
     import Testing
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — hot certificate reload (G4b, ADR 0004)")
+    @Suite(
+        "Portable TLS (vendored BoringSSL) — hot certificate reload (G4b, ADR 0004)",
+        .realNetwork
+    )
     struct PortableTLSReloadTests {
         @Test(
             "reload swaps the served certificate for new connections",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func reloadSwapsServedCertificate() async throws {
-            let identityA = try DevTLSIdentity.selfSigned(commonName: "reload-cert-a")
+            let identityA = try PortableTLSLoopback.devTLS(commonName: "reload-cert-a")
             let transport = PortableTLSTransport(
                 configuration: TransportConfiguration(
                     port: 0, backbone: .portableTLS, tls: identityA
@@ -49,7 +53,7 @@
             // Before the reload, a new connection is served certificate A.
             #expect(await Self.serverLeafCN(port: port) == "reload-cert-a")
 
-            let identityB = try DevTLSIdentity.selfSigned(commonName: "reload-cert-b")
+            let identityB = try PortableTLSLoopback.devTLS(commonName: "reload-cert-b")
             try await transport.reload(tls: identityB)
 
             // After the reload, a new connection is served certificate B (no port rebind).
@@ -60,7 +64,7 @@
 
         @Test("reload before start fails closed (the transport is not accepting)")
         func reloadBeforeStartThrows() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
+            let identity = try PortableTLSLoopback.devTLS()
             let transport = PortableTLSTransport(
                 configuration: TransportConfiguration(
                     port: 0, backbone: .portableTLS, tls: identity
@@ -111,7 +115,7 @@
             guard CHTTPBoringSSL_SSL_connect(ssl) == 1 else {
                 return nil
             }
-            return OpenSSLTLS.peerSubject(of: ssl)
+            return PortableTLSLoopback.peerSubject(of: ssl)
         }
     }
 

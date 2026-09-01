@@ -14,6 +14,9 @@
 //                          MIDDLEWARE list. Unset/0 → bare router (the framework-overhead floor).
 //    HTTPD_MAX_CONN=N    → raise the per-client + global connection caps (a loopback load test trips
 //                          the default single-IP DoS guard).
+//    BENCH_JSON=adjson   → use the ADJSON sibling for /json + /echo. Only available when the package
+//                          was BUILT with BENCH_ADJSON set (see Package.swift); otherwise the value is
+//                          ignored and Foundation is used, because the dependency is not linked in.
 //
 //  Routes (mirrored 1:1 by djangoapp/benchsite/views.py):
 //    GET  /              → text/plain  "Hello, World!"        (framework floor)
@@ -23,11 +26,15 @@
 //    GET  /payload       → ~1 KiB text/plain                  (a body worth gzipping, for the chain run)
 //
 
-import ADJSONCore
 import Foundation
 import HTTPCore
 import HTTPServer
 import HTTPTransport
+
+// The ADJSON sibling is an opt-in dependency (see Package.swift), so its import is too.
+#if BENCH_ADJSON
+    import ADJSONCore
+#endif
 
 // MARK: - Configuration
 
@@ -46,9 +53,17 @@ let payload = String(repeating: "from-scratch swift http server. ", count: 32)
 //
 // BENCH_JSON=adjson swaps the /json + /echo JSON work from Foundation's JSONSerialization to the local
 // ADJSON sibling library (its Foundation-free ADJSONCore: tape parse + cursor re-encode). Both code
-// paths are compiled in; the env var picks one at startup so the harness can A/B the two back-to-back.
+// paths are compiled in WHEN the package was built with BENCH_ADJSON; the env var then picks one at
+// startup so the harness can A/B the two back-to-back. Without that build flag the ADJSON sibling is
+// not a dependency at all (it is an unpublished local checkout — see Package.swift), so the backend
+// collapses to Foundation and the enum has one case.
 
-enum JSONBackend: String { case foundation, adjson }
+enum JSONBackend: String {
+    case foundation
+    #if BENCH_ADJSON
+        case adjson
+    #endif
+}
 
 let jsonBackend =
     JSONBackend(rawValue: ProcessInfo.processInfo.environment["BENCH_JSON"] ?? "") ?? .foundation
@@ -60,10 +75,12 @@ func encodeHelloJSON() -> [UInt8]? {
         case .foundation:
             return (try? JSONSerialization.data(withJSONObject: ["message": "Hello, World!"]))
                 .map(Array.init)
-        case .adjson:
-            // Build an order-preserving value and serialize it straight to UTF-8 bytes (no Foundation).
-            let value: JSONValue = .object(["message": .string("Hello, World!")])
-            return try? value.encodedBytes()
+        #if BENCH_ADJSON
+            case .adjson:
+                // An order-preserving value serialized straight to UTF-8 bytes (no Foundation).
+                let value: JSONValue = .object(["message": .string("Hello, World!")])
+                return try? value.encodedBytes()
+        #endif
     }
 }
 
@@ -84,14 +101,16 @@ func echoJSON(_ body: [UInt8]) -> [UInt8]? {
                 return nil
             }
             return Array(data)
-        case .adjson:
-            // Tape-parse, then re-encode straight from the cursor — no intermediate value tree built.
-            guard let document = try? ADJSON.parse(body),
-                let out = try? document.root.encodedBytes()
-            else {
-                return nil
-            }
-            return out
+        #if BENCH_ADJSON
+            case .adjson:
+                // Tape-parse, then re-encode from the cursor — no intermediate value tree built.
+                guard let document = try? ADJSON.parse(body),
+                    let out = try? document.root.encodedBytes()
+                else {
+                    return nil
+                }
+                return out
+        #endif
     }
 }
 
@@ -149,11 +168,13 @@ else {
 
 // MARK: - Limits (raise the loopback-tripping connection cap)
 
-var limits = HTTPLimits.default
-
-if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = Int(raw) {
-    limits.maxConnectionsPerClient = value
-    limits.maxConnections = value
+// `HTTPLimits` is immutable: its properties are `let` and `with` mutates a `Draft` that the initializer
+// then clamps and validates. The same shape Sources/Examples/httpd-example uses.
+let limits = HTTPLimits.default.with { draft in
+    if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = Int(raw) {
+        draft.maxConnectionsPerClient = value
+        draft.maxConnections = value
+    }
 }
 
 // MARK: - Serve
@@ -168,17 +189,20 @@ let configuration = TransportConfiguration(
     reusePort: false,
     eventLoopCount: loopCount
 )
-let server = HTTPServer(
-    transport: TransportFactory.make(configuration),
-    responder: responder,
-    limits: limits
-)
-
-print(
-    "ours-bench: serving HTTP/1.1 on http://127.0.0.1:\(port) via \(backbone.rawValue) "
-        + "(middleware: \(useMiddleware ? "on" : "off"), json: \(jsonBackend.rawValue))"
-)
+// `TransportFactory.make` is throwing (typed `TransportError`): a bad host, an unbindable port or a
+// backbone unavailable on this platform is reported rather than trapped. This is top-level code, so the
+// construction joins the run in the same do/catch — a failure here should print the same way a serve
+// failure does, not crash the harness mid-matrix.
 do {
+    let server = HTTPServer(
+        transport: try TransportFactory.make(configuration),
+        responder: responder,
+        limits: limits
+    )
+    print(
+        "ours-bench: serving HTTP/1.1 on http://127.0.0.1:\(port) via \(backbone.rawValue) "
+            + "(middleware: \(useMiddleware ? "on" : "off"), json: \(jsonBackend.rawValue))"
+    )
     try await server.run()
 }
 catch {

@@ -12,6 +12,7 @@
 
 import HPACK
 import HTTPCore
+import HTTPTestSupport
 import HTTPTransport
 import Testing
 
@@ -23,7 +24,7 @@ struct HTTP2StreamingServerTests {
 
     @Test(
         "a streamed response survives a forced window stall and arrives complete (no deadlock)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func streamedResponseSurvivesWindowStall() async {
         let bodyByte: UInt8 = 0x5A
         let bodyLength = 50

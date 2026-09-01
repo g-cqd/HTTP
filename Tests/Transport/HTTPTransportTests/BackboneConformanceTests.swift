@@ -17,20 +17,140 @@ import Testing
 
 @testable import HTTPTransport
 
-@Suite("Transport backbone conformance — every socket backbone, the same battery")
+@Suite("Transport backbone conformance — every socket backbone, the same battery", .realNetwork)
 struct BackboneConformanceTests {
     /// Every real socket backbone (the fake binds no port; the QUIC backbones are a separate protocol).
     static let socketBackbones: [TransportBackbone] = [
         .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem
     ]
 
-    private func makeTransport(_ backbone: TransportBackbone) throws -> any ServerTransport {
+    func makeTransport(_ backbone: TransportBackbone) throws -> any ServerTransport {
         try TransportFactory.make(TransportConfiguration(port: 0, backbone: backbone))
     }
 
     @Test(
+        "the configured bind host does not expose the listener through another interface",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
+    func configuredHostIsHonored(_ backbone: TransportBackbone) async throws {
+        // A listener explicitly bound to loopback must reject a connection through an active
+        // non-loopback interface. The POSIX backbone is the control; Network.framework must honor the
+        // same public TransportConfiguration contract. Hosts without such an interface skip the case.
+        guard let exposedHost = Self.nonLoopbackIPv4Address() else {
+            return
+        }
+        let transport = try TransportFactory.make(
+            TransportConfiguration(host: "127.0.0.1", port: 0, backbone: backbone)
+        )
+        _ = try await transport.start()
+        defer { Task { await transport.shutdown() } }
+
+        let descriptor = Self.openIPv4Connection(host: exposedHost, port: transport.boundPort)
+        if descriptor >= 0 {
+            close(descriptor)
+        }
+        #expect(
+            descriptor == -1,
+            "\(backbone.rawValue) exposed a loopback-configured listener at \(exposedHost)"
+        )
+    }
+
+    @Test(
+        "binding a nonlocal configured host fails instead of silently selecting another interface",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
+    func nonlocalConfiguredHostFailsClosed(_ backbone: TransportBackbone) async throws {
+        // RFC 5737 TEST-NET-1 cannot be assigned to this host. Starting a listener configured for it
+        // must fail; success proves the backend silently ignored the public bind-host setting.
+        let transport = try TransportFactory.make(
+            TransportConfiguration(host: "192.0.2.1", port: 0, backbone: backbone)
+        )
+        do {
+            _ = try await transport.start()
+            await transport.shutdown()
+            Issue.record("\(backbone.rawValue) started despite the nonlocal configured bind host")
+        }
+        catch {
+            // Expected: the requested local endpoint is unavailable.
+        }
+    }
+
+    static func nonLoopbackIPv4Address() -> String? {
+        var head: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&head) == 0, let head else {
+            return nil
+        }
+        defer { freeifaddrs(head) }
+
+        var cursor: UnsafeMutablePointer<ifaddrs>? = head
+        while let interface = cursor {
+            defer { cursor = interface.pointee.ifa_next }
+            let flags = Int32(interface.pointee.ifa_flags)
+            guard flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0,
+                let socketAddress = interface.pointee.ifa_addr,
+                Int32(socketAddress.pointee.sa_family) == AF_INET
+            else {
+                continue
+            }
+            var address = UnsafeRawPointer(socketAddress)
+                .assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr
+            var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+            guard inet_ntop(AF_INET, &address, &buffer, socklen_t(buffer.count)) != nil else {
+                continue
+            }
+            let end = buffer.firstIndex(of: 0) ?? buffer.endIndex
+            return String(
+                bytes: buffer[..<end].map(UInt8.init(bitPattern:)),
+                encoding: .utf8
+            )
+        }
+        return nil
+    }
+
+    private static func openIPv4Connection(host: String, port: UInt16) -> Int32 {
+        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        guard descriptor >= 0 else {
+            return -1
+        }
+        _ = fcntl(descriptor, F_SETFL, fcntl(descriptor, F_GETFL) | O_NONBLOCK)
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr.s_addr = inet_addr(host)
+        let result = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.connect(
+                    descriptor,
+                    $0,
+                    socklen_t(MemoryLayout<sockaddr_in>.size)
+                )
+            }
+        }
+        if result == 0 {
+            return descriptor
+        }
+        guard errno == EINPROGRESS else {
+            close(descriptor)
+            return -1
+        }
+        var readiness = pollfd(fd: descriptor, events: Int16(POLLOUT), revents: 0)
+        guard poll(&readiness, 1, 1_000) == 1 else {
+            close(descriptor)
+            return -1
+        }
+        var socketError: Int32 = 0
+        var width = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(descriptor, SOL_SOCKET, SO_ERROR, &socketError, &width) == 0,
+            socketError == 0
+        else {
+            close(descriptor)
+            return -1
+        }
+        return descriptor
+    }
+
+    @Test(
         "binds a non-zero ephemeral port after start",
-        .timeLimit(.minutes(1)), arguments: socketBackbones)
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
     func bindsEphemeralPort(_ backbone: TransportBackbone) async throws {
         let transport = try makeTransport(backbone)
         _ = try await transport.start()
@@ -40,7 +160,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "accepts a connection and round-trips bytes over loopback",
-        .timeLimit(.minutes(1)), arguments: socketBackbones)
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
     func loopbackRoundTrip(_ backbone: TransportBackbone) async throws {
         let transport = try makeTransport(backbone)
         let stream = try await transport.start()
@@ -50,7 +170,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "many on-loop park→resume round-trips stay correct with the per-request wakeup elided (FIX #7)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func onLoopRoundTripsElideWakeup() async throws {
         // The kqueue backbone pins the serve task to its event loop, so each server receive parks via
         // the loop's on-loop `waitReadable` and each resume runs as an on-loop `enqueue` — exactly the
@@ -107,7 +227,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "scatter-gather send(head, body) delivers head then body intact (writev path)",
-        .timeLimit(.minutes(1)), arguments: socketBackbones)
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
     func scatterGatherRoundTrip(_ backbone: TransportBackbone) async throws {
         let transport = try makeTransport(backbone)
         let stream = try await transport.start()
@@ -122,7 +242,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "cancellation unblocks a stalled receive instead of deadlocking",
-        .timeLimit(.minutes(1)), arguments: socketBackbones)
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
     func cancellationUnblocksStalledReceive(_ backbone: TransportBackbone) async throws {
         let transport = try makeTransport(backbone)
         let stream = try await transport.start()
@@ -158,7 +278,7 @@ struct BackboneConformanceTests {
             _ = try? await receiveTask.value
             unblocked.record(())
         }
-        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await unblocked.wait(forAtLeast: 1)
         await joiner.value
 
         await connection.close()
@@ -168,7 +288,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "a BARE child-task cancel unblocks a parked receive (the receive contract, S1 regression)",
-        .timeLimit(.minutes(1)), arguments: socketBackbones)
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
     func childTaskCancelUnblocksParkedReceive(_ backbone: TransportBackbone) async throws {
         let transport = try makeTransport(backbone)
         let stream = try await transport.start()
@@ -201,7 +321,7 @@ struct BackboneConformanceTests {
             }
             unblocked.record(())
         }
-        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await unblocked.wait(forAtLeast: 1)
         await joiner.value
 
         await connection.close()
@@ -211,7 +331,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "a BARE child-task cancel also unblocks the parked scratch receive(into:) path",
-        .timeLimit(.minutes(1)), arguments: socketBackbones)
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
     func childTaskCancelUnblocksParkedScratchReceive(_ backbone: TransportBackbone) async throws {
         let transport = try makeTransport(backbone)
         let stream = try await transport.start()
@@ -239,7 +359,7 @@ struct BackboneConformanceTests {
             }
             unblocked.record(())
         }
-        _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await unblocked.wait(forAtLeast: 1)
         await joiner.value
 
         await connection.close()
@@ -249,7 +369,7 @@ struct BackboneConformanceTests {
 
     @Test(
         "sendFile delivers a file region byte-exact over loopback (G5 — sendfile or fallback)",
-        .timeLimit(.minutes(1)), arguments: socketBackbones)
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
     func sendFileDeliversFileRegion(_ backbone: TransportBackbone) async throws {
         // kqueue + swiftSystem take the kernel sendfile(2) path; dispatch + Network.framework take
         // the copying pread default — the bytes on the wire must be identical either way. The
@@ -278,7 +398,8 @@ struct BackboneConformanceTests {
     }
 
     @Test(
-        "shutdown finishes the connection stream", .timeLimit(.minutes(1)),
+        "shutdown finishes the connection stream",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: socketBackbones)
     func shutdownFinishesStream(_ backbone: TransportBackbone) async throws {
         let transport = try makeTransport(backbone)
@@ -293,7 +414,7 @@ struct BackboneConformanceTests {
             }
             drained.record(())
         }
-        _ = try await drained.wait(forAtLeast: 1, timeout: .seconds(3))
+        _ = try await drained.wait(forAtLeast: 1)
         await drainer.value
     }
 }

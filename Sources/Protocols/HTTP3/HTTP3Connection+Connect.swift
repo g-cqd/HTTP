@@ -50,8 +50,9 @@ extension HTTP3Connection {
     /// Ends a tunnel stream (RFC 9220 / RFC 8441 §5): untracks it so the FIN the driver sends closes the
     /// tunnel.
     ///
-    /// Idempotent — a no-op once the peer's FIN already surfaced `tunnelClosed`.
+    /// Idempotent — a no-op once the peer's FIN already surfaced `tunnelClosed` — and terminal: tunnel
+    /// DATA still in flight cannot rebuild the record (audit R5-P0c).
     public mutating func closeTunnel(_ streamID: QUICStreamID) {
-        streams[streamID] = nil
+        retireRecord(streamID)
     }
 }

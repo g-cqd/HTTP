@@ -192,7 +192,7 @@ struct HTTPServerTests {
 
     @Test(
         "an idle persistent connection is closed after the keep-alive timeout (Slowloris)",
-        .timeLimit(.minutes(1))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1))
     )
     func idleTimeoutClosesConnection() async {
         let clock = TestClock()
@@ -222,7 +222,7 @@ struct HTTPServerTests {
 
     @Test(
         "rejects connections beyond maxConnectionsPerClient for one peer",
-        .timeLimit(.minutes(1))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1))
     )
     func perClientConnectionCap() async throws {
         let limits = HTTPLimits(maxConnectionsPerClient: 2)
@@ -254,7 +254,8 @@ struct HTTPServerTests {
     }
 
     @Test(
-        "rejects connections beyond the global maxConnections (audit T-F2)", .timeLimit(.minutes(1))
+        "rejects connections beyond the global maxConnections (audit T-F2)",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1))
     )
     func globalConnectionCap() async throws {
         // A high per-client cap with distinct peers, so only the *global* cap can trip.

@@ -89,7 +89,8 @@ struct FieldValueValidationTests {
     func kernelFieldValueMatchesClassifier() {
         let filler: UInt8 = 0x61  // 'a'
         for value in UInt8.min ... UInt8.max {
-            for offset in [0, 1, 15, 16, 17, 31, 32, 33, 47, 63, 64, 71] {  // 72-byte buffer ⇒ kernel
+            // A 72-byte buffer, so these offsets straddle every kernel lane boundary.
+            for offset in [0, 1, 15, 16, 17, 31, 32, 33, 47, 63, 64, 71] {
                 var bytes = [UInt8](repeating: filler, count: 72)
                 bytes[offset] = value
                 #expect(

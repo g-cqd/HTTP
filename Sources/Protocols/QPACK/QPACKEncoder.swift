@@ -36,9 +36,10 @@ public struct QPACKEncoder {
     /// A Set Dynamic Table Capacity (§4.3.1) owed on the next section, after enabling the table.
     var pendingCapacity: Int?
     /// Recently seen not-yet-inserted fields, for the insert-on-second-use heuristic (bounded memory).
-    var recentFields: [HeaderField] = []
-    /// The cap on ``recentFields`` — a field must recur within this window to be inserted.
-    let recentFieldLimit = 64
+    ///
+    /// A field must recur while it is still inside this window to earn a dynamic-table insert, which
+    /// keeps unique per-response values out of the table (RFC 9204 §4.3).
+    var recentFields = QPACKRecentFieldWindow(limit: 64)
     /// How many entries reference each live absolute index across all unacknowledged sections — an entry
     /// with a non-zero count MUST NOT be evicted (RFC 9204 §2.1.3).
     var referenceCounts: [Int: Int] = [:]

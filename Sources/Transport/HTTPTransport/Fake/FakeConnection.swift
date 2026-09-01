@@ -7,7 +7,7 @@
 //
 
 /// An in-memory ``TransportConnection`` for deterministic tests.
-public actor FakeConnection: TransportConnection {
+public actor FakeConnection: UnleasedTransportConnection {
     /// The connection's stable identifier.
     nonisolated public let id: TransportConnectionID
 

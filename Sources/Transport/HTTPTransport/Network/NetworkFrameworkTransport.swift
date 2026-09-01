@@ -41,6 +41,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
         /// port by then), so reads never race a live `listener.port` that can be transiently nil under
         /// concurrent load.
         var boundPort: UInt16 = 0
+        /// The local endpoint the configuration resolved to, captured at ``start(admission:)`` so a
+        /// ``reload(tls:)`` rebinds the *same* interface rather than re-deriving it (audit F-05).
+        var bindEndpoint: BindEndpoint?
         /// The currently-active TLS identity (`nil` for a cleartext listener), swapped by
         /// ``reload(tls:)`` (G4b). `makeParameters` reads it so a rebuilt listener picks up the new
         /// identity; `handleNewConnection` reads it to mark accepted connections secure.
@@ -48,6 +51,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
         /// The inbound-connection stream continuation, captured at ``start()`` so a reloaded listener's
         /// `newConnectionHandler` can yield into the same stream the server is already consuming.
         var continuation: AsyncStream<any TransportConnection>.Continuation?
+        /// The admission policy applied when a connection is delivered, *before* the handshake
+        /// completes and before anything is yielded (audit F8); ungated until ``start(admission:)``.
+        var gate = AcceptGate(admission: nil)
     }
 
     /// Creates a Network.framework transport for `configuration`.
@@ -68,11 +74,35 @@ public final class NetworkFrameworkTransport: ServerTransport {
         state.withLock { $0.boundPort != 0 ? $0.boundPort : ($0.listener?.port?.rawValue ?? 0) }
     }
 
+    /// The local endpoint actually bound — the resolved interface literal plus the realized port.
+    ///
+    /// `nil` before ``start(admission:)`` binds. This is what an operator (and a `Alt-Svc`
+    /// advertisement, RFC 7838) should report: the configured host may have been a name or a
+    /// wildcard, and the configured port may have been the ephemeral `0`.
+    public var boundEndpoint: BindEndpoint? {
+        state.withLock { current in
+            guard let endpoint = current.bindEndpoint, current.boundPort != 0 else {
+                return nil
+            }
+            return BindEndpoint(
+                address: endpoint.address,
+                family: endpoint.family,
+                port: current.boundPort
+            )
+        }
+    }
+
     /// Binds the listener and begins accepting, returning a stream of inbound connections.
     ///
-    /// Waits for the listener to reach `ready` (so ``boundPort`` is valid) before returning.
-    public func start() async throws -> AsyncStream<any TransportConnection> {
-        let listener = try makeListener(tls: configuration.tls, port: configuration.port)
+    /// Waits for the listener to reach `ready` (so ``boundPort`` is valid) before returning. The
+    /// configured host is resolved to a concrete local endpoint *here*, once, and applied to the
+    /// listener's parameters — a bind that cannot be satisfied throws ``TransportError/bindFailed(_:)``
+    /// rather than silently landing on another interface (audit F-05).
+    public func start(
+        admission: ConnectionAdmission?
+    ) async throws -> AsyncStream<any TransportConnection> {
+        let endpoint = try BindEndpoint.resolve(configuration)
+        let listener = try makeListener(tls: configuration.tls, endpoint: endpoint)
         let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
 
         listener.newConnectionHandler = { [weak self] nwConnection in
@@ -91,20 +121,63 @@ public final class NetworkFrameworkTransport: ServerTransport {
             $0.tls = configuration.tls
             $0.continuation = continuation
             $0.listener = listener
+            $0.bindEndpoint = endpoint
+            $0.gate = AcceptGate(admission: admission)
         }
+        // `NWListener` has no suspend, but `newConnectionLimit` is exactly the equivalent knob: at zero
+        // "new connections will be queued and eventually blocked, until you raise the limit". The gate's
+        // hysteresis resume raises it back to infinite.
+        admission?
+            .onResume { [weak self] in
+                // Onto the listener's own queue: the resume runs on whichever thread released the
+                // deciding slot, and every other `NWListener` interaction happens here.
+                //
+                // Bound strongly first: nesting a second `self?.` inside the hop would capture the
+                // outer optional binding itself, which the compiler reads as a captured `var` in
+                // concurrently-executing code.
+                guard let self else {
+                    return
+                }
+                queue.async { [self] in setConnectionLimit(NWListener.InfiniteConnectionLimit) }
+            }
         listener.start(queue: queue)
-        try await waitUntilReady()
+        do {
+            try await waitUntilReady()
+        }
+        catch {
+            // A refused bind must not leave a live `NWListener` behind: a `.waiting` listener retries
+            // its bind for the life of the process, holding Network.framework queues and sources.
+            let refused = state.withLock { current -> NWListener? in
+                let live = current.listener
+                current.listener = nil
+                return live
+            }
+            refused?.cancel()
+            continuation.finish()
+            throw error
+        }
         return stream
     }
 
-    /// Cancels the listener and stops accepting.
+    /// Cancels the listener, stops accepting, and waits for the bound port to be released.
+    ///
+    /// `NWListener.cancel()` is asynchronous: it returns long before the listener reaches `.cancelled`
+    /// and gives the port back. A `shutdown()` that returned at `cancel()` made "stop, then restart on
+    /// the same configured port" a race the restart lost with `EADDRINUSE` — so the wait is part of the
+    /// contract, not an optimization. The same `.cancelled` await already guards the reload path.
     public func shutdown() async {
         let listener: NWListener? = state.withLock {
             let current = $0.listener
             $0.listener = nil
+            $0.isReady = false
+            $0.boundPort = 0
             return current
         }
-        listener?.cancel()
+        guard let listener else {
+            return
+        }
+        await retireListener(listener)
+        state.withLock { $0.continuation?.finish() }
     }
 
     /// Hot-reloads the TLS identity (G4b): rebinds the listener with `tls` on the same port, so new
@@ -118,17 +191,27 @@ public final class NetworkFrameworkTransport: ServerTransport {
     /// `NWConnection`s are independent of the listener and keep serving (zero existing-connection
     /// drops). A bad identity throws before the running listener is touched.
     public func reload(tls: TransportTLS) async throws {
-        // The transport must be accepting: capture the bound port and the live stream continuation.
-        let (port, continuation) = try state.withLock {
-            current -> (UInt16, AsyncStream<any TransportConnection>.Continuation) in
-            guard current.boundPort != 0, let continuation = current.continuation else {
+        // The transport must be accepting: capture the bound endpoint and the live stream continuation.
+        let (endpoint, continuation) = try state.withLock {
+            current -> (BindEndpoint, AsyncStream<any TransportConnection>.Continuation) in
+            guard current.boundPort != 0, let bound = current.bindEndpoint,
+                let continuation = current.continuation
+            else {
                 throw TransportError.closed
             }
-            return (current.boundPort, continuation)
+            // Rebind the same *interface* as well as the same port: re-resolving the configured host
+            // could land elsewhere if DNS moved under us, and dropping the host would widen the
+            // reloaded listener to every interface (audit F-05).
+            let sameEndpoint = BindEndpoint(
+                address: bound.address,
+                family: bound.family,
+                port: current.boundPort
+            )
+            return (sameEndpoint, continuation)
         }
         // Build the replacement (and its identity) first, so a bad identity throws here with the
         // running listener untouched.
-        let newListener = try makeListener(tls: tls, port: port)
+        let newListener = try makeListener(tls: tls, endpoint: endpoint)
         newListener.newConnectionHandler = { [weak self] nwConnection in
             self?.handleNewConnection(nwConnection, continuation: continuation)
         }
@@ -138,12 +221,17 @@ public final class NetworkFrameworkTransport: ServerTransport {
             let previous = current.listener
             current.listener = newListener
             current.tls = tls
+            // Carry the accept ceiling across the swap: a replacement listener starts unlimited, so a
+            // reload while the gate is saturated would silently re-open the tap (audit F8).
+            newListener.newConnectionLimit =
+                current.gate.admission?.isSaturated == true
+                ? 0 : NWListener.InfiniteConnectionLimit
             return previous
         }
         if let oldListener {
             await retireListener(oldListener)
         }
-        try await startReplacement(newListener, continuation: continuation)
+        try await startReplacement(newListener, endpoint: endpoint, continuation: continuation)
     }
 
     // MARK: - Internals
@@ -173,17 +261,28 @@ public final class NetworkFrameworkTransport: ServerTransport {
     /// fault of the now-current listener tears the stream down as usual.
     private func startReplacement(
         _ listener: NWListener,
+        endpoint: BindEndpoint,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) async throws {
         try await withUnsafeThrowingContinuation {
             (ready: UnsafeContinuation<Void, any Error>) in
             let resumer = OnceResumer(ready)
+            let context = endpoint.description
             listener.stateUpdateHandler = { newState in
                 switch newState {
                     case .ready:
                         resumer.resume(returning: ())
                     case .failed(let error):
                         resumer.resume(throwing: TransportError.bindFailed("\(error)"))
+                        continuation.finish()
+                    case .waiting(let error):
+                        // A required local endpoint that can never be claimed parks the listener in
+                        // `.waiting` forever; only then is waiting a failure (audit F-05).
+                        let bindFailure = TransportError.bindFailure(from: error, binding: context)
+                        guard let failure = bindFailure else {
+                            break
+                        }
+                        resumer.resume(throwing: failure)
                         continuation.finish()
                     case .cancelled:
                         continuation.finish()
@@ -195,11 +294,17 @@ public final class NetworkFrameworkTransport: ServerTransport {
         }
     }
 
-    private func makeListener(tls: TransportTLS?, port: UInt16) throws -> NWListener {
-        let endpointPort = NWEndpoint.Port(rawValue: port) ?? .any
+    /// Builds an `NWListener` pinned to `endpoint` — the configured host *and* port, not the port alone.
+    ///
+    /// The local endpoint travels on `NWParameters.requiredLocalEndpoint`, which is the mechanism
+    /// available at this package's macOS 15.6 / iOS 18 floor (the typed `localEndpoint(_:)` builder is
+    /// macOS 26+). `NWListener(using:on:)`'s `on:` port is deliberately left at its `.any` default: the
+    /// port belongs to the required endpoint, so there is exactly one place a port can come from.
+    private func makeListener(tls: TransportTLS?, endpoint: BindEndpoint) throws -> NWListener {
         let parameters = try makeParameters(tls: tls)  // may throw .tlsConfigurationFailed
+        parameters.requiredLocalEndpoint = try endpoint.networkEndpoint()
         do {
-            return try NWListener(using: parameters, on: endpointPort)
+            return try NWListener(using: parameters)
         }
         catch {
             throw TransportError.bindFailed("\(error)")
@@ -250,18 +355,50 @@ public final class NetworkFrameworkTransport: ServerTransport {
         else {
             parameters = NWParameters(tls: nil, tcp: tcp)  // cleartext TCP (h1 / h2c)
         }
-        parameters.allowLocalEndpointReuse = true
+        // `allowLocalEndpointReuse` is Network.framework's *port-sharing* switch, not the plain
+        // SO_REUSEADDR the POSIX backbones always set: with it on at both ends, a second listener binds
+        // a port a first one already holds and the two silently share it (measured — see
+        // `portConflictFailsClosed`). That is the accidental-second-instance hazard POSIXSocket
+        // deliberately keeps behind `reusePort`, so it is gated on the same flag here. A prefork worker
+        // opts in; anything else fails closed with `EADDRINUSE`.
+        parameters.allowLocalEndpointReuse = configuration.reusePort
         return parameters
     }
 
+    /// Charges an admission slot for a delivered connection, then surfaces it once its handshake
+    /// settles.
+    ///
+    /// The charge happens **here** — when Network.framework delivers the connection, before it is
+    /// started and long before `.ready` — so a peer that completes the TCP connect and then stalls the
+    /// TLS handshake still holds a slot against the ceiling (audit F8). The stream stays `.unbounded`
+    /// deliberately: `AsyncStream`'s buffering policy *drops* on overflow, and a dropped connection is
+    /// a leaked `NWConnection`, strictly worse than the queue depth it would bound. The bound comes
+    /// from the gate, because a slot is charged before `yield`.
     private func handleNewConnection(
         _ nwConnection: NWConnection,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) {
-        let id = connectionIDs.next()
         // Read the active identity (swappable by reload, G4b): a TLS listener advertised ALPN, enforced
         // below. Once per accept, off the byte path.
-        let isSecure = state.withLock { $0.tls != nil }
+        let (gate, isSecure) = state.withLock { ($0.gate, $0.tls != nil) }
+        let peer = NetworkFrameworkConnection.address(of: nwConnection.endpoint)
+        let ticket: AdmissionTicket?
+        // There is no descriptor to close on this backbone — cancelling the `NWConnection` is the
+        // refusal, and it happens before the connection is ever started.
+        let refuse: (Int32) -> Void = { _ in nwConnection.cancel() }
+        switch gate.admit(descriptor: -1, host: peer.host, close: refuse) {
+            case .rejectedContinue:
+                return
+            case .saturatedStop:
+                setConnectionLimit(0)
+                return
+            case .admit(let charged, let saturated):
+                ticket = charged
+                if saturated {
+                    setConnectionLimit(0)  // that was the last slot — stop delivering
+                }
+        }
+        let id = connectionIDs.next()
         // Surface the connection only once the handshake settles (`.ready`), so its negotiated ALPN
         // protocol (RFC 7301) is known and the server can commit to h2 vs h1 without sniffing. For a
         // cleartext listener `.ready` is just the completed TCP connect and ALPN resolves to nil.
@@ -281,17 +418,32 @@ public final class NetworkFrameworkTransport: ServerTransport {
                             connection: nwConnection,
                             negotiatedApplicationProtocol: alpn,
                             isSecure: isSecure,
-                            tlsPeerIdentity: peerIdentity
+                            tlsPeerIdentity: peerIdentity,
+                            admissionTicket: ticket
                         )
                     )
                 case .failed, .cancelled:
                     nwConnection.stateUpdateHandler = nil
                     nwConnection.cancel()
+                    // The handshake never settled, so nothing downstream owns the slot: return it now
+                    // rather than waiting for the ticket's `deinit`.
+                    ticket?.release()
                 default:
                     break
             }
         }
         nwConnection.start(queue: queue)
+    }
+
+    /// Sets the live listener's `newConnectionLimit` — `0` to stop delivering, infinite to resume.
+    ///
+    /// `NWListener` exposes no suspend; this is the documented equivalent, and it is reversible: at
+    /// zero, inbound connections queue and are eventually blocked until the limit is raised again.
+    /// **Must be called on ``queue``** — from the new-connection handler it is applied synchronously,
+    /// so the limit lands before the framework delivers the next connection rather than one handler
+    /// later (which would refuse a connection that the backlog should have held).
+    private func setConnectionLimit(_ limit: Int) {
+        state.withLock(\.listener)?.newConnectionLimit = limit
     }
 
     private func handleStateChange(
@@ -308,17 +460,35 @@ public final class NetworkFrameworkTransport: ServerTransport {
                     current.readyContinuation?.resume()
                     current.readyContinuation = nil
                 case .failed(let error):
-                    let failure = TransportError.bindFailed("\(error)")
-                    current.failure = failure
-                    current.readyContinuation?.resume(throwing: failure)
-                    current.readyContinuation = nil
-                    continuation.finish()
+                    fail(&current, with: TransportError.bindFailed("\(error)"), continuation)
+                case .waiting(let error):
+                    // `.waiting` is normally transient and self-healing, but a required local endpoint
+                    // no interface owns parks the listener here permanently — `start()` would never
+                    // return and the server would come up bound to nothing (audit F-05, CWE-755).
+                    let context = current.bindEndpoint?.description ?? "the configured endpoint"
+                    guard let failure = TransportError.bindFailure(from: error, binding: context)
+                    else {
+                        break
+                    }
+                    fail(&current, with: failure, continuation)
                 case .cancelled:
                     continuation.finish()
                 default:
                     break
             }
         }
+    }
+
+    /// Records a terminal listener failure, unblocks ``waitUntilReady()``, and finishes the stream.
+    private func fail(
+        _ current: inout State,
+        with failure: TransportError,
+        _ continuation: AsyncStream<any TransportConnection>.Continuation
+    ) {
+        current.failure = failure
+        current.readyContinuation?.resume(throwing: failure)
+        current.readyContinuation = nil
+        continuation.finish()
     }
 
     private func waitUntilReady() async throws {

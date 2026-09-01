@@ -20,9 +20,11 @@ import Testing
     internal import Glibc
 #endif
 
-@Suite("Transport — UNIX-domain-socket backbone (AF_UNIX)")
+@Suite("Transport — UNIX-domain-socket backbone (AF_UNIX)", .realNetwork)
 struct UnixSocketTransportTests {
-    @Test("accepts a connection at a socket path and round-trips bytes", .timeLimit(.minutes(1)))
+    @Test(
+        "accepts a connection at a socket path and round-trips bytes",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func roundTripsOverSocketPath() async throws {
         let path = FileManager.default.temporaryDirectory
             .appendingPathComponent("uds-\(UInt32.random(in: 0 ... .max)).sock").path
@@ -86,9 +88,9 @@ struct UnixSocketTransportTests {
                 }
             }
 
-        let echoes = try await echoed.wait(forAtLeast: 1, timeout: .seconds(10))
+        let echoes = try await echoed.wait(forAtLeast: 1)
         #expect(echoes.first == Array("ping".utf8))
-        let peers = try await peerHost.wait(forAtLeast: 1, timeout: .seconds(10))
+        let peers = try await peerHost.wait(forAtLeast: 1)
         #expect(peers.first == path)  // UNIX-domain peers report the socket path as their address
         _ = await server.result
         await transport.shutdown()

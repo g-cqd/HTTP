@@ -33,8 +33,8 @@ Authoritative offline copies of every RFC this server implements or directly ext
 
 | RFC | Title | Governs | Source | Tests | Status |
 |----|-------|---------|--------|-------|--------|
-| [9114](rfc9114.txt) | HTTP/3 | frames, unidirectional/request streams, settings (sans-I/O) | `Sources/Protocols/HTTP3/*` (`HTTP3Connection*`, `HTTP3FrameDecoder`, `HTTP3RequestMapper`, `HTTP3StreamRole`) | `Tests/HTTP3Tests/*` (incl. `Conformance/`) | ◐ sans-I/O engine; no UDP/QUIC transport |
-| [9204](rfc9204.txt) | QPACK | header compression (static table + literals; dynamic table off in v1) | `Sources/Protocols/QPACK/*`, `Sources/Core/HTTPCore/Huffman*.swift` | `Tests/QPACKTests/*` | ◐ static-only (v1) |
+| [9114](rfc9114.txt) | HTTP/3 | frames, unidirectional/request streams, settings (sans-I/O) | `Sources/Protocols/HTTP3/*` (`HTTP3Connection*`, `HTTP3FrameDecoder`, `HTTP3RequestMapper`, `HTTP3StreamRole`) | `Tests/HTTP3Tests/*` (incl. `Conformance/`) | ✅ sans-I/O engine + QUIC transport (`Sources/Transport/HTTPTransport/Quic/*`, Network.framework; Darwin only) |
+| [9204](rfc9204.txt) | QPACK | header compression (static table, literals, and an opt-in dynamic table) | `Sources/Protocols/QPACK/*`, `Sources/Core/HTTPCore/Huffman*.swift` | `Tests/QPACKTests/*` | ◐ static table always; dynamic table implemented (`QPACKDynamicTable`, `QPACK{Encoder,Decoder}+Dynamic`) but **off by default** (`QPACKEncoder.dynamicTableEnabled`) |
 
 ## QUIC (HTTP/3 transport substrate)
 
@@ -50,8 +50,8 @@ Authoritative offline copies of every RFC this server implements or directly ext
 |----|-------|---------|--------|-------|--------|
 | [6455](rfc6455.txt) | The WebSocket Protocol | framing, masking, handshake, close, ping/pong, fragmentation, UTF-8 | `Sources/Protocols/WebSocket/*` | `Tests/WebSocketTests/*` | ✅ |
 | [8441](rfc8441.txt) | Bootstrapping WebSockets with HTTP/2 | extended CONNECT (`:protocol`) | `Sources/Protocols/HTTP2/HTTP2Connection+Connect.swift`, `Sources/Server/HTTPServer/HTTPServer+WebSocket.swift` | `Tests/HTTP2Tests/*`, `Tests/HTTPServerTests/*` | ✅ |
-| [9220](rfc9220.txt) | Bootstrapping WebSockets with HTTP/3 | extended CONNECT over h3 | — | — | ✗ not implemented |
-| [7692](rfc7692.txt) | Compression Extensions (permessage-deflate) | per-message DEFLATE | — | — | ✗ not implemented (RSV1 rejected) |
+| [9220](rfc9220.txt) | Bootstrapping WebSockets with HTTP/3 | extended CONNECT over h3 | `Sources/Server/HTTPServer/HTTPServer+HTTP3Tunnel.swift`, `HTTPServer+HTTP3.swift` (`enableConnectProtocol`) | `Tests/HTTPServerTests/HTTPServerWebSocketHTTP3Tests.swift` | ✅ |
+| [7692](rfc7692.txt) | Compression Extensions (permessage-deflate) | per-message DEFLATE | `Sources/Protocols/WebSocket/PermessageDeflate*.swift` | `Tests/WebSocketTests/*` | ✅ negotiated on h1, h2 (RFC 8441) and h3 (RFC 9220) tunnels |
 
 ## Content coding (compression)
 

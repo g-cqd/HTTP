@@ -13,24 +13,30 @@ from django.urls import path
 from . import views
 
 if os.environ.get("BENCH_ASYNC") == "1":
-    _index, _json, _hello, _echo, _payload = (
+    _index, _json, _hello, _echo, _payload, _health, _plaintext = (
         views.aindex,
         views.ajson,
         views.ahello,
         views.aecho,
         views.apayload,
+        views.ahealth,
+        views.aplaintext,
     )
 else:
-    _index, _json, _hello, _echo, _payload = (
+    _index, _json, _hello, _echo, _payload, _health, _plaintext = (
         views.index,
         views.json_view,
         views.hello,
         views.echo,
         views.payload,
+        views.health,
+        views.plaintext,
     )
 
 urlpatterns = [
     path("", _index),
+    path("health", _health),
+    path("plaintext", _plaintext),
     path("json", _json),
     path("hello/<str:name>", _hello),
     path("echo", _echo),

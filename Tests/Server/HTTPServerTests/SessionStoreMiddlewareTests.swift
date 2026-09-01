@@ -34,10 +34,13 @@ struct SessionStoreMiddlewareTests {
     }
 
     @Test("a revoked session is rejected even with a valid cookie — logout works")
-    func revokedSessionReissued() async {
+    func revokedSessionReissued() async throws {
         let store = InMemorySessionStore()
         let middleware = SessionMiddleware(
-            key: key, isSecure: false, generate: { "sid-1" }, store: store
+            keys: try #require(SessionSigningKeys(current: key)),
+            isSecure: false,
+            generate: { "sid-1" },
+            store: store
         )
         let issued = await middleware.respond(to: request(), body: [], next: echo)
         #expect(await store.validate("sid-1"))  // minted session was registered
@@ -52,8 +55,9 @@ struct SessionStoreMiddlewareTests {
     }
 
     @Test("without a store the signed cookie alone continues the session (stateless, unchanged)")
-    func statelessUnchanged() async {
-        let middleware = SessionMiddleware(key: key, isSecure: false) { "sid-1" }
+    func statelessUnchanged() async throws {
+        let keys = try #require(SessionSigningKeys(current: key))
+        let middleware = SessionMiddleware(keys: keys, isSecure: false) { "sid-1" }
         let issued = await middleware.respond(to: request(), body: [], next: echo)
         let cont = await middleware.respond(
             to: request(cookie: signedPair(issued)), body: [], next: echo

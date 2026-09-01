@@ -1,7 +1,14 @@
 # ADR 0002 — Strict memory safety (SE-0458): adopt incrementally, not yet globally
 
-- **Status:** Accepted (deferred adoption)
+- **Status:** Superseded by [ADR 0009](0009-strict-memory-safety-staged-gate.md) (2026-07-31)
 - **Context date:** 2026-06
+
+> **Superseded.** The decision below — adopt per target, bottom-up, rather than flipping
+> `-strict-memory-safety` on globally — was right and still holds. What it lacked was enforcement:
+> nothing counted the un-annotated sites, so nothing noticed them growing. ADR 0009 keeps this
+> decision and adds the two gates it was missing (a compiler-enforced set of already-clean targets,
+> and a ratcheting per-target budget for the rest), with a full census: **465 sites across 9
+> targets**. Read ADR 0009 for the current policy; this ADR remains as the original measurement.
 
 ## Context
 

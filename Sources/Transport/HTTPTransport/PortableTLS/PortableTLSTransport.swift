@@ -4,23 +4,26 @@
 //
 //  The portable (non-Network.framework) TLS server backbone — ADR 0004, now **event-driven** (audit
 //  R4). Binds a POSIX listening socket via the shared `POSIXSocket` helper, accepts on a dedicated
-//  blocking-`accept()` thread, then wraps each accepted (non-blocking) descriptor in a libssl session
-//  driven through **memory BIOs** on one of N shared kqueue/epoll loops (round-robin) — the handshake
-//  and all TLS I/O run inline on the loop thread, no thread-per-connection. The connection is surfaced
-//  only once its handshake settles. The single shared `SSL_CTX` is built once from the `TransportTLS`
-//  identity and hot-swappable via ``reload(tls:)``.
+//  blocking-`accept()` thread, then wraps each accepted (non-blocking) descriptor in a per-connection
+//  TLS engine driven on one of N shared kqueue/epoll loops (round-robin) — the handshake and all TLS
+//  I/O run inline on the loop thread, no thread-per-connection. The connection is surfaced only once
+//  its handshake settles. The single shared ``PortableTLSServerContext`` is built once from the
+//  `TransportTLS` identity and hot-swappable via ``reload(tls:)``.
 //
-//  Selected by ``TransportFactory`` for ``TransportBackbone/portableTLS``; gated
-//  `#if canImport(CHTTPBoringSSLShims)` (the opt-in `HTTP_PORTABLE_TLS` build).
+//  ENGINE-BLIND since Phase 3d: the context flavor behind that seam is the build's choice — the
+//  HTTPTLS engine under `HTTP_PORTABLE_TLS` (pure Swift, `HTTPTLSServerContext.swift`) or the legacy
+//  BoringSSL `SSL_CTX` under the temporary `HTTP_BORINGSSL_TLS` A/B gate
+//  (`BoringSSLServerContext.swift`, dies in 3e). Everything here — bind, accept, admission,
+//  round-robin, shutdown — is identical either way, which is the point of the seam.
+//
+//  Selected by ``TransportFactory`` for ``TransportBackbone/portableTLS``.
 //
 //  Standards: TCP (RFC 9293) over IPv4 (RFC 791) / IPv6 (RFC 4291) via POSIX.1-2017 sockets, carrying
 //  TLS 1.3 (RFC 8446); ALPN (RFC 7301).
 //
 
-#if canImport(CHTTPBoringSSLShims)
+#if canImport(CHTTPBoringSSLShims) || HTTP_PORTABLE_TLS_SWIFT
 
-    internal import CHTTPBoringSSL
-    internal import CHTTPBoringSSLShims
     #if canImport(Darwin)
         internal import Darwin
     #elseif canImport(Glibc)
@@ -36,6 +39,28 @@
             _ = Darwin.close(descriptor)
         #else
             _ = Glibc.close(descriptor)
+        #endif
+    }
+
+    /// Poisons a listening descriptor with `shutdown(2)` `SHUT_RDWR`, ahead of its `close(2)`.
+    ///
+    /// This is the Linux half of releasing a blocking-`accept(2)` listener, and it must come FIRST.
+    /// POSIX.1-2017 does not specify what `close(2)` does to a thread blocked in `accept(2)` on the
+    /// same descriptor, and the two kernels answer differently (measured, 2026-08): Darwin releases
+    /// the bound port inside `close(2)` and wakes the blocked accept (`ECONNABORTED`); Linux does
+    /// neither — the socket stays bound through the accept's file reference until a connection
+    /// arrives, which after a shutdown is never. `shutdown(2)` on the listening socket is what Linux
+    /// answers with: it releases the port immediately (before the woken thread has left the syscall)
+    /// and wakes the accept with `EINVAL`. On Darwin the call fails `ENOTCONN` — a listening socket
+    /// is not connected — but still wakes an already-blocked accept, and the `close(2)` that follows
+    /// does the rest, so the pair is correct on both platforms in every interleaving.
+    private func poisonFD(_ descriptor: Int32) {
+        #if canImport(Darwin)
+            _ = Darwin.shutdown(descriptor, SHUT_RDWR)
+        #else
+            // Glibc surfaces `SHUT_RDWR` as `Int` — the same import divergence `POSIXSocket`
+            // normalizes for `SOCK_STREAM`.
+            _ = Glibc.shutdown(descriptor, Int32(SHUT_RDWR))
         #endif
     }
 
@@ -57,20 +82,33 @@
         private let connectionIDs = ConnectionIDAllocator()
         /// Round-robin cursor distributing accepted connections across the loops.
         private let nextLoop = Atomic<Int>(0)
+        /// Parks the blocking accept thread while the admission gate is saturated (audit F8).
+        ///
+        /// This backbone accepts on a dedicated thread with a *blocking* `accept(2)`, so it has no
+        /// readiness registration to leave un-armed and no `DispatchSource` to suspend; parking the
+        /// thread is the equivalent backpressure. A `DispatchSemaphore` counts, so a resume that
+        /// arrives before the park is banked rather than lost.
+        private let admissionResume = DispatchSemaphore(value: 0)
 
         private struct State {
-            /// The shared server `SSL_CTX`, swappable by ``reload(tls:)``.
-            var context: ContextBox?
+            /// The shared listener context (identity + negotiation contract), swappable by
+            /// ``reload(tls:)``.
+            var context: PortableTLSServerContext?
             /// One loop per shard; each is a dedicated thread serving its assigned TLS connections.
             var loops: [TLSEventLoop] = []
             var listenDescriptor: Int32?
             var boundPort: UInt16 = 0
+            /// The endpoint `getsockname(2)` reports for the listener, `nil` before binding.
+            var boundEndpoint: BindEndpoint?
+            /// Signalled once the listening descriptor is genuinely closed and its port released.
+            ///
+            /// Awaited by EVERY ``shutdown()`` caller, not just the one that performs the close —
+            /// see ``ListenerCloseLatch``.
+            var closeLatch: ListenerCloseLatch?
             var isRunning = false
-        }
-
-        /// Carries the non-`Sendable` `SSL_CTX` pointer across the accept-thread hop.
-        private struct ContextBox: @unchecked Sendable {
-            let pointer: OpaquePointer
+            /// The admission policy applied between `accept(2)` and `SSL_new` (audit F8), ungated
+            /// until ``start(admission:)`` installs the server's gate.
+            var gate = AcceptGate(admission: nil)
         }
 
         /// Creates a portable TLS transport for `configuration` (which must carry a TLS identity).
@@ -87,14 +125,29 @@
             state.withLock(\.boundPort)
         }
 
-        /// Builds the shared `SSL_CTX`, spins up N event loops, binds the listening socket, and accepts.
-        public func start() async throws -> AsyncStream<any TransportConnection> {
+        /// The local endpoint actually bound (meaningful after ``start()`` returns), or `nil` before
+        /// binding.
+        ///
+        /// Read back from the kernel with `getsockname(2)` at bind time, not derived from the
+        /// configuration: `port` `0` means "whichever the OS chose" and `host` may have been a name or
+        /// a wildcard, so the realized answer is the only one an operator log or an `Alt-Svc`
+        /// advertisement (RFC 7838) can use. Same shape as the four POSIX backbones — this transport
+        /// binds through the shared ``POSIXSocket`` helper, so the answer comes from the same call.
+        public var boundEndpoint: BindEndpoint? {
+            state.withLock(\.boundEndpoint)
+        }
+
+        /// Builds the shared listener context, spins up N event loops, binds the listening
+        /// socket, and accepts.
+        public func start(
+            admission: ConnectionAdmission?
+        ) async throws -> AsyncStream<any TransportConnection> {
             guard let tls = configuration.tls else {
                 throw TransportError.tlsConfigurationFailed(
                     "the portable TLS backbone requires a TLS identity"
                 )
             }
-            let sslContext = try OpenSSLTLS.serverContext(tls)
+            let context = try PortableTLSServerContext(tls)
             let listener: (descriptor: Int32, port: UInt16)
             do {
                 listener = try POSIXSocket.makeListenSocket(
@@ -106,7 +159,7 @@
                 )
             }
             catch {
-                CHTTPBoringSSL_SSL_CTX_free(sslContext)
+                context.release()
                 throw error
             }
             let loopCount = max(1, configuration.eventLoopCount ?? Self.defaultLoopCount())
@@ -120,21 +173,27 @@
                 }
             }
             catch {
-                CHTTPBoringSSL_SSL_CTX_free(sslContext)
+                context.release()
                 closeFD(listener.descriptor)
                 throw error
             }
             let (stream, continuation) = AsyncStream<any TransportConnection>.makeStream()
             state.withLock {
-                $0.context = ContextBox(pointer: sslContext)
+                $0.context = context
                 $0.loops = loops
                 $0.listenDescriptor = listener.descriptor
                 $0.boundPort = listener.port
+                $0.boundEndpoint = POSIXSocket.readBoundEndpoint(of: listener.descriptor)
+                $0.closeLatch = ListenerCloseLatch()
                 $0.isRunning = true
+                $0.gate = AcceptGate(admission: admission)
             }
             continuation.onTermination = { [weak self] _ in
                 Task { await self?.shutdown() }
             }
+            // Unpark the blocking accept thread once the gate's live count falls back to its
+            // hysteresis watermark.
+            admission?.onResume { [weak self] in self?.admissionResume.signal() }
             // Capture an immutable snapshot: `loops` is a var (built incrementally above), and the accept
             // loop runs concurrently on `acceptQueue`, so referencing the var there is a data-race smell.
             let acceptLoops = loops
@@ -149,44 +208,73 @@
             return stream
         }
 
-        /// Closes the listening socket (ending the accept loop, which frees the `SSL_CTX`) and stops the
+        /// Closes the listening socket — not returning until its port is released — and stops the
         /// event loops.
+        ///
+        /// The woken accept thread ends the connection stream and frees the `SSL_CTX`.
+        ///
+        /// The close is `shutdown(2)`-then-`close(2)`, in that order, because this backbone accepts
+        /// with a *blocking* `accept(2)` on a dedicated thread and the close-only version leaks the
+        /// port on Linux: see ``poisonFD(_:)`` for the measured per-kernel semantics. By the time the
+        /// pair has run, POSIX's `EADDRINUSE` window is over on both platforms — a caller that then
+        /// rebinds the same port must succeed, which is the bind-contract `rebind after stop` row.
+        ///
+        /// Idempotent, and synchronous for EVERY caller, not just the one that performs the close.
+        /// The state swap below is the arbiter — exactly one caller sees the live descriptor — and
+        /// the losers of that race await the same ``ListenerCloseLatch`` the winner signals, because
+        /// ``start(admission:)`` wires `continuation.onTermination` to shut down, so a consumer
+        /// dropping the stream races an explicit `shutdown()` by construction; a loser that returned
+        /// through the `nil` it found would resolve with the port possibly still held.
         public func shutdown() async {
-            let (descriptor, loops): (Int32?, [TLSEventLoop]) = state.withLock {
+            // `closeLatch` is deliberately NOT cleared: a caller that arrives after the close still
+            // has to find it, and find it already signalled.
+            let (descriptor, loops, latch) = state.withLock {
                 let fd = $0.listenDescriptor
                 let loops = $0.loops
                 $0.listenDescriptor = nil
                 $0.loops = []
                 $0.isRunning = false
-                return (fd, loops)
+                return (fd, loops, $0.closeLatch)
             }
             if let descriptor {
-                closeFD(descriptor)
+                poisonFD(descriptor)  // wakes the blocked accept; releases the port on Linux
+                closeFD(descriptor)  // releases the port on Darwin; drops the fd-table entry
+            }
+            // The accept thread may be parked on the admission gate; closing the listener alone would
+            // not wake it, so signal too. (`isRunning` is already false, so it exits its park loop.)
+            admissionResume.signal()
+            if let latch {
+                if descriptor != nil {
+                    latch.signal()  // the performer: the poison + close above released the port
+                }
+                // Every caller waits here, including the ones that found the descriptor already
+                // taken. A never-started transport has no latch, and nothing to wait for.
+                await latch.wait()
             }
             for loop in loops {
                 loop.stop()
             }
         }
 
-        /// Hot-reloads the TLS identity (G4b): swaps the shared `SSL_CTX` so new handshakes use `tls`,
-        /// while connections already accepted keep serving on the context they handshook with.
+        /// Hot-reloads the TLS identity (G4b): swaps the shared listener context so new
+        /// handshakes use `tls`, while connections already accepted keep serving on the
+        /// context they handshook with.
         public func reload(tls: TransportTLS) async throws {
-            let newContext = try OpenSSLTLS.serverContext(tls)
-            let outcome: (running: Bool, previous: ContextBox?) = state.withLock { state in
-                guard state.isRunning else {
-                    return (false, nil)
+            let newContext = try PortableTLSServerContext(tls)
+            let outcome: (running: Bool, previous: PortableTLSServerContext?) =
+                state.withLock { state in
+                    guard state.isRunning else {
+                        return (false, nil)
+                    }
+                    let previous = state.context
+                    state.context = newContext
+                    return (true, previous)
                 }
-                let previous = state.context
-                state.context = ContextBox(pointer: newContext)
-                return (true, previous)
-            }
             guard outcome.running else {
-                CHTTPBoringSSL_SSL_CTX_free(newContext)
+                newContext.release()
                 throw TransportError.closed
             }
-            if let previous = outcome.previous {
-                CHTTPBoringSSL_SSL_CTX_free(previous.pointer)
-            }
+            outcome.previous?.release()
         }
 
         // MARK: - Internals
@@ -211,6 +299,7 @@
             loops: [TLSEventLoop],
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
+            let gate = state.withLock(\.gate)
             drain: while state.withLock(\.isRunning) {
                 var address = sockaddr_storage()
                 var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
@@ -230,66 +319,92 @@
                             break drain
                     }
                 }
-                // audit T-F1: a peer RST mid-write must not kill us; disable Nagle for p99.9 tail.
-                POSIXSocket.setNoSIGPIPE(clientFD)
-                POSIXSocket.setNoDelay(clientFD)
-                surface(clientFD, address: address, loops: loops, continuation: continuation)
+                // Charge BEFORE `surface(...)` — before `SSL_new` and before the handshake — so a peer
+                // that completes the TCP connect and then never sends a ClientHello is still holding a
+                // slot against the ceiling, which is precisely the Slowloris-shaped case the audit's
+                // "queued and handshaking connections" wording is about.
+                let peer = POSIXSocket.peerAddress(from: address)
+                switch gate.admit(descriptor: clientFD, host: peer.host, close: closeFD) {
+                    case .rejectedContinue:
+                        continue  // this peer is over ITS cap; others are not — keep accepting
+                    case .saturatedStop:
+                        parkUntilAdmissionResumes(gate)
+                        continue
+                    case .admit(let ticket, let saturated):
+                        // audit T-F1: a peer RST mid-write must not kill us; Nagle off for the tail.
+                        POSIXSocket.setNoSIGPIPE(clientFD)
+                        POSIXSocket.setNoDelay(clientFD)
+                        surface(
+                            clientFD,
+                            peer: peer,
+                            ticket: ticket,
+                            loops: loops,
+                            continuation: continuation
+                        )
+                        if saturated {
+                            parkUntilAdmissionResumes(gate)
+                        }
+                }
             }
             continuation.finish()
-            let context = state.withLock { state -> ContextBox? in
+            let context = state.withLock { state -> PortableTLSServerContext? in
                 let current = state.context
                 state.context = nil
                 return current
             }
-            if let context {
-                CHTTPBoringSSL_SSL_CTX_free(context.pointer)
+            context?.release()
+        }
+
+        /// Parks the accept thread until the admission gate clears its saturation latch.
+        ///
+        /// The timed wait is a safety valve, not the wakeup path: the gate's resume signals the
+        /// semaphore, and a signal that arrives before the park is banked (semaphores count). The
+        /// timeout only bounds the park if the gate is torn down while we are in it.
+        private func parkUntilAdmissionResumes(_ gate: AcceptGate) {
+            guard let admission = gate.admission else {
+                return
+            }
+            while state.withLock(\.isRunning), admission.isSaturated {
+                _ = admissionResume.wait(timeout: .now() + .milliseconds(50))
             }
         }
 
-        /// Wraps an accepted descriptor in a libssl session over memory BIOs, assigns it a loop, drives
-        /// the handshake inline on that loop, and surfaces it once the handshake settles.
+        /// Wraps an admitted descriptor in a per-connection TLS engine, assigns it a loop,
+        /// drives the handshake inline on that loop, and surfaces it once the handshake settles.
+        ///
+        /// The slot in `ticket` is already charged. If any step below fails the connection is torn
+        /// down without being yielded, and the ticket's `deinit` returns the slot — the failure paths
+        /// need no bookkeeping of their own.
         private func surface(
             _ clientFD: Int32,
-            address: sockaddr_storage,
+            peer: TransportAddress,
+            ticket: AdmissionTicket?,
             loops: [TLSEventLoop],
             continuation: AsyncStream<any TransportConnection>.Continuation
         ) {
-            // Hold a reference across `SSL_new` so a concurrent ``reload(tls:)`` cannot free the context
-            // under us; the new `SSL` then retains the context it handshakes with.
             guard let context = state.withLock(\.context) else {
                 closeFD(clientFD)
                 return
             }
-            _ = CHTTPBoringSSL_SSL_CTX_up_ref(context.pointer)
-            let ssl = CHTTPBoringSSL_SSL_new(context.pointer)
-            CHTTPBoringSSL_SSL_CTX_free(context.pointer)
-            guard let ssl else {
+            let id = connectionIDs.next()
+            // The context mints the engine (an `SSL` over memory BIOs on the legacy flavor,
+            // a sans-I/O `TLSServerConnection` on the HTTPTLS one) and holds whatever
+            // reference discipline its flavor needs across a concurrent ``reload(tls:)``.
+            guard let engine = context.makeEngine(connectionID: id) else {
                 closeFD(clientFD)
                 return
             }
-            // Memory BIOs: SSL reads ciphertext from `readBIO`, writes ciphertext to `writeBIO`; the
-            // connection pumps both to/from the non-blocking socket. `SSL_set_bio` transfers ownership
-            // (both are freed by `SSL_free`).
-            guard let readBIO = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()),
-                let writeBIO = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
-            else {
-                CHTTPBoringSSL_SSL_free(ssl)
-                closeFD(clientFD)
-                return
-            }
-            CHTTPBoringSSL_SSL_set_bio(ssl, readBIO, writeBIO)
             POSIXSocket.setNonBlocking(clientFD)  // event-driven pump needs a non-blocking fd
             let loop = loops[nextLoop.wrappingAdd(1, ordering: .relaxed).oldValue % loops.count]
             let connection = PortableTLSConnection(
-                id: connectionIDs.next(),
-                peer: POSIXSocket.peerAddress(from: address),
-                ssl: ssl,
-                readBIO: readBIO,
-                writeBIO: writeBIO,
+                id: id,
+                peer: peer,
+                engine: engine,
                 descriptor: clientFD,
                 eventLoop: loop,
                 clientAuth: configuration.tls?.clientAuth ?? .none,
-                verifyPeer: configuration.tls?.verifyPeer
+                verifyPeer: configuration.tls?.verifyPeer,
+                admissionTicket: ticket
             )
             // Drive the handshake inline on the connection's loop; surface only on success — a failed
             // handshake (ALPN no-overlap / ALPACA refusal) is torn down, never yielded.

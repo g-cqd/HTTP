@@ -83,7 +83,8 @@ actor AsyncHandoff {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Item, Never>) in
                 if let closed {
-                    continuation.resume(returning: closed)  // producer ended between the check and here
+                    // The producer ended between the check above and here.
+                    continuation.resume(returning: closed)
                 }
                 else if Task.isCancelled {
                     continuation.resume(returning: .failed)  // already cancelled before we parked

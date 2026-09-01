@@ -19,16 +19,22 @@ import Testing
 struct HTTP3RouteBodyLimitTests: HTTP3WireFixtures {
     private static let stream = QUICStreamID(0)
 
-    private let fourOctetLimit: @Sendable (HTTPRequest) -> Int? = { _ in 4 }
-    private let fiveOctetLimit: @Sendable (HTTPRequest) -> Int? = { _ in 5 }
+    private let fourOctetLimit: @Sendable (QUICStreamID, HTTPRequest) -> RequestBodyPolicy = {
+        _, _ in RequestBodyPolicy(limit: 4)
+    }
+    private let fiveOctetLimit: @Sendable (QUICStreamID, HTTPRequest) -> RequestBodyPolicy = {
+        _, _ in RequestBodyPolicy(limit: 5)
+    }
 
     /// A resolver that RAISES every route's cap to 64 octets (above the tests' tiny global).
-    private let sixtyFourOctetLimit: @Sendable (HTTPRequest) -> Int? = { _ in 64 }
+    private let sixtyFourOctetLimit: @Sendable (QUICStreamID, HTTPRequest) -> RequestBodyPolicy = {
+        _, _ in RequestBodyPolicy(limit: 64)
+    }
 
     @Test("a body over the route limit resets the stream, even within the global limit")
     func overRouteLimit() throws {
         var connection = HTTP3Connection(
-            limits: HTTPLimits(maxBodySize: 1_000), resolveBodyLimit: fourOctetLimit
+            limits: HTTPLimits(maxBodySize: 1_000), resolveRoute: fourOctetLimit
         )
         let section = requestFieldSection(
             method: "POST", extra: [HeaderField(name: "content-length", value: "5")]
@@ -42,7 +48,7 @@ struct HTTP3RouteBodyLimitTests: HTTP3WireFixtures {
     @Test("a body exactly at the route limit is delivered (inclusive bound)")
     func atRouteLimit() throws {
         var connection = HTTP3Connection(
-            limits: HTTPLimits(maxBodySize: 1_000), resolveBodyLimit: fiveOctetLimit
+            limits: HTTPLimits(maxBodySize: 1_000), resolveRoute: fiveOctetLimit
         )
         let section = requestFieldSection(
             method: "POST", extra: [HeaderField(name: "content-length", value: "5")]
@@ -62,7 +68,7 @@ struct HTTP3RouteBodyLimitTests: HTTP3WireFixtures {
         // Global cap 4 < body 16 < route cap 64: the route's raise must win — the per-stream cap and
         // the connection-level aggregate bound both stretch to the route's declared limit.
         var connection = HTTP3Connection(
-            limits: HTTPLimits(maxBodySize: 4), resolveBodyLimit: sixtyFourOctetLimit
+            limits: HTTPLimits(maxBodySize: 4), resolveRoute: sixtyFourOctetLimit
         )
         let payload = [UInt8](repeating: 0x61, count: 16)
         let section = requestFieldSection(

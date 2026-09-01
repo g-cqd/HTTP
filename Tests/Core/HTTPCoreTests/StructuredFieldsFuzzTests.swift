@@ -3,7 +3,8 @@
 //  HTTPCoreTests
 //
 //  Deterministic fuzzing for the RFC 8941 Structured Fields parser — fuzz parity with the HTTP/1,
-//  HTTP/2, HTTP/3, HPACK, QPACK, and WebSocket decoders. The parser reads untrusted header values, so
+//  HTTP/2, HTTP/3, HPACK, QPACK, WebSocket, and multipart/form-data parsers, each of which has a
+//  seeded fuzz suite of its own. The parser reads untrusted header values, so
 //  it must NEVER trap, hang, or exhaust memory: it may only return a value or throw a typed
 //  `StructuredFields.ParseError`. Reaching the end of a run (the process did not crash) is the
 //  assertion; a fixed seed keeps any failure reproducible. The RNG + byte mutator come from

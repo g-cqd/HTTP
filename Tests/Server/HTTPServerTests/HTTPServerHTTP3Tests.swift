@@ -12,6 +12,7 @@
 import Foundation
 import HTTP3
 import HTTPCore
+import HTTPTestSupport
 import HTTPTransport
 import Network
 import QPACK
@@ -22,7 +23,8 @@ import Testing
 @Suite("HTTP/3 server — loopback")
 struct HTTPServerHTTP3Tests {
     @Test(
-        "an HTTP/3 GET over the legacy QUIC backbone returns the response", .timeLimit(.minutes(1)))
+        "an HTTP/3 GET over the legacy QUIC backbone returns the response",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http3GetLegacy() async throws {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         let (status, body) = try await serveAndGet(
@@ -39,7 +41,7 @@ struct HTTPServerHTTP3Tests {
 
     @Test(
         "an HTTP/3 client cannot spoof the client-cert subject (audit P0-1)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http3StripsSpoofedClientCertSubject() async throws {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         // Echo back the verified client-cert subject the handler reads from the context (or `<none>`).
@@ -63,7 +65,8 @@ struct HTTPServerHTTP3Tests {
     }
 
     @Test(
-        "an HTTP/3 GET over the modern QUIC backbone returns the response", .timeLimit(.minutes(1)))
+        "an HTTP/3 GET over the modern QUIC backbone returns the response",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http3GetModern() async throws {
         guard #available(macOS 26, iOS 26, *) else {
             return
@@ -83,7 +86,7 @@ struct HTTPServerHTTP3Tests {
 
     @Test(
         "a native HTTP/3 streamed response is delivered chunk-by-chunk over QUIC (P6b)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http3StreamingLegacy() async throws {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         // A `.streaming` responder drives the native path (respondHeaders → H3StreamWriter DATA frames
@@ -109,7 +112,7 @@ struct HTTPServerHTTP3Tests {
 
     @Test(
         "a streaming HTTP/3 route receives its request body as a stream end-to-end (Phase 1.4)",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func http3StreamingRequest() async throws {
         let tls = try DevTLSIdentity.selfSigned(applicationProtocols: ["h3"])
         // `.streamingBody()` drives the true-incremental path (requestHead → requestBodyChunk →

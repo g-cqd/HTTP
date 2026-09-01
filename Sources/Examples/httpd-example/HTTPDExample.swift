@@ -43,6 +43,12 @@ enum HTTPDExample {
         if !Prefork.isWorker, let workers = Prefork.workerCount {
             Prefork.supervise(workers: workers)
         }
+        // HTTPD_EXEC_CALIBRATE=1 re-derives `ExecutionTopology.cpuIterations` on this machine and
+        // exits without binding anything (audit CR-F7 / ADR 0007).
+        if ProcessInfo.processInfo.environment["HTTPD_EXEC_CALIBRATE"] == "1" {
+            ExecutionTopology.calibrate()
+            return
+        }
         let port = parsePort()
         let backbone = parseBackbone()
         let tls = makeTLS()
@@ -63,23 +69,11 @@ enum HTTPDExample {
         // posture for the Bench/ comparison against logging-off reference servers.
         let quiet = ProcessInfo.processInfo.environment["HTTPD_QUIET"] != nil
         let metrics = ExampleMetrics()  // the HTTPMetrics seam, surfaced at GET /metrics below
-        var middlewares: [any HTTPMiddleware] = []
-        if !quiet {
-            middlewares.append(AccessLogMiddleware { print("httpd-example: \($0)") })
-        }
-        middlewares.append(
-            contentsOf: [
-                MetricsMiddleware(metrics),  // RED signals over the whole chain (outermost timing)
-                DecompressionMiddleware(),  // inbound: gunzip a gzip body (bomb-capped)
-                CompressionMiddleware(),  // gzip the outgoing body
-                ServerHeaderMiddleware("httpd-example"),
-                DateHeaderMiddleware(),
-                SecurityHeadersMiddleware(),
-                CORSMiddleware(),
-                ConditionalRequestMiddleware(),  // ETag on the raw body, If-None-Match → 304
-                RangeMiddleware()  // innermost: Range → 206 (§14)
-            ] as [any HTTPMiddleware]
-        )
+        // HTTPD_PROFILE=floor strips the chain to the router alone — the apples-to-apples posture for
+        // the comparative benchmark, where every peer runs a framework-floor handler. The default is,
+        // and stays, the full shipped stack; see ``BenchmarkProfile`` for why both are measured.
+        let profile = BenchmarkProfile.current
+        let middlewares = profile.middlewares(metrics: metrics, quiet: quiet)
         let responder = MiddlewareChain(middlewares, terminatingAt: makeRouter(metrics: metrics))
         // HTTP/3 (RFC 9114): with a TLS identity, run a QUIC transport alongside the TCP one (h3 needs
         // QUIC/TLS); the server advertises it via Alt-Svc (RFC 7838) on the h1/h2 responses so a
@@ -94,9 +88,17 @@ enum HTTPDExample {
             transport: try TransportFactory.make(configuration),
             responder: responder,
             quicTransport: quicTransport,
-            limits: makeLimits()
+            limits: makeLimits(),
+            // HTTPD_HANDLER_EXEC selects where handlers run (audit CR-F7 / ADR 0007); `.inline` —
+            // the shipped default — when unset.
+            handlerExecution: ExecutionTopology.policy()
         )
 
+        if profile == .floor {
+            // Announced on every path (worker included) so a benchmark log proves which stack was
+            // measured — the confound that made every previous comparative round unreadable.
+            print("httpd-example: PROFILE=floor — router only, no middleware (benchmark posture)")
+        }
         if Prefork.isWorker {
             print("httpd-example: worker \(getpid()) serving on \(port) via \(backbone.rawValue)")
         }
@@ -161,21 +163,30 @@ enum HTTPDExample {
     /// seam. `HEAD` is served by the matching `GET` (RFC 9110 §9.3.2); an unknown path is 404 and a
     /// known path with the wrong method is 405 — both folded by the router.
     private static func makeRouter(metrics: ExampleMetrics) -> Router {
-        Router {
+        // The comparative-benchmark bodies are built ONCE and captured, because that is what every
+        // peer server in `Benchmarking/Bench/` does (hyper: a `LazyLock<Bytes>` cloned by refcount;
+        // Go: a `strings.Repeat` captured by the handler; Bun/Hummingbird/Vapor: a module constant).
+        // Building them per request — which `/payload` and `/json` previously did — charged this
+        // server an allocation and a 1 KiB copy that no peer paid, on the exact routes the
+        // comparison reports. See `Benchmarking/Bench/RESULTS.md`.
+        let plaintext = Array(BenchmarkParity.plaintextBody.utf8)
+        let json = Array(BenchmarkParity.jsonBody.utf8)
+        let payload = Array(BenchmarkParity.payloadBody.utf8)
+        return Router {
             Route.get("/") { _, _, _ in
                 .text("Hello from a from-scratch, NIO-free HTTP/1.1 + HTTP/2 + HTTP/3 server.\n")
             }
             Route.get("/health") { _, _, _ in .text("OK\n") }
+            // The framework-floor benchmark route. `/` cannot serve that purpose: every server in the
+            // comparison answers it with its own name, so the field returns DIFFERENT BYTES there and
+            // the byte-equivalence gate rejects it. `/plaintext` is identical on every server.
+            Route.get("/plaintext") { _, _, _ in BenchmarkParity.text(plaintext) }
             // JSON serialization (the comparative-benchmark `/json` scenario): a small object encoded
             // to `application/json`.
-            Route.get("/json") { _, _, _ in
-                .json(Array(#"{"message":"Hello, World!"}"#.utf8))
-            }
+            Route.get("/json") { _, _, _ in .json(json) }
             // ~1 KiB of compressible text (the `/payload` scenario): 32 × 32 B = 1024 B, mirroring the
             // other benchmark servers byte-for-byte (a body worth gzipping).
-            Route.get("/payload") { _, _, _ in
-                .text(String(repeating: "from-scratch swift http server. ", count: 32))
-            }
+            Route.get("/payload") { _, _, _ in BenchmarkParity.text(payload) }
             // A `:name` path parameter (RFC 3986 §3.3) plus an optional `?greeting=` query parameter.
             Route.get("/hello/:name") { request, _, context in
                 let greeting = request.query["greeting"] ?? "Hello"
@@ -196,6 +207,10 @@ enum HTTPDExample {
             // localized per `Accept-Language`, `Vary` set, 406 when neither type fits. See
             // ``ContentNegotiation``.
             ContentNegotiation.route()
+            // The execution-topology workload set (audit CR-F7 / ADR 0007), behind
+            // HTTPD_EXEC_ROUTES=1 so the five-route parity set the comparative harness measures
+            // stays byte-identical when the flag is unset. Empty otherwise.
+            ExecutionTopology.routes()
             // A trailing `*path` catch-all capturing the remaining path (RFC 3986 §3.3).
             Route.get("/files/*path") { _, _, context in
                 .text("would serve: \(context.parameters["path"] ?? "")\n")
@@ -237,18 +252,20 @@ enum HTTPDExample {
     /// The default `maxConnectionsPerClient` (20) is a single-IP DoS guard that a loopback load test
     /// trips; set `HTTPD_MAX_CONN` to raise both the per-client and global caps without recompiling.
     private static func makeLimits() -> HTTPLimits {
-        var limits = HTTPLimits.default
-        if let raw = ProcessInfo.processInfo.environment["HTTPD_MAX_CONN"], let value = Int(raw) {
-            limits.maxConnectionsPerClient = value
-            limits.maxConnections = value
+        let environment = ProcessInfo.processInfo.environment
+        // One `with` transaction rather than a run of field assignments: every override lands, then
+        // every range and cross-field invariant is re-established once (audit CR-F15).
+        return HTTPLimits.default.with { limits in
+            if let raw = environment["HTTPD_MAX_CONN"], let value = Int(raw) {
+                limits.maxConnectionsPerClient = value
+                limits.maxConnections = value
+            }
+            // WebSocket message ceiling (bytes). The Autobahn conformance job raises it to cover the
+            // suite's 16 MiB section-9 messages without changing the shipped default for real loads.
+            if let raw = environment["HTTPD_WS_MAX_MESSAGE"], let value = Int(raw) {
+                limits.maxWebSocketMessageSize = value
+            }
         }
-        // WebSocket message ceiling (bytes). The Autobahn conformance job raises it to cover the
-        // suite's 16 MiB section-9 messages without changing the shipped default for real loads.
-        let wsMessage = ProcessInfo.processInfo.environment["HTTPD_WS_MAX_MESSAGE"]
-        if let raw = wsMessage, let value = Int(raw) {
-            limits.maxWebSocketMessageSize = value
-        }
-        return limits
     }
 
     // MARK: Argument parsing
@@ -284,13 +301,23 @@ enum HTTPDExample {
     /// A throwaway self-signed TLS identity when `tls` appears in the arguments (dev/test only).
     ///
     /// Advertises ALPN `h2` + `http/1.1`, so a `--http2` client negotiates HTTP/2 over TLS
-    /// (RFC 9113 §3.3). Honored only by the Network.framework backbone.
+    /// (RFC 9113 §3.3). The Network.framework backbone takes the PKCS#12 form; the portable
+    /// TLS backbone (Phase 3d, the HTTPTLS engine) takes PEM — its intake parses no PKCS#12.
     private static func makeTLS() -> TransportTLS? {
         guard CommandLine.arguments.contains("tls") else {
             return nil
         }
         do {
-            return try DevTLSIdentity.selfSigned()
+            guard parseBackbone() == .portableTLS else {
+                return try DevTLSIdentity.selfSigned()
+            }
+            let pem = try DevTLSIdentity.selfSignedPEM()
+            return TransportTLS(
+                pem: TransportTLS.PEMIdentity(
+                    certificateChainPEM: pem.certificatePEM,
+                    privateKeyPEM: pem.privateKeyPEM
+                )
+            )
         }
         catch {
             print("httpd-example: TLS disabled — \(error)")

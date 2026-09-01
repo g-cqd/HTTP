@@ -9,7 +9,7 @@
 public import HTTPTransport
 
 /// An in-memory ``TransportConnection`` that delivers its inbound bytes `chunkSize` at a time.
-public actor DribblingConnection: TransportConnection {
+public actor DribblingConnection: UnleasedTransportConnection {
     /// The connection's stable identifier.
     nonisolated public let id: TransportConnectionID
 

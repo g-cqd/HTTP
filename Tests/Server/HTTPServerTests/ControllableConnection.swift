@@ -13,7 +13,7 @@
 import HTTPTransport
 
 /// A ``TransportConnection`` with test-driven inbound delivery and observable output.
-actor ControllableConnection: TransportConnection {
+actor ControllableConnection: UnleasedTransportConnection {
     nonisolated let id: TransportConnectionID
     nonisolated let peer = TransportAddress(host: "controllable", port: 0)
     nonisolated let negotiatedApplicationProtocol: String?

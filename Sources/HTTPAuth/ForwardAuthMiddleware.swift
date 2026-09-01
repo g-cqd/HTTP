@@ -7,6 +7,13 @@
 //  terminal response). The server has no outbound HTTP client, so the app owns the subrequest to the
 //  external authorization service inside the closure (URLSession, an internal client, …).
 //
+//  This middleware only ever *sets* what the authorizer returned, so a decision that omits a name says
+//  nothing about that name — and before audit CR-F13 a client-supplied `X-Auth-Subject` therefore
+//  survived an `.allow(headers: [])` verdict all the way to the handler. The server's ingress strip is
+//  what closes that: by the time this runs, the request carries no server-asserted field it did not
+//  itself assert, so "the authorizer said nothing" reads downstream as absence rather than as the
+//  client's value (CWE-290).
+//
 
 public import HTTPCore
 public import HTTPServer

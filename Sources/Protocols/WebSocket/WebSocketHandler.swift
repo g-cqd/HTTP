@@ -7,6 +7,13 @@
 //  mutating the connection) keeps the handler free of the engine's exclusive-access requirements and
 //  trivially testable.
 //
+//  ``WebSocketHandler/shouldUpgrade(_:)`` is the one hook here that is shown request fields at all —
+//  every other hook is given frames — which makes it the only place a spoofed server-asserted field
+//  could reach an application's authorization decision. It therefore takes a ``SanitizedRequest``
+//  rather than an `HTTPRequest`; see that type, and the note on the requirement below, for why the
+//  guarantee is carried by the parameter's *type* instead of by a rule each caller has to remember
+//  (audit R5-SEC1).
+//
 
 public import HTTPCore
 
@@ -14,7 +21,14 @@ public import HTTPCore
 public protocol WebSocketHandler: Sendable {
     /// Whether to upgrade `request` to WebSocket (e.g. gate by path); defaults to accepting any valid
     /// upgrade request (RFC 6455 §4).
-    func shouldUpgrade(_ request: HTTPRequest) -> Bool
+    ///
+    /// The parameter is a ``SanitizedRequest`` because this is an authorization decision made from
+    /// request fields, and a client must not be able to supply the fields the server asserts (RFC 9110
+    /// §17.1, CWE-290). A `SanitizedRequest` can only be produced by running the strip, so a handler
+    /// physically cannot be handed a spoofable request here — which is what the HTTP/2 and HTTP/3
+    /// Extended CONNECT paths used to do, having never gone through the CR-F13 ingress choke point
+    /// (audit R5-SEC1).
+    func shouldUpgrade(_ request: SanitizedRequest) -> Bool
 
     /// Whether to accept an upgrade from this `Origin` (nil when the client sent no `Origin`).
     ///
@@ -46,7 +60,18 @@ public protocol WebSocketHandler: Sendable {
 
 extension WebSocketHandler {
     /// By default any request that already passed the handshake is upgraded.
-    public func shouldUpgrade(_: HTTPRequest) -> Bool { true }
+    public func shouldUpgrade(_: SanitizedRequest) -> Bool { true }
+
+    /// Authorizes an upgrade from a raw, off-the-wire `request` by sanitizing it first.
+    ///
+    /// The server's protocol engines hold an `HTTPRequest`, so this is the overload their call sites
+    /// resolve to — and it is the reason the R5-SEC1 fix does not depend on every one of those call
+    /// sites being found and edited. It is not a requirement and is never customization-dispatched:
+    /// there is no overload of `shouldUpgrade` that forwards a raw request onward, so every route into
+    /// the seam passes through ``SanitizedRequest``'s initializer, which is the strip.
+    public func shouldUpgrade(_ request: HTTPRequest) -> Bool {
+        shouldUpgrade(SanitizedRequest(request))
+    }
 
     /// By default only a request with no `Origin` is admitted — i.e. a non-browser client.
     ///

@@ -8,9 +8,11 @@
 //  accumulated buffer (audit H1-F1, CWE-407). The body is passed `inout` separately from ``State`` so
 //  it is grown in place, never copied per feed.
 //
-//  Hardening folded in: cumulative chunk-extension length is bounded (§7.1.1, audit H1-F2) and each
+//  Hardening folded in: cumulative chunk-extension length is bounded (§7.1.1, audit H1-F2), each
 //  trailer field-line is validated like a header line (§7.1.2 / RFC 9110 §5.5, audit H1-F3) instead of
-//  being discarded unchecked.
+//  being discarded unchecked, and the `maxBodySize` cap is charged against the decoder's own monotonic
+//  ``State/decodedByteCount`` rather than the caller's live buffer — so a caller that drains `body`
+//  between feeds (the streaming shape) is still bounded (CWE-409).
 //
 
 public import HTTPCore
@@ -45,6 +47,18 @@ public enum ChunkedBodyDecoder {
         /// completes; the data path was already resumable (audit F-CHUNKBUF residual).
         // swiftlint:disable:next strict_fileprivate - read and written by ChunkedBodyDecoder in-file
         fileprivate var scanOffset = 0
+
+        // swiftlint:disable strict_fileprivate - the setter is the decoder's, in this file, alone
+        /// Octets of chunk *data* decoded so far, across every feed — the cumulative body size the
+        /// ``HTTPLimits/maxBodySize`` cap is charged against.
+        ///
+        /// Monotonic and owned by the decoder rather than read back off the caller's buffer. A caller
+        /// that *streams* yields each decoded chunk onward and drops it, so its buffer count returns to
+        /// zero every feed; charging the cap against that would reset the budget on every read and let
+        /// an unbounded body through a bounded configuration (CWE-409). For a caller that accumulates,
+        /// this equals its `body.count` — so the bound is unchanged for them.
+        public fileprivate(set) var decodedByteCount = 0
+        // swiftlint:enable strict_fileprivate
 
         /// Creates a decoder positioned before the first chunk-size line.
         public init() {
@@ -93,9 +107,12 @@ public enum ChunkedBodyDecoder {
             case .complete:
                 return true
             case .size:
-                return try stepSize(&reader, state: &state, bodyCount: body.count, limits: limits)
+                return try stepSize(
+                    &reader, state: &state, bodyCount: state.decodedByteCount, limits: limits
+                )
             case .data(let remaining):
                 let took = copyData(&reader, remaining: remaining, into: &body)
+                state.decodedByteCount += took
                 state.phase =
                     took < remaining ? .data(remaining: remaining - took) : .dataTerminator
                 return took == remaining
@@ -235,7 +252,9 @@ public enum ChunkedBodyDecoder {
         }
         else {
             // Compare without computing `bodyCount + size`, which would trap on a hostile near-Int.max
-            // chunk size; `bodyCount <= maxBodySize` holds by construction (RFC 9112 §7.1).
+            // chunk size; `bodyCount <= maxBodySize` holds by construction (RFC 9112 §7.1). The count
+            // is the decoder's own monotonic tally, not the caller's live buffer — see
+            // ``State/decodedByteCount``.
             guard size <= limits.maxBodySize - bodyCount else { throw .bodyTooLarge }
             state.phase = .data(remaining: size)
         }

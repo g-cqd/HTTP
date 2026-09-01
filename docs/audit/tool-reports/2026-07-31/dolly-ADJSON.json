@@ -1,0 +1,1892 @@
+{
+  "analyzedFileCount" : 78,
+  "cacheHits" : 0,
+  "cacheMisses" : 78,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 45,
+      "fingerprint" : "aaaad83e03458611",
+      "line" : 210,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/CodingStrategies.swift:225",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/CodingStrategies.swift",
+      "related" : [
+        {
+          "column" : 44,
+          "line" : 225,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/CodingStrategies.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "318cf84951c11cdf",
+      "line" : 233,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/CodingStrategies.swift:272",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/CodingStrategies.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 272,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/CodingStrategies.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "79f2a96136ef6d8c",
+      "line" : 320,
+      "message" : "2 duplicated regions of ~68 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:50",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/CodingStrategies.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 50,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 36,
+      "fingerprint" : "119e9cfb362707f2",
+      "line" : 63,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.92)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastBuiltinConformances.swift:72",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastBuiltinConformances.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 72,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastBuiltinConformances.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 73,
+      "fingerprint" : "c496af938552dda1",
+      "line" : 42,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift:54, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift:64",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift",
+      "related" : [
+        {
+          "column" : 69,
+          "line" : 54,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift"
+        },
+        {
+          "column" : 73,
+          "line" : 64,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 74,
+      "fingerprint" : "fd6d2ee7d33808c8",
+      "line" : 49,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift:59",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift",
+      "related" : [
+        {
+          "column" : 70,
+          "line" : 59,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/FastDecodeCursor.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "17e4f01256bb3d47",
+      "line" : 70,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:67",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONByteWriter.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 59,
+      "fingerprint" : "983fb3d5a6e331d5",
+      "line" : 110,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:131",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 77,
+          "line" : 131,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 55,
+      "fingerprint" : "c390460e1a131ed6",
+      "line" : 127,
+      "message" : "2 duplicated regions of ~60 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:140",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 58,
+          "line" : 140,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "183c47a4c9c9b163",
+      "line" : 163,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:53",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 53,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "52ccbfb79c6ffd0b",
+      "line" : 237,
+      "message" : "4 duplicated regions of ~50 tokens (similarity 0.93)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:254, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:260, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:266",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 254,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 260,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        },
+        {
+          "column" : 19,
+          "line" : 266,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "57619839b64eb3a0",
+      "line" : 242,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.82)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:248",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 10,
+          "line" : 248,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "89642e0150e4f1c6",
+      "line" : 246,
+      "message" : "3 duplicated regions of ~86 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:255, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:264",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 255,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        },
+        {
+          "column" : 43,
+          "line" : 264,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "98b5e315e851bf54",
+      "line" : 328,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.97)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:336",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 336,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "436efcd48acdc268",
+      "line" : 341,
+      "message" : "3 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:353, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:365",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 41,
+          "line" : 353,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        },
+        {
+          "column" : 41,
+          "line" : 365,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "f45708d2404da194",
+      "line" : 411,
+      "message" : "3 duplicated regions of ~75 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:414, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift:417",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift",
+      "related" : [
+        {
+          "column" : 23,
+          "line" : 414,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 417,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "71857d4747c6d317",
+      "line" : 159,
+      "message" : "2 duplicated regions of ~72 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift:163",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 163,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 63,
+      "fingerprint" : "8409658f21a46348",
+      "line" : 190,
+      "message" : "3 duplicated regions of ~80 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift:193, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift:196",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift",
+      "related" : [
+        {
+          "column" : 65,
+          "line" : 193,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift"
+        },
+        {
+          "column" : 65,
+          "line" : 196,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "a81608c7b673040a",
+      "line" : 220,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift:284",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift",
+      "related" : [
+        {
+          "column" : 20,
+          "line" : 284,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "cc1a3e08c6229aaf",
+      "line" : 252,
+      "message" : "3 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift:255, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift:258",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 255,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 258,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/JSONValueEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 65,
+      "fingerprint" : "78703180d9c4a981",
+      "line" : 82,
+      "message" : "2 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:93",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 63,
+          "line" : 93,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 99,
+      "fingerprint" : "c057aae3fabb5e4f",
+      "line" : 100,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:116",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 71,
+          "line" : 116,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "b374dbe3a7ff121f",
+      "line" : 229,
+      "message" : "4 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:235, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:241, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:247",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 235,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 241,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        },
+        {
+          "column" : 44,
+          "line" : 247,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 34,
+      "fingerprint" : "dacf3868115923ae",
+      "line" : 231,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:243",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 49,
+          "line" : 243,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "510b4e86257c4a41",
+      "line" : 254,
+      "message" : "3 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:257, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:260",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 30,
+          "line" : 257,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        },
+        {
+          "column" : 31,
+          "line" : 260,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 73,
+      "fingerprint" : "2881c4f573a83cda",
+      "line" : 346,
+      "message" : "3 duplicated regions of ~81 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:349, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:352",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 77,
+          "line" : 349,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        },
+        {
+          "column" : 77,
+          "line" : 352,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 86,
+      "fingerprint" : "9037454bcd38ddfe",
+      "line" : 415,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.97)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:421",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 87,
+          "line" : 421,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "1ec06f1289eb6b38",
+      "line" : 417,
+      "message" : "3 duplicated regions of ~78 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:420, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift:423",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift",
+      "related" : [
+        {
+          "column" : 44,
+          "line" : 420,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 423,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeDecoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "65beb7c5af39ce32",
+      "line" : 212,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.85)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:244",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 244,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "c519b93c9ddae5e7",
+      "line" : 228,
+      "message" : "3 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:240, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:252",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 240,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        },
+        {
+          "column" : 45,
+          "line" : 252,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "35f1920ea15ba7b0",
+      "line" : 315,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.83)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:346, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:351",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 346,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        },
+        {
+          "column" : 19,
+          "line" : 351,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "76fc802fb72d85ec",
+      "line" : 333,
+      "message" : "2 duplicated regions of ~71 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:349",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 349,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "4787480026c461e7",
+      "line" : 410,
+      "message" : "2 duplicated regions of ~68 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:414",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift",
+      "related" : [
+        {
+          "column" : 45,
+          "line" : 414,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 46,
+      "fingerprint" : "e5c7ac9474282fb5",
+      "line" : 413,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.96)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift:417",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift",
+      "related" : [
+        {
+          "column" : 46,
+          "line" : 417,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Codable\/TapeEncoder.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "ce48cf70870495d0",
+      "line" : 61,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentDecode.swift:71",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentDecode.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 71,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentDecode.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e1d16f9c7aa89218",
+      "line" : 82,
+      "message" : "2 duplicated regions of ~103 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentParse.swift:67",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentDecode.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 67,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentParse.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 30,
+      "fingerprint" : "9c5de91768866bee",
+      "line" : 90,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentParse.swift:77",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentDecode.swift",
+      "related" : [
+        {
+          "column" : 41,
+          "line" : 77,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentParse.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 20,
+      "fingerprint" : "3c7f359782bd86b6",
+      "line" : 102,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentParse.swift:92",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentDecode.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 92,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Concurrency\/ConcurrentParse.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "19baf83c6594f61a",
+      "line" : 84,
+      "message" : "2 duplicated regions of ~76 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaCompiler.swift:132",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaCompiler.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 132,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaCompiler.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "fd64ed85cfb811f",
+      "line" : 100,
+      "message" : "2 duplicated regions of ~108 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaCompiler.swift:119",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaCompiler.swift",
+      "related" : [
+        {
+          "column" : 119,
+          "line" : 119,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaCompiler.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 55,
+      "fingerprint" : "c5100fc5d87cfe9b",
+      "line" : 59,
+      "message" : "3 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift:111, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift:210",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift",
+      "related" : [
+        {
+          "column" : 15,
+          "line" : 111,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift"
+        },
+        {
+          "column" : 15,
+          "line" : 210,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "64e7c85d18ebb267",
+      "line" : 107,
+      "message" : "2 duplicated regions of ~91 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift:206",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 206,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 36,
+      "fingerprint" : "c10b158d6a61f634",
+      "line" : 180,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift:289",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift",
+      "related" : [
+        {
+          "column" : 29,
+          "line" : 289,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "ea27b9433af96eac",
+      "line" : 236,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift:246",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift",
+      "related" : [
+        {
+          "column" : 55,
+          "line" : 246,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSON\/Schema\/SchemaValidator+Keywords.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "e93361de2462cec3",
+      "line" : 85,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventReader.swift:110",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventReader.swift",
+      "related" : [
+        {
+          "column" : 37,
+          "line" : 110,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventReader.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 51,
+      "fingerprint" : "8026aa5f0d34ddf8",
+      "line" : 252,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift:392",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventReader.swift",
+      "related" : [
+        {
+          "column" : 76,
+          "line" : 392,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 38,
+      "fingerprint" : "9ae0a8248fd220ca",
+      "line" : 106,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift:120",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift",
+      "related" : [
+        {
+          "column" : 75,
+          "line" : 120,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "5f05be164c646ab2",
+      "line" : 196,
+      "message" : "2 duplicated regions of ~61 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift:287",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 287,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "7354125feeaf7dd0",
+      "line" : 229,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift:257",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 257,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "848a40d7389b6a0c",
+      "line" : 317,
+      "message" : "2 duplicated regions of ~74 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift:362",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 362,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "6ef3045e4a39f11f",
+      "line" : 128,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift:164",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 164,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 48,
+      "fingerprint" : "14f0ad5c42b94431",
+      "line" : 134,
+      "message" : "2 duplicated regions of ~120 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift:171",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift",
+      "related" : [
+        {
+          "column" : 46,
+          "line" : 171,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 39,
+      "fingerprint" : "74c366adea1bea85",
+      "line" : 144,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.88)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift:181",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 181,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput+Numbers.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "60aadd7d3a361767",
+      "line" : 173,
+      "message" : "4 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:30, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:83, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift:267",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 30,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 13,
+          "line" : 83,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 267,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 18,
+      "fingerprint" : "5c158c7535bcc34c",
+      "line" : 173,
+      "message" : "5 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:30, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:83, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift:267, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/SQLiteJSONPath.swift:110",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput.swift",
+      "related" : [
+        {
+          "column" : 22,
+          "line" : 30,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 83,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 267,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 110,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/SQLiteJSONPath.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 36,
+      "fingerprint" : "65e949503e05ca64",
+      "line" : 174,
+      "message" : "5 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:31, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:84, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift:268, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/SQLiteJSONPath.swift:111",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONOutput.swift",
+      "related" : [
+        {
+          "column" : 38,
+          "line" : 31,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 38,
+          "line" : 84,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 42,
+          "line" : 268,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift"
+        },
+        {
+          "column" : 46,
+          "line" : 111,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/SQLiteJSONPath.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 103,
+      "fingerprint" : "e6253a9c70390a80",
+      "line" : 18,
+      "message" : "2 duplicated regions of ~77 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift:41",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift",
+      "related" : [
+        {
+          "column" : 101,
+          "line" : 41,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "9ecb913a17b3b041",
+      "line" : 50,
+      "message" : "2 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift:114",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 114,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "70ebc1bfc96244ea",
+      "line" : 71,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift:196",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift",
+      "related" : [
+        {
+          "column" : 39,
+          "line" : 196,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 31,
+      "fingerprint" : "71ff01db37f34f22",
+      "line" : 84,
+      "message" : "2 duplicated regions of ~158 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift:209",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 209,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "100caebac75246ad",
+      "line" : 125,
+      "message" : "2 duplicated regions of ~93 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift:155",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 155,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 47,
+      "fingerprint" : "3306928d694ca4ba",
+      "line" : 139,
+      "message" : "2 duplicated regions of ~78 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift:169",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift",
+      "related" : [
+        {
+          "column" : 48,
+          "line" : 169,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 64,
+      "fingerprint" : "695b81c76783a874",
+      "line" : 277,
+      "message" : "2 duplicated regions of ~71 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift:306",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift",
+      "related" : [
+        {
+          "column" : 68,
+          "line" : 306,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Numbers.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "601f679badf51464",
+      "line" : 7,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:65",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 65,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "2ff3c0815d7e24e0",
+      "line" : 29,
+      "message" : "3 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:82, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift:266",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 82,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 17,
+          "line" : 266,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 43,
+      "fingerprint" : "8ddcfee86ea9696e",
+      "line" : 31,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:85",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift",
+      "related" : [
+        {
+          "column" : 43,
+          "line" : 85,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "43a307eae005cddc",
+      "line" : 39,
+      "message" : "2 duplicated regions of ~156 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:102",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 102,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "eee3eb55b5b2c727",
+      "line" : 40,
+      "message" : "3 duplicated regions of ~108 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:103, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift:195",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 103,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 195,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Strings.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "693099b8a644f24b",
+      "line" : 8,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Containers.swift:26",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Containers.swift",
+      "related" : [
+        {
+          "column" : 28,
+          "line" : 26,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Containers.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "9d557f98c6568fc7",
+      "line" : 67,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift:256",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 256,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "d6381060802a64ab",
+      "line" : 100,
+      "message" : "2 duplicated regions of ~120 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift:284",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 284,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 77,
+      "fingerprint" : "96e6097e813dafd5",
+      "line" : 152,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift:199",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 199,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "17f1966fa125921d",
+      "line" : 352,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift:125",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/TapeBuilder+Scanners.swift",
+      "related" : [
+        {
+          "column" : 101,
+          "line" : 125,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "68d444e25225b025",
+      "line" : 28,
+      "message" : "2 duplicated regions of ~51 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift:199",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 199,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 71,
+      "fingerprint" : "31a1f183c4e6b4d9",
+      "line" : 103,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift:158",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift",
+      "related" : [
+        {
+          "column" : 75,
+          "line" : 158,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "11ee1494576915c0",
+      "line" : 299,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift:380",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 380,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "5dbe45834bf9e61b",
+      "line" : 325,
+      "message" : "2 duplicated regions of ~108 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift:412",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 412,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 63,
+      "fingerprint" : "f1baaaaa5ce2c761",
+      "line" : 448,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift:458",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift",
+      "related" : [
+        {
+          "column" : 57,
+          "line" : 458,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/Tokenizer.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "d813563e599d97a4",
+      "line" : 22,
+      "message" : "2 duplicated regions of ~64 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPatch.swift:24",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPatch.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 24,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPatch.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 29,
+      "fingerprint" : "2a7cc795e06b4209",
+      "line" : 18,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.96)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser+Filter.swift:31",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser+Filter.swift",
+      "related" : [
+        {
+          "column" : 36,
+          "line" : 31,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser+Filter.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "db9d721b6c276ab5",
+      "line" : 22,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.96)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser+Filter.swift:35",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser+Filter.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 35,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONPathParser+Filter.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 21,
+      "fingerprint" : "e33c20484c8a24af",
+      "line" : 94,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONValueMutation.swift:140",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONValueMutation.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 140,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONValueMutation.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 16,
+      "fingerprint" : "72854ba480384cce",
+      "line" : 100,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONValueMutation.swift:143",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONValueMutation.swift",
+      "related" : [
+        {
+          "column" : 19,
+          "line" : 143,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Query\/JSONValueMutation.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 30,
+      "fingerprint" : "b31755a46f573c55",
+      "line" : 51,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSON.swift:66",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSON.swift",
+      "related" : [
+        {
+          "column" : 28,
+          "line" : 66,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSON.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "c4e3c50b76b64f36",
+      "line" : 55,
+      "message" : "2 duplicated regions of ~153 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift:373",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONCursorEncoding.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 373,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "6fcd7428c8efa2ea",
+      "line" : 91,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift:351",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONCursorEncoding.swift",
+      "related" : [
+        {
+          "column" : 33,
+          "line" : 351,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "d11c736b1561c246",
+      "line" : 96,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift:356",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONCursorEncoding.swift",
+      "related" : [
+        {
+          "column" : 67,
+          "line" : 356,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "9ea2b50edcbec176",
+      "line" : 116,
+      "message" : "2 duplicated regions of ~55 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift:302",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONCursorEncoding.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 302,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 54,
+      "fingerprint" : "9895c60b2080024b",
+      "line" : 121,
+      "message" : "2 duplicated regions of ~137 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift:307",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONCursorEncoding.swift",
+      "related" : [
+        {
+          "column" : 58,
+          "line" : 307,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "1cecff84aef52bbf",
+      "line" : 250,
+      "message" : "2 duplicated regions of ~99 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift:330",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 330,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Value\/JSONValue.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "6928f51786e0fdb5",
+      "line" : 83,
+      "message" : "2 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONFuzz\/main.swift:94",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONFuzz\/main.swift",
+      "related" : [
+        {
+          "column" : 40,
+          "line" : 94,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONFuzz\/main.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "ff4c18fc1e3a716",
+      "line" : 28,
+      "message" : "4 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift:52, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift:74, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift:24",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 52,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 24,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 24,
+      "fingerprint" : "d6a324e27f45d70b",
+      "line" : 28,
+      "message" : "3 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift:52, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift:74",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 52,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 25,
+      "fingerprint" : "e1519582a4848407",
+      "line" : 138,
+      "message" : "2 duplicated regions of ~67 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift:101",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift",
+      "related" : [
+        {
+          "column" : 31,
+          "line" : 101,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "e5e07479ed1fe397",
+      "line" : 143,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift:108",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 108,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 18,
+      "fingerprint" : "3ec1ab7634f8d417",
+      "line" : 186,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift:240",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift",
+      "related" : [
+        {
+          "column" : 12,
+          "line" : 240,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/Plugin.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "7a410efef83d5ed",
+      "line" : 68,
+      "message" : "2 duplicated regions of ~52 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift:96",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift",
+      "related" : [
+        {
+          "column" : 17,
+          "line" : 96,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 32,
+      "fingerprint" : "65f4c8e191858816",
+      "line" : 86,
+      "message" : "2 duplicated regions of ~70 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift:98",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift",
+      "related" : [
+        {
+          "column" : 41,
+          "line" : 98,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 35,
+      "fingerprint" : "b81933185be98e4b",
+      "line" : 87,
+      "message" : "2 duplicated regions of ~66 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift:99",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift",
+      "related" : [
+        {
+          "column" : 35,
+          "line" : 99,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemaDecoratorMacros.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "59f0400a98f91e44",
+      "line" : 243,
+      "message" : "2 duplicated regions of ~108 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift:254",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 254,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 12,
+      "fingerprint" : "54ff9ff18bda40ac",
+      "line" : 244,
+      "message" : "2 duplicated regions of ~56 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift:255",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift",
+      "related" : [
+        {
+          "column" : 10,
+          "line" : 255,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "3807cc8ac2de6adb",
+      "line" : 286,
+      "message" : "2 duplicated regions of ~65 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift:296",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 296,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONMacros\/SchemableMacro.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

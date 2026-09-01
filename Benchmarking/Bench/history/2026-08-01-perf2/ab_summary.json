@@ -1,0 +1,278 @@
+{
+  "schema": "http-bench/2",
+  "startedAt": "2026-08-01T16:24:30Z",
+  "finishedAt": "2026-08-01T16:33:05Z",
+  "statistic": "median of 11 round(s)",
+  "grade": "NOT-decision-grade (no clean round: every round drifted or ran on a contended host)",
+  "config": {
+    "rounds": 11,
+    "connections": 64,
+    "duration": "3s",
+    "warmup": "1s",
+    "acceptEncoding": "identity",
+    "scenarios": [
+      "GET:/plaintext",
+      "GET:/json",
+      "GET:/payload",
+      "GET:/hello/world",
+      "POST:/echo"
+    ],
+    "seed": "7",
+    "loadDriftMax": 0.25,
+    "loadCeilingPerCPU": 0.5,
+    "eligibleRounds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ]
+  },
+  "host": {
+    "uname": "Darwin 27.0.0 arm64",
+    "model": "Mac14,9",
+    "ncpu": 10
+  },
+  "parity": {
+    "status": "pass"
+  },
+  "rounds": [
+    {
+      "round": "1",
+      "seed": "8",
+      "loadStart": "15.56",
+      "loadEnd": "25.08",
+      "drift": "0.6118",
+      "verdict": "drifted+contended",
+      "order": "ours:posixKqueue:floor ours:posixKqueue:full"
+    },
+    {
+      "round": "2",
+      "seed": "9",
+      "loadStart": "25.08",
+      "loadEnd": "26.69",
+      "drift": "0.0642",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:floor ours:posixKqueue:full"
+    },
+    {
+      "round": "3",
+      "seed": "10",
+      "loadStart": "26.69",
+      "loadEnd": "37.27",
+      "drift": "0.3964",
+      "verdict": "drifted+contended",
+      "order": "ours:posixKqueue:floor ours:posixKqueue:full"
+    },
+    {
+      "round": "4",
+      "seed": "11",
+      "loadStart": "37.27",
+      "loadEnd": "37.65",
+      "drift": "0.0102",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:full ours:posixKqueue:floor"
+    },
+    {
+      "round": "5",
+      "seed": "12",
+      "loadStart": "37.65",
+      "loadEnd": "31.83",
+      "drift": "0.1546",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:full ours:posixKqueue:floor"
+    },
+    {
+      "round": "6",
+      "seed": "13",
+      "loadStart": "31.83",
+      "loadEnd": "28.08",
+      "drift": "0.1178",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:full ours:posixKqueue:floor"
+    },
+    {
+      "round": "7",
+      "seed": "14",
+      "loadStart": "28.08",
+      "loadEnd": "34.11",
+      "drift": "0.2147",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:full ours:posixKqueue:floor"
+    },
+    {
+      "round": "8",
+      "seed": "15",
+      "loadStart": "34.11",
+      "loadEnd": "33.83",
+      "drift": "0.0082",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:floor ours:posixKqueue:full"
+    },
+    {
+      "round": "9",
+      "seed": "16",
+      "loadStart": "33.83",
+      "loadEnd": "36.48",
+      "drift": "0.0783",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:full ours:posixKqueue:floor"
+    },
+    {
+      "round": "10",
+      "seed": "17",
+      "loadStart": "36.48",
+      "loadEnd": "31.34",
+      "drift": "0.1409",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:full ours:posixKqueue:floor"
+    },
+    {
+      "round": "11",
+      "seed": "18",
+      "loadStart": "31.34",
+      "loadEnd": "30.93",
+      "drift": "0.0131",
+      "verdict": "contended",
+      "order": "ours:posixKqueue:full ours:posixKqueue:floor"
+    }
+  ],
+  "aggregate": [
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "floor",
+      "scenkey": "_plaintext",
+      "rounds": "11",
+      "rpsMedian": "44960",
+      "rpsMin": "24405",
+      "rpsMax": "55976",
+      "p50Median": "0.624",
+      "p99Median": "17.602",
+      "p999Median": "49.060",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "floor",
+      "scenkey": "_json",
+      "rounds": "11",
+      "rpsMedian": "50681",
+      "rpsMin": "22647",
+      "rpsMax": "56341",
+      "p50Median": "0.635",
+      "p99Median": "11.140",
+      "p999Median": "26.298",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "floor",
+      "scenkey": "_payload",
+      "rounds": "11",
+      "rpsMedian": "47413",
+      "rpsMin": "21268",
+      "rpsMax": "54453",
+      "p50Median": "0.656",
+      "p99Median": "13.897",
+      "p999Median": "37.196",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "floor",
+      "scenkey": "_hello_world",
+      "rounds": "11",
+      "rpsMedian": "49151",
+      "rpsMin": "19399",
+      "rpsMax": "57983",
+      "p50Median": "0.551",
+      "p99Median": "13.867",
+      "p999Median": "31.078",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "floor",
+      "scenkey": "_echo",
+      "rounds": "11",
+      "rpsMedian": "43423",
+      "rpsMin": "17284",
+      "rpsMax": "55207",
+      "p50Median": "0.584",
+      "p99Median": "17.849",
+      "p999Median": "43.276",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "full",
+      "scenkey": "_plaintext",
+      "rounds": "11",
+      "rpsMedian": "32538",
+      "rpsMin": "14776",
+      "rpsMax": "50956",
+      "p50Median": "0.638",
+      "p99Median": "35.793",
+      "p999Median": "92.752",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "full",
+      "scenkey": "_json",
+      "rounds": "11",
+      "rpsMedian": "33473",
+      "rpsMin": "19961",
+      "rpsMax": "51316",
+      "p50Median": "0.663",
+      "p99Median": "37.609",
+      "p999Median": "77.289",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "full",
+      "scenkey": "_payload",
+      "rounds": "11",
+      "rpsMedian": "36050",
+      "rpsMin": "17854",
+      "rpsMax": "53233",
+      "p50Median": "0.664",
+      "p99Median": "31.387",
+      "p999Median": "66.927",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "full",
+      "scenkey": "_hello_world",
+      "rounds": "11",
+      "rpsMedian": "43414",
+      "rpsMin": "19048",
+      "rpsMax": "51698",
+      "p50Median": "0.680",
+      "p99Median": "14.582",
+      "p999Median": "37.105",
+      "status": "ok"
+    },
+    {
+      "subject": "ours(posixKqueue)",
+      "mode": "full",
+      "scenkey": "_echo",
+      "rounds": "11",
+      "rpsMedian": "43224",
+      "rpsMin": "19411",
+      "rpsMax": "51654",
+      "p50Median": "0.657",
+      "p99Median": "15.398",
+      "p999Median": "61.290",
+      "status": "ok"
+    }
+  ]
+}

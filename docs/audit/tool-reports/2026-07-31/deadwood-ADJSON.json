@@ -1,0 +1,56 @@
+{
+  "analyzedFileCount" : 122,
+  "cacheHits" : 0,
+  "cacheMisses" : 122,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 15,
+      "fingerprint" : "a8d17dbf93995ea5",
+      "line" : 318,
+      "message" : "condition 'matched' is provably true — the false branch never executes",
+      "note" : "confidence certain — sparse conditional constant propagation",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventReader.swift",
+      "rule" : "dead-branch",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "29954b232cb8d0d5",
+      "line" : 354,
+      "message" : "condition 'matched' is provably true — the false branch never executes",
+      "note" : "confidence certain — sparse conditional constant propagation",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONCore\/Core\/JSONEventStreamReader.swift",
+      "rule" : "dead-branch",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "581be63820ebf53b",
+      "line" : 43,
+      "message" : "method 'writeJSON(_:options:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONNIO\/ADJSONNIO.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "42b3a02884ba596a",
+      "line" : 48,
+      "message" : "method 'writeJSON(_:options:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADJSON\/Sources\/ADJSONNIO\/ADJSONNIO.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    }
+  ],
+  "notes" : [
+
+  ],
+  "suppressed" : [
+
+  ]
+}

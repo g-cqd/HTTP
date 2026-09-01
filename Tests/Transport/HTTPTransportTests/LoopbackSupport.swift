@@ -5,6 +5,11 @@
 //  Shared loopback echo round-trip used by every backbone's integration test, so each backbone is
 //  validated against real sockets through the same client.
 //
+//  Darwin-only, and unavoidably so: each round-trip drives an `NWConnection` through
+//  `NetworkFrameworkConnection`, so `Package.swift` drops this whole file from the Linux graph. The raw
+//  `openLoopbackConnection(to:)` dialer that used to live here needs none of that and moved to
+//  `LoopbackDialer.swift`, which stays in the graph — see that file for why.
+//
 
 internal import Network
 import Testing

@@ -70,6 +70,12 @@ public struct HTTP2Connection {
         var receiveWindow: Int
         /// Octets received on this stream since we last replenished its window with a WINDOW_UPDATE.
         var receiveConsumed = 0
+        /// Octets debited from this stream's receive window that have **not** yet been credited back.
+        ///
+        /// Zero on a buffered stream (it credits at arrival). On a consumption-gated stream — a tunnel
+        /// or a streaming route — it is the unconsumed application bytes this stream is holding, and it
+        /// must be returned to the *connection* window when the stream retires (RFC 9113 §6.9.1).
+        var receiveOutstanding = 0
         /// Response body queued for sending, the offset already flushed, and whether the final frame
         /// carries END_STREAM.
         ///
@@ -100,7 +106,18 @@ public struct HTTP2Connection {
     }
 
     private var phase = Phase.awaitingPreface
-    private var inbound: [UInt8] = []
+    /// The rolling inbound buffer, and the read cursor into it (audit CR-F18).
+    ///
+    /// Octets are consumed by ADVANCING `inboundStart`, not by `removeFirst` — a frame-sized memmove
+    /// of the tail on every drain — and the dead prefix is reclaimed only when the buffer empties or
+    /// the prefix passes ``inboundCompactionThreshold``. That is the same rolling-buffer idiom the
+    /// HTTP/1 reader uses for keep-alive (`HTTPServer+RequestReader.reclaim`).
+    ///
+    /// Internal rather than private so `HTTP2InboundBufferTests` can assert the reclaim invariant on
+    /// them: `removeFirst` bounded the retained octets and capacity for free, and a cursor that never
+    /// compacts is a leak, so the bound has to be tested rather than assumed.
+    var inbound: [UInt8] = []
+    var inboundStart = 0
     var writer = HTTP2FrameWriter()
     private var decoder: HPACKDecoder
     var encoder: HPACKEncoder
@@ -120,6 +137,12 @@ public struct HTTP2Connection {
     var connectionReceiveWindow = 65_535
     /// Octets received since we last replenished the connection window with a WINDOW_UPDATE.
     var connectionReceiveConsumed = 0
+    /// Octets debited from the connection receive window that have not yet been credited back.
+    ///
+    /// The sum of every live stream's `receiveOutstanding`, and so the connection's total unconsumed
+    /// application bytes — bounded by ``HTTPLimits/connectionReceiveWindow`` because the peer cannot
+    /// send past a window it has not been given back (ADR 0006).
+    var connectionReceiveOutstanding = 0
     var pendingHeadersEndStream = false
     /// The deprecated priority-section stream dependency of the open HEADERS block, if any (RFC 9113
     /// §5.3.2) — captured when the HEADERS frame arrives, checked after the block decodes so a
@@ -164,17 +187,17 @@ public struct HTTP2Connection {
     let limits: HTTPLimits
     /// The concurrent-stream cap advertised to and enforced against the peer (RFC 9113 §5.1.2).
     let maxConcurrentStreams: Int
-    /// Resolves the matched route's request-body limit from a request head (Phase 1.2): the engine caps
-    /// each stream's buffered body to it before buffering (RFC 9110 §15.5.14), tighter than the global
-    /// ``HTTPLimits/maxBodySize``.
+    /// Decides one stream's ``RequestBodyPolicy`` from its head, at HEADERS time (Phase 1.2 / 1.4):
+    /// the body ceiling to enforce before buffering (RFC 9110 §15.5.14) and whether the body is
+    /// surfaced incrementally.
     ///
-    /// Defaults to "no per-route limit".
-    let resolveBodyLimit: @Sendable (HTTPRequest) -> Int?
-    /// Resolves whether the matched route consumes its request body as a stream (Phase 1.4), from a
-    /// request head at HEADERS time.
+    /// One closure rather than the former separate limit/streaming pair, because both answers come
+    /// from one route match and asking twice walked the routing table twice (audit CR-F19). The stream
+    /// id is passed so the driver can file the match it just made against the stream that will need it
+    /// again at dispatch, rather than resolving it a third time.
     ///
-    /// Defaults to "no streaming route" — the engine buffers and surfaces one `request`.
-    let resolveStreamsBody: @Sendable (HTTPRequest) -> Bool
+    /// Defaults to ``RequestBodyPolicy/unmatched`` — the global bound, buffered.
+    let resolveRoute: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy
 
     /// Creates a connection that advertises `localSettings`, queuing the server SETTINGS preface (§3.4).
     ///
@@ -183,8 +206,9 @@ public struct HTTP2Connection {
     public init(
         localSettings: HTTP2Settings = HTTP2Settings(),
         limits: HTTPLimits = .default,
-        resolveBodyLimit: @escaping @Sendable (HTTPRequest) -> Int? = { _ in nil },
-        resolveStreamsBody: @escaping @Sendable (HTTPRequest) -> Bool = { _ in false },
+        resolveRoute: @escaping @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = {
+            _, _ in .unmatched
+        },
         now: @escaping MonotonicNowProvider = LiveMonotonicClock.now
     ) {
         // A server MUST NOT advertise ENABLE_PUSH with a non-zero value (RFC 9113 §6.5.2).
@@ -197,8 +221,7 @@ public struct HTTP2Connection {
         self.localSettings = advertised
         self.maxConcurrentStreams = advertised.maxConcurrentStreams ?? limits.maxConcurrentStreams
         self.limits = limits
-        self.resolveBodyLimit = resolveBodyLimit
-        self.resolveStreamsBody = resolveStreamsBody
+        self.resolveRoute = resolveRoute
         self.decoder = HPACKDecoder(
             maxDynamicTableSize: advertised.headerTableSize,
             limits: limits
@@ -214,6 +237,42 @@ public struct HTTP2Connection {
             start: now(), interval: limits.streamResetInterval.monotonicNanoseconds
         )
         writer.writeFrame(.settings, payload: advertised.encodePayload())
+        // RFC 9113 §6.9.2: the CONNECTION receive window's initial value is fixed at 65,535 and
+        // SETTINGS_INITIAL_WINDOW_SIZE does not apply to it — the only way to raise it is a stream-0
+        // WINDOW_UPDATE, so send one for the delta as part of the preface. Without it the connection
+        // window would be the binding constraint on every upload regardless of the configured knob.
+        let delta = limits.connectionReceiveWindow - connectionReceiveWindow
+        if delta > 0 {
+            writer.writeWindowUpdate(.connection, increment: delta)
+            connectionReceiveWindow += delta
+        }
+    }
+
+    /// Retires `streamID`, returning its outstanding receive credit to the connection window.
+    ///
+    /// The single drop path for a stream record. Centralized because a stream can be dropped from five
+    /// places (clean close, peer RST_STREAM, engine-emitted stream error, `abortResponse`, empty
+    /// END_STREAM) and forgetting the credit return in any one of them silently shrinks the shared
+    /// connection window for the rest of the connection's life (RFC 9113 §6.9.1).
+    mutating func retireStream(_ streamID: HTTP2StreamID, reason: StreamCloseReason) {
+        if var record = streams.removeValue(forKey: streamID) {
+            retire(streamID, &record, reason: reason)
+            return
+        }
+        markStreamClosed(streamID, reason: reason)
+    }
+
+    /// Retires a stream whose record the caller already holds (it was taken out of the table to be
+    /// mutated in place), returning its outstanding receive credit to the connection window.
+    mutating func retire(
+        _ streamID: HTTP2StreamID,
+        _ record: inout StreamRecord,
+        reason: StreamCloseReason
+    ) {
+        creditConnectionReceiveWindow(by: record.receiveOutstanding)
+        record.receiveOutstanding = 0
+        streams[streamID] = nil
+        markStreamClosed(streamID, reason: reason)
     }
 
     /// Drains the queued outbound octets (the server preface, ACKs, and responses).
@@ -234,9 +293,7 @@ public struct HTTP2Connection {
                 }
             }
             var events: [Event] = []
-            for frame in try drainFrames() {
-                try process(frame, into: &events)
-            }
+            try drainFrames(into: &events)
             return events
         }
         catch {
@@ -252,45 +309,106 @@ public struct HTTP2Connection {
     // MARK: Preface
 
     private mutating func consumePreface() throws(HTTP2Error) -> Bool {
+        let start = inboundStart  // read before the borrow, so nothing reads `self` inside it
         let result: Result<Bool, HTTP2Error> = inbound.withUnsafeBytes { raw in
             Result { () throws(HTTP2Error) in
-                var reader = ByteReader(raw)
+                var reader = ByteReader(raw, startingAt: start)
                 return try HTTP2ConnectionPreface.consume(&reader) == .matched
             }
         }
         guard try result.get() else {
             return false
         }
-        inbound.removeFirst(HTTP2ConnectionPreface.client.count)
+        inboundStart += HTTP2ConnectionPreface.client.count
         phase = .awaitingSettings
         return true
     }
 
     // MARK: Frame decoding
 
-    private mutating func drainFrames() throws(HTTP2Error) -> [HTTP2FrameDecoder.Frame] {
-        let decoded: Result<(frames: [HTTP2FrameDecoder.Frame], consumed: Int), HTTP2Error> =
-            inbound.withUnsafeBytes { raw in
-                Result { () throws(HTTP2Error) in
-                    var reader = ByteReader(raw)
-                    var frames: [HTTP2FrameDecoder.Frame] = []
-                    while let frame = try frameDecoder.nextFrame(&reader) { frames.append(frame) }
-                    return (frames, reader.position)
+    /// The dead-prefix size past which the rolling buffer is compacted (one `maxFrameSize` default).
+    ///
+    /// Below it, advancing the cursor is O(1) and shifting would be a memmove per drain; above it the
+    /// prefix is large enough that keeping it would let a busy connection's buffer grow without bound.
+    /// The same threshold, for the same reason, as the HTTP/1 keep-alive reader.
+    private static let inboundCompactionThreshold = 16_384
+
+    /// Walks the buffered octets one frame at a time, processing each frame while its payload is still
+    /// BORROWED from the buffer (audit CR-F18).
+    ///
+    /// The buffer is moved into a local for the walk. The handlers mutate the connection — they open
+    /// streams, queue output, append events — while a `RawSpan` into the buffer is live, and Swift's
+    /// exclusivity rules forbid that on a stored property. A local holds the sole reference (`inbound`
+    /// is left empty by the swap, so no copy-on-write copy is made either), which separates the borrow
+    /// from the mutation without separating them in time, and lets the payload stay where it landed.
+    ///
+    /// Consumed octets are handed back as a cursor, not shifted out. A frame that is still arriving
+    /// leaves the cursor before it, so it is re-read from the same place once the rest lands.
+    private mutating func drainFrames(into events: inout [Event]) throws(HTTP2Error) {
+        var buffer: [UInt8] = []
+        swap(&buffer, &inbound)
+        let start = inboundStart
+        let outcome: Result<Int, HTTP2Error> = buffer.withUnsafeBytes { raw in
+            Result { () throws(HTTP2Error) in
+                var reader = ByteReader(raw, startingAt: start)
+                // An index-based `while` over the cursor, never a `for-in` over a span-derived
+                // sequence: the shape every span-borrowing scan in the package uses (see
+                // `MultipartParser`), so the debug-build allocation oracles are not charged for
+                // `IndexingIterator.next()` (task #29 sweep).
+                while let framing = try frameDecoder.nextFrameRange(&reader) {
+                    try process(
+                        HTTP2FrameView(
+                            header: framing.header,
+                            payload: reader.slice(in: framing.payload)
+                        ),
+                        into: &events
+                    )
                 }
+                return reader.position
             }
-        switch decoded {
-            case .success(let value):
-                inbound.removeFirst(value.consumed)
-                return value.frames
+        }
+        // Hand the storage back with a second swap, NOT `inbound = buffer`: an assignment would leave
+        // `buffer` holding a live second reference for the rest of this scope, so the very next
+        // `removeAll(keepingCapacity:)` would see a shared buffer and allocate a fresh one — paying
+        // the copy-on-write tax on every receive and throwing away the capacity this idiom exists to
+        // reuse. Measured: assignment cost one fresh ~wire-sized allocation per receive; the swap
+        // costs none.
+        swap(&inbound, &buffer)
+        switch outcome {
+            case .success(let consumed):
+                inboundStart = consumed
+                reclaimInbound()
             case .failure(let error):
+                // Fatal for this connection: `receive` queues GOAWAY and the driver closes, so the
+                // buffer is released rather than kept for a next chunk that will not come.
+                inbound = []
+                inboundStart = 0
                 throw error
+        }
+    }
+
+    /// Reclaims the consumed prefix of the rolling buffer once it is worth reclaiming.
+    ///
+    /// Fully drained — the common case, one chunk carrying whole frames — costs nothing: the buffer is
+    /// emptied and its storage kept for the next chunk. Otherwise the prefix is only shifted out once
+    /// it is large, so the steady state pays no memmove at all while a peer that always leaves a
+    /// partial frame behind still cannot make the buffer grow.
+    private mutating func reclaimInbound() {
+        if inboundStart == inbound.count {
+            inbound.removeAll(keepingCapacity: true)
+            inboundStart = 0
+            return
+        }
+        if inboundStart >= Self.inboundCompactionThreshold {
+            inbound.removeFirst(inboundStart)
+            inboundStart = 0
         }
     }
 
     // MARK: Frame dispatch
 
     private mutating func process(
-        _ frame: HTTP2FrameDecoder.Frame,
+        _ frame: HTTP2FrameView,
         into events: inout [Event]
     ) throws(HTTP2Error) {
         if phase == .awaitingSettings {
@@ -313,8 +431,7 @@ public struct HTTP2Connection {
             // §5.4.2); a connection-scoped error propagates to GOAWAY + close (§5.4.1).
             guard let streamID = error.streamID else { throw error }
             writer.writeRstStream(streamID, code: error.code)
-            streams[streamID] = nil
-            markStreamClosed(streamID, reason: .reset)
+            retireStream(streamID, reason: .reset)
             // A server-*emitted* RST_STREAM counts against the reset budget too — otherwise an attacker
             // provokes unbounded resets the client never sends, bypassing the Rapid-Reset defense:
             // MadeYouReset (CVE-2025-8671).
@@ -323,7 +440,7 @@ public struct HTTP2Connection {
     }
 
     private mutating func dispatch(
-        _ frame: HTTP2FrameDecoder.Frame,
+        _ frame: HTTP2FrameView,
         into events: inout [Event]
     ) throws(HTTP2Error) {
         switch frame.header.type {

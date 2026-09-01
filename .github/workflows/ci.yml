@@ -108,6 +108,32 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # Dependency reproducibility. `ADFoundation` is first-party and UNVERSIONED, and it used to be
+  # taken from `branch: "main"`. A moving branch means two checkouts of the same HTTP commit can
+  # resolve different dependency code — so a build is not reproducible, a benchmark number is not
+  # attributable to a commit, and a green CI run is not evidence about any particular input. It is
+  # pinned to an exact revision in the manifest instead.
+  #
+  # `Package.resolved` stays GITIGNORED on purpose: this is a reusable library, and committing a
+  # lockfile would publish one resolution of the whole graph to every consumer, who must resolve
+  # their own. That is precisely why the manifest pin has to be exact — with no committed lockfile,
+  # the manifest is the only thing making this package's own builds deterministic.
+  #
+  # Both halves were already in place; nothing enforced either. This job does: the pin must be a
+  # 40-hex revision (no branch, no version range), Package.resolved must stay untracked, and
+  # resolving the graph must actually land on the pinned revision with no branch or version
+  # attached. Verified red in both directions (branch pin; committed lockfile) before landing.
+  # ---------------------------------------------------------------------------
+  dependency-pinning:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Assert ADFoundation is pinned to an exact revision
+        run: python3 scripts/dependency-pinning.py
+
+  # ---------------------------------------------------------------------------
   # Trap-surface gate. The request path must stay free of process-aborting traps, so one bad request
   # can never crash the whole server (the in-process half of crash defense; prefork covers app traps).
   # SwiftLint already gates try!/as!/force-unwrap; this covers fatalError/precondition/assertionFailure
@@ -154,29 +180,128 @@ jobs:
           echo "every wire parser/decoder cites its standard"
 
   # ---------------------------------------------------------------------------
-  # Data-race & memory checks. Parsers must stay clean under ASan/TSan.
+  # SE-0458 strict memory safety — the STAGED gate (ADR 0009, superseding ADR 0002).
+  #
+  # CLAUDE.md asks for "strict memory". The package cannot turn `-strict-memory-safety` on globally:
+  # the census below counts 465 expressions that use unsafe constructs without an `unsafe` marker, and
+  # under warnings-as-errors every one of them is a build error. So the gate is staged in two halves.
+  #
+  #   • The HARD half is in the manifest, not here: `strictMemorySafeTargets` in Package.swift adds
+  #     `.strictMemorySafety()` to the targets already at zero (HTTPConcurrency, HPACK, QPACK,
+  #     HTTPObservability, HTTPAuth). `build-test` and `release-test` run with HTTP_WARNINGS_AS_ERRORS,
+  #     so a new un-annotated unsafe expression in one of those targets is a BUILD ERROR there.
+  #   • The RATCHET half is this job: a full `-strict-memory-safety` census of the remaining nine
+  #     targets, compared against `.github/strict-memory-safety-budget.tsv`. A count may fall freely;
+  #     if one rises, this job fails and names the target. A target that reaches 0 graduates into the
+  #     manifest list and stops being a number.
+  #
+  # Its own job (not folded into build-test) because it is a full rebuild under a different flag set,
+  # and because a ratchet breach should read as its own red X rather than as a build failure.
+  # ---------------------------------------------------------------------------
+  strict-memory-safety:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Toolchain
+        run: swift --version
+      - name: Census + ratchet (per-target unsafe-site budget)
+        run: python3 scripts/strict-memory-safety.py --verbose
+
+  # ---------------------------------------------------------------------------
+  # Data-race & memory checks. Parsers must stay clean under ASan/TSan/UBSan.
+  #
+  # ADDRESS + THREAD run the FULL suite on the default (swiftbuild) build system, as before.
+  #
+  # UNDEFINED is scoped and configured differently, for reasons MEASURED on 2026-08-16 (arm64
+  # macOS 27, Swift 6.4 toolchain) — recorded here so the choices are not re-litigated:
+  #
+  #   • BUILD SYSTEM. `swift test --sanitize=undefined` on the DEFAULT swiftbuild build system fails
+  #     to LINK the test bundles: the C targets (CCRC32 and the ADFoundation CADFKernels)
+  #     are UBSan-instrumented and emit `___ubsan_handle_*` references, but swiftbuild does not link the
+  #     UBSan runtime into an xctest bundle, so every one is an undefined symbol at link
+  #     (`ld: symbol(s) not found ... ___ubsan_handle_add_overflow ... in CCRC32.o`). This is the
+  #     toolchain limitation the old follow-up note recorded. `--build-system native` DOES link the
+  #     runtime and run, so UBSan is reachable after all — at the cost of the (currently deprecated)
+  #     native build system. Revisit the flag when swiftbuild links the UBSan runtime.
+  #   • HALT_ON_ERROR. UBSan's default is print-and-CONTINUE: a genuine UB prints `runtime error: ...`
+  #     but the process exits 0, so the gate would be GREEN with a live UB. `halt_on_error=1` makes the
+  #     first finding abort with a non-zero exit — without it this leg is vacuous. (Proven both ways
+  #     against a scratch signed-overflow: silent-green without the flag, red `SUMMARY:
+  #     UndefinedBehaviorSanitizer` with it.)
+  #   • SCOPE. The FULL suite was run under UBSan and is CLEAN — zero `runtime error:` across all 1735
+  #     tests. It cannot GATE the full suite, though: UBSan's instrumentation slowdown times out the
+  #     network/QUIC/TLS/large-upload tests (they carry their own in-code deadlines, not a CLI timeout
+  #     we could raise), producing red on ~136 timing failures with no UB behind any of them. The leg
+  #     therefore runs the codec/parser suites — the actual UB surface (integer/shift/bounds in the
+  #     Huffman, varint, frame, and deflate/CRC paths), plus the Structured-Fields fuzz suite — which
+  #     are CPU-only, finish in seconds, and stay green. 764 tests, clean.
   # ---------------------------------------------------------------------------
   sanitizers:
     runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, thread]
+        sanitizer: [address, thread, undefined]
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
         uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Test under ${{ matrix.sanitizer }} sanitizer
-        run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.sanitizer }}" = "undefined" ]; then
+            # See the block comment: native build system (swiftbuild cannot link the UBSan runtime into
+            # test bundles), halt_on_error (else UBSan prints and continues green), scoped to the
+            # codec/parser UB surface (the full suite times out under instrumentation; measured clean).
+            UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+              swift test --build-system native --sanitize=undefined --scratch-path "$SCRATCH" \
+                --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
+                --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
+          else
+            swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+          fi
+
+  # ---------------------------------------------------------------------------
+  # The single REQUIRED check for the macOS sanitizer matrix — name THIS in branch protection
+  # alongside `linux-required`, not the individual `sanitizers (address|thread|undefined)` legs.
+  #
+  # Same rationale and same shape as `linux-required` (read that job's comment): the matrix legs are
+  # separately nameable and a required-checks list that enumerates them drifts the instant a sanitizer
+  # is added or a leg renamed. Depending on the matrix here means branch protection names ONE check
+  # that cannot silently lose coverage — add a sanitizer, and protection follows via `needs`.
+  #
+  # `if: always()` + an explicit per-result `success` test is deliberate and load-bearing: GitHub
+  # reports a SKIPPED required check as PASSING, so without it a skipped/cancelled matrix leg would let
+  # this aggregate be skipped too and read as green. Only `success` on every leg is accepted. (Until
+  # this landed the macOS sanitizers were advisory — no aggregate depended on them; this is the
+  # promotion.)
+  # ---------------------------------------------------------------------------
+  sanitizers-required:
+    runs-on: macos-26
+    if: always()
+    needs: [sanitizers]
+    steps:
+      - name: Every macOS sanitizer leg must have succeeded
+        run: |
+          set -euo pipefail
+          result='${{ needs.sanitizers.result }}'
+          echo "macOS sanitizers matrix result: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::The macOS sanitizer matrix did not succeed (saw '$result'). ASan/TSan/UBSan are a required gate: a skipped or failed leg is not a pass."
+            exit 1
+          fi
+          echo "All macOS sanitizer legs succeeded."
 
   # ---------------------------------------------------------------------------
   # Optional-feature manifest paths the DEFAULT graph never compiles, so a regression in them is
   # otherwise invisible until a downstream first opts in: the portable libssl-over-POSIX TLS backbone
   # (HTTP_PORTABLE_TLS — C++ interop + the vendored BoringSSL build) and the Zstandard content coding
-  # (HTTP_ZSTD — the libzstd shim, Homebrew-prefix path). These are the most fragile manifest branches;
-  # build them under warnings-as-errors so a manifest or shim break is caught here. (The Linux zstd path
-  # is exercised by codings-linux; this is the macOS Homebrew-prefix path plus the TLS backbone, which
-  # has no CI lane at all. Running the gated suites — only compiled under these flags — is a follow-up.)
+  # (the SE-0450 `Zstd` package trait — the libzstd shim, Homebrew-prefix path). These are the most
+  # fragile manifest branches; build them under warnings-as-errors so a manifest or shim break is caught
+  # here. (The Linux zstd path is exercised by codings-linux; this is the macOS Homebrew-prefix path plus
+  # the TLS backbone, which has no CI lane at all. Running the gated suites is a follow-up.)
   # ---------------------------------------------------------------------------
   optional-features:
     runs-on: macos-26
@@ -192,37 +317,96 @@ jobs:
         env:
           HTTP_PORTABLE_TLS: "1"
         run: swift build --scratch-path "$SCRATCH/opt-tls"
-      - name: Build — Zstandard coding (HTTP_ZSTD)
-        env:
-          HTTP_ZSTD: "1"
-          HTTP_ZSTD_PREFIX: /opt/homebrew/opt/zstd
+      - name: Build — Zstandard coding (--traits Zstd)
         run: |
           brew list zstd >/dev/null 2>&1 || brew install zstd
-          swift build --scratch-path "$SCRATCH/opt-zstd"
+          swift build --scratch-path "$SCRATCH/opt-zstd" --traits Zstd
 
   # ---------------------------------------------------------------------------
-  # Linux (G0). The sans-I/O engines + server runtime run on Linux over the epoll backbone; these jobs
-  # build and run the full suite in the official Swift container on ubuntu-latest (locally reproduced by
-  # scripts/linux-test.sh via apple/container). HTTP_WARNINGS_AS_ERRORS is intentionally off here:
-  # swift-crypto's NIST-curve keys are not Sendable on Linux (CryptoKit's are), so HTTPAuth emits
-  # @preconcurrency warnings the Apple build does not — re-enable once those are addressed. HTTP/3/QUIC is
-  # Network.framework-provided, so it (and its tests) is excluded from the Linux build graph.
+  # The Django comparison's "ours" subject (Benchmarking/Django/ours) is its OWN package, so nothing in
+  # the default graph compiles it — and it silently stopped compiling against two breaking library
+  # changes (HTTPLimits' properties becoming `let`, TransportFactory.make becoming throwing) with every
+  # other gate green. It is the only out-of-graph package that consumes this library's API and is not
+  # already gated (Benchmarking/Benchmarks has the `benchmarks` job; Bench/vapor and Bench/hummingbird
+  # depend on third-party frameworks only and cannot rot against us).
+  #
+  # Build-only, and deliberately so: running the comparison needs `oha`, a Python venv and a quiet box,
+  # none of which a shared runner has. What this gates is the thing that actually broke — that the
+  # harness still compiles against the library it measures. Release, because that is the only
+  # configuration the harness ever builds (debug benchmark numbers are fiction) and it is where the
+  # optimizer-visible API breaks surface.
+  #
+  # BENCH_ADJSON is deliberately NOT set: the ADJSON backend is an unpublished local sibling checkout,
+  # so the default graph is this repository alone. That is what makes this job possible at all.
+  # ---------------------------------------------------------------------------
+  django-bench:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Toolchain
+        run: swift --version
+      - name: Build — Django comparison subject (release)
+        run: |
+          swift build -c release --package-path Benchmarking/Django/ours \
+            --product ours-bench --scratch-path "$SCRATCH/django-bench"
+
+  # ---------------------------------------------------------------------------
+  # Linux (G0) — REQUIRED, and the `linux-required` gate at the end of this group is the check to
+  # protect the branch with. The sans-I/O engines + server runtime run on Linux over the epoll
+  # backbone; these jobs build and run the full suite in the official Swift container (locally
+  # reproduced by scripts/linux-test.sh via apple/container, on the SAME image — see below).
+  #
+  # WHY THIS IS REQUIRED RATHER THAN ADVISORY (F-01). Darwin compiles the epoll backbone to NOTHING,
+  # so every gate above passes vacuously on it. That mirror has now taken four changes it never
+  # built under — the reactor fairness quantum, the adaptive receive scratch, the multi-waiter
+  # readiness tables, and the `ready` redeclaration those introduced. The redeclaration was FILED as
+  # a hazard ("the epoll mirror is three unbuilt changes deep") and was a hard build break under an
+  # hour later, found by an external Linux build rather than by anything here. A platform that ships
+  # in the source tree and is not built by CI is not a supported platform, it is a guess.
+  #
+  # WARNINGS-AS-ERRORS IS ON HERE NOW. It used to be off with this note: "swift-crypto's NIST-curve
+  # keys are not Sendable on Linux (CryptoKit's are), so HTTPAuth emits @preconcurrency warnings the
+  # Apple build does not — re-enable once those are addressed." Addressed: swift-crypto 4.x conforms
+  # SymmetricKey / P256 / _RSA keys upstream, so the Linux build is clean at the same strictness as
+  # the Apple one. Anything less would leave Linux held to a weaker standard than the platform whose
+  # gates already cannot see it, which is how the four changes above accumulated.
+  #
+  # IMAGE. Pinned to the same tag scripts/linux-test.sh defaults to, so "it passes locally" and "it
+  # passes in CI" are statements about one toolchain. nightly-6.4.x-jammy tracks the 6.4 RELEASE
+  # branch, which is the language mode this package targets (swift-tools-version 6.4); the previous
+  # nightly-noble tracks main, so it could break the build for reasons that have nothing to do with a
+  # change under review — the failure mode that makes a required gate get switched back to advisory.
+  #
+  # HTTP/3/QUIC is Network.framework-provided, so it (and its tests) is excluded from the Linux build
+  # graph; the exclusion list and the coverage debt each entry represents are documented in
+  # Package.swift next to the entries themselves.
   # ---------------------------------------------------------------------------
   build-test-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
         run: swift --version
-      - name: Build
+      - name: Build (warnings as errors)
         run: swift build --scratch-path "$SCRATCH"
+      - name: Build tests (warnings as errors)
+        # Explicit, and not redundant with the run below: a test-target-only break (a bare
+        # `import Darwin`, a Glibc `SOCK_STREAM` mismatch) should fail as a COMPILE error against
+        # this step rather than as an inscrutable failure inside the test runner.
+        run: swift build --build-tests --scratch-path "$SCRATCH"
       - name: Test (full suite)
-        run: swift test --scratch-path "$SCRATCH"
+        run: swift test --parallel --scratch-path "$SCRATCH"
 
   release-test-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -230,37 +414,90 @@ jobs:
       - name: Test (release)
         run: swift test -c release --scratch-path "$SCRATCH"
 
+  # UNDEFINED is scoped exactly as the macOS `sanitizers` job scopes it (see that block comment): the
+  # full suite is UBSan-clean but its network/large-upload tests time out under instrumentation, so the
+  # leg runs the codec/parser UB surface, and `halt_on_error=1` is what makes a UB abort rather than
+  # print-and-continue-green. Linux differs in ONE respect: swiftbuild is macOS-only, so the Linux
+  # default build system IS the native one — the `--build-system native` flag the macOS UBSan leg needs
+  # (to link the UBSan runtime into test bundles) is neither needed nor passed here.
+  #
+  # This leg was structurally mirrored from the (measured-green) macOS one but could NOT be run to
+  # green locally, because the whole Linux test build is currently broken upstream of it: on the
+  # closeout HEAD, `Tests/.../QUICApplicationCloseProbe.swift` does `import Network` unconditionally
+  # and is not in Package.swift's `darwinOnlyTransportTestSources`, so `HTTPTransportTests` fails to
+  # compile on Linux with `no such module 'Network'` — reproduced by a plain, non-sanitizer
+  # `swift build --build-tests` too, i.e. it reds `build-test-linux` and every other Linux leg equally.
+  # Once that exclusion is added, this leg builds like its siblings; whoever clears it should confirm
+  # the UBSan runtime links on Linux native here (ASan/TSan already do, so it is expected to).
   sanitizers-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, thread]
+        sanitizer: [address, thread, undefined]
     steps:
       - uses: actions/checkout@v4
       - name: Test under ${{ matrix.sanitizer }} sanitizer (Linux)
-        run: swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.sanitizer }}" = "undefined" ]; then
+            UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+              swift test --sanitize=undefined --scratch-path "$SCRATCH" \
+                --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
+                --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
+          else
+            swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+          fi
 
   # ---------------------------------------------------------------------------
   # Opt-in content codings on Linux (G0): Brotli (libbrotli) + zstd (libzstd), the system-lib codings the
   # default graph never links. apt-install the dev packages, then run the coding round-trip suites under
-  # HTTP_BROTLI/HTTP_ZSTD (prefix /usr). gzip needs no flag — system zlib, covered by build-test-linux.
+  # the SE-0450 `Zstd`/`Brotli` package traits (no prefix hints needed — the distro dev packages land on
+  # the default search paths). gzip needs no trait — system zlib, covered by build-test-linux.
   # ---------------------------------------------------------------------------
   codings-linux:
     runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-noble
+    container: swiftlang/swift:nightly-6.4.x-jammy
     env:
-      HTTP_BROTLI: "1"
-      HTTP_BROTLI_PREFIX: /usr
-      HTTP_ZSTD: "1"
-      HTTP_ZSTD_PREFIX: /usr
+      HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Install libbrotli + libzstd
         run: apt-get update -qq && apt-get install -y -qq libbrotli-dev libzstd-dev
       - name: Coding round-trips (Brotli + zstd + Linux gzip/inflate)
-        run: swift test --scratch-path "$SCRATCH" --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+        run: swift test --scratch-path "$SCRATCH" --traits Zstd,Brotli --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+
+  # ---------------------------------------------------------------------------
+  # The single REQUIRED check for the Linux platform — this is the one to name in branch protection.
+  #
+  # It exists because the four jobs above are separately skippable and separately nameable, and a
+  # required-checks list that enumerates them drifts the moment one is renamed or a matrix leg is
+  # added. Depending on them here means the branch rule names ONE check that cannot silently lose
+  # coverage: add a Linux job, add it to `needs`, and protection follows automatically.
+  #
+  # `if: always()` plus an explicit result test is deliberate. Without it a SKIPPED or CANCELLED
+  # dependency would let this job be skipped too, and GitHub reports a skipped required check as
+  # PASSING — the exact failure mode that would restore the "Linux is advisory" status quo while
+  # looking green. Only `success` is accepted.
+  # ---------------------------------------------------------------------------
+  linux-required:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build-test-linux, release-test-linux, sanitizers-linux, codings-linux]
+    steps:
+      - name: Every Linux job must have succeeded
+        run: |
+          set -euo pipefail
+          results='${{ join(needs.*.result, " ") }}'
+          echo "Linux job results: $results"
+          for r in $results; do
+            if [ "$r" != "success" ]; then
+              echo "::error::A required Linux job did not succeed (saw '$r'). Linux is a supported platform: it builds, it tests, and it gates."
+              exit 1
+            fi
+          done
+          echo "All Linux jobs succeeded."
 
   # ---------------------------------------------------------------------------
   # Benchmarks (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). REQUIRED for
@@ -272,6 +509,26 @@ jobs:
   # activates automatically once a runner-class baseline is committed under
   # Benchmarking/Benchmarks/.benchmarkBaselines/. Capture one via workflow_dispatch with
   # update_baseline=true, download the artifact, and commit it.
+  #
+  # WHY NO BASELINE IS COMMITTED YET (PERF-2, 2026-08-01). The gate has never activated, and the
+  # tempting fix — capture one on a developer machine and commit it — was measured and rejected.
+  # The `.instructions` threshold gates p90 and p99 at ±5 %. Instruction COUNTS are deterministic,
+  # but the p90/p99 of a sampled distribution are not: preemption inflates the counter on a busy
+  # box. Measured on the PERF-2 host at load ~30 on 10 cores, p99 instructions ran 0–75 % above p0
+  # across the routing suite (median ~11 %, four benchmarks above 18 %) — i.e. the noise floor
+  # exceeded the gate's own threshold by up to 15x.
+  #
+  # A baseline captured under that noise is PADDED by it. It would not cry wolf; it would do the
+  # quieter and worse thing and never fire, because every real regression smaller than the padding
+  # would fit underneath it. `.mallocCountTotal` at absolute zero-delta would survive the transfer
+  # (mallocs are flat regardless of load), but that is the one metric already locked deterministically
+  # by `expectAllocations` in the `swift test` gate, so it would add nothing.
+  #
+  # A meaningful baseline therefore has to come from this runner class, which is what the dispatch
+  # path below exists for — and it must PROVE it is quiet enough to be worth committing. The capture
+  # path now re-runs the suite against the baseline it just took: a runner that cannot reproduce its
+  # own numbers back to back cannot gate anyone else's, and its artifact must be discarded rather
+  # than committed.
   # ---------------------------------------------------------------------------
   benchmarks:
     runs-on: macos-26
@@ -292,13 +549,28 @@ jobs:
           else
             # No baseline yet: the harness-health half of the gate (build + every benchmark runs).
             swift package --package-path Benchmarking/Benchmarks --disable-sandbox benchmark
-            echo "::notice::no committed benchmark baseline — low-noise drift gate pending capture (dispatch with update_baseline=true)"
+            echo "::notice::no committed benchmark baseline — drift gate inactive by decision, not by omission. A baseline must be captured on THIS runner class (dispatch with update_baseline=true) and must pass the self-reproduction check; see the comment above this job."
           fi
       - name: Capture baseline (manual dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
         run: |
           swift package --package-path Benchmarking/Benchmarks --disable-sandbox \
             --allow-writing-to-package-directory benchmark baseline update main
+      # Qualify the baseline before anyone commits it. A second run of the same code on the same
+      # runner must pass the same thresholds the baseline will later enforce; if it does not, the
+      # runner's noise is larger than the gate's tolerance and the artifact is not fit to gate a PR.
+      # This step is allowed to fail — it reports fitness, it does not block the capture — but a
+      # FAILING result means: do not commit the artifact.
+      - name: Qualify baseline (self-reproduction on the capturing runner)
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        continue-on-error: true
+        run: |
+          if swift package --package-path Benchmarking/Benchmarks --disable-sandbox \
+              benchmark baseline check main; then
+            echo "::notice::baseline qualified — this runner reproduced its own numbers within the pinned thresholds; the artifact is fit to commit"
+          else
+            echo "::warning::baseline NOT qualified — this runner could not reproduce its own numbers within the pinned thresholds. Its noise floor exceeds the gate's tolerance, so committing this artifact would produce a gate that either fires spuriously or is padded blind. Discard it and re-capture on a quieter runner."
+          fi
       - name: Upload baseline artifact (manual dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
         uses: actions/upload-artifact@v4
@@ -384,23 +656,84 @@ jobs:
         run: docker rm -f httpd || true
 
   # ---------------------------------------------------------------------------
-  # HTTP/3 conformance — h3spec (RFC 9114 / QUIC v1) against httpd-example serving h3 over
-  # Network.framework QUIC. Darwin-only (QUIC is Network.framework here), hence a macOS job; the
-  # `tls` argument mints a throwaway self-signed identity and `-n` skips client-side validation.
+  # HTTP/3 conformance (RFC 9114 / RFC 9204) — THE GATE. Required; no continue-on-error.
   #
-  # ADVISORY (continue-on-error) — the attempt is documented, per P10's no-silent-omission gate:
-  # validated locally 2026-07-02 on arm64 macOS with h3spec v0.1.13 (h3spec-mac-arm64). The server
-  # comes up (h1/h2 probe 200, QUIC listener + Alt-Svc advertised), but h3spec reports 48/49
-  # failures — every one a QUIC-TRANSPORT-layer expectation (TRANSPORT_PARAMETER_ERROR /
-  # PROTOCOL_VIOLATION / STREAM_STATE_ERROR / FLOW_CONTROL_ERROR …) aimed at the peer's QUIC
-  # stack. That stack is Apple's CLOSED Network.framework implementation, which h3spec's Haskell
-  # quic client cannot drive into those states (it expects the behaviors of its own quic library
-  # as the peer). The RFC 9114/9204 layer this package actually owns is covered by the in-repo
-  # HTTP3 conformance + QPACK suites in `build-test`. Promote this job if h3spec grows a mode that
-  # exercises the h3 layer independently of transport internals, or Apple's QUIC exposes the
-  # needed transport behaviors. The report uploads as an artifact either way.
+  # This replaces the advisory external-`h3spec` job as the thing that fails on an HTTP/3 regression.
+  # The reasoning is measured, not assumed (2026-07-31, arm64 macOS, h3spec v0.1.13, release build):
+  #
+  #   • h3spec CAN split its suite — it takes hspec's `-m/--match` and `-s/--skip`, and its 49 cases
+  #     are grouped `describe "QUIC servers"` (34: 27 RFC 9000 transport + 7 RFC 9001 TLS) and
+  #     `describe "HTTP/3 servers"` (15: 11 RFC 9114 + 4 RFC 9204). So `-m "HTTP/3 servers"` selects
+  #     exactly the subset that exercises our code. The split is mechanically available.
+  #   • It still cannot gate. Re-running the full suite reproduces 49 examples / 48 failures, and
+  #     ALL 48 carry the identical message `did not get expected exception: QUICException`; with
+  #     `-d` the cause is `ConnectionIsTimeout "Client Handshaking"`. The HTTP/3-layer cases fail for
+  #     exactly the reason the transport ones do — the client never completes a QUIC handshake, so
+  #     nothing ever reaches the h3 layer. An intentionally broken H3 engine would produce a
+  #     byte-identical report. Zero discriminating power.
+  #   • The previously documented cause ("Apple's closed QUIC rejects h3spec's Haskell client") does
+  #     not survive measurement. `ModernQUICTransport.start` builds its `Network.NetworkListener`
+  #     without a port, so the QUIC listener binds an EPHEMERAL UDP port and only announces it via
+  #     Alt-Svc (observed `alt-svc: h3=":50649"` while this job dialed 14433). h3spec has no Alt-Svc
+  #     discovery. The job has been dialing a UDP port with nothing on it. See
+  #     docs/standards/CONFORMANCE.md; the listener fix is transport work, tracked there.
+  #
+  # So the gate is built from the in-repo suites, which drive the same 15 RFC 9114/9204 MUSTs against
+  # the real engine: `H3SpecTests` mirrors h3spec's catalog row-for-row (its `catalogIsWellFormed`
+  # pins the 27/7/11/4 layer split, so the mirror cannot silently narrow) and
+  # `endpointClosesWithMandatedError` drives each `.supported` row and asserts the mandated error
+  # code. Release configuration, because that is where an optimizer-visible engine regression shows.
   # ---------------------------------------------------------------------------
-  h3spec:
+  h3-conformance:
+    runs-on: macos-26
+    env:
+      HTTP_WARNINGS_AS_ERRORS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Toolchain
+        run: swift --version
+      - name: RFC 9114 / RFC 9204 conformance (release)
+        run: |
+          swift test -c release --scratch-path "$SCRATCH" \
+            --filter 'HTTP3Tests' --filter 'QPACKTests'
+      - name: HTTP/3 over real QUIC — loopback integration (release)
+        run: |
+          swift test -c release --scratch-path "$SCRATCH" \
+            --filter 'HTTPServerHTTP3Tests' --filter 'HTTPServerWebSocketHTTP3Tests'
+
+  # ---------------------------------------------------------------------------
+  # External h3spec — EVIDENCE, not a gate, and dispatch-only so it never contributes a red X that
+  # everyone learns to ignore. That is the failure mode this job was in: `continue-on-error: true`,
+  # 48/49 red on every run, gating nothing and proving nothing.
+  #
+  # The two steps below encode the split the moment it becomes runnable. Step 1 is the subset that
+  # would gate (`-m "HTTP/3 servers"`, RFC 9114 §4/§6.2/§7.2 + RFC 9204 §3.1/§4.1.3/§4.2/§4.4.3).
+  # Step 2 is the excluded subset, run only to keep observing it. The excluded cases are listed BY
+  # NAME with their expected error codes in the in-repo catalog — `H3Catalog+Transport.swift` (27
+  # RFC 9000 rows) and the `quicTLS` block of `H3ConformanceCatalog.swift` (7 RFC 9001 rows) — each
+  # `.platform`-stamped, i.e. enforced by Apple's QUIC/TLS stack rather than by any code here. That
+  # file is the authoritative exclusion list; it is asserted complete by `H3SpecTests`.
+  #
+  # STATUS 2026-08-16: step 1's 12 failures are now attributed all the way down, and 11 of them are
+  # PLATFORM-BLOCKED — Network.framework provides no way to choose the application error code of a
+  # CONNECTION_CLOSE (RFC 9000 §10.2 / §19.19): the modern structured teardown hardwires code 0 and
+  # `NWConnectionGroup.cancel()` sends no 0x1d frame at all, whatever `applicationError` holds. The
+  # engine selects the mandated RFC 9114 §8.1 code, `close(errorCode:)` records it in the QUIC state
+  # (inert today), and the full experiment matrix plus the 11 rows BY NAME are in
+  # docs/standards/CONFORMANCE.md. The 12th failure (4.1.3 mandatory pseudo-headers) WAS the one
+  # engine-owned row; it is closed as of 2026-08-16 (RequestMapper now enforces the RFC 9114 §4.3.1
+  # authority rule — measured 15 examples / 11 failures, all 11 platform-blocked).
+  # The premise is pinned by `closeCarriesTheApplicationErrorCode` (withKnownIssue) in
+  # `Legacy`/`ModernQUICTransportTests`: if an SDK starts delivering the code, that test flags it —
+  # revisit promotion then. Do not promote step 1 by weakening `h3-conformance`, which stays the gate.
+  # (The 2026-08-02 "set applicationError → connection stops closing" dead end was a misread crash:
+  # `nw_quic_set_application_error` segfaults on a nil reason string, and the dead server timed out
+  # every following case. With a non-nil reason there is no crash — and no code on the wire either.)
+  # ---------------------------------------------------------------------------
+  h3spec-observation:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     continue-on-error: true
     steps:
@@ -415,28 +748,52 @@ jobs:
           chmod +x /tmp/h3spec
       - name: Build example server (release)
         run: swift build -c release --product httpd-example --scratch-path "$SCRATCH"
-      - name: h3spec against httpd-example (QUIC + self-signed TLS)
+      - name: Start httpd-example (QUIC + self-signed TLS)
         run: |
           BIN="$(swift build -c release --product httpd-example --scratch-path "$SCRATCH" --show-bin-path)/httpd-example"
           "$BIN" 14433 networkFramework tls quiet >/tmp/httpd-h3.log 2>&1 &
-          PID=$!
-          # Wait for the TLS listener (the h1/h2 side of the same port).
+          echo $! > /tmp/httpd-h3.pid
+          # Wait for the TLS listener (the h1/h2 side of the same TCP port).
           for _ in $(seq 1 40); do
             curl -sk --max-time 1 -o /dev/null https://127.0.0.1:14433/ && break
             sleep 0.5
           done
-          set +e
-          /tmp/h3spec 127.0.0.1 14433 -n -t 4000 2>&1 | tee /tmp/h3spec-report.txt
-          rc=$?
-          set -e
-          kill "$PID" 2>/dev/null || true
-          exit $rc
-      - name: Upload h3spec report
+          # Record which UDP port the QUIC listener actually bound. This used to be the discrepancy
+          # that made the whole run vacuous; it is fixed, and it stays logged so a regression is
+          # visible in one line instead of as 15 uniform failures.
+          curl -skI --max-time 4 https://127.0.0.1:14433/ | grep -i alt-svc || true
+      - name: Prove the QUIC listener is reachable by a NON-Apple client before believing the report
+        run: |
+          # The whole suite reports identically whether the h3 engine is broken or the handshake never
+          # happened, so establish which world we are in FIRST. curl on macos-26 has no HTTP/3, so this
+          # is best-effort evidence rather than a gate; when it does run, a failure here means the
+          # h3spec output below says nothing about the HTTP/3 engine.
+          if curl --version | grep -q HTTP3; then
+            curl -sk --http3-only --max-time 10 -o /dev/null \
+              -w 'third-party h3 client: http_version=%{http_version} code=%{http_code}\n' \
+              https://127.0.0.1:14433/
+          else
+            echo "third-party h3 client: SKIPPED — this runner's curl has no HTTP/3 support"
+          fi
+      - name: h3spec — the RFC 9114/9204 subset (the gating candidate)
+        run: |
+          /tmp/h3spec 127.0.0.1 14433 -n -t 4000 -m "HTTP/3 servers" \
+            2>&1 | tee /tmp/h3spec-http3.txt || true
+      - name: h3spec — the QUIC transport/TLS subset (excluded; see the in-repo catalog)
+        run: |
+          /tmp/h3spec 127.0.0.1 14433 -n -t 4000 -m "QUIC servers" \
+            2>&1 | tee /tmp/h3spec-quic.txt || true
+      - name: Stop the server
+        if: always()
+        run: kill "$(cat /tmp/httpd-h3.pid)" 2>/dev/null || true
+      - name: Upload h3spec reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: h3spec-report
-          path: /tmp/h3spec-report.txt
+          name: h3spec-reports
+          path: |
+            /tmp/h3spec-http3.txt
+            /tmp/h3spec-quic.txt
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
@@ -484,6 +841,45 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $rc
 
+  # ---------------------------------------------------------------------------
+  # Memory soak — EVIDENCE, not a gate, and dispatch-only. Modeled on `h3spec-observation`: it produces
+  # a report (an RSS plateau verdict + a summary table in the job summary) rather than blocking a PR.
+  #
+  # WHY DISPATCH-ONLY, NOT `schedule:`. A soak is a long, hostile run (default 30 min) whose value is
+  # trend evidence, not per-commit signal — it does not belong on the PR path, and a nightly `schedule:`
+  # is a REPO-OWNER decision (it consumes runner minutes on a cadence and needs someone to watch its
+  # output), recorded here rather than made unilaterally. TO PROMOTE TO NIGHTLY LATER: add
+  # `schedule: [{cron: "0 7 * * *"}]` to this workflow's `on:` block and gate the other jobs' triggers
+  # so only this one runs on the schedule (e.g. an `if:` on each gating job excluding
+  # `github.event_name == 'schedule'`), or split the soak into its own workflow file with its own `on:`.
+  #
+  # WHAT IT PROVES. `scripts/soak.sh` drives mixed adversarial load (sustained oha h1 + h2, slowloris,
+  # connection churn, abrupt resets) against httpd-example and asserts the resident set PLATEAUS — the
+  # median RSS of the final third must not exceed the mid third beyond tolerance — plus liveness, no
+  # crash, and end-to-end correctness. A connection-lifetime leak that no bounded benchmark would show
+  # climbs the RSS and fails the run. The script's exit code is the verdict; the summary table lands in
+  # the job summary. `continue-on-error` because this is evidence: a soak failure on a shared, loaded
+  # runner should be READ (the plateau tolerances assume a reasonably quiet box), not auto-block anyone.
+  #
+  # SOAK_DURATION is short here (8 min) so a dispatch returns in reasonable runner time; a real soak is
+  # the 30-min local/owner run. RSS is per-process, so the plateau assertion survives runner noise even
+  # if the absolute numbers do not.
+  # ---------------------------------------------------------------------------
+  soak:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+      - name: Install oha (closed-loop load generator)
+        run: brew list oha >/dev/null 2>&1 || brew install oha
+      - name: Adversarial memory soak (RSS plateau assertion)
+        env:
+          SOAK_DURATION: "480"
+        run: scripts/soak.sh
+
 # NOTE: jobs run on the `macos-26` image with the Swift 6.4 development toolchain. If a specific 6.4
 # snapshot is needed beyond the image default, install it as the first step of each job with swiftly
 # (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
@@ -494,10 +890,22 @@ jobs:
 #     are fixed. Only generic/http2-3 stay out, for the invalid-preface GOAWAY (a benign ambiguity).
 #   • Autobahn (WebSocket, RFC 6455) — PROMOTED to a required gate (P10, 2026-07-02) after
 #     consecutive green runs; the fuzzingclient report gate blocks on any FAILED case.
-#   • h3spec — job added but ADVISORY: 48/49 failures are transport-layer expectations Apple's
-#     closed Network.framework QUIC cannot be driven into by h3spec's client; see the job comment.
+#   • HTTP/3 (RFC 9114 / RFC 9204) — REQUIRED as `h3-conformance`, driven from the in-repo suites
+#     that mirror h3spec's catalog row-for-row. The external tool moved to `h3spec-observation`
+#     (dispatch-only, non-gating): a re-run showed its 48 failures are one QUIC handshake timeout
+#     reported 48 times, not 48 findings, so it cannot tell a correct engine from a broken one. The
+#     blocker to promoting it is that the QUIC listener binds an EPHEMERAL UDP port rather than the
+#     one it was given, so h3spec dials a dead port. See docs/standards/CONFORMANCE.md.
 #   • Benchmark baseline gate — harness health is REQUIRED now; the low-noise drift check
 #     (malloc zero-delta + instructions ±5%) activates when a runner-class baseline is committed
 #     under Benchmarking/Benchmarks/.benchmarkBaselines/ (capture via dispatch update_baseline).
-#   • UBSan (-sanitize=undefined) — the UBSan runtime fails to link the test bundles on the current
-#     6.4 toolchain; revisit when the toolchain ships a linkable UBSan runtime.
+#   • UBSan (-sanitize=undefined) — now GATED as the `undefined` leg of both sanitizer matrices.
+#     The swiftbuild-build-system link failure that stalled this (the runtime does not link into an
+#     xctest bundle) is worked around with `--build-system native` on macOS; the full suite is UBSan-
+#     clean but its network/large-upload tests time out under instrumentation, so the leg is scoped to
+#     the codec/parser UB surface with `halt_on_error=1`. Full rationale in the `sanitizers` job
+#     comment. Follow-up: drop `--build-system native` once swiftbuild links the UBSan runtime, and
+#     widen the scope if the toolchain makes the network suite fast enough under UBSan to gate.
+#   • Memory soak (`scripts/soak.sh` / the `soak` job) — dispatch-only EVIDENCE, non-gating. A
+#     nightly `schedule:` is deliberately NOT set: that is a repo-owner decision (runner-minute cost +
+#     someone to watch it). Promotion recipe is in the `soak` job comment.

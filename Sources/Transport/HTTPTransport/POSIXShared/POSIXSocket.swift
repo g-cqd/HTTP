@@ -193,17 +193,57 @@ enum POSIXSocket {
 
     /// Reads the OS-assigned port via `getsockname()` (either address family).
     static func readBoundPort(of rawFD: Int32) -> UInt16 {
+        guard let storage = localAddress(of: rawFD) else {
+            return 0
+        }
+        return peerAddress(from: storage).port
+    }
+
+    /// Reads the local address a descriptor is bound to (`getsockname()`, POSIX.1-2017), or `nil`.
+    ///
+    /// The single `getsockname` call site, shared by ``readBoundPort(of:)`` and
+    /// ``readBoundEndpoint(of:)`` so the two can never disagree about what the kernel said.
+    private static func localAddress(of rawFD: Int32) -> sockaddr_storage? {
         var storage = sockaddr_storage()
         var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
-        let ok = withUnsafeMutablePointer(to: &storage) { pointer in
+        let read = withUnsafeMutablePointer(to: &storage) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                 getsockname(rawFD, $0, &length) == 0
             }
         }
-        guard ok else {
-            return 0
+        return read ? storage : nil
+    }
+
+    /// Reads the endpoint a listener actually bound via `getsockname()` — resolved family, realized port.
+    ///
+    /// The source of truth for ``ServerTransport/boundEndpoint`` on every POSIX backbone. It asks the
+    /// *kernel* rather than re-deriving the answer from the configuration, which is the whole point:
+    /// `port` `0` means "whichever the OS chose", `host` may have been a name or a wildcard, and audit
+    /// F-04 is what happens when a listener reports the address it was asked for instead of the one it
+    /// got. The literal comes back through `getnameinfo` + `NI_NUMERICHOST`, the same normalization
+    /// ``BindEndpoint/resolve(host:port:)`` applies, so the two agree character for character.
+    ///
+    /// `nil` for a family that has no ``BindEndpoint`` — `AF_UNIX` (POSIX.1-2017), where the
+    /// ``TransportBackbone/unixDomainSocket`` listener's address is a filesystem path and there is no
+    /// port to report.
+    static func readBoundEndpoint(of rawFD: Int32) -> BindEndpoint? {
+        guard let storage = localAddress(of: rawFD) else {
+            return nil
         }
-        return peerAddress(from: storage).port
+        let family: BindEndpoint.Family
+        switch Int32(storage.ss_family) {
+            case AF_INET:
+                family = .ipv4
+            case AF_INET6:
+                family = .ipv6
+            default:
+                return nil  // AF_UNIX and friends carry no address/port endpoint
+        }
+        let local = peerAddress(from: storage)
+        guard !local.host.isEmpty else {
+            return nil
+        }
+        return BindEndpoint(address: local.host, family: family, port: local.port)
     }
 
     /// Resolves the peer's numeric host and port from an accepted `sockaddr_storage` of either family

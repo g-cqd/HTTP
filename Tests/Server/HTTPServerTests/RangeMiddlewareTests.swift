@@ -102,13 +102,18 @@ struct RangeMiddlewareTests {
         #expect(response.body == Array("0123456789".utf8))
     }
 
-    @Test("If-Range with a matching ETag serves the range (RFC 9110 §13.1.5)")
-    func ifRangeMatchServesRange() async {
+    @Test("If-Range with the derived ETag serves the full 200 — it is weak (§13.1.5, REG-4b)")
+    func ifRangeDerivedTagIsNotUsable() async {
+        // §13.1.5 admits only a STRONG validator on If-Range, and the derived CRC-32 tag is weak
+        // (EntityTagCollisionTests constructs the collision). An unsatisfied If-Range is not an
+        // error: the server simply serves the whole representation, which is what a client that
+        // cannot prove it holds the same bytes must be given rather than a splice-able 206.
         let etag = EntityTag.crc(for: Array("0123456789".utf8))
+        #expect(etag.hasPrefix("W/"))
         let response = await served("0123456789")
             .respond(to: request(range: "bytes=0-3", ifRange: etag), body: [])
-        #expect(response.head.status == .partialContent)
-        #expect(response.body == Array("0123".utf8))
+        #expect(response.head.status == .ok)
+        #expect(response.body == Array("0123456789".utf8))
     }
 
     @Test("If-Range with a stale validator serves the full 200, not the range")

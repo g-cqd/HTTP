@@ -12,7 +12,7 @@
 public import HTTPTransport
 
 /// An in-memory ``TransportConnection`` whose `receive` blocks until cancelled.
-public actor HangingConnection: TransportConnection {
+public actor HangingConnection: UnleasedTransportConnection {
     /// The connection's stable identifier.
     nonisolated public let id: TransportConnectionID
 

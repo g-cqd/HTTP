@@ -28,11 +28,11 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — Phase 3 transport (ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — Phase 3 transport (ADR 0004)", .realNetwork)
     struct PortableTLSTransportTests {
         @Test(
             "the transport accepts a libssl client, negotiates ALPN h2, and round-trips bytes",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func transportAcceptsHandshakesAndEchoes() async throws {
             let transport = try Self.startedTransport()
             let connections = try await transport.start()
@@ -92,7 +92,7 @@
                     }
                 }
 
-            let echoes = try await echoed.wait(forAtLeast: 1, timeout: .seconds(15))
+            let echoes = try await echoed.wait(forAtLeast: 1)
             #expect(echoes.first == [UInt8]("ping".utf8))
             #expect(await server.value)
             #expect(serverALPN.withLock(\.self) == "h2")
@@ -101,7 +101,7 @@
 
         @Test(
             "curl interops over TLS through the transport (a real non-Network client)",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func curlInterop() async throws {
             guard let curl = Self.which("curl") else {
                 return  // no curl on this host — skip the interop proof
@@ -135,11 +135,32 @@
             await transport.shutdown()
         }
 
+        @Test(
+            "the transport reports the realized bound endpoint, read back from the kernel",
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
+        func boundEndpointReportsTheRealizedListener() async throws {
+            let transport = try Self.startedTransport()
+            let connections = try await transport.start()
+            let endpoint = try #require(
+                transport.boundEndpoint,
+                "PortableTLS reported no bound endpoint after start()"
+            )
+            #expect(endpoint.family == .ipv4)
+            #expect(endpoint.address == "127.0.0.1")
+            #expect(endpoint.port != 0)
+            #expect(endpoint.port == transport.boundPort)
+            await transport.shutdown()
+            withExtendedLifetime(connections) {
+                // Held until the listener is down, so the stream's `onTermination` shutdown does not
+                // race the explicit one mid-assertion.
+            }
+        }
+
         // MARK: - Helpers
 
         /// A `PortableTLSTransport` on an ephemeral port with a fresh dev identity (ALPN h2 / http1.1).
         private static func startedTransport() throws -> PortableTLSTransport {
-            let identity = try DevTLSIdentity.selfSigned()
+            let identity = try PortableTLSLoopback.devTLS()
             let configuration = TransportConfiguration(
                 port: 0, backbone: .portableTLS, tls: identity
             )

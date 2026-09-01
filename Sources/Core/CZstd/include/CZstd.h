@@ -3,13 +3,14 @@
 //  CZstd
 //
 //  A thin C shim over the system libzstd for the RFC 8878 `zstd` content coding. Apple's
-//  Compression framework has no Zstandard codec, so — like CCRC32 / CWSDeflate over the system
-//  zlib — the unsafe one-shot `ZSTD_compress` plumbing is kept in auditable C, linking `-lzstd`.
+//  Compression framework has no Zstandard codec, so the unsafe one-shot `ZSTD_compress` plumbing
+//  is kept in auditable C (the CCRC32 discipline), linking `-lzstd`.
 //  The middleware uses only the compressor (the server emits `zstd`, never inflates it here); the
 //  matching single-frame decompressor is provided so a round-trip test can verify a produced frame
 //  against the real library (the inbound `zstd` request path is a separate, future concern). The
-//  whole `CZstd` target is opt-in via the `HTTP_ZSTD` build flag, so the default build graph never
-//  sees libzstd; the Swift integration guards on `#if canImport(CZstd)`.
+//  whole `CZstd` module is opt-in via the `Zstd` package trait (SE-0450), so the default build graph
+//  never sees libzstd; the Swift integration guards on `#if canImport(CZstd)`. Only prototypes live
+//  here — the definitions in czstd.c sit behind the trait-driven `HTTP_TRAIT_ZSTD` define.
 //
 
 #ifndef CZSTD_H

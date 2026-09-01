@@ -12,13 +12,19 @@
 
 :8082 {
 	@root path /
-	respond @root "Hello from the Caddy baseline.\n" 200
+	respond @root `Hello from the Caddy baseline.
+` 200
 
 	@health path /health
-	respond @health "OK\n" 200
+	respond @health `OK
+` 200
 
-	# Parity routes (the heavier-workload scenarios). Caddy cannot echo a POST body without a plugin,
-	# so it does not implement /echo — the harness marks that cell N/A.
+	# The framework-floor parity route: byte-identical on every server in the field. `/` cannot
+	# serve that purpose because each server answers it with its own name.
+	@plaintext path /plaintext
+	respond @plaintext "Hello, World!" 200
+
+	# Parity routes (the heavier-workload scenarios).
 	@json path /json
 	handle @json {
 		header Content-Type application/json
@@ -28,6 +34,19 @@
 	@payload path /payload
 	respond @payload "__PAYLOAD__" 200
 
+	# A Caddyfile quoted string does NOT interpret escapes, so "…!\n" put a literal backslash-n on
+	# the wire: 15 bytes where every other server sent 14 ending in 0x0A. A status-code check cannot
+	# see that; the harness's byte-equivalence gate caught it. A backtick string carries a real
+	# newline through verbatim.
 	@hello path_regexp hello ^/hello/(.+)$
-	respond @hello "Hello, {re.hello.1}!\n" 200
+	respond @hello `Hello, {re.hello.1}!
+` 200
+
+	# Caddy cannot echo a POST body without a plugin. It must say so with a status the harness can
+	# see: the previous config had no /echo matcher at all, so the catch-all answered 200 with an
+	# EMPTY body and the >=99%-2xx check accepted it — Benchmarking/Bench/RESULTS.md ranks caddy
+	# fourth on POST /echo at 92,584 rps for returning nothing. 405 is the honest answer
+	# (RFC 9110 §15.5.6) and marks the cell N/A.
+	@echo path /echo
+	respond @echo "POST /echo is not implemented by this server" 405
 }

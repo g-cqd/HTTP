@@ -45,13 +45,51 @@
         private let registry = Mutex<Registry>(Registry())
         /// Work submitted from off-loop (executor jobs + control closures), drained each turn on the loop.
         private let inbox = Mutex<Inbox>(Inbox())
+        /// Control closures queued but not yet run — the lock-free mirror behind ``queuedControlWork``.
+        private let controlBacklog = Atomic<Int>(0)
 
         private struct Registry {
-            var readHandlers: [Int32: @Sendable () -> Void] = [:]
-            var writeHandlers: [Int32: @Sendable () -> Void] = [:]
+            /// Every waiter parked on a descriptor, per direction — a *list*, not one slot.
+            ///
+            /// Mirrors ``KqueueEventLoop``, whose `Registry` records why: a single slot let the second
+            /// waiter on a descriptor silently overwrite the first, whose continuation was then
+            /// resumed by nothing.
+            var readHandlers: [Int32: [Waiter]] = [:]
+            var writeHandlers: [Int32: [Waiter]] = [:]
+            var nextWaiterID: UInt64 = 0
             /// fds currently in the epoll set (so the next `arm` chooses `EPOLL_CTL_MOD` vs `_ADD`).
             var registered: Set<Int32> = []
             var isRunning = true
+
+            /// Registers `handler` for `fd` in `direction`, returning its removal id.
+            mutating func park(
+                _ handler: @escaping @Sendable () -> Void,
+                fd: Int32,
+                direction: WritableKeyPath<Self, [Int32: [Waiter]]>
+            ) -> UInt64 {
+                nextWaiterID += 1
+                let id = nextWaiterID
+                self[keyPath: direction][fd, default: []].append(Waiter(id: id, handler: handler))
+                return id
+            }
+
+            /// Removes the waiter `id` parked on `fd`, if it is still there.
+            mutating func unpark(
+                id: UInt64,
+                fd: Int32,
+                direction: WritableKeyPath<Self, [Int32: [Waiter]]>
+            ) {
+                self[keyPath: direction][fd]?.removeAll { $0.id == id }
+                if self[keyPath: direction][fd]?.isEmpty == true {
+                    self[keyPath: direction].removeValue(forKey: fd)
+                }
+            }
+        }
+
+        /// One parked readiness waiter, identified so it can be removed without comparing closures.
+        private struct Waiter {
+            let id: UInt64
+            let handler: @Sendable () -> Void
         }
 
         private struct Inbox {
@@ -138,9 +176,9 @@
         /// since reused. Mirrors ``KqueueEventLoop/waitReadable(_:_:)``.
         @discardableResult
         func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-            registry.withLock { $0.readHandlers[fd] = handler }
+            let id = registry.withLock { $0.park(handler, fd: fd, direction: \.readHandlers) }
             guard arm(fd) else {
-                registry.withLock { _ = $0.readHandlers.removeValue(forKey: fd) }
+                registry.withLock { $0.unpark(id: id, fd: fd, direction: \.readHandlers) }
                 return false
             }
             wakeIfOffLoop()
@@ -153,9 +191,9 @@
         /// ``waitReadable(_:_:)``.
         @discardableResult
         func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-            registry.withLock { $0.writeHandlers[fd] = handler }
+            let id = registry.withLock { $0.park(handler, fd: fd, direction: \.writeHandlers) }
             guard arm(fd) else {
-                registry.withLock { _ = $0.writeHandlers.removeValue(forKey: fd) }
+                registry.withLock { $0.unpark(id: id, fd: fd, direction: \.writeHandlers) }
                 return false
             }
             wakeIfOffLoop()
@@ -165,22 +203,47 @@
         /// Drops any pending interest in `fd` and closes it **on the loop thread**, so a close never races
         /// an in-flight handler and the fd number cannot be reused under one.
         func closeDescriptor(_ fd: Int32) {
+            enqueueClose(fd, then: nil)
+        }
+
+        /// Closes `fd` on the loop thread and runs `completion` there, strictly after `close(2)` returned.
+        ///
+        /// The Linux twin of ``KqueueEventLoop/closeDescriptor(_:then:)``, and the reason it exists is
+        /// the same: it lets ``POSIXEpollTransport/shutdown()`` suspend until the listening descriptor is
+        /// genuinely gone. The Linux job is where the defect was first *observed* — an immediate rebind
+        /// of the same port failed `bind(2)` with `EADDRINUSE`, errno 98 here against 48 on Darwin — even
+        /// though the racing code path is shared with the kqueue backbones.
+        func closeDescriptor(_ fd: Int32, then completion: @escaping @Sendable () -> Void) {
+            enqueueClose(fd, then: completion)
+        }
+
+        /// How much control work (closes, cancels) is queued for the loop thread but not yet run.
+        ///
+        /// The seam that makes the synchronous-close contract machine-checkable — see
+        /// ``KqueueEventLoop/queuedControlWork``, which also records why this is an `Atomic` mirror of
+        /// `inbox.control.count` rather than a read of it.
+        var queuedControlWork: Int {
+            controlBacklog.load(ordering: .acquiring)
+        }
+
+        private func enqueueClose(_ fd: Int32, then completion: (@Sendable () -> Void)?) {
             let offLoop = inbox.withLock { inbox -> Bool in
+                controlBacklog.add(1, ordering: .releasing)
                 inbox.control.append { [self] in
-                    let (readHandler, writeHandler) = registry.withLock { registry in
+                    let parked = registry.withLock { registry -> [Waiter] in
                         registry.registered.remove(fd)
-                        return (
-                            registry.readHandlers.removeValue(forKey: fd),
-                            registry.writeHandlers.removeValue(forKey: fd)
-                        )
+                        return (registry.readHandlers.removeValue(forKey: fd) ?? [])
+                            + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
                     }
                     // Remove before close (a closed fd auto-leaves the set, but explicit DEL is race-free).
                     _ = epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
                     close(fd)
                     // Resume any parked waiter so a cancelled/closed receive/send doesn't leak its
                     // continuation: invoked after close, the handler hits EBADF and resumes with an error.
-                    readHandler?()
-                    writeHandler?()
+                    for waiter in parked {
+                        waiter.handler()
+                    }
+                    completion?()
                 }
                 return !inbox.onLoop
             }
@@ -193,6 +256,10 @@
 
         private func runLoop() {
             var events = [epoll_event](repeating: epoll_event(), count: 256)
+            // The drain's double buffer, owned by the loop thread for its whole life — see
+            // ``drainInbox(jobs:control:until:)`` and the identical twin in `KqueueEventLoop`.
+            var jobs: [UnownedJob] = []
+            var control: [@Sendable () -> Void] = []
             while registry.withLock(\.isRunning) {
                 // Return at once (timeout 0) when work is queued so pinned continuations are not delayed
                 // behind the idle poll; the 50 ms idle timeout only bounds shutdown latency on a quiet
@@ -222,8 +289,14 @@
                         dispatch(event)
                     }
                 }
+                // Bounded by the fairness quantum: unbounded, one saturating source starves every
+                // other socket on this reactor (PERF-1).
+                let budget = ReactorQuantum.nanoseconds() &+ ReactorQuantum.drainNanoseconds
                 while !inbox.withLock(\.isEmpty), registry.withLock(\.isRunning) {
-                    drainInbox()
+                    guard drainInbox(jobs: &jobs, control: &control, until: budget) else {
+                        // Over quantum; the remainder is back in the inbox, readiness goes first.
+                        break
+                    }
                 }
             }
             // `isRunning` just went false (a concurrent `stop()`). The inner drain above is gated on
@@ -234,26 +307,61 @@
             // drain closes that window: anything enqueued up to this point is guaranteed to run — fd
             // closed, continuation resumed — before the loop thread exits.
             while !inbox.withLock(\.isEmpty) {
-                drainInbox()
+                // No budget on the teardown drain: its whole purpose is that nothing is stranded.
+                _ = drainInbox(jobs: &jobs, control: &control, until: .max)
             }
             close(wakeFD)
             close(epfd)
         }
 
-        private func drainInbox() {
-            let (jobs, control) = inbox.withLock {
-                inbox -> ([UnownedJob], [@Sendable () -> Void]) in
-                let taken = (inbox.jobs, inbox.control)
-                inbox.jobs.removeAll(keepingCapacity: true)
-                inbox.control.removeAll(keepingCapacity: true)
-                return taken
+        /// Runs one batch of the inbox on the loop thread; returns whether it finished within `budget`.
+        ///
+        /// `jobs`/`control` are the caller's long-lived double buffer. Swapping them with the inbox's
+        /// arrays — rather than copying the arrays out and calling `removeAll(keepingCapacity:)` — is
+        /// what makes the drain allocation-free in steady state: a copy leaves both the inbox's `var`
+        /// and the local holding the same buffer, so the very next `removeAll` sees a non-unique
+        /// reference and reallocates, defeating `keepingCapacity` on every single drain.
+        ///
+        /// Control work always runs in full and is never deferred by the budget: a close or cancel held
+        /// back behind a job flood is a parked continuation left stranded.
+        private func drainInbox(
+            jobs: inout [UnownedJob],
+            control: inout [@Sendable () -> Void],
+            until budget: UInt64
+        ) -> Bool {
+            inbox.withLock { inbox in
+                swap(&inbox.jobs, &jobs)
+                swap(&inbox.control, &control)
+                // Queued-but-not-yet-run: this batch is about to RUN, so it leaves the backlog here —
+                // see the twin in ``KqueueEventLoop/drainInbox(jobs:control:until:)``.
+                controlBacklog.subtract(control.count, ordering: .releasing)
             }
             for closure in control {
                 closure()
             }
-            for job in jobs {
-                job.runSynchronously(on: asUnownedTaskExecutor())
+            control.removeAll(keepingCapacity: true)
+
+            var index = 0
+            while index < jobs.count {
+                // The clock is read once per stride, not per job.
+                let stride = min(jobs.count, index &+ ReactorQuantum.clockCheckStride)
+                while index < stride {
+                    jobs[index].runSynchronously(on: asUnownedTaskExecutor())
+                    index &+= 1
+                }
+                if index < jobs.count, ReactorQuantum.nanoseconds() >= budget {
+                    break
+                }
             }
+            let finished = index == jobs.count
+            if !finished {
+                // Hand the tail back at the FRONT, so nothing is dropped and FIFO order holds across
+                // the readiness turn this yields to.
+                let remainder = Array(jobs[index...])
+                inbox.withLock { $0.jobs.insert(contentsOf: remainder, at: 0) }
+            }
+            jobs.removeAll(keepingCapacity: true)
+            return finished
         }
 
         private func dispatch(_ event: epoll_event) {
@@ -263,30 +371,30 @@
             let hangup = ready & (EPOLLHUP.rawValue | EPOLLERR.rawValue) != 0
             let isReadable = hangup || (ready & EPOLLIN.rawValue != 0)
             let isWritable = hangup || (ready & EPOLLOUT.rawValue != 0)
-            let (readHandler, writeHandler) = registry.withLock { registry in
-                (
-                    isReadable ? registry.readHandlers.removeValue(forKey: fd) : nil,
-                    isWritable ? registry.writeHandlers.removeValue(forKey: fd) : nil
-                )
+            let waiters: [Waiter] = registry.withLock { registry in
+                (isReadable ? registry.readHandlers.removeValue(forKey: fd) ?? [] : [])
+                    + (isWritable ? registry.writeHandlers.removeValue(forKey: fd) ?? [] : [])
             }
-            readHandler?()
-            writeHandler?()
+            for waiter in waiters {
+                waiter.handler()
+            }
             // `EPOLLONESHOT` disarmed the whole fd; re-arm if a handler in the other direction is still
             // pending (or the fired handler re-armed itself). A redundant `MOD` with the same mask is
             // fine. A refused re-arm (the fd died under us) fails the still-parked handlers here — on
             // the loop thread, serialized with the close sweep — so no waiter leaks behind it.
+            // `isEmpty == false`, not `!= nil`: the tables now hold lists, and an empty list would
+            // re-arm for a direction with nobody parked on it.
             let stillPending = registry.withLock {
-                $0.readHandlers[fd] != nil || $0.writeHandlers[fd] != nil
+                $0.readHandlers[fd]?.isEmpty == false || $0.writeHandlers[fd]?.isEmpty == false
             }
             if stillPending, !arm(fd) {
-                let (stranded, strandedWrite) = registry.withLock {
-                    (
-                        $0.readHandlers.removeValue(forKey: fd),
-                        $0.writeHandlers.removeValue(forKey: fd)
-                    )
+                let stranded = registry.withLock { registry -> [Waiter] in
+                    (registry.readHandlers.removeValue(forKey: fd) ?? [])
+                        + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
                 }
-                stranded?()
-                strandedWrite?()
+                for waiter in stranded {
+                    waiter.handler()
+                }
             }
         }
 
@@ -298,8 +406,8 @@
         private func arm(_ fd: Int32) -> Bool {
             let (mask, alreadyRegistered): (UInt32, Bool) = registry.withLock { registry in
                 var events = EPOLLONESHOT.rawValue
-                if registry.readHandlers[fd] != nil { events |= EPOLLIN.rawValue }
-                if registry.writeHandlers[fd] != nil { events |= EPOLLOUT.rawValue }
+                if registry.readHandlers[fd]?.isEmpty == false { events |= EPOLLIN.rawValue }
+                if registry.writeHandlers[fd]?.isEmpty == false { events |= EPOLLOUT.rawValue }
                 let was = registry.registered.contains(fd)
                 registry.registered.insert(fd)
                 return (events, was)

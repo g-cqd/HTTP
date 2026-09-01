@@ -22,15 +22,39 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     let transport: any ServerTransport
     /// An optional QUIC transport run alongside the TCP one to serve HTTP/3 (RFC 9114).
     let quicTransport: (any QUICServerTransport)?
-    /// The responder, hot-swappable at runtime via ``reloadResponder(_:)`` (G4a).
+    /// The current ``ResponderSnapshot``, hot-swappable at runtime via ``reloadResponder(_:)`` (G4a).
     ///
-    /// Behind a `Mutex` — a `Sendable` existential — so a config reload can replace the routing table
-    /// without a restart. Every dispatch reads it exactly once (`responder.withLock { $0 }`) and never
-    /// holds the lock across the `await`, so an in-flight request finishes on the table it read while
-    /// new requests pick up the new one: the graceful old/new split falls out with no drain.
-    let responder: Mutex<any HTTPResponder>
+    /// Behind a `Mutex` so a config reload can replace the routing table without a restart. A request
+    /// reads it exactly once — when its head completes — and carries the resulting snapshot through
+    /// route resolution, body framing and dispatch, never holding the lock across an `await`. So an
+    /// in-flight request finishes on the generation it read while new requests pick up the new one:
+    /// the graceful old/new split falls out with no drain, and no request can straddle two generations
+    /// (audit CR-F12).
+    let snapshot: Mutex<ResponderSnapshot>
     let limits: HTTPLimits
+
+    /// Where application handlers run relative to this connection's I/O reactor (audit CR-F7).
+    ///
+    /// Read at each of the six `respond` seams through
+    /// ``respond(to:body:context:following:)``. Defaults to ``HandlerExecutionPolicy/inline``, which
+    /// is the topology that shipped before this knob existed.
+    let handlerExecution: HandlerExecutionPolicy
+
+    /// The per-route service-time record behind ``HandlerExecutionPolicy/adaptive(threshold:)``, or
+    /// `nil` under a policy that decides without measuring.
+    ///
+    /// `nil` for ``HandlerExecutionPolicy/inline`` and ``HandlerExecutionPolicy/concurrent`` so those
+    /// paths allocate nothing and consult nothing — the shared, synchronized state exists only when
+    /// something actually asked for it.
+    let handlerGate: HandlerExecutionGate?
+
     let clock: C
+
+    /// The instant every deadline key is measured from — see `HTTPServer+DeadlineClock.swift`.
+    ///
+    /// Captured once at construction so the ``DeadlineWheel`` can order by a concrete `Duration`
+    /// instead of by the injected clock's address-only `Instant`.
+    let epoch: C.Instant
     /// The `Alt-Svc` value advertising HTTP/3 (RFC 7838), set once the QUIC listener binds its port.
     let altSvc = Mutex<String?>(nil)
 
@@ -41,38 +65,65 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// request. The drain helpers live in `HTTPServer+Shutdown.swift`.
     let isShuttingDown = Atomic<Bool>(false)
 
-    /// Live connection counts: a global total (``HTTPLimits/maxConnections``) and a per-host map
-    /// (``HTTPLimits/maxConnectionsPerClient``), guarded together.
+    /// The shared connection ceiling — a global total (``HTTPLimits/maxConnections``) and a per-host
+    /// budget (``HTTPLimits/maxConnectionsPerClient``) — handed to the transport at ``run()``.
     ///
-    /// A `Mutex` (not an actor) because the critical section is a single map/counter update with no
-    /// `await`.
-    private let connectionCounts = Mutex<ConnectionCounts>(ConnectionCounts())
+    /// It lives at the transport layer (audit F8) so a slot is charged the instant a descriptor is
+    /// accepted, *before* the connection is queued and before any serve task exists. This server-side
+    /// reference exists to build the gate from ``limits``, to hand it to the transport, and to charge
+    /// connections from an ungated backbone (the in-memory fakes) on dequeue.
+    let admission: ConnectionAdmission
 
     /// In-flight connections being served, keyed by id, registered/unregistered around ``serve(_:)``.
     ///
     /// ``shutdown(within:)`` force-closes any that have not drained by the deadline.
     let activeConnections = Mutex<[TransportConnectionID: any TransportConnection]>([:])
 
-    /// Live connection accounting: a global total plus per-host counts.
-    private struct ConnectionCounts {
-        var total = 0
-        var perHost: [String: Int] = [:]
-    }
+    /// In-flight QUIC connections being served, keyed by a monotonic handle id (audit addendum P0.5).
+    ///
+    /// A QUIC connection is not a ``TransportConnection`` — it multiplexes streams rather than being
+    /// one — so it needs its own registry; without it the drain reached only the TCP half of the
+    /// server. ``shutdown(within:)`` GOAWAYs each of these, then force-closes whatever has not drained.
+    let activeQUICConnections = Mutex<[Int: HTTP3ConnectionScope]>([:])
+
+    /// The source of ``activeQUICConnections`` keys — a QUIC connection has no transport-assigned id.
+    let nextQUICHandleID = Atomic<Int>(0)
 
     /// Creates a server bound to `transport`, handling requests with `responder` and timing its
     /// Slowloris/idle deadlines against `clock`.
+    ///
+    /// `handlerExecution` decides where application handlers run relative to the connection's I/O
+    /// reactor; see ``HandlerExecutionPolicy``. It defaults to
+    /// ``HandlerExecutionPolicy/inline`` — unchanged behavior — and is deliberately not part of
+    /// ``HTTPLimits``, which models engine resource limits rather than execution topology.
     public init(
         transport: any ServerTransport,
         responder: any HTTPResponder,
         quicTransport: (any QUICServerTransport)? = nil,
         limits: HTTPLimits = .default,
+        handlerExecution: HandlerExecutionPolicy = .inline,
         clock: C
     ) {
         self.transport = transport
         self.quicTransport = quicTransport
-        self.responder = Mutex(responder)
+        self.snapshot = Mutex(ResponderSnapshot(responder, generation: 0))
         self.limits = limits
+        self.handlerExecution = handlerExecution
+        if case .adaptive(let threshold) = handlerExecution {
+            self.handlerGate = HandlerExecutionGate(threshold: threshold)
+        }
+        else {
+            self.handlerGate = nil
+        }
         self.clock = clock
+        self.epoch = clock.now
+        self.admission = ConnectionAdmission(
+            capacity: ConnectionAdmission.Capacity(
+                total: limits.maxConnections,
+                perHost: limits.maxConnectionsPerClient,
+                resumeRatio: limits.acceptResumeRatio
+            )
+        )
     }
 
     deinit {
@@ -84,7 +135,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// When a ``QUICServerTransport`` was supplied it is run alongside the TCP listener to serve
     /// HTTP/3 (RFC 9114), and `Alt-Svc` (RFC 7838) is advertised on the h1/h2 responses.
     public func run() async throws {
-        let connections = try await transport.start()
+        let connections = try await transport.start(admission: admission)
         await withDiscardingTaskGroup { group in
             if quicTransport != nil {
                 group.addTask(priority: .userInitiated) { await self.runHTTP3() }
@@ -102,29 +153,24 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// Atomically swaps the responder so subsequent requests are served by `responder` (G4a — a hot
     /// route / handler reload with no restart).
     ///
-    /// A request reads the responder once at dispatch, so this needs no drain: requests already
-    /// in flight finish on the table they read, and every request dispatched after this call uses the
-    /// new one. Safe to call from any task while the server is running.
+    /// A request reads the responder once when its head completes, so this needs no drain: requests
+    /// already in flight finish on the table they read, and every request whose head completes after
+    /// this call uses the new one. Safe to call from any task while the server is running.
     public func reloadResponder(_ responder: any HTTPResponder) {
-        self.responder.withLock { $0 = responder }
+        snapshot.withLock { current in
+            current = ResponderSnapshot(responder, generation: current.generation &+ 1)
+        }
     }
 
-    /// The current responder, read once under the lock (never held across a dispatch's `await`) — the
-    /// single hot-swap read point (G4a).
+    /// The current generation, read once under the lock (never held across an `await`) — the single
+    /// hot-swap read point (G4a).
     ///
-    /// A dispatch reads this exactly once, then awaits the returned responder, so an in-flight request
-    /// finishes on the table it read while a concurrent ``reloadResponder(_:)`` only affects requests
-    /// dispatched afterward. Centralized here so the protocol-engine dispatch files need not import the
-    /// synchronization primitive.
-    var currentResponder: any HTTPResponder { responder.withLock(\.self) }
-
-    /// The current responder viewed as a ``RouteResolver`` when it conforms (a ``Router``, or a chain
-    /// wrapping one), else `nil`.
-    ///
-    /// The head-time seam: the engines query this — before reading the body — to enforce a per-route body
-    /// limit, dispatch a route-scoped WebSocket upgrade, and honor the streaming opt-in. A responder that
-    /// is not a ``RouteResolver`` leaves the server on its global defaults.
-    var currentResolver: (any RouteResolver)? { currentResponder as? (any RouteResolver) }
+    /// A request reads this exactly once, when its head completes, and then carries the returned value
+    /// through route resolution, body framing and dispatch. So an in-flight request finishes on the
+    /// generation it read while a concurrent ``reloadResponder(_:)`` only affects requests whose heads
+    /// complete afterward, and no request can mix two generations (audit CR-F12). Centralized here so
+    /// the protocol-engine dispatch files need not import the synchronization primitive.
+    var currentSnapshot: ResponderSnapshot { snapshot.withLock(\.self) }
 
     /// The ``RequestBody`` to hand a responder for `request`: an incremental ``RequestBody/stream(_:)``
     /// when the matched route opted in (Phase 1.4), else the buffered bytes.
@@ -133,38 +179,33 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
     /// engine has already received the whole body (bounded by the per-route limit), so a streaming route
     /// is served those bytes wrapped as a one-shot stream — the handler API is uniform across protocols,
     /// and truly incremental h2/h3 delivery is a follow-up (see `docs/adr/0006-…`).
-    func requestBody(_ body: [UInt8], for request: HTTPRequest) -> RequestBody {
-        let resolved = currentResolver?.resolve(method: request.method, path: request.path)
-        return resolved?.streamsBody == true
-            ? .stream(HTTPRequestBodyStream(yielding: body))
-            : .collected(body)
+    ///
+    /// Reads the opt-in off the plan the head already resolved: it used to re-run the route match, a
+    /// third or fourth walk of the table for the same request (audit CR-F19).
+    func requestBody(_ body: [UInt8], following plan: DispatchPlan) -> RequestBody {
+        plan.streamsBody ? .stream(HTTPRequestBodyStream(yielding: body)) : .collected(body)
     }
 
-    /// Admits `connection` if it is under both the global (``HTTPLimits/maxConnections``) and
-    /// per-client (``HTTPLimits/maxConnectionsPerClient``) caps, serves it for its lifetime, then
-    /// releases the slot.
+    /// Takes ownership of the admission slot charged for `connection`, serves it for its lifetime,
+    /// then releases the slot.
+    ///
+    /// A gated backbone already charged the slot at accept time — before this connection was queued
+    /// and before this task existed (audit F8) — so the common path is pure adoption. A connection
+    /// from an ungated backbone (the in-memory fakes) carries no ticket and is charged here instead,
+    /// still before any serve work, so the ceiling holds on every backbone.
     ///
     /// A connection over either cap is closed immediately — a resource-exhaustion defense (the spirit
-    /// of a 429): the per-client cap (T-F4) blunts a single source, the global cap (audit T-F2) bounds
-    /// total live connections so a many-source flood cannot exhaust file descriptors / tasks.
+    /// of a 429, RFC 9110 §15.5.30): the per-client cap (T-F4) blunts a single source, the global cap
+    /// (audit T-F2) bounds total live connections so a many-source flood cannot exhaust file
+    /// descriptors / tasks.
     private func accept(_ connection: any TransportConnection) async {
-        let host = connection.peer.host
-        let admitted = connectionCounts.withLock { counts in
-            guard counts.total < limits.maxConnections else {
-                return false
-            }
-            let current = counts.perHost[host, default: 0]
-            guard current < limits.maxConnectionsPerClient else {
-                return false
-            }
-            counts.perHost[host] = current + 1
-            counts.total += 1
-            return true
-        }
-        guard admitted else {
+        guard let ticket = connection.admissionTicket ?? charge(connection) else {
             await connection.close()
             return
         }
+        // Held for the whole serve loop, then returned — which is also what frees the accept source to
+        // re-arm once enough slots come back (the gate's hysteresis watermark).
+        defer { ticket.release() }
         // Pin the serve task to the connection's preferred executor when it has one (the kqueue/epoll
         // loop): read → parse → route → respond → write then run inline on the loop thread with no hop
         // to the cooperative pool — median-latency parity with the blocking backbone (audit R4). `nil`
@@ -172,18 +213,15 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         await withTaskExecutorPreference(connection.preferredTaskExecutor) {
             await serve(connection)
         }
-        connectionCounts.withLock { counts in
-            counts.total -= 1
-            guard let current = counts.perHost[host] else {
-                return
-            }
-            if current <= 1 {
-                counts.perHost[host] = nil
-            }
-            else {
-                counts.perHost[host] = current - 1
-            }
+    }
+
+    /// Charges an admission slot for a connection its backbone did not charge for, or `nil` when it is
+    /// over the global or per-client ceiling.
+    private func charge(_ connection: any TransportConnection) -> AdmissionTicket? {
+        guard case .admitted(let ticket, _) = admission.admit(host: connection.peer.host) else {
+            return nil
         }
+        return ticket
     }
 
     /// Serves a connection for its lifetime, dispatching by protocol, then closes.
@@ -238,7 +276,7 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
             var buffer: [UInt8] = []
             // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).
             while buffer.count < Self.http2MarkerLength, Self.couldBeHTTP2Preface(buffer) {
-                deadline.arm(self.clock.now.advanced(by: self.limits.keepAliveTimeout))
+                deadline.arm(self.deadlineKey(after: self.limits.keepAliveTimeout))
                 let chunk = try? await connection.receive(maxLength: 16_384)
                 deadline.disarm()
                 guard let chunk, !chunk.isEmpty else { break }
@@ -281,13 +319,15 @@ extension HTTPServer where C == ContinuousClock {
         transport: any ServerTransport,
         responder: any HTTPResponder,
         quicTransport: (any QUICServerTransport)? = nil,
-        limits: HTTPLimits = .default
+        limits: HTTPLimits = .default,
+        handlerExecution: HandlerExecutionPolicy = .inline
     ) {
         self.init(
             transport: transport,
             responder: responder,
             quicTransport: quicTransport,
             limits: limits,
+            handlerExecution: handlerExecution,
             clock: ContinuousClock()
         )
     }

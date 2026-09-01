@@ -17,6 +17,9 @@ let router = Router()
 
 router.get("/") { _, _ in "Hello from the Hummingbird baseline.\n" }
 router.get("/health") { _, _ in "OK\n" }
+// The framework-floor parity route: byte-identical on every server in the field. `/` cannot
+// serve that purpose because each server answers it with its own name.
+router.get("/plaintext") { _, _ in "Hello, World!" }
 router.get("/payload") { _, _ in payload }
 
 router.get("/json") { _, _ in

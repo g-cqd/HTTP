@@ -21,15 +21,16 @@
         internal import Glibc
     #endif
     internal import Dispatch
+    import HTTPTestSupport
     import Testing
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — SNI multi-cert (Phase 5, ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — SNI multi-cert (Phase 5, ADR 0004)", .realNetwork)
     struct PortableTLSSNITests {
         @Test(
             "the handshake's server_name selects the matching certificate, else the default",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func sniSelectsPerNameCertificate() async throws {
             let transport = try Self.sniTransport()
             let connections = try await transport.start()
@@ -59,21 +60,14 @@
         /// A transport whose default identity is the dev `localhost` cert, with two SNI identities whose
         /// CNs equal their server-names.
         private static func sniTransport() throws -> PortableTLSTransport {
-            var tls = try DevTLSIdentity.selfSigned()  // default identity, CN=localhost
+            // PEM identities throughout — both engines' shared intake currency (Phase 3d).
+            var tls = try PortableTLSLoopback.devTLS()  // default identity, CN=localhost
             tls.sniIdentities = [
-                "alpha.test": try sniIdentity(commonName: "alpha.test"),
-                "beta.test": try sniIdentity(commonName: "beta.test")
+                "alpha.test": try PortableTLSLoopback.devSNIIdentity(commonName: "alpha.test"),
+                "beta.test": try PortableTLSLoopback.devSNIIdentity(commonName: "beta.test")
             ]
             return PortableTLSTransport(
                 configuration: TransportConfiguration(port: 0, backbone: .portableTLS, tls: tls)
-            )
-        }
-
-        /// A fresh SNI identity whose certificate Common Name is `commonName`.
-        private static func sniIdentity(commonName: String) throws -> TransportTLS.SNIIdentity {
-            let identity = try DevTLSIdentity.selfSigned(commonName: commonName)
-            return TransportTLS.SNIIdentity(
-                pkcs12: identity.pkcs12, passphrase: identity.passphrase
             )
         }
 
@@ -120,7 +114,8 @@
             guard CHTTPBoringSSL_SSL_connect(ssl) == 1 else {
                 return nil
             }
-            return OpenSSLTLS.peerSubject(of: ssl)  // the server leaf the SNI callback selected
+            // The server leaf the SNI selection handed this client (the oracle's own reading).
+            return PortableTLSLoopback.peerSubject(of: ssl)
         }
     }
 

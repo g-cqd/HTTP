@@ -18,11 +18,11 @@ import Testing
 
 @testable import HTTPTransport
 
-@Suite("Transport — hot TLS certificate reload (G4b)")
+@Suite("Transport — hot TLS certificate reload (G4b)", .realNetwork)
 struct CertificateReloadTests {
     @Test(
         "a reload swaps the served identity for new connections while existing ones keep serving",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func reloadSwapsIdentityAndPreservesConnections() async throws {
         let certA = try DevTLSIdentity.selfSigned(commonName: "reload-cert-A")
         let certB = try DevTLSIdentity.selfSigned(commonName: "reload-cert-B")

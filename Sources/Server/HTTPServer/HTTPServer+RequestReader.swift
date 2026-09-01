@@ -8,6 +8,8 @@
 //  `parseHeadStep`, `frameBody`, `headerSectionEnd`) with the small step types they thread. `serveOne`
 //  is internal so the protocol sniffer in `serve` (main file) can drive the keep-alive loop; the rest
 //  stay private here, and `BodyStep` stays internal so `HTTPServer+Chunked.swift` can produce it.
+//  The streaming-route exchange lives in HTTPServer+RequestStreaming.swift, next to the body producer
+//  it drives.
 //
 
 internal import HTTP1
@@ -22,29 +24,25 @@ extension HTTPServer where C.Duration == Duration {
     /// close (a parse error, a `Connection: close`, EOF, or a transport failure).
     func serveOne(
         _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         buffer: inout [UInt8],
         start: inout Int,
         responseBuffer: inout [UInt8]
     ) async -> Bool {
-        // Reclaim the consumed prefix before reading the next request (audit L3 — the keep-alive ring
-        // buffer): free the whole buffer when it is fully drained (the common non-pipelined case — O(1),
-        // capacity kept), or compact a large dead prefix so a pipelined stream cannot grow it unbounded.
-        // Between pipelined requests we deliberately do *not* shift — advancing `start` past a consumed
-        // request is O(1), the win over the old per-request `removeFirst(consumed)` memmove.
-        if start == buffer.count {
-            buffer.removeAll(keepingCapacity: true)
-            start = 0
-        }
-        else if start >= 16_384 {
-            buffer.removeFirst(start)
-            start = 0
-        }
-
+        reclaim(&buffer, start: &start)
+        // ONE read of the hot-swappable table for this whole exchange (G4a / audit CR-F12): route
+        // resolution, the body limit it yields, the WebSocket dispatch and the responder below all come
+        // from this generation, so a `reloadResponder` landing mid-body cannot pair an old body limit
+        // with a new handler.
+        var plan = DispatchPlan(snapshot: currentSnapshot)
         let outcome: ReadOutcome
         do {
             outcome = try await readRequest(
-                from: connection, deadline: deadline, into: &buffer, start: start
+                from: connection,
+                deadline: deadline,
+                into: &buffer,
+                start: start,
+                following: &plan
             )
         }
         catch let error as HTTP1ParseError {
@@ -63,7 +61,8 @@ extension HTTPServer where C.Duration == Duration {
                 pending: pending,
                 buffer: &buffer,
                 start: &start,
-                responseBuffer: &responseBuffer
+                responseBuffer: &responseBuffer,
+                following: plan
             )
         }
         guard case .request(let framed) = outcome else {
@@ -72,14 +71,30 @@ extension HTTPServer where C.Duration == Duration {
         // Advance past this request (O(1)); any pipelined remainder stays in place, unshifted.
         start = framed.consumed
 
-        let request = framed.parsed.request
+        // Build the per-request context from the verified connection metadata (peer, TLS subject, ALPN,
+        // id) and take the sanitized request back. The verified mutual-TLS client identity (G3) reaches
+        // handlers via `context.connection.tlsPeerSubject` rather than a header, and the same seam
+        // strips every client-supplied server-asserted field off the request (audit CR-F13) — before
+        // the WebSocket branch too, so a handshake handler cannot read a spoofed identity either.
+        let (request, context) = RequestContext.ingress(
+            framed.parsed.request, over: connection, matching: plan.match
+        )
         // A WebSocket Upgrade request (RFC 6455 §4) to a matching `.webSocket` route the app accepts
         // hands the connection to the WebSocket engine for its lifetime; the h1 keep-alive loop ends
         // here. A non-upgrade GET to that path falls through to `respond` → 426 (the route's fallback);
         // a WebSocket path the responder does not declare resolves to `nil` and is served normally.
+        //
+        // This is the one extra table walk a request can still cost, and only an upgrade pays it: the
+        // handshake is method-agnostic (RFC 6455 §4.1) while the plan above was matched under the
+        // request's own method, so the two are genuinely different questions of the same table.
+        //
+        // `shouldUpgrade` takes a `SanitizedRequest`; the raw-request overload it resolves to here
+        // sanitizes on the way in, so the strip holds on this path even though `request` above has
+        // already been through it. Belt and braces by construction rather than by ordering (R5-SEC1).
         if Self.isWebSocketUpgrade(request),
-            let route = currentResolver?.resolveWebSocket(path: request.path),
-            let handler = route.webSocketHandler,
+            let matched = plan.snapshot.resolver?
+                .match(method: request.method, path: request.path, isUpgrade: true),
+            let handler = matched.route.webSocketHandler,
             handler.shouldUpgrade(request)
         {
             await serveWebSocket(
@@ -87,20 +102,23 @@ extension HTTPServer where C.Duration == Duration {
                 deadline: deadline,
                 request: request,
                 handler: handler,
-                hub: route.webSocketHub,
-                topic: route.webSocketTopic,
+                hub: matched.route.webSocketHub,
+                topic: matched.route.webSocketTopic,
                 carryover: Array(buffer[start...])
             )
             return false
         }
-        // Build the per-request context from the verified connection metadata (peer, TLS subject, ALPN,
-        // id). The verified mutual-TLS client identity (G3) now reaches handlers via
-        // `context.connection.tlsPeerSubject`, replacing the former X-Client-Cert-Subject header stamp.
-        let context = RequestContext(connection: connection, request: request)
-        // Read the hot-swappable responder once (G4a); the lock is never held across the await.
-        let current = currentResponder
-        let response = await current.respond(
-            to: request, body: .collected(framed.parsed.body), context: context
+        // Seam 1 of 6 (audit CR-F7): the handler runs under this server's ``HandlerExecutionPolicy``.
+        // The hop, when there is one, is scoped to exactly this call — `buffer`, `start` and
+        // `responseBuffer` are `inout` locals of the reactor-pinned keep-alive loop and are not
+        // captured here, and the serialize-and-send below runs after the scoped preference is
+        // restored. `serveOne` is one sequential statement of that loop, so a pipelined follow-up is
+        // not even read until this exchange has been written (RFC 9112 §9.3 — response order).
+        let response = await respond(
+            to: request,
+            body: .collected(framed.parsed.body),
+            context: context,
+            following: plan
         )
         var head = withAltSvc(response.head)
         // Graceful shutdown: signal this is the last exchange (RFC 9110 §7.6.1) and close after it.
@@ -137,7 +155,7 @@ extension HTTPServer where C.Duration == Duration {
         // slow-read). The buffered body is size-bounded (maxBody), so one idle-timeout window is the
         // right bound; a stalled send is reaped (the watchdog cancels this child task, unblocking the
         // send via the transport's per-call cancellation).
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+        deadline.arm(deadlineKey(after: limits.idleTimeout))
         do {
             if sendsBody {
                 try await connection.send(responseBuffer, response.body)
@@ -159,93 +177,43 @@ extension HTTPServer where C.Duration == Duration {
         )
     }
 
-    /// Serves one streaming-route exchange (Phase 1.4): dispatch the handler with an incremental
-    /// ``RequestBody/stream(_:)`` and read the whole body off the wire into it concurrently — so the
-    /// keep-alive cursor stays exact even if the handler abandons the stream — then send the response.
+    /// Reclaims the keep-alive read buffer before the next request is read.
     ///
-    /// `Expect: 100-continue` is honored before the body is read (RFC 9110 §10.1.1). A body that cannot
-    /// be fully read (truncation, or a chunked body that overran the route limit after dispatch) ends the
-    /// handler's stream early and closes the connection rather than desyncing a pipelined follow-up.
-    private func serveStreaming(
-        _ connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
-        pending: PendingRequest,
-        buffer: inout [UInt8],
-        start: inout Int,
-        responseBuffer: inout [UInt8]
-    ) async -> Bool {
-        let request = pending.head.request
-        if await handleExpect(pending.head, on: connection) {
-            return false  // a 417 was sent — the expectation cannot be met
+    /// First the consumed prefix (audit L3 — the keep-alive ring buffer): free the whole buffer when it
+    /// is fully drained (the common non-pipelined case — O(1), storage kept), or shift out a large dead
+    /// prefix so a pipelined stream cannot grow it without bound. Between pipelined requests we
+    /// deliberately do *not* shift — advancing `start` is O(1), the win over a `removeFirst` memmove per
+    /// request.
+    ///
+    /// Then the *storage*, which neither of those releases: `removeAll(keepingCapacity:)` and
+    /// `removeFirst` both keep the array's buffer, by design. A buffered request body is accumulated
+    /// here (`frameBody` needs the whole thing to build a `ParsedRequest`), so one large upload sizes
+    /// this array to the upload — and keeping that peak hands it to every later request for as long as
+    /// the peer holds the connection open, turning a one-off allocation into permanent per-connection
+    /// residency. An idle keep-alive connection would sit on a gibibyte because it once carried one
+    /// (audit CR-F5). So past the configured ceiling the storage is *released* and the few live octets
+    /// are moved into a fresh array, which then grows back geometrically exactly as it did on this
+    /// connection's first request. Deliberately not `reserveCapacity(ceiling)`: reserving speculates
+    /// that the next request is large when it almost never is, and the allocator rounds the reservation
+    /// up (65,536 becomes 81,888 here), so the ceiling would not actually be one.
+    private func reclaim(_ buffer: inout [UInt8], start: inout Int) {
+        if start == buffer.count {
+            buffer.removeAll(keepingCapacity: true)
+            start = 0
         }
-        let bodyLimit = currentResolver?.resolve(method: request.method, path: request.path)?
-            .bodyLimit
-        let (bodyStream, continuation) = AsyncStream.makeStream(of: [UInt8].self)
-        let context = RequestContext(connection: connection, request: request)
-        let current = currentResponder  // hot-swappable responder, read once (G4a)
-        // The handler consumes the body stream as chunks arrive while this task reads the whole body off
-        // the wire — the producer always runs to completion, so `start` advances past the exact body.
-        async let responseTask = current.respond(
-            to: request,
-            body: .stream(HTTPRequestBodyStream(bodyStream)),
-            context: context
-        )
-        let consumed = await produceBody(
-            pending,
-            into: continuation,
-            buffer: &buffer,
-            from: connection,
-            deadline: deadline,
-            bodyLimit: bodyLimit
-        )
-        continuation.finish()
-        let response = await responseTask
-        guard let consumed else {
-            return false  // body truncated / over-limit mid-stream — close rather than desync
+        else if start >= 16_384 {
+            buffer.removeFirst(start)
+            start = 0
         }
-        start = consumed
-        var head = withAltSvc(response.head)
-        let draining = applyHTTP1Drain(to: &head)
-        if let stream = response.stream {
-            let sent = await sendStreamedResponse(
-                head,
-                stream: stream,
-                omitBody: request.method == .head,
-                on: connection,
-                deadline: deadline
-            )
-            guard sent, !draining else {
-                return false
-            }
-            return !Self.shouldClose(
-                version: pending.head.version, request: request, response: head
-            )
+        let ceiling = limits.keepAliveBufferCapacity
+        // `count <= ceiling` is a second condition, not an assumption: a pipelined remainder larger
+        // than the ceiling would only grow straight back, so leave it alone until it drains.
+        guard buffer.capacity > ceiling, buffer.count <= ceiling else {
+            return
         }
-        let sendsBody = ResponseSerializer.serializeHead(
-            head,
-            bodyLength: response.body.count,
-            omitBody: request.method == .head,
-            into: &responseBuffer
-        )
-        // Bound the buffered response send by the idle deadline (FIX #1) — see ``serveOne``.
-        deadline.arm(clock.now.advanced(by: limits.idleTimeout))
-        do {
-            if sendsBody {
-                try await connection.send(responseBuffer, response.body)
-            }
-            else {
-                try await connection.send(responseBuffer)
-            }
-        }
-        catch {
-            deadline.disarm()
-            return false
-        }
-        deadline.disarm()
-        if draining {
-            return false
-        }
-        return !Self.shouldClose(version: pending.head.version, request: request, response: head)
+        var released: [UInt8] = []
+        released.append(contentsOf: buffer)
+        buffer = released
     }
 
     /// Caps an unterminated header section (431, throwing) and honors `Expect: 100-continue` once the
@@ -263,6 +231,10 @@ extension HTTPServer where C.Duration == Duration {
         // never terminates the header section would grow `buffer` unbounded. `pending == nil` ⇒ no
         // terminator ⇒ the unconsumed bytes are all header bytes: cap them and fail closed with 431
         // (RFC 9110 §15.5.13). `buffer.count - start` excludes any consumed pipelined prefix (L3).
+        //
+        // The sum below cannot overflow: `HTTPLimits.Bounds` tops both `maxRequestLineLength` and
+        // `maxHeaderListSize` at `Int.max / 2` precisely so this ceiling stays representable (R5-VAL).
+        // It used to trap here on limits that `init(validating:)` had accepted (CWE-190).
         let headerBytes = buffer.count - start
         if pending == nil, headerBytes > limits.maxRequestLineLength + limits.maxHeaderListSize {
             throw HTTP1ParseError.headerSectionTooLarge
@@ -285,11 +257,12 @@ extension HTTPServer where C.Duration == Duration {
     /// while a body streams in (RFC 9112 §9.3; the limits are the defense-in-depth knobs).
     private func readRequest(
         from connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>,
+        deadline: IdleDeadline,
         into buffer: inout [UInt8],
-        start: Int
+        start: Int,
+        following plan: inout DispatchPlan
     ) async throws -> ReadOutcome {
-        var headerDeadline: C.Instant?
+        var headerDeadline: Duration?
         // Resumable end-of-headers scan (keeps header framing O(n), not O(n²)); an absolute index into
         // `buffer`, so it begins at the request's start cursor, not 0 (audit L3 — keep-alive ring buffer).
         var scanOffset = start
@@ -297,9 +270,6 @@ extension HTTPServer where C.Duration == Duration {
         // Resumable chunked-body decode kept across reads — O(n), not O(n²) (audit H1-F1).
         var chunked = ChunkedProgress()
         var expectHandled = false  // honor `Expect: 100-continue` once, before the body is read
-        // The matched route's body limit, resolved once when the head is parsed (Phase 1.2); `nil` ⇒ the
-        // global ``HTTPLimits/maxBodySize``.
-        var bodyLimit: Int?
         while true {
             switch assemble(
                 buffer,
@@ -307,7 +277,7 @@ extension HTTPServer where C.Duration == Duration {
                 scanOffset: &scanOffset,
                 pending: &pending,
                 chunked: &chunked,
-                bodyLimit: &bodyLimit
+                following: &plan
             ) {
                 case .request(let framed):
                     return .request(framed)
@@ -330,8 +300,8 @@ extension HTTPServer where C.Duration == Duration {
                     throw error
             }
             deadline.arm(
-                clock.now.advanced(
-                    by: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
+                deadlineKey(
+                    after: receiveTimeout(buffer, headersParsed: pending != nil, &headerDeadline)
                 )
             )
             let received: Int
@@ -373,7 +343,7 @@ extension HTTPServer where C.Duration == Duration {
         scanOffset: inout Int,
         pending: inout PendingRequest?,
         chunked: inout ChunkedProgress,
-        bodyLimit: inout Int?
+        following plan: inout DispatchPlan
     ) -> AssembleStep {
         if pending == nil {
             guard Self.headerSectionEnd(buffer, start: start, from: &scanOffset) != nil else {
@@ -388,18 +358,19 @@ extension HTTPServer where C.Duration == Duration {
                     // flow — so a route cap REPLACES the global bound (it may raise as well as
                     // tighten); the parser resolves framing with no size policy of its own. `nil`
                     // (no router / no per-route cap) falls back to the global maxBodySize.
-                    let resolved = currentResolver?
-                        .resolve(
-                            method: parsed.head.request.method, path: parsed.head.request.path
+                    plan.match = plan.snapshot.resolver?
+                        .match(
+                            method: parsed.head.request.method,
+                            path: parsed.head.request.path,
+                            isUpgrade: false
                         )
-                    bodyLimit = resolved?.bodyLimit
-                    let effectiveLimit = resolved?.bodyLimit ?? limits.maxBodySize
+                    let effectiveLimit = plan.bodyLimit ?? limits.maxBodySize
                     if case .contentLength(let length) = parsed.head.framing,
                         length > effectiveLimit
                     {
                         return .failed(.bodyTooLarge)
                     }
-                    if resolved?.streamsBody == true {
+                    if plan.streamsBody {
                         return .streamingHead(parsed)
                     }
                     pending = parsed
@@ -410,7 +381,7 @@ extension HTTPServer where C.Duration == Duration {
         guard let pending else {
             return .incomplete
         }
-        switch frameBody(buffer, pending, chunked: &chunked, bodyLimit: bodyLimit) {
+        switch frameBody(buffer, pending, chunked: &chunked, bodyLimit: plan.bodyLimit) {
             case .complete(let parsed, let consumed):
                 return .request(FramedRequest(parsed: parsed, consumed: consumed))
             case .incomplete:

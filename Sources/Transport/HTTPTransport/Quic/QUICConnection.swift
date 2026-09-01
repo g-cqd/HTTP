@@ -29,6 +29,16 @@ public protocol QUICConnection: Sendable {
     /// captures it at handshake.
     var tlsPeerIdentity: TLSPeerIdentity? { get }
 
+    /// The admission slot charged for this connection at accept time (audit F8), released when the
+    /// server's serve loop ends.
+    ///
+    /// The QUIC peer of ``TransportConnection/admissionTicket``, and the reason a QUIC connection is
+    /// charged exactly once: a gated backbone charges before it yields and hands the ticket here, so
+    /// the server *adopts* it instead of charging a second slot for the same peer. `nil` for an
+    /// ungated listener (the in-memory fakes, the direct-drive tools); the server then charges its own
+    /// on dequeue, so the ceiling holds on every backbone (audit addendum P0.5).
+    var admissionTicket: AdmissionTicket? { get }
+
     /// A stream of inbound, peer-initiated QUIC streams, finishing when the connection closes.
     func inboundStreams() -> AsyncStream<any QUICStream>
 
@@ -40,6 +50,10 @@ public protocol QUICConnection: Sendable {
 }
 
 extension QUICConnection {
+    /// No admission slot by default — a connection from an ungated listener carries none, and the
+    /// server charges its own on dequeue (audit F8 / addendum P0.5).
+    public var admissionTicket: AdmissionTicket? { nil }
+
     /// No verified client-certificate subject unless a backbone captures one at handshake.
     public var tlsPeerSubject: String? { nil }
 

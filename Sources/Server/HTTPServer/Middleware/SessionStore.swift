@@ -3,10 +3,15 @@
 //  HTTPServer
 //
 //  The server-side half of session management (RFC 6265bis): a store of live session ids that
-//  ``SessionMiddleware`` can consult so a session can be *revoked* (logout) or *expire server-side*,
-//  rather than living entirely in the signed cookie until its `Max-Age`. Optional — without a store the
-//  middleware stays stateless (the HMAC-signed cookie is the whole session). Conformers may be remote
-//  (Redis, a database), so the methods are `async`; an in-memory ``InMemorySessionStore`` ships.
+//  ``SessionMiddleware`` can consult so a session can be *revoked* (logout) or timed out while idle.
+//  Optional — without a store the middleware stays stateless (the signed cookie is the whole session).
+//  Conformers may be remote (Redis, a database), so the methods are `async`; an in-memory
+//  ``InMemorySessionStore`` ships.
+//
+//  A store is **not** what bounds a session's absolute lifetime (audit R5-SEC2). That is the expiry
+//  ``SessionMiddleware`` signs into the token, checked before a store is ever consulted, so every
+//  configuration has the bound whether or not one is installed. A store adds the two guarantees a
+//  self-contained token cannot make: revocation before the expiry, and an idle timeout.
 //
 
 /// A store of live server-side sessions consulted by ``SessionMiddleware`` for revocation and expiry.

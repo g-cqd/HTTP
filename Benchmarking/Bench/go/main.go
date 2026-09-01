@@ -26,6 +26,12 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprint(w, "OK\n")
 	})
+	// The framework-floor parity route: byte-identical on every server in the field. `/` cannot
+	// serve that purpose because each server answers it with its own name.
+	mux.HandleFunc("/plaintext", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprint(w, "Hello, World!")
+	})
 	mux.HandleFunc("/json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"message":"Hello, World!"}`)

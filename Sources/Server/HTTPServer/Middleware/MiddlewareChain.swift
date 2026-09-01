@@ -33,15 +33,11 @@ public struct MiddlewareChain: HTTPResponder, RouteResolver {
         await composed.respond(to: request, body: body, context: context)
     }
 
-    /// Resolves a route's metadata at the head by forwarding to the wrapped responder — a middleware
-    /// chain around a ``Router`` stays resolvable, since middleware never changes which route matches.
-    public func resolve(method: HTTPMethod, path: String) -> ResolvedRoute? {
-        (composed as? (any RouteResolver))?.resolve(method: method, path: path)
-    }
-
-    /// Resolves a WebSocket route for `path` by forwarding to the wrapped responder.
-    public func resolveWebSocket(path: String) -> ResolvedRoute? {
-        (composed as? (any RouteResolver))?.resolveWebSocket(path: path)
+    /// Matches a route at the head by forwarding to the wrapped responder — a middleware chain around
+    /// a ``Router`` stays resolvable, since middleware never changes which route matches.
+    public func match(method: HTTPMethod, path: String, isUpgrade: Bool) -> RouteMatch? {
+        (composed as? (any RouteResolver))?
+            .match(method: method, path: path, isUpgrade: isUpgrade)
     }
 
     /// Whether the wrapped responder declares any WebSocket route (RFC 8441 / RFC 9220 advertisement).

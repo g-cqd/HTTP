@@ -52,10 +52,16 @@ OURS_SCRATCH="${OURS_SCRATCH:-/tmp/swiftpm-build/ours-bench}"
 OURS_BIN="$OURS_SCRATCH/release/ours-bench"
 mkdir -p "$RESULTS_DIR"
 
-# ADJSON (OURS_JSON=adjson) resolves its ADFoundation sibling from github.com/g-cqd@main, like every
-# other first-party dependency in the family — the `*_PATH` local-checkout overrides were removed.
-# Note this harness's `ours/Package.swift` still uses relative `.package(path:)` for HTTP and ADJSON
-# themselves, so it only runs from inside a full workspace checkout.
+# ADJSON (OURS_JSON=adjson) is an unpublished LOCAL sibling at ../../../../ADJSON, so `ours/Package.swift`
+# only depends on it when BENCH_ADJSON is set at build time — otherwise the package would be
+# unresolvable on any machine without that sibling (which is every CI runner; the `django-bench` job in
+# .github/workflows/ci.yml builds the default graph). It resolves its own ADFoundation from
+# github.com/g-cqd@main, like every other first-party dependency in the family.
+if [ "$OURS_JSON" = "adjson" ]; then
+    [ -d "$SCRIPT_DIR/../../../ADJSON" ] \
+        || { echo "error: OURS_JSON=adjson needs an ADJSON checkout beside this repo" >&2; exit 1; }
+    export BENCH_ADJSON=1
+fi
 
 # --- preflight --------------------------------------------------------------------------------------
 command -v oha >/dev/null || { echo "error: 'oha' not found — brew install oha" >&2; exit 1; }

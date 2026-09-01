@@ -12,7 +12,7 @@ import HTTPCore
 import HTTPTestSupport
 import HTTPTransport
 
-actor SlowReaderConnection: TransportConnection {
+actor SlowReaderConnection: UnleasedTransportConnection {
     nonisolated let id: TransportConnectionID
     nonisolated let peer = TransportAddress(host: "slow-reader", port: 0)
     nonisolated let negotiatedApplicationProtocol: String? = nil  // cleartext HTTP/1.1 (sniffed)

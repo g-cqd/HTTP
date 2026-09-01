@@ -28,11 +28,14 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — mutual TLS, incl. .optional (Phase 4, ADR 0004)")
+    @Suite(
+        "Portable TLS (vendored BoringSSL) — mutual TLS, incl. .optional (Phase 4, ADR 0004)",
+        .realNetwork
+    )
     struct PortableTLSMutualTLSTests {
         @Test(
             "required client-auth surfaces the presented client certificate subject",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func requiredSurfacesSubject() async throws {
             // RFC 8446 §4.4.2.4: a presented client certificate MUST be validated. This backbone defers
             // that validation to the `verifyPeer` hook (the TLS layer is permissive — G3 "the hook is the
@@ -45,7 +48,7 @@
 
         @Test(
             "required client-auth rejects a client that presents no certificate",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func requiredRejectsNoCertificate() async throws {
             let transport = try Self.transport(clientAuth: .required)
             try await Self.expectNoConnection(from: transport, identity: nil)
@@ -53,7 +56,7 @@
 
         @Test(
             "a verifyPeer pin rejects a disallowed certificate under required auth",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func requiredHonorsVerifyPeerRejection() async throws {
             let identity = try DevTLSIdentity.selfSigned(commonName: "portable-unpinned")
             let transport = try Self.transport(clientAuth: .required) { _ in false }
@@ -62,7 +65,7 @@
 
         @Test(
             "verifyPeer receives the DER chain leaf-first and admits a match",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func verifyPeerReceivesDERChain() async throws {
             let sawNonEmptyLeaf = Mutex(false)
             try await Self.expectSubject(
@@ -88,7 +91,7 @@
         // destructor optionality and this file's neighbor `Glibc.send` shadowing.)
         @Test(
             "optional client-auth surfaces a presented client certificate subject",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func optionalSurfacesSubject() async throws {
             // RFC 8446 §4.4.2.4 — see `requiredSurfacesSubject`: validation is the `verifyPeer` hook's
             // job here, so a surfacing test supplies it; a nil hook conformantly rejects a presented cert.
@@ -99,7 +102,7 @@
 
         @Test(
             "optional client-auth admits a client that presents no certificate",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func optionalAdmitsNoCertificate() async throws {
             let transport = try Self.transport(clientAuth: .optional)
             let connections = try await transport.start()
@@ -117,14 +120,14 @@
             defer { accepting.cancel() }
 
             Self.connect(port: port, identity: nil)
-            let subjects = try await surfaced.wait(forAtLeast: 1, timeout: .seconds(15))
+            let subjects = try await surfaced.wait(forAtLeast: 1)
             #expect(subjects.first == .some(nil))  // surfaced, with no client-cert subject
             await transport.shutdown()
         }
 
         @Test(
             "a verifyPeer pin rejects a disallowed certificate under optional auth",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func optionalHonorsVerifyPeerRejection() async throws {
             let identity = try DevTLSIdentity.selfSigned(commonName: "portable-optional-unpinned")
             let transport = try Self.transport(clientAuth: .optional) { _ in false }
@@ -139,7 +142,9 @@
             clientAuth: TransportTLS.ClientAuth,
             verifyPeer: (@Sendable ([[UInt8]]) -> Bool)? = nil
         ) throws -> PortableTLSTransport {
-            var tls = try DevTLSIdentity.selfSigned()
+            // PEM server identity — both engines' shared intake currency (Phase 3d). The
+            // CLIENT identities below stay PKCS#12: they feed the raw BoringSSL client only.
+            var tls = try PortableTLSLoopback.devTLS()
             tls.clientAuth = clientAuth
             tls.verifyPeer = verifyPeer
             return PortableTLSTransport(
@@ -201,7 +206,7 @@
 
             connect(port: port, identity: identity)
             await #expect(throws: AsyncEventProbeTimeoutError.self) {
-                _ = try await yielded.wait(forAtLeast: 1, timeout: .seconds(2))
+                _ = try await yielded.wait(forAtLeast: 1, timeout: TestLivenessBudget.absence)
             }
             await transport.shutdown()
         }

@@ -27,15 +27,16 @@
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — Phase 2 connection (ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — Phase 2 connection (ADR 0004)", .realNetwork)
     struct PortableTLSConnectionTests {
         @Test(
             "a TLS session round-trips plaintext through PortableTLSConnection over a socket",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func connectionEchoesOverLoopback() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
-            let serverContext = try OpenSSLTLS.serverContext(identity)
-            defer { CHTTPBoringSSL_SSL_CTX_free(serverContext) }
+            let serverContext = try PortableTLSLoopback.makeServerContext(
+                try PortableTLSLoopback.devTLS()
+            )
+            defer { serverContext.release() }
 
             var descriptors = [Int32](repeating: 0, count: 2)
             let paired = descriptors.withUnsafeMutableBufferPointer { buffer in
@@ -49,26 +50,14 @@
             let serverDescriptor = descriptors[0]
             let clientDescriptor = descriptors[1]
 
-            // Server side: wrap the accepted descriptor in a PortableTLSConnection driven through memory
-            // BIOs on a kqueue/epoll loop (audit R4 — event-driven, non-blocking).
+            // Server side: wrap the accepted descriptor in a PortableTLSConnection driven by
+            // this build's engine on a kqueue/epoll loop (audit R4 — event-driven, non-blocking).
             POSIXSocket.setNonBlocking(serverDescriptor)
-            let serverSSL = try #require(CHTTPBoringSSL_SSL_new(serverContext))
-            let readBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            let writeBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            CHTTPBoringSSL_SSL_set_bio(serverSSL, readBIO, writeBIO)
             let loop = try TLSEventLoop()
             loop.start()
             defer { loop.stop() }
-            let connection = PortableTLSConnection(
-                id: TransportConnectionID(1),
-                peer: TransportAddress(host: "127.0.0.1", port: 0),
-                ssl: serverSSL,
-                readBIO: readBIO,
-                writeBIO: writeBIO,
-                descriptor: serverDescriptor,
-                eventLoop: loop,
-                clientAuth: .none,
-                verifyPeer: nil
+            let connection = try PortableTLSLoopback.makeConnection(
+                serverContext, descriptor: serverDescriptor, loop: loop
             )
 
             // Client side: a raw libssl peer that handshakes, sends "ping", and records the echo it reads.
@@ -112,7 +101,7 @@
             #expect(received == [UInt8]("ping".utf8))
             try await connection.send(try #require(received))
 
-            let echoes = try await echoed.wait(forAtLeast: 1, timeout: .seconds(15))
+            let echoes = try await echoed.wait(forAtLeast: 1)
             #expect(echoes.first == [UInt8]("ping".utf8))
             #expect(connection.isSecure)
             await connection.close()
@@ -120,11 +109,12 @@
 
         @Test(
             "a BARE child-task cancel unblocks a parked TLS receive (the receive contract)",
-            .timeLimit(.minutes(1)))
+            .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
         func childTaskCancelUnblocksParkedReceive() async throws {
-            let identity = try DevTLSIdentity.selfSigned()
-            let serverContext = try OpenSSLTLS.serverContext(identity)
-            defer { CHTTPBoringSSL_SSL_CTX_free(serverContext) }
+            let serverContext = try PortableTLSLoopback.makeServerContext(
+                try PortableTLSLoopback.devTLS()
+            )
+            defer { serverContext.release() }
 
             var descriptors = [Int32](repeating: 0, count: 2)
             let paired = descriptors.withUnsafeMutableBufferPointer { buffer in
@@ -139,23 +129,11 @@
             let clientDescriptor = descriptors[1]
 
             POSIXSocket.setNonBlocking(serverDescriptor)
-            let serverSSL = try #require(CHTTPBoringSSL_SSL_new(serverContext))
-            let readBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            let writeBIO = try #require(CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()))
-            CHTTPBoringSSL_SSL_set_bio(serverSSL, readBIO, writeBIO)
             let loop = try TLSEventLoop()
             loop.start()
             defer { loop.stop() }
-            let connection = PortableTLSConnection(
-                id: TransportConnectionID(1),
-                peer: TransportAddress(host: "127.0.0.1", port: 0),
-                ssl: serverSSL,
-                readBIO: readBIO,
-                writeBIO: writeBIO,
-                descriptor: serverDescriptor,
-                eventLoop: loop,
-                clientAuth: .none,
-                verifyPeer: nil
+            let connection = try PortableTLSLoopback.makeConnection(
+                serverContext, descriptor: serverDescriptor, loop: loop
             )
 
             // Client side: handshake, then go silent — the server's next receive parks indefinitely.
@@ -194,7 +172,7 @@
                 }
                 unblocked.record(())
             }
-            _ = try await unblocked.wait(forAtLeast: 1, timeout: .seconds(3))
+            _ = try await unblocked.wait(forAtLeast: 1)
             await joiner.value
             await connection.close()
         }

@@ -5,9 +5,11 @@
 //  A thin C shim over libbrotli (encoder + decoder) for the RFC 7932 `br` content coding on the non-Apple
 //  (Linux) path, where Apple's Compression framework — which provides Brotli on Darwin — is absent. One-
 //  shot, like CZstd: each entry point funnels libbrotli's boolean/enum results to "octets written, or 0
-//  on failure" so the Swift side reads 0 as "could not encode/decode". The whole target is opt-in via the
-//  `HTTP_BROTLI` build flag, so the default build graph never links libbrotli; the Swift integration
-//  guards on `#if canImport(CBrotli)`. The caller owns the buffers; no state is held across calls.
+//  on failure" so the Swift side reads 0 as "could not encode/decode". The whole module is opt-in via the
+//  `Brotli` package trait (SE-0450), so the default build graph never links libbrotli; the Swift
+//  integration guards on `#if canImport(CBrotli)`. Only prototypes live here — the definitions in
+//  cbrotli.c sit behind the trait-driven `HTTP_TRAIT_BROTLI` define. The caller owns the buffers; no
+//  state is held across calls.
 //
 
 #ifndef CBROTLI_H

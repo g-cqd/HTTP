@@ -48,6 +48,10 @@ extension HTTPStatus {
     public static let notFound = HTTPStatus(unchecked: 404)
     /// `405 Method Not Allowed` (RFC 9110 §15.5.6).
     public static let methodNotAllowed = HTTPStatus(unchecked: 405)
+    /// `406 Not Acceptable` (RFC 9110 §15.5.7) — no available representation matches the proactive
+    /// negotiation headers, e.g. an `Accept-Encoding` that excludes `identity` with no coded
+    /// representation on hand (§12.5.3).
+    public static let notAcceptable = HTTPStatus(unchecked: 406)
     /// `412 Precondition Failed` (RFC 9110 §15.5.13) — an `If-Match` / `If-Unmodified-Since` failure.
     public static let preconditionFailed = HTTPStatus(unchecked: 412)
     /// `416 Range Not Satisfiable` (RFC 9110 §15.5.17).
@@ -58,6 +62,8 @@ extension HTTPStatus {
     public static let contentTooLarge = HTTPStatus(unchecked: 413)
     /// `414 URI Too Long` (RFC 9110 §15.5.15).
     public static let uriTooLong = HTTPStatus(unchecked: 414)
+    /// `415 Unsupported Media Type` (RFC 9110 §15.5.16) — including a refused `Content-Encoding`.
+    public static let unsupportedMediaType = HTTPStatus(unchecked: 415)
     /// `417 Expectation Failed` (RFC 9110 §15.5.18) — an `Expect` other than `100-continue`.
     public static let expectationFailed = HTTPStatus(unchecked: 417)
     /// `426 Upgrade Required` (RFC 9110 §15.5.22) — rejects a WebSocket handshake naming a version.

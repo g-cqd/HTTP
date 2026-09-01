@@ -25,13 +25,9 @@ private struct InterceptedResponder: HTTPResponder, RouteResolver {
         await middleware.respond(to: request, body: body, context: context, next: next)
     }
 
-    // Forward route resolution down the chain to the terminal responder (the ``Router``).
-    func resolve(method: HTTPMethod, path: String) -> ResolvedRoute? {
-        (next as? (any RouteResolver))?.resolve(method: method, path: path)
-    }
-
-    func resolveWebSocket(path: String) -> ResolvedRoute? {
-        (next as? (any RouteResolver))?.resolveWebSocket(path: path)
+    // Forward route matching down the chain to the terminal responder (the ``Router``).
+    func match(method: HTTPMethod, path: String, isUpgrade: Bool) -> RouteMatch? {
+        (next as? (any RouteResolver))?.match(method: method, path: path, isUpgrade: isUpgrade)
     }
 
     var hasWebSocketRoutes: Bool {

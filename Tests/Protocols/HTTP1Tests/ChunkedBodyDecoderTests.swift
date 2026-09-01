@@ -57,6 +57,58 @@ struct ChunkedBodyDecoderTests {
         #expect(try decodeOneByteAtATime(wire) == Array(payload.utf8))
     }
 
+    /// Feeds `wire` one octet at a time, **draining** the decoded body after every `advance` — the shape
+    /// a streaming caller has once it yields each chunk onward — and returns the total octets decoded.
+    ///
+    /// This is what makes ``ChunkedBodyDecoder/State/decodedByteCount`` load-bearing: `body.count` is 0
+    /// at the start of every feed here, so a cap derived from the live buffer would bound nothing.
+    private func decodeDraining(_ wire: [UInt8], limits: HTTPLimits) throws -> Int {
+        var state = ChunkedBodyDecoder.State()
+        var body: [UInt8] = []
+        var buffer: [UInt8] = []
+        var consumed = 0
+        var total = 0
+        for byte in wire {
+            buffer.append(byte)
+            let done = try buffer.withUnsafeBytes { raw -> Bool in
+                var reader = ByteReader(raw, startingAt: consumed)
+                let complete = try ChunkedBodyDecoder.advance(
+                    &reader,
+                    state: &state,
+                    into: &body,
+                    limits: limits
+                )
+                consumed = reader.position
+                return complete
+            }
+            total += body.count
+            body.removeAll(keepingCapacity: true)  // the streaming caller yielded and dropped it
+            if done { break }
+        }
+        return total
+    }
+
+    @Test("a draining caller is still bounded by maxBodySize (CWE-409, RFC 9112 §7.1)")
+    func boundsDrainedBodyAgainstMaxBodySize() {
+        let limits = HTTPLimits(maxBodySize: 64)
+        // 32 + 32 + 1 == maxBodySize + 1. The third chunk-size line is where the decode must fail
+        // closed: without a monotonic count the caller's drain resets the cap on every feed and
+        // `maxBodySize` stops bounding anything at all — an unbounded upload from a *bounded* config.
+        let payload = String(repeating: "A", count: 32)
+        let wire = Array("20\r\n\(payload)\r\n20\r\n\(payload)\r\n1\r\nA\r\n0\r\n\r\n".utf8)
+        #expect(throws: HTTP1ParseError.bodyTooLarge) {
+            _ = try decodeDraining(wire, limits: limits)
+        }
+    }
+
+    @Test("a draining caller may decode exactly maxBodySize octets (RFC 9112 §7.1)")
+    func admitsDrainedBodyAtExactlyMaxBodySize() throws {
+        let limits = HTTPLimits(maxBodySize: 64)
+        let payload = String(repeating: "A", count: 32)
+        let wire = Array("20\r\n\(payload)\r\n20\r\n\(payload)\r\n0\r\n\r\n".utf8)
+        #expect(try decodeDraining(wire, limits: limits) == 64)
+    }
+
     /// One-shot decode (the whole body present) — shares the resumable engine, so it exercises the same
     /// extension/trailer hardening on a single buffer.
     private func decodeWhole(_ string: String, limits: HTTPLimits = .default) throws -> [UInt8] {

@@ -187,7 +187,11 @@ extension QPACKDecoder {
     /// Decodes the (possibly Huffman-coded) octets of a fully-present string (RFC 9204 §4.1.2).
     private func decodePayload(_ payload: RawSpan, huffman: Bool) throws(QPACKError) -> String {
         guard huffman else {
-            return payload.withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
+            // SE-0458: the materialization boundary, same argument as `QPACKString.decodeString`.
+            // `payload` is a compiler-lifetime-checked `RawSpan` over a range the caller bounded
+            // against `limits.maxFieldSize` and `remaining`; the pointer lives for the closure body
+            // only, which copies out and lets it die.
+            return payload.withUnsafeBytes { unsafe String(decoding: $0, as: Unicode.UTF8.self) }
         }
         do {
             return try Huffman.decodeString(payload)

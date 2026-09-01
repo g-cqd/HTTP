@@ -15,6 +15,10 @@ extern httptk_malloc_logger_t *malloc_logger;
 /// `MALLOC_LOG_TYPE_ALLOCATE` in libmalloc's stack-logging encoding (a malloc/calloc/realloc-new).
 #define HTTPTK_MALLOC_LOG_TYPE_ALLOCATE 2
 
+/// `MALLOC_LOG_TYPE_DEALLOCATE`. Set *together with* ALLOCATE for a realloc, which is what moves the
+/// requested size from `arg2` (the old pointer) to `arg3`.
+#define HTTPTK_MALLOC_LOG_TYPE_DEALLOCATE 4
+
 /// Per-thread measurement state, so each measuring thread counts only its OWN allocations.
 ///
 /// The malloc logger is a process-wide hook fired for every thread, but Swift Testing runs suites in
@@ -23,6 +27,7 @@ extern httptk_malloc_logger_t *malloc_logger;
 /// (pthread thread-specific data) makes a measurement immune to whatever else is running.
 typedef struct {
     uint64_t count;
+    uint64_t bytes;
     int active;
 } httptk_state;
 
@@ -41,6 +46,9 @@ static void httptk_counting_logger(uint32_t type, uintptr_t arg1, uintptr_t arg2
     httptk_state *state = pthread_getspecific(httptk_key);
     if (state && state->active && (type & HTTPTK_MALLOC_LOG_TYPE_ALLOCATE)) {
         state->count++;
+        /* malloc/calloc log (zone, size, 0, result); realloc logs (zone, old_ptr, size, result) and
+           sets DEALLOCATE alongside ALLOCATE — so the requested size sits in arg3 there, not arg2. */
+        state->bytes += (type & HTTPTK_MALLOC_LOG_TYPE_DEALLOCATE) ? (uint64_t)arg3 : (uint64_t)arg2;
     }
     /* Chain to whatever hook was already installed (e.g. Instruments) so we don't disrupt it. */
     if (httptk_prev_logger) {
@@ -81,17 +89,35 @@ void httptk_malloc_count_begin(void) {
     pthread_once(&httptk_install_once, httptk_install);
     if (state) {
         state->count = 0;
+        state->bytes = 0;
         state->active = 1;
     }
 }
 
 uint64_t httptk_malloc_count_end(void) {
+    uint64_t count = 0;
+    httptk_malloc_count_stop(&count, 0);
+    return count;
+}
+
+void httptk_malloc_count_stop(uint64_t *count, uint64_t *bytes) {
     httptk_state *state = pthread_getspecific(httptk_key);
     if (!state || !state->active) {
-        return 0;
+        if (count) {
+            *count = 0;
+        }
+        if (bytes) {
+            *bytes = 0;
+        }
+        return;
     }
     state->active = 0;
-    return state->count;
+    if (count) {
+        *count = state->count;
+    }
+    if (bytes) {
+        *bytes = state->bytes;
+    }
 }
 
 #else /* non-Darwin: counting unavailable — a benchmark malloc metric covers Linux CI. */
@@ -99,5 +125,14 @@ uint64_t httptk_malloc_count_end(void) {
 int httptk_malloc_counting_available(void) { return 0; }
 void httptk_malloc_count_begin(void) {}
 uint64_t httptk_malloc_count_end(void) { return 0; }
+
+void httptk_malloc_count_stop(uint64_t *count, uint64_t *bytes) {
+    if (count) {
+        *count = 0;
+    }
+    if (bytes) {
+        *bytes = 0;
+    }
+}
 
 #endif

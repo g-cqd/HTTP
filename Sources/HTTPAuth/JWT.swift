@@ -9,6 +9,11 @@
 //  configurable `leeway`) and the optional `aud`/`iss`. Signatures use swift-crypto: HS256 = HMAC-SHA256,
 //  ES256 = P-256 ECDSA (SHA-256), RS256 = RSA PKCS#1 v1.5 (SHA-256).
 //
+//  The verifier distrusts its OWN temporal inputs as much as the token's: `now` must be finite and
+//  `leeway` finite and non-negative. Every IEEE 754 comparison against a NaN is false, so a NaN clock or
+//  leeway would silently turn `now > exp + leeway` into "not expired" and admit a dead token
+//  (CWE-754, reached via CWE-20).
+//
 
 // swiftlint:disable sorted_imports - swift-format's OrderedImports sorts `_`-prefixed modules last
 public import Crypto
@@ -33,6 +38,12 @@ public enum JWT {
         case notYetValid
         case audienceMismatch
         case issuerMismatch
+        /// The caller's own temporal inputs were unusable: a non-finite `now`, or a `leeway` that is
+        /// non-finite or negative.
+        ///
+        /// Not a property of the token — the verifier refuses to decide at all rather than decide on
+        /// IEEE 754 comparisons that are all false against a NaN (CWE-754).
+        case invalidClock
     }
 
     /// A verification key bound to one JWS algorithm (RFC 7518); the binding is the confusion defense.
@@ -42,9 +53,22 @@ public enum JWT {
     /// conformance fails to compile there; the keys carry no mutable state, so the unchecked conformance is
     /// sound on both platforms.
     public enum Key: @unchecked Sendable {
-        case hs256([UInt8])  // shared secret
+        case hs256(SymmetricKey)  // shared secret
         case es256(P256.Signing.PublicKey)
         case rs256(_RSA.Signing.PublicKey)
+
+        /// An HS256 key from `secret`, or nil if it is shorter than the SHA-256 digest.
+        ///
+        /// RFC 7518 §3.2: "A key of the same size as the hash output (for instance, 256 bits for
+        /// "HS256") or larger MUST be used with this algorithm." The raw `[UInt8]` case accepted any
+        /// length, including empty, so a token could be "verified" against no secret at all
+        /// (CWE-326, inadequate encryption strength).
+        public static func hs256(secret: [UInt8]) -> Self? {
+            guard secret.count >= Crypto.SHA256.Digest.byteCount else {
+                return nil
+            }
+            return .hs256(SymmetricKey(data: secret))
+        }
 
         /// The `alg` header value this key verifies.
         var algorithm: String {
@@ -82,6 +106,13 @@ public enum JWT {
     /// `crit` JOSE header (RFC 7515 §4.1.11). Validates `exp`/`nbf`/`iat` (± `leeway`) and the optional
     /// `audience`/`issuer`; non-finite numeric claims are rejected. By default a token MUST carry `exp`
     /// (`requireExpiration`) so an unbounded-lifetime token is not silently accepted.
+    ///
+    /// `now` must be finite and `leeway` finite and non-negative, else the result is
+    /// ``Error/invalidClock`` — checked first, before the token is even parsed. The temporal checks are
+    /// IEEE 754 comparisons and *every* comparison against a NaN is false, so a NaN `now` or `leeway`
+    /// would make `now > exp + leeway` false for an already-expired token and verification would
+    /// succeed. That is an authentication bypass driven purely by a caller-side input (CWE-754 improper
+    /// check for an unusual condition), so the inputs are validated rather than trusted.
     public static func verify(
         _ token: some StringProtocol,
         key: Key,
@@ -91,6 +122,11 @@ public enum JWT {
         leeway: Double = 0,
         requireExpiration: Bool = true
     ) -> Result<Claims, Error> {
+        // Before any parsing or crypto: an unusable clock cannot produce a trustworthy verdict, and
+        // refusing here also denies a caller the verifier's HMAC/RSA budget on a broken configuration.
+        guard now.isFinite, leeway.isFinite, leeway >= 0 else {
+            return .failure(.invalidClock)
+        }
         guard let parsed = parse(token) else {
             return .failure(.malformed)
         }
@@ -156,11 +192,10 @@ public enum JWT {
         // straight into swift-crypto — no per-verify `Data(...)` copy of either buffer.
         switch key {
             case .hs256(let secret):
+                // The `SymmetricKey` is built once, when the key is constructed — not per verify.
                 return HMAC<Crypto.SHA256>
                     .isValidAuthenticationCode(
-                        signature,
-                        authenticating: signingInput,
-                        using: SymmetricKey(data: secret)
+                        signature, authenticating: signingInput, using: secret
                     )
             case .es256(let publicKey):
                 guard let parsed = try? P256.Signing.ECDSASignature(rawRepresentation: signature)
@@ -197,6 +232,9 @@ public enum JWT {
     }
 
     /// The first claim that fails for the given constraints, or nil if all pass (RFC 7519 §4.1).
+    ///
+    /// Requires a finite `now` and a finite, non-negative `leeway` — ``verify(_:key:audience:issuer:
+    /// now:leeway:requireExpiration:)`` establishes that, so the comparisons below are total.
     private static func validate(
         _ claims: Claims,
         audience: String?,

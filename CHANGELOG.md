@@ -1,5 +1,71 @@
 # Changelog
 
+## Unreleased — in-house DEFLATE: system zlib leaves the package (2026-08-17)
+
+`HTTPDeflate` is a from-scratch, pure-Swift RFC 1951 DEFLATE codec (inflate + deflate) with the
+RFC 1952 gzip and RFC 1950 zlib containers — sans-I/O (`Span` in, `OutputSpan` out), typed
+`InflateError`s on the attacker-facing half, zero steady-state allocations, strict memory safety
+from birth. It replaces the last two system-zlib borrows: `CWSDeflate` (RFC 7692
+permessage-deflate, previously linked on every platform) and `CZlibCoding` (the Linux gzip content
+codings). Equivalence against zlib was proven differentially on both platforms' system libraries
+before the shims were deleted; `linkedLibrary("z")` no longer appears in the manifest and a
+from-scratch verbose build contains zero `-lz`.
+
+### Added
+- The `HTTPDeflate` library product: `Deflator`/`Inflator` (raw RFC 1951, sync-flush and finish
+  boundaries, context takeover + `reset()`), `GzipDeflator`/`GzipInflator`/`ZlibInflator`
+  (verified CRC-32/ISIZE and Adler-32 trailers), `DeflateCodec` one-shots, `DeflateLevel`
+  (store/fast/balanced), `CodecProgress`, `DeflateFlush`, `InflateError`.
+- gzip request decoding and gzip response coding now exist on **every** build — the
+  "no gzip backend" fallbacks in the middleware are gone.
+
+### Changed
+- WebSocket permessage-deflate and the Linux `gzip`/`deflate` codings ride `HTTPDeflate`;
+  Darwin's buffered/streamed response codings stay on Apple's Compression framework.
+- The `deflate` request coding now decodes its spec'd RFC 1950 envelope (raw RFC 1951 fallback)
+  and `gzip` strictly RFC 1952 — the shim's header auto-detect had accepted mislabeled bodies.
+
+### Removed (breaking for no supported configuration)
+- The `CWSDeflate` and `CZlibCoding` targets and their system-zlib links.
+
+## Unreleased — TOCTOU-safe static file serving (2026-07-31)
+
+`FileResponder` resolved a request path by string (`resolvingSymlinksInPath()` + a `hasPrefix`
+containment check) and then opened the result **by name**, repeatedly — `fileExists`,
+`attributesOfItem`, `FileHandle(forReadingAtPath:)`, the streaming pump, the h1 `open()` before
+`sendfile(2)`, and the `.br`/`.gz` sidecar lookup. A writer able to swap a path component between the
+check and any of those opens escaped the root (CWE-367 time-of-check/time-of-use, CWE-59 link
+following).
+
+Resolution is now anchored on a descriptor: the root is opened once, each request component is one
+`openat(2)` hop with `O_NOFOLLOW`, and the descriptor that is verified is the descriptor that is
+stat'd, read, and handed to `sendfile(2)`. Containment is structural, so there is no window at all.
+
+### Breaking
+- **`ResponseBodyWriter.writeFile(atPath:offset:length:)` → `writeFile(_ region: FileRegion)`.** A
+  pathname cannot express the invariant — the writer must not be able to perform a lookup. A conformer
+  that overrode it gets `region.descriptor` / `.offset` / `.length`.
+- **A symlink under the root is now refused (`403`)**, where the prefix check served an in-root one.
+- **A file the process cannot open is `403`**, not `500`: resolution *is* the open, so `EACCES`
+  surfaces where it happens (RFC 9110 §15.5.4).
+- **A `FileResponder(root:)` whose root is not an existing directory answers `500`**, not `404` — that
+  is a misconfiguration, not a missing resource.
+
+### Added
+- `RootDirectory`, `OpenedDirectory`, `OpenedFile`, `FileRegion`, and the `POSIXFile` syscall wrappers.
+  `OpenedFile` exposes the verified `descriptor`, and the `size`/`modifiedAt` from **that
+  descriptor's** `fstat` — so `Content-Length`, `ETag`, and `Last-Modified` cannot describe a file a
+  concurrent rename swapped out.
+
+### Fixed (security)
+- **CWE-367 / CWE-59:** a rename racing static file serving can no longer leak a file outside the root.
+- **A FIFO or device node under the root is refused** rather than opened. `FileManager.fileExists` +
+  `FileHandle(forReadingAtPath:)` would open a FIFO, and `open(2)` on one with no writer blocks — the
+  serve task parked forever. The lookup flags carry `O_NONBLOCK` and the leaf `fstat` requires
+  `S_IFREG`.
+- **The autoindex listing** is read from the verified directory descriptor (`fdopendir` + `fstatat`
+  with `AT_SYMLINK_NOFOLLOW`) and lists only regular files and directories.
+
 ## Unreleased — deep security hardening (2026-06-25)
 
 A second-pass adversarial hardening of the stack; see

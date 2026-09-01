@@ -16,12 +16,6 @@ internal import HTTP1
 internal import HTTPCore
 internal import HTTPTransport
 
-#if canImport(Darwin)
-    internal import Darwin
-#elseif canImport(Glibc)
-    internal import Glibc
-#endif
-
 extension HTTPServer {
     /// Streams a response over HTTP/1.1.
     ///
@@ -40,7 +34,7 @@ extension HTTPServer {
         stream: ResponseStream,
         omitBody: Bool,
         on connection: any TransportConnection,
-        deadline: IdleDeadline<C.Instant>
+        deadline: IdleDeadline
     ) async -> Bool {
         var head = head
         let chunked = stream.contentLength == nil
@@ -52,7 +46,7 @@ extension HTTPServer {
         }
         defer { deadline.disarm() }
         do {
-            deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+            deadline.arm(deadlineKey(after: limits.idleTimeout))
             try await connection.send(ResponseSerializer.serialize(head, body: [], omitBody: false))
             guard !omitBody else {
                 return true  // HEAD: the header section only (RFC 9112 §6.3)
@@ -65,11 +59,12 @@ extension HTTPServer {
                     chunked: chunked,
                     deadline: deadline,
                     clock: clock,
+                    epoch: epoch,
                     idleTimeout: limits.idleTimeout
                 )
             )
             if chunked {
-                deadline.arm(clock.now.advanced(by: limits.idleTimeout))
+                deadline.arm(deadlineKey(after: limits.idleTimeout))
                 try await connection.send(Array("0\r\n\r\n".utf8))  // last-chunk (RFC 9112 §7.1)
             }
             return true
@@ -86,8 +81,10 @@ extension HTTPServer {
         /// The per-connection idle deadline, re-armed before each chunk send so progress resets it.
         ///
         /// FIX #1. Shared with the serve loop + its watchdog.
-        let deadline: IdleDeadline<C.Instant>
+        let deadline: IdleDeadline
         let clock: C
+        /// The instant ``DeadlineWheel`` keys are measured from — see `HTTPServer+DeadlineClock.swift`.
+        let epoch: C.Instant
         let idleTimeout: Duration
 
         func write(_ chunk: [UInt8]) async throws {
@@ -97,7 +94,7 @@ extension HTTPServer {
             // Progress-based reset: a chunk about to go on the wire pushes the deadline to
             // now + idleTimeout, so a slow-but-progressing transfer is not reaped while a stalled send
             // (a slow-reading peer) is (FIX #1).
-            deadline.arm(clock.now.advanced(by: idleTimeout))
+            deadline.arm(epoch.duration(to: clock.now) + idleTimeout)
             guard chunked else {
                 try await connection.send(chunk)
                 return
@@ -114,19 +111,20 @@ extension HTTPServer {
         /// so the kernel can copy file pages straight to the socket. A chunked body interleaves
         /// size-line framing per chunk (RFC 9112 §7.1), so it keeps the copying chunk pump — as do
         /// the backbones without a raw socket (the ``TransportConnection`` default).
-        func writeFile(atPath path: String, offset: Int, length: Int) async throws {
-            guard !chunked, length > 0 else {
-                try await FileRegionStreamer.stream(
-                    atPath: path, offset: offset, length: length, to: self
-                )
+        ///
+        /// There is no open and no close here: the region already carries the descriptor the responder
+        /// verified, and owns it for the whole response. Re-opening by pathname was the last place the
+        /// bytes sent could differ from the bytes measured for the `Content-Length` (CWE-367).
+        /// ``TransportConnection/sendFile(descriptor:offset:length:)`` documents that it does not close
+        /// the caller's descriptor.
+        func writeFile(_ region: FileRegion) async throws {
+            guard !chunked, region.length > 0 else {
+                try await FileRegionStreamer.stream(region, to: self)
                 return
             }
-            let file = open(path, O_RDONLY)
-            guard file >= 0 else {
-                throw FileRegionStreamer.FileError.unreadable
-            }
-            defer { close(file) }
-            try await connection.sendFile(descriptor: file, offset: offset, length: length)
+            try await connection.sendFile(
+                descriptor: region.descriptor, offset: region.offset, length: region.length
+            )
         }
     }
 }

@@ -1,0 +1,11 @@
+1	8	15.56	25.08	0.6118	drifted+contended	ours:posixKqueue:floor ours:posixKqueue:full
+2	9	25.08	26.69	0.0642	contended	ours:posixKqueue:floor ours:posixKqueue:full
+3	10	26.69	37.27	0.3964	drifted+contended	ours:posixKqueue:floor ours:posixKqueue:full
+4	11	37.27	37.65	0.0102	contended	ours:posixKqueue:full ours:posixKqueue:floor
+5	12	37.65	31.83	0.1546	contended	ours:posixKqueue:full ours:posixKqueue:floor
+6	13	31.83	28.08	0.1178	contended	ours:posixKqueue:full ours:posixKqueue:floor
+7	14	28.08	34.11	0.2147	contended	ours:posixKqueue:full ours:posixKqueue:floor
+8	15	34.11	33.83	0.0082	contended	ours:posixKqueue:floor ours:posixKqueue:full
+9	16	33.83	36.48	0.0783	contended	ours:posixKqueue:full ours:posixKqueue:floor
+10	17	36.48	31.34	0.1409	contended	ours:posixKqueue:full ours:posixKqueue:floor
+11	18	31.34	30.93	0.0131	contended	ours:posixKqueue:full ours:posixKqueue:floor

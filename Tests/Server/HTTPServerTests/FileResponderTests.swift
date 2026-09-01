@@ -3,9 +3,10 @@
 //  HTTPServerTests
 //
 //  Static file serving (RFC 9110): serving a file with content-type and validators, 404 for a missing
-//  file, 403 for a traversal path (CWE-22), HEAD with Content-Length and no body, byte ranges (206), the
-//  If-None-Match → 304 collapse, index.html for the root, and streaming a large file. Each test runs
-//  against a throwaway temp directory.
+//  file, 403 for a traversal path (CWE-22) or a symlink component (CWE-59), HEAD with Content-Length and
+//  no body, byte ranges (206), the If-None-Match → 304 collapse, index.html for the root, and streaming a
+//  large file. Each test runs against a throwaway temp directory. The TOCTOU regressions for the
+//  descriptor-anchored resolution live in `FileResponderSymlinkRaceTests` and `RootDirectoryTests`.
 //
 
 import Foundation
@@ -28,11 +29,7 @@ struct FileResponderTests {
             .appendingPathComponent("fileresponder-\(UUID().uuidString)")
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: root) }
-        for (name, bytes) in files {
-            manager.createFile(
-                atPath: root.appendingPathComponent(name).path, contents: Data(bytes)
-            )
-        }
+        FileTree.write(files, into: root)
         await body(FileResponder(root: root.path, streamingThreshold: streamingThreshold))
     }
 
@@ -88,10 +85,10 @@ struct FileResponderTests {
         let outside = base.appendingPathComponent("secret")
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         try? manager.createDirectory(at: outside, withIntermediateDirectories: true)
-        manager.createFile(
+        _ = manager.createFile(
             atPath: outside.appendingPathComponent("passwd").path, contents: Data("TOP SECRET".utf8)
         )
-        manager.createFile(
+        _ = manager.createFile(
             atPath: root.appendingPathComponent("ok.txt").path, contents: Data("ok".utf8)
         )
         // A symlink inside the docroot pointing to the sibling secret dir — no `..` appears in the URL.
@@ -110,20 +107,33 @@ struct FileResponderTests {
         #expect(escape.body.isEmpty)
     }
 
-    @Test("an unreadable file fails closed with 500, not a 200 with a short body (audit F1)")
-    func unreadableFileFailsClosed() async {
+    @Test("a file the process cannot open is refused with 403, with no body")
+    func unopenableFileRefused() async {
         // Root bypasses POSIX permissions, so the unreadable case cannot be staged there.
         if getuid() == 0 {
             return
         }
         await withTree(["locked.txt": Array("secret".utf8)]) { responder, root in
-            // Readable by `classify` (a stat works) but not by `open` — the failure path F1 hardened.
             try? FileManager.default.setAttributes(
                 [.posixPermissions: 0], ofItemAtPath: root.path + "/locked.txt"
             )
+            // Resolution *is* the open now, so `EACCES` surfaces here as a 403 rather than as a 500 from
+            // a later read: there is no longer a window in which a stat succeeds and the open then fails.
             let response = await responder.respond(to: get("/locked.txt"), body: [])
-            #expect(response.head.status == .internalServerError)
+            #expect(response.head.status == .forbidden)
             #expect(response.body.isEmpty)
+        }
+    }
+
+    @Test("a file truncated after the head is framed fails the stream, never ships a short body")
+    func truncatedStreamFailsClosed() async {
+        let big = [UInt8](repeating: 0x41, count: 4_096)
+        await withTree(["big.bin": big], streamingThreshold: 1_024) { responder, root in
+            let response = await responder.respond(to: get("/big.bin"), body: [])
+            #expect(response.head.headerFields[.contentLength] == "4096")
+            // The Content-Length is committed; the file now cannot honour it.
+            #expect(truncate(root.path + "/big.bin", 16) == 0)
+            #expect(await response.stream?.collect(maxBytes: 1 << 20) == nil)
         }
     }
 
@@ -214,6 +224,35 @@ struct FileResponderTests {
         }
     }
 
+    @Test("one whole second of staleness is enough — the granularity, not just the direction")
+    func oneSecondOlderSidecarIsStale() async {
+        // `FileResponder+Precompressed.sidecar` compares `st_mtimespec.tv_sec`: WHOLE SECONDS, with the
+        // nanosecond field deliberately unused. `staleSidecarSkipped` above shows the *direction* with a
+        // two-minute gap; this shows the *granularity*, which is the load-bearing part — one tick of the
+        // clock between writing a sidecar and writing its identity file is enough to make the sidecar
+        // stale. That is precisely why the test trees are now written in sorted key order (`FileTree`):
+        // with dictionary order a sidecar could be written first, and a scheduling stall across a second
+        // boundary then turned every negotiated assertion in the suite into a rare, unexplained failure.
+        let identity = Array("html { }".utf8)
+        await withTree(["a.css": identity, "a.css.br": Array("OLD".utf8)]) { responder, root in
+            let attributes = try? FileManager.default.attributesOfItem(
+                atPath: root.path + "/a.css"
+            )
+            guard let written = attributes?[.modificationDate] as? Date else {
+                Issue.record("the identity file has no modification date")
+                return
+            }
+            try? FileManager.default.setAttributes(
+                [.modificationDate: written.addingTimeInterval(-1)],
+                ofItemAtPath: root.path + "/a.css.br"
+            )
+            let request = get("/a.css", headers: [(.acceptEncoding, "br")])
+            let response = await responder.respond(to: request, body: [])
+            #expect(response.head.headerFields[.contentEncoding] == nil)
+            #expect(response.body == identity)
+        }
+    }
+
     @Test("a Range request serves identity bytes, never the precompressed sidecar")
     func rangeIgnoresSidecar() async {
         await withTree(["a.css": Array("0123456789".utf8), "a.css.br": Array("BR".utf8)]) {
@@ -263,6 +302,7 @@ struct FileResponderTests {
     /// root URL (for mtime tweaks), and removes the tree afterward.
     private func withTree(
         _ files: [String: [UInt8]],
+        streamingThreshold: Int = 1 << 20,
         precompressed: Bool = true,
         autoindex: Bool = false,
         fallback: String? = nil,
@@ -273,11 +313,13 @@ struct FileResponderTests {
             .appendingPathComponent("fileresponder-\(UUID().uuidString)")
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: root) }
-        for (name, bytes) in files {
-            manager.createFile(atPath: root.path + "/" + name, contents: Data(bytes))
-        }
+        FileTree.write(files, into: root)
         let responder = FileResponder(
-            root: root.path, precompressed: precompressed, autoindex: autoindex, fallback: fallback
+            root: root.path,
+            streamingThreshold: streamingThreshold,
+            precompressed: precompressed,
+            autoindex: autoindex,
+            fallback: fallback
         )
         await body(responder, root)
     }

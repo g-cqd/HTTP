@@ -78,8 +78,8 @@ struct CacheStaleWhileRevalidateTests {
         }
     }
 
-    private func get() -> HTTPRequest {
-        HTTPRequest(method: .get, scheme: "https", authority: "x", path: "/")
+    private func get(path: String = "/") -> HTTPRequest {
+        HTTPRequest(method: .get, scheme: "https", authority: "x", path: path)
     }
 
     @Test("a stale entry inside the window is served stale now, then refreshed in the background")
@@ -169,5 +169,69 @@ struct CacheStaleWhileRevalidateTests {
         // single-flight: the second stale hit did not spawn a second refresh.
         #expect(spawned.count == 1)
         await spawned.settle()
+    }
+
+    @Test("at most maxConcurrentRevalidations refreshes run at once")
+    func boundsConcurrentRevalidations() async {
+        let clock = TestClock()
+        let now: @Sendable () -> Int = { Int(clock.monotonicNanoseconds / 1_000_000_000) }
+        let spawned = SpawnedTasks()
+        let bound = 4
+        let keys = 32
+        let middleware = CacheMiddleware(
+            maxConcurrentRevalidations: bound,
+            now: now,
+            spawn: spawned.spawn
+        )
+        let next = MutableResponder(
+            body: "v1",
+            cacheControl: "max-age=10, stale-while-revalidate=300"
+        )
+
+        for index in 0 ..< keys {
+            _ = await middleware.respond(to: get(path: "/\(index)"), body: [], next: next)
+        }
+        clock.advance(by: .seconds(20))  // every entry now stale, all still inside the window
+
+        // Distinct keys, so per-key single-flight admits all of them; only the global bound does not.
+        for index in 0 ..< keys {
+            let request = get(path: "/\(index)")
+            let response = await middleware.respond(to: request, body: [], next: next)
+            // A skipped refresh costs freshness, never correctness: the stale entry is still served.
+            #expect(response.head.headerFields[.age] != nil)
+        }
+
+        // The captured work never runs here, so no permit is ever returned: exactly `bound` refreshes
+        // are admitted and the remaining 28 are dropped rather than queued.
+        #expect(spawned.count == bound)
+        await spawned.settle()
+    }
+
+    @Test("a refresh that overruns its deadline releases its permit")
+    func deadlineReleasesPermit() async {
+        let spawned = SpawnedTasks()
+        let supervisor = RevalidationSupervisor(
+            maxConcurrent: 1,
+            deadline: .zero,
+            spawn: spawned.spawn
+        )
+        let stuck = AsyncGate()  // never opened — the refresh can only end by deadline cancellation
+
+        let admitted = supervisor.submit(key: "a") {
+            // Returns only when the supervisor's deadline cancels it.
+            try? await stuck.waitUntilOpen()
+        }
+        #expect(admitted)
+        let refusedWhileHeld = supervisor.submit(key: "b") {
+            // Never reached: the single permit is held by the stuck refresh above.
+        }
+        #expect(!refusedWhileHeld)
+
+        await spawned.settle()  // the zero deadline elapses, cancelling the stuck refresh
+
+        let admittedAfterDeadline = supervisor.submit(key: "b") {
+            // The permit came back, so this one is admitted.
+        }
+        #expect(admittedAfterDeadline)
     }
 }

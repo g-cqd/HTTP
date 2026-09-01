@@ -70,6 +70,10 @@ public enum QPACKString {
                 throw .decompressionFailed("invalid Huffman")
             }
         }
-        return payload.withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
+        // SE-0458: the materialization boundary. `payload` is a `RawSpan` the compiler has already
+        // lifetime-checked against `reader`'s buffer, over a range this function bounded against both
+        // `maxEncodedLength` and `reader.remaining` above; `withUnsafeBytes` narrows it to a pointer
+        // that lives for exactly the closure body, which copies out and lets it die.
+        return payload.withUnsafeBytes { unsafe String(decoding: $0, as: Unicode.UTF8.self) }
     }
 }

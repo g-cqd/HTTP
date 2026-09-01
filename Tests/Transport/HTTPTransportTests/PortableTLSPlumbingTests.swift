@@ -13,15 +13,18 @@
 //  are unaffected.
 //
 
-#if canImport(CHTTPBoringSSLShims)
+// LEGACY-ENGINE ONLY (Phase 3d): asserts BoringSSL mechanics of the old engine -
+// compiled solely under the temporary HTTP_BORINGSSL_TLS A/B gate; dies with it in 3e.
+#if canImport(CHTTPBoringSSLShims) && !HTTP_PORTABLE_TLS_SWIFT
 
     import CHTTPBoringSSL
     import CHTTPBoringSSLShims
+    import HTTPTestSupport
     import Testing
 
     @testable import HTTPTransport
 
-    @Suite("Portable TLS (vendored BoringSSL) — Phase 1 plumbing (ADR 0004)")
+    @Suite("Portable TLS (vendored BoringSSL) — Phase 1 plumbing (ADR 0004)", .realNetwork)
     struct PortableTLSPlumbingTests {
         @Test("the CHTTPBoringSSLShims shim links libssl and its macro wrappers are callable")
         func shimLinksAndImports() throws {

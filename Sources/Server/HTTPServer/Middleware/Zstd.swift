@@ -5,7 +5,7 @@
 //  RFC 8878 — the `zstd` content coding via the system libzstd (the `CZstd` shim). Apple's
 //  Compression framework has no Zstandard codec, so this is the only coding here not backed by
 //  Darwin Compression; the whole file compiles only when the opt-in `CZstd` target is in the graph
-//  (`HTTP_ZSTD`). The `zstd` content coding is a single raw zstd frame (RFC 8878 §3) with no extra
+//  (the `Zstd` package trait). The `zstd` content coding is a single raw zstd frame (RFC 8878 §3) with no extra
 //  envelope — like Brotli's `br`, so this is the one-shot encoder with a worst-case-sized
 //  destination. OUTBOUND only.
 //

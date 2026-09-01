@@ -15,7 +15,7 @@ import Testing
 
 @testable import HTTPTransport
 
-@Suite("Network.framework backbone — TLS + ALPN")
+@Suite("Network.framework backbone — TLS + ALPN", .realNetwork)
 struct NetworkFrameworkTLSTests {
     @Test("a dev self-signed identity imports through SecPKCS12Import (PKCS#12 round-trip)")
     func devIdentityImports() throws {
@@ -69,7 +69,7 @@ struct NetworkFrameworkTLSTests {
 
     @Test(
         "negotiates ALPN h2 over TLS and reports it on the accepted connection",
-        .timeLimit(.minutes(1)))
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func negotiatesHTTP2OverTLS() async throws {
         let tls = try SharedDevTLSIdentity.value()
         let transport = NetworkFrameworkTransport(

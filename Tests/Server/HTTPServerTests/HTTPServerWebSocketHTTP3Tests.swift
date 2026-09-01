@@ -11,6 +11,7 @@
 import Foundation
 import HTTP3
 import HTTPCore
+import HTTPTestSupport
 import HTTPTransport
 import Network
 import QPACK
@@ -22,7 +23,8 @@ import WebSocket
 @Suite("HTTPServer — WebSocket over HTTP/3 (RFC 9220)")
 struct HTTPServerWebSocketHTTP3Tests {
     @Test(
-        "Extended CONNECT upgrades to WebSocket and echoes a text frame", .timeLimit(.minutes(1)))
+        "Extended CONNECT upgrades to WebSocket and echoes a text frame",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
     func webSocketOverHTTP3() async throws {
         let echo = ClosureWebSocketHandler { event in
             guard case .message(let opcode, let payload) = event, opcode == .text else {

@@ -79,9 +79,22 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
             group.addTask { try await self.waitForThreshold(count) }
             group.addTask {
                 try await clock.sleep(for: duration)
+                // Re-check the threshold before reporting a timeout.
+                //
+                // `group.next()` returns whichever child finishes first, and these two race: the
+                // threshold can be reached while this timer is already in flight, or in the same
+                // instant it fires. Throwing unconditionally then reports a timeout for a condition
+                // that is *satisfied* — the observed failures said "2/2" and "1/1", i.e. every
+                // requested event had already been recorded. A test suite that fails on met
+                // conditions is worse than one with a missing test, because it teaches the reader to
+                // re-run rather than to look.
+                let settled = self.events
+                guard settled.count < count else {
+                    return settled
+                }
                 throw AsyncEventProbeTimeoutError(
                     requested: count,
-                    recorded: self.count,
+                    recorded: settled.count,
                     creation: creation
                 )
             }
@@ -90,12 +103,24 @@ public final class AsyncEventProbe<Event: Sendable>: Sendable {
         }
     }
 
-    /// Convenience over `ContinuousClock` with a generous real-time deadline.
+    /// Convenience over `ContinuousClock`, racing a ``TestLivenessBudget``-scaled deadline.
     ///
-    /// Prefer the clock-injectable overload under a ``TestClock``.
-    public func wait(forAtLeast count: Int, timeout: Duration = .seconds(2)) async throws -> [Event]
-    {
-        try await wait(forAtLeast: count, within: timeout, clock: ContinuousClock())
+    /// The deadline is a *liveness* guard, not a latency assertion: it exists to turn a hang into a
+    /// failure that names this probe. `timeout` is therefore widened by ``TestLivenessBudget/scale``
+    /// even when a caller states it explicitly — a caller asking for ten seconds is saying "longer
+    /// than usual", not "fail if this takes eleven". Under load, unscaled explicit budgets missed too
+    /// (audit FLAKE-1).
+    ///
+    /// Prefer the clock-injectable overload under a ``TestClock``, where no real-time deadline applies.
+    public func wait(
+        forAtLeast count: Int,
+        timeout: Duration = TestLivenessBudget.nominal
+    ) async throws -> [Event] {
+        try await wait(
+            forAtLeast: count,
+            within: TestLivenessBudget.scaled(timeout),
+            clock: ContinuousClock()
+        )
     }
 
     /// The boundary half: parks until `count` events exist, honoring cancellation (the timeout

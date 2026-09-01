@@ -38,8 +38,12 @@ public struct TransportConfiguration: Sendable {
     /// How many event loops the kqueue/epoll backbones shard across — one dedicated thread each, sharing
     /// the port via `SO_REUSEPORT`, serving its connections inline (audit R4 — p50 parity under load).
     ///
-    /// `nil` auto-sizes to the active processor count. `1` reproduces the single-loop behavior. Ignored
-    /// by the non-event-loop backbones (swiftSystem, Dispatch, Network.framework).
+    /// `nil` auto-sizes to the active processor count. `1` reproduces the single-loop behavior.
+    ///
+    /// Honored by `POSIXKqueue`, `POSIXEpoll` **and `SwiftSystem`** — the last of these shards across
+    /// N `KqueueEventLoop`s too, since the R4 rewrite; this note used to say it was ignored there and
+    /// predated that change. Genuinely ignored by `POSIXDispatch` (GCD owns its thread pool) and by
+    /// Network.framework (`NWListener` owns its own queues).
     public var eventLoopCount: Int?
 
     /// The filesystem path a ``TransportBackbone/unixDomainSocket`` listener binds (`AF_UNIX`,

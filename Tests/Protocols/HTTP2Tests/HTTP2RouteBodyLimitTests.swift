@@ -17,15 +17,19 @@ import Testing
 @Suite("RFC 9110 §15.5.14 — HTTP/2 per-route body limit")
 struct HTTP2RouteBodyLimitTests {
     /// A resolver that caps every route at four octets.
-    private let fourOctetLimit: @Sendable (HTTPRequest) -> Int? = { _ in 4 }
+    private let fourOctetLimit: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = {
+        _, _ in RequestBodyPolicy(limit: 4)
+    }
 
     /// A resolver that RAISES every route's cap to 64 octets (above the tests' tiny global).
-    private let sixtyFourOctetLimit: @Sendable (HTTPRequest) -> Int? = { _ in 64 }
+    private let sixtyFourOctetLimit: @Sendable (HTTP2StreamID, HTTPRequest) -> RequestBodyPolicy = {
+        _, _ in RequestBodyPolicy(limit: 64)
+    }
 
     @Test("a stream body over the route limit is reset, even when within the global limit")
     func overRouteLimit() throws {
         var connection = try H2Wire.handshaked(
-            limits: HTTPLimits(maxBodySize: 1_000), resolveBodyLimit: fourOctetLimit
+            limits: HTTPLimits(maxBodySize: 1_000), resolveRoute: fourOctetLimit
         )
         H2Wire.expectStreamError(
             .enhanceYourCalm,
@@ -39,7 +43,7 @@ struct HTTP2RouteBodyLimitTests {
     @Test("a stream body exactly at the route limit is delivered (inclusive bound)")
     func atRouteLimit() throws {
         var connection = try H2Wire.handshaked(
-            limits: HTTPLimits(maxBodySize: 1_000), resolveBodyLimit: fourOctetLimit
+            limits: HTTPLimits(maxBodySize: 1_000), resolveRoute: fourOctetLimit
         )
         H2Wire.expectRequest(
             H2Wire.openStream(streamID: 1)
@@ -53,7 +57,7 @@ struct HTTP2RouteBodyLimitTests {
         // Global cap 4 < body 16 < route cap 64: the route's raise must win — the per-stream cap and
         // the connection-level aggregate bound both stretch to the route's declared limit.
         var connection = try H2Wire.handshaked(
-            limits: HTTPLimits(maxBodySize: 4), resolveBodyLimit: sixtyFourOctetLimit
+            limits: HTTPLimits(maxBodySize: 4), resolveRoute: sixtyFourOctetLimit
         )
         H2Wire.expectRequest(
             H2Wire.openStream(streamID: 1)

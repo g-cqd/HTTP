@@ -1,0 +1,333 @@
+{
+  "analyzedFileCount" : 24,
+  "cacheHits" : 0,
+  "cacheMisses" : 24,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 12,
+      "fingerprint" : "47aa702d9882e8cc",
+      "line" : 148,
+      "message" : "3 duplicated regions of ~53 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:150, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:151",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 150,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        },
+        {
+          "column" : 71,
+          "line" : 151,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 34,
+      "fingerprint" : "8b17833064c6371a",
+      "line" : 148,
+      "message" : "7 duplicated regions of ~50 tokens (similarity 0.92)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:149, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:150, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:151, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:151, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:152, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift:153",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 149,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 150,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 151,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 151,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        },
+        {
+          "column" : 61,
+          "line" : 152,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        },
+        {
+          "column" : 58,
+          "line" : 153,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/PublicSuffixGeneratorCore\/PublicSuffixGenerator.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "bd50fe1ba7653bf0",
+      "line" : 30,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Host.swift:74",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Host.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 74,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Host.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "21d05a293be5f251",
+      "line" : 4,
+      "message" : "2 duplicated regions of ~170 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Schemes.swift:43",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Schemes.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 43,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Schemes.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 27,
+      "fingerprint" : "de39cdf2df847d1f",
+      "line" : 21,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Schemes.swift:60",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Schemes.swift",
+      "related" : [
+        {
+          "column" : 26,
+          "line" : 60,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/Schemes.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "fcb70ff0cc76f8fd",
+      "line" : 20,
+      "message" : "2 duplicated regions of ~147 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:183",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift",
+      "related" : [
+        {
+          "column" : 20,
+          "line" : 183,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 37,
+      "fingerprint" : "3404a8e78510c6ca",
+      "line" : 24,
+      "message" : "4 duplicated regions of ~119 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:60, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:151, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:187",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift",
+      "related" : [
+        {
+          "column" : 32,
+          "line" : 60,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        },
+        {
+          "column" : 80,
+          "line" : 151,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        },
+        {
+          "column" : 37,
+          "line" : 187,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1882fe9ca4972af0",
+      "line" : 25,
+      "message" : "5 duplicated regions of ~118 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:61, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:152, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:188, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:225",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 61,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 152,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 188,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        },
+        {
+          "column" : 5,
+          "line" : 225,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "10a53916b4223f35",
+      "line" : 85,
+      "message" : "2 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:212",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 212,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 52,
+      "fingerprint" : "afdfeecba1511531",
+      "line" : 96,
+      "message" : "2 duplicated regions of ~84 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:108",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift",
+      "related" : [
+        {
+          "column" : 57,
+          "line" : 108,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 9,
+      "fingerprint" : "80f400f973be2d8",
+      "line" : 104,
+      "message" : "2 duplicated regions of ~69 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:128",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift",
+      "related" : [
+        {
+          "column" : 9,
+          "line" : 128,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 10,
+      "fingerprint" : "c8a4c6177f2e6742",
+      "line" : 104,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.83)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:107, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift:139",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift",
+      "related" : [
+        {
+          "column" : 65,
+          "line" : 107,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        },
+        {
+          "column" : 83,
+          "line" : 139,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLBuilders.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 41,
+      "fingerprint" : "bc173815f05f76f",
+      "line" : 50,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift:79",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift",
+      "related" : [
+        {
+          "column" : 16,
+          "line" : 79,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 48,
+      "fingerprint" : "b61fc16203a3c811",
+      "line" : 59,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 1.00)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift:83",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift",
+      "related" : [
+        {
+          "column" : 47,
+          "line" : 83,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 61,
+      "fingerprint" : "e026ab15182410a4",
+      "line" : 63,
+      "message" : "3 duplicated regions of ~50 tokens (similarity 0.89)",
+      "note" : "duplicates: \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift:68, \/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift:87",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 68,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift"
+        },
+        {
+          "column" : 60,
+          "line" : 87,
+          "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Sources\/URLBuilder\/URLQueryRepresentable.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    }
+  ],
+  "suppressed" : [
+
+  ]
+}

@@ -15,17 +15,22 @@ internal import HTTP2
 
 /// A wakeup for the HTTP/2 merged-mailbox consumer (see ``HTTPServer/serveHTTP2(_:deadline:initialBytes:)``).
 enum HTTP2Wakeup: Sendable {
-    /// Inbound octets off the wire (or the reader's initial carryover) to feed `engine.receive`.
-    case inbound([UInt8])
-
-    /// The reader hit EOF, an idle-timeout lapse, or a read failure — no more `.inbound` will ever
-    /// follow. NOT immediately connection-fatal: a request already fully received (dispatched to its own
-    /// task before this arrived), an active native-streaming relay, or an open tunnel may still have
-    /// meaningful work in flight — none of it needs any more input from the connection to finish, only
-    /// the chance to actually run. The consumer drains that in-flight work (abandoning anything that DOES
-    /// still need more input, e.g. a streaming-route request body mid-upload) and closes once none of it
-    /// remains, rather than cancelling it out from under itself the instant this wakeup is seen.
-    case closed
+    /// One item — a chunk of inbound octets, or the terminal end-of-input — is queued in the reader's
+    /// intake channel.
+    ///
+    /// A payload-free *ticket* (2026-07-31 audit, finding 3). The octets themselves live in a
+    /// ``BoundedByteChannel`` that parks the reader at a byte watermark, which is what lets this stream
+    /// stay `.unbounded` while being *provably* bounded: a ticket is 1:1 with a queued item, and the
+    /// channel caps those at `maxQueuedInboundChunks`. Carrying the payload here instead let an
+    /// adversarial peer outpace the consumer and grow memory without limit.
+    ///
+    /// End-of-input arrives *in band* through the same channel rather than as its own case, so it can
+    /// never overtake octets that were read before it. It is not immediately connection-fatal: a request
+    /// already fully received, an active native-streaming relay, or an open tunnel needs no further
+    /// input to finish, only the chance to run. The consumer drains that in-flight work — abandoning
+    /// exactly what does still need input, such as a streaming-route body mid-upload — and closes once
+    /// none remains.
+    case inboundReady
 
     /// A dispatched request's (buffered or streaming-route) handler finished; apply its response.
     case requestReady(HTTP2StreamID, ServerResponse)
@@ -34,16 +39,40 @@ enum HTTP2Wakeup: Sendable {
     /// state (P6b / RFC 9113 §8.1).
     case streamChunk(HTTP2StreamID, AsyncHandoff.Item)
 
+    /// A gated stream's handler took body octets; drain its report and credit the receive windows.
+    ///
+    /// The wakeup that makes consumption-gated flow control possible at all (RFC 9113 §6.9, ADR 0006).
+    /// Once the peer has exhausted its window it stops sending, so the connection goes quiet — and the
+    /// event that must produce the replenishing WINDOW_UPDATE is *handler consumption*, which has no
+    /// other way to reach the loop. Payload-free, like `.inboundReady`: the count lives in the stream's
+    /// ``HTTP2ConsumptionSignal``, which coalesces many chunk takes into one wakeup.
+    case consumed(HTTP2StreamID)
+
+    /// Time to check whether any gated stream is holding receive credit without consuming it.
+    ///
+    /// The other side of the consumption gate. Because replenishment now depends on the application,
+    /// one handler that stops reading holds part of the *shared* connection window and slows every
+    /// sibling stream — that is HTTP/2's semantics, not a bug, but it must not be unbounded. A stream
+    /// making no byte progress across two sweeps is reset with ENHANCE_YOUR_CALM (RFC 9113 §7) and its
+    /// siblings carry on.
+    ///
+    /// Byte-progress based rather than clock based: the sweeper task only decides *when* to look, and a
+    /// test can drive this wakeup by hand for a fully deterministic result.
+    case sweepStalls
+
     /// A tunnel pump produced bytes to relay as tunnel DATA (RFC 8441 §5).
     case tunnelOutbound(HTTP2StreamID, [UInt8])
 
     /// A tunnel pump's task has finished — for every ending: its own WebSocket engine decided to close,
-    /// the peer ended the tunnel, or the connection is tearing down. `selfClosed` distinguishes the first
-    /// case (the consumer must still tell the HTTP/2 engine to end the stream, `engine.closeTunnel`) from
-    /// the other two (the engine/consumer already knows, via `.tunnelClosed` / `.streamReset` or the
-    /// reader closing). The consumer tracks this so it can tell whether a tunnel is still doing
-    /// meaningful work before closing the connection on EOF (see `.closed` below).
-    case tunnelEnded(HTTP2StreamID, selfClosed: Bool)
+    /// the peer ended the tunnel, or the connection is tearing down.
+    ///
+    /// It used to carry `selfClosed`, on the reasoning that only a LOCALLY decided close still needed
+    /// `engine.closeTunnel`. That was the leak: a peer's END_STREAM leaves the stream half-closed
+    /// (remote), and RFC 9113 §5.1 closes it only when the server sends END_STREAM in return — which
+    /// is also exactly what RFC 8441 §5 means by a tunnel's orderly close. Without it the record, and
+    /// so the `maxConcurrentStreams` slot, stayed charged for the rest of the connection's life
+    /// (R5-P0e). The two cases need the same call, so the distinction is gone.
+    case tunnelEnded(HTTP2StreamID)
 
     /// A local watchdog lapsed: the consumer's own send-deadline, or a relay's producer-pull deadline
     /// (see HTTPServer+HTTP2.swift's file comment on the local-``IdleDeadline`` design) — connection-

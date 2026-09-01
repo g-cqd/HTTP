@@ -87,23 +87,6 @@ extension H2Wire {
         return (data, endStream)
     }
 
-    /// The `:status` of the first response HEADERS block written, if any (§8.3.2).
-    static func responseStatus(in bytes: [UInt8]) -> String? {
-        var decoder = HPACKDecoder(maxDynamicTableSize: 4_096)
-        for frame in frames(in: bytes) where frame.header.type == .headers {
-            guard
-                let fragment = try? HTTP2HeadersFrame.fieldBlockFragment(
-                    frame.payload,
-                    flags: frame.header.flags
-                )
-            else { continue }
-            let fields =
-                (try? Array(fragment).withUnsafeBytes { try decoder.decode($0.bytes) }) ?? []
-            for field in fields where field.name == ":status" { return field.value }
-        }
-        return nil
-    }
-
     /// Whether the bytes contain an RST_STREAM / GOAWAY (i.e. the engine rejected something).
     static func containsReset(in bytes: [UInt8]) -> Bool {
         frames(in: bytes).contains { $0.header.type == .rstStream }

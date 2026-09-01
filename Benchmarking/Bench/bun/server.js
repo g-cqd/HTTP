@@ -16,6 +16,9 @@ Bun.serve({
     const path = url.pathname;
     if (path === "/") return new Response("Hello from the Bun baseline.\n", { headers: TEXT });
     if (path === "/health") return new Response("OK\n", { headers: TEXT });
+    // The framework-floor parity route: byte-identical on every server in the field. `/` cannot
+    // serve that purpose because each server answers it with its own name.
+    if (path === "/plaintext") return new Response("Hello, World!", { headers: TEXT });
     if (path === "/json") return new Response('{"message":"Hello, World!"}', { headers: JSON_CT });
     if (path === "/payload") return new Response(payload, { headers: TEXT });
     if (path.startsWith("/hello/")) {

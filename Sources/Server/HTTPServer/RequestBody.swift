@@ -22,22 +22,64 @@ public enum RequestBody: Sendable {
     /// An incremental, back-pressured stream of body chunks — consumed as the bytes arrive.
     case stream(HTTPRequestBodyStream)
 
+    /// The largest up-front reservation a declared body length may cause, in octets.
+    ///
+    /// A declared `Content-Length` is the *peer's claim*, and a claim costs the sender one header
+    /// field. Reserving it outright would let a request that never sends a byte commit the whole cap
+    /// (CWE-770), so the reservation is capped here and anything beyond it is reached by the array's
+    /// own geometric growth — amortized O(*n*) with a logarithmic number of reallocations, which is
+    /// the right trade against an attacker-priced allocation.
+    static let maxReservation = 1 << 20
+
     /// The body as one buffer: the bytes directly when already ``collected(_:)``, otherwise the stream
     /// drained to completion.
     ///
-    /// The buffered entry point for a handler or middleware that needs the whole payload (parsing JSON,
-    /// computing a digest); prefer ``asStream`` to process a large body without holding it all in memory.
+    /// Unbounded — it retains whatever the engine delivers. Prefer
+    /// ``collect(maximum:expecting:)``, which fails closed at a cap the caller states, or ``asStream``
+    /// to process a large body without holding it all in memory.
     public func collect() async -> [UInt8] {
+        await collect(maximum: .max, expecting: nil) ?? []
+    }
+
+    /// The body as one buffer, refusing to retain more than `maximum` octets.
+    ///
+    /// Returns `nil` — having *stopped reading* — as soon as the accumulated body would cross
+    /// `maximum`, so an over-limit body is never materialized before being refused (RFC 9110
+    /// §15.5.14: the caller answers `413 Content Too Large`). `expecting` is the declared body length
+    /// (a `Content-Length`) when one is known: it seeds the buffer so a legitimate body is not grown
+    /// chunk by chunk, clamped to ``maxReservation`` because the claim is attacker-supplied.
+    public func collect(maximum: Int, expecting expectedCount: Int? = nil) async -> [UInt8]? {
+        guard maximum >= 0 else {
+            return nil
+        }
         switch self {
             case .collected(let bytes):
-                return bytes
+                return bytes.count <= maximum ? bytes : nil
             case .stream(let stream):
-                var accumulated: [UInt8] = []
-                for await chunk in stream {
-                    accumulated.append(contentsOf: chunk)
-                }
-                return accumulated
+                return await Self.drain(stream, maximum: maximum, expecting: expectedCount)
         }
+    }
+
+    /// Drains `stream` into one buffer, returning nil the moment the total would cross `maximum`.
+    private static func drain(
+        _ stream: HTTPRequestBodyStream,
+        maximum: Int,
+        expecting expectedCount: Int?
+    ) async -> [UInt8]? {
+        var accumulated: [UInt8] = []
+        if let expectedCount, expectedCount > 0 {
+            accumulated.reserveCapacity(min(expectedCount, maximum, maxReservation))
+        }
+        for await chunk in stream {
+            // `maximum - chunk.count` rather than `accumulated.count + chunk.count`: the first guard
+            // proves the subtraction is non-negative, while the addition could overflow on a chunk
+            // count near `Int.max`.
+            guard chunk.count <= maximum, accumulated.count <= maximum - chunk.count else {
+                return nil
+            }
+            accumulated.append(contentsOf: chunk)
+        }
+        return accumulated
     }
 
     /// The body as an incremental chunk stream: the stream itself when ``stream(_:)``, otherwise a

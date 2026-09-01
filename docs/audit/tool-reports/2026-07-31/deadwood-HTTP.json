@@ -1,0 +1,106 @@
+{
+  "analyzedFileCount" : 558,
+  "cacheHits" : 0,
+  "cacheMisses" : 558,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 5,
+      "fingerprint" : "5a2eb30d1e2cf438",
+      "line" : 85,
+      "message" : "method 'bufferedResponse(_:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Server\/HTTPServer\/HTTPServer+Streaming.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "42429c8fe9e3f31d",
+      "line" : 13,
+      "message" : "property 'fuzz' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "f5c4235cb90d6810",
+      "line" : 16,
+      "message" : "property 'property' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "e1b07d2b92e6a1fd",
+      "line" : 19,
+      "message" : "property 'concurrency' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "55e1d410fd3fd18e",
+      "line" : 22,
+      "message" : "property 'soak' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "d4c9b740020606e4",
+      "line" : 25,
+      "message" : "property 'conformance' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Sources\/Testing\/HTTPTestSupport\/Tags.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "85bce0ff83373f7f",
+      "line" : 73,
+      "message" : "method 'windowUpdates(in:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Tests\/Protocols\/HTTP2Tests\/Conformance\/H2WireInspect.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "80bdefbcc4a303a4",
+      "line" : 91,
+      "message" : "method 'responseStatus(in:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Tests\/Protocols\/HTTP2Tests\/Conformance\/H2WireInspect.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "1539152cee40b730",
+      "line" : 16,
+      "message" : "struct 'NotFound' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/HTTP\/Tests\/Server\/HTTPServerTests\/NotFound.swift",
+      "rule" : "unused-type",
+      "severity" : "warning"
+    }
+  ],
+  "notes" : [
+
+  ],
+  "suppressed" : [
+
+  ]
+}

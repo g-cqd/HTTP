@@ -1,0 +1,26 @@
+{
+  "analyzedFileCount" : 65,
+  "cacheHits" : 0,
+  "cacheMisses" : 65,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 9,
+      "fingerprint" : "3847976c5f37ff9c",
+      "line" : 308,
+      "message" : "property 'apiVersion' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/URLBuilder\/Tests\/URLBuilderTests\/URLQueryMacroIntegrationTests.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    }
+  ],
+  "notes" : [
+
+  ],
+  "suppressed" : [
+
+  ]
+}

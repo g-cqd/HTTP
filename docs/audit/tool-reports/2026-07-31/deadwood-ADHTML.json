@@ -1,0 +1,286 @@
+{
+  "analyzedFileCount" : 151,
+  "cacheHits" : 0,
+  "cacheMisses" : 151,
+  "degradedFiles" : [
+
+  ],
+  "findings" : [
+    {
+      "column" : 5,
+      "fingerprint" : "d7eb3046c4908fd7",
+      "line" : 36,
+      "message" : "method 'actionView(signer:now:page:fragment:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLActions\/Submit.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "571b8514840a3b11",
+      "line" : 57,
+      "message" : "method 'adhtmlAssets(_:manifest:arena:nonce:assetPath:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLAssets\/ADHTMLAssets.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "f4ccaaf36a765b88",
+      "line" : 224,
+      "message" : "function 'emitTags()' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "82128e32054b0787",
+      "line" : 237,
+      "message" : "property 'conformances' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 13,
+      "fingerprint" : "8047c23daf8cbd02",
+      "line" : 238,
+      "message" : "property 'inherit' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "de244e221a2158f",
+      "line" : 306,
+      "message" : "property 'fileManager' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "e533240967fa4a51",
+      "line" : 309,
+      "message" : "property 'tagsURL' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCodegen\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 16,
+      "fingerprint" : "2745fe591937f9d6",
+      "line" : 180,
+      "message" : "condition 'inFence' is provably false — the true branch never executes",
+      "note" : "confidence certain — sparse conditional constant propagation",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLCore\/Parse\/HTMLMarkdown.swift",
+      "rule" : "dead-branch",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "cee07357e94ca27",
+      "line" : 5,
+      "message" : "function 'same(_:_:)' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "1c3b6bfc7b4d8e3f",
+      "line" : 6,
+      "message" : "property 'got' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "64d736146dbbdfd5",
+      "line" : 43,
+      "message" : "property 'nodeDense' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "d55ab427a6b10d35",
+      "line" : 44,
+      "message" : "property 'attrHeavy' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "3623bd1de576b7e6",
+      "line" : 46,
+      "message" : "property 'prose' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "9dc696d9d1f6edf",
+      "line" : 48,
+      "message" : "property 'realistic' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "7e0a414067451d9e",
+      "line" : 53,
+      "message" : "function 'bench(_:_:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "3a22f7fd52b3f268",
+      "line" : 56,
+      "message" : "property 'ms' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLPerfProbe\/main.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "9b37e487fdf48e82",
+      "line" : 49,
+      "message" : "method 'adhtmlStream(_:arena:chunkBytes:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLServe\/ADHTMLServe.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "7e7f7ecb4bb4de49",
+      "line" : 61,
+      "message" : "method 'adhtmlStaticStream(_:chunkBytes:)' is reachable only from test code",
+      "note" : "confidence medium — reachable with test roots, unreachable without them",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Sources\/ADHTMLServe\/ADHTMLServe.swift",
+      "rule" : "referenced-only-by-tests",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "c6a3834fcae85154",
+      "line" : 12,
+      "message" : "method 'deleteThing(_:)' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLActionsTests\/ActionMacroSpikeTests.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "fea446ea2e552b00",
+      "line" : 19,
+      "message" : "method 'one(_:)' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLActionsTests\/ActionMacroSpikeTests.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "cbfa416afa7f9e3c",
+      "line" : 22,
+      "message" : "method 'two(_:)' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLActionsTests\/ActionMacroSpikeTests.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "11a51c5f604e9a05",
+      "line" : 22,
+      "message" : "method 'deletePart(_:)' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLActionsTests\/ServerActionIntegrationTests.swift",
+      "rule" : "unused-function",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "bcece73751a9bd41",
+      "line" : 12,
+      "message" : "property 'inCart' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLTests\/V2AuthoringTests.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "df24c09e14fed2aa",
+      "line" : 27,
+      "message" : "property 'both' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLTests\/V2IntegrationTests.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "5d49d1e6b64377df",
+      "line" : 28,
+      "message" : "property 'either' is never referenced from any entry point",
+      "note" : "confidence medium — no reference found",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLTests\/V2IntegrationTests.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "7ccc1f11ce3553d",
+      "line" : 37,
+      "message" : "property 'greeting' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLTests\/V2IntegrationTests.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    },
+    {
+      "column" : 5,
+      "fingerprint" : "e24369db28ca498",
+      "line" : 67,
+      "message" : "property 'inCart' is never referenced from any entry point",
+      "note" : "confidence low — no reference found; name appears in a string literal — possible dynamic reference",
+      "path" : "\/Users\/gc\/Developer\/ongoing\/swift\/g-cqd\/ADHTML\/Tests\/ADHTMLTests\/V2IntegrationTests.swift",
+      "rule" : "unused-property",
+      "severity" : "warning"
+    }
+  ],
+  "notes" : [
+
+  ],
+  "suppressed" : [
+
+  ]
+}

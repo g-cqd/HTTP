@@ -22,9 +22,9 @@ struct HTTPRouterTests {
             .text("fixed")
         }
 
-        func resolve(method _: HTTPMethod, path _: String) -> ResolvedRoute? { nil }
-
-        func resolveWebSocket(path _: String) -> ResolvedRoute? { nil }
+        func match(method _: HTTPMethod, path _: String, isUpgrade _: Bool) -> RouteMatch? {
+            nil
+        }
 
         var hasWebSocketRoutes: Bool { false }
     }
@@ -45,7 +45,7 @@ struct HTTPRouterTests {
     @Test("the built-in Router conforms to HTTPRouter")
     func builtInRouterConforms() {
         let router: any HTTPRouter = Router { Route.get("/") { _, _, _ in .text("hi") } }
-        #expect(router.resolve(method: .get, path: "/") != nil)
+        #expect(router.match(method: .get, path: "/", isUpgrade: false) != nil)
         #expect(router.hasWebSocketRoutes == false)
     }
 }

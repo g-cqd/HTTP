@@ -3,38 +3,38 @@
 //  HTTPServer
 //
 //  Bounded inbound decompression for the non-Apple (Linux) build — the counterpart to Inflate.swift,
-//  which uses Darwin Compression. gzip (RFC 1952) and `deflate` (RFC 1951 raw / RFC 1950 zlib-wrapped)
-//  decode through the system zlib (the CZlibCoding shim, which auto-detects the gzip/zlib header and
-//  verifies the gzip CRC-32/ISIZE trailer itself); Brotli decode comes from the opt-in libbrotli shim.
-//  The output is hard-capped against a decompression bomb (CWE-409): the decode buffer is sized to the
-//  cap, so an over-cap expansion overruns it and fails closed (nil) — never a partial body.
+//  which uses Darwin Compression. gzip (RFC 1952, CRC-32 + ISIZE verified) and `deflate` (RFC 1950
+//  zlib-wrapped with the Adler-32 verified, falling back to RFC 1951 raw for the senders that omit
+//  the envelope) decode through the in-house HTTPDeflate codec; Brotli decode comes from the opt-in
+//  libbrotli shim. The output is hard-capped against a decompression bomb (CWE-409): a decode into
+//  a capacity-bounded destination fails closed (nil) when the body would not fit — never a partial
+//  body — and ``BoundedGrowthDecode`` owns the destination growth schedule.
 //
-//  Compiled only where the shim is present (`#if canImport(CZlibCoding)`, the Linux graph; Inflate.swift
-//  is excluded there), with the same `decompress(_:encoding:maxOutput:)` shape so DecompressionMiddleware
-//  dispatches uniformly across platforms.
+//  Compiled only where Apple's Compression framework is absent (`#if !canImport(Compression)`;
+//  Inflate.swift is excluded from the Linux graph), with the same `decompress(_:encoding:maxOutput:)`
+//  shape so DecompressionMiddleware dispatches uniformly across platforms.
 //
 
-#if canImport(CZlibCoding)
+#if !canImport(Compression)
 
-    internal import CZlibCoding
+    internal import HTTPDeflate
 
-    /// Decompresses a coded request body with a hard output bound — the inverse of ``Gzip``, over zlib.
+    /// Decompresses a coded request body with a hard output bound — the inverse of ``Gzip``.
     enum Inflate {
-        /// Decompresses `input` coded with `encoding` (`gzip`/`deflate`/`br`), bounding the output to
-        /// `maxOutput` octets.
+        /// Decompresses `input` coded with `encoding` (`gzip`/`deflate`/`br`), bounding the output
+        /// to `maxOutput` octets.
         ///
-        /// Returns nil for an unsupported/malformed envelope, a decode error, or output that would exceed
-        /// `maxOutput` — fail-closed, the decompression-bomb defense (CWE-409).
+        /// Returns nil for an unsupported/malformed envelope, a decode error, or output that would
+        /// exceed `maxOutput` — fail-closed, the decompression-bomb defense (CWE-409).
         static func decompress(_ input: [UInt8], encoding: String, maxOutput: Int) -> [UInt8]? {
             switch encoding {
                 case "gzip", "x-gzip":
-                    // windowBits 47 auto-detects the gzip header and checks the CRC-32/ISIZE trailer.
-                    return decode(input, maxOutput: maxOutput, raw: false)
+                    return decode(input, format: .gzip, maxOutput: maxOutput)
                 case "deflate":
-                    // zlib-wrapped (RFC 1950) first (auto-detected), then raw DEFLATE (RFC 1951) — some
-                    // `deflate` senders omit the zlib header.
-                    return decode(input, maxOutput: maxOutput, raw: false)
-                        ?? decode(input, maxOutput: maxOutput, raw: true)
+                    // The spec'd zlib envelope (RFC 1950) first, then raw DEFLATE (RFC 1951) —
+                    // some `deflate` senders omit the zlib header.
+                    return decode(input, format: .zlib, maxOutput: maxOutput)
+                        ?? decode(input, format: .raw, maxOutput: maxOutput)
                 #if canImport(CBrotli)
                     case "br":
                         return Brotli.decompress(input, maxOutput: maxOutput)
@@ -44,30 +44,21 @@
             }
         }
 
-        /// The shared bounded decode into a `maxOutput + 1` buffer: zlib reaches `Z_STREAM_END` only when
-        /// the whole stream fits, so an over-cap body overruns `avail_out` and the shim returns 0 (nil
-        /// here). `raw` selects raw DEFLATE (no zlib/gzip header) over the auto-detecting path.
-        private static func decode(_ input: [UInt8], maxOutput: Int, raw: Bool) -> [UInt8]? {
-            guard maxOutput > 0, !input.isEmpty else {
+        /// The bounded decode: ``DeflateCodec/decompress(_:format:capacity:)`` reaches `finished`
+        /// only when the whole stream fits its capacity, so a too-small destination reads as nil.
+        ///
+        /// The retry schedule and the CWE-409 cap live in ``BoundedGrowthDecode``, shared with the
+        /// libbrotli shim — the rationale for growing geometrically rather than sizing to the cap
+        /// is documented there, once, and tested by `BoundedGrowthDecodeTests`.
+        private static func decode(
+            _ input: [UInt8], format: DeflateCodec.Format, maxOutput: Int
+        ) -> [UInt8]? {
+            guard !input.isEmpty else {
                 return nil
             }
-            let capacity = maxOutput + 1
-            var destination = [UInt8](repeating: 0, count: capacity)
-            let written = input.withUnsafeBufferPointer { source in
-                destination.withUnsafeMutableBufferPointer { output -> Int in
-                    guard let source = source.baseAddress, let output = output.baseAddress else {
-                        return 0
-                    }
-                    return raw
-                        ? czlib_inflate_raw(output, capacity, source, input.count)
-                        : czlib_inflate(output, capacity, source, input.count)
-                }
+            return BoundedGrowthDecode.run(maxOutput: maxOutput) {
+                DeflateCodec.decompress(input, format: format, capacity: $0)
             }
-            guard written > 0, written <= maxOutput else {
-                return nil
-            }
-            destination.removeLast(destination.count - written)
-            return destination
         }
     }
 
