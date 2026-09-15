@@ -12,12 +12,20 @@
 import Crypto
 import Foundation
 import SwiftASN1
+import Synchronization
 import X509
 
 @testable internal import HTTPTLS
 
 /// Mints in-memory test certificates and chains (test-only).
 enum TestPKI {
+    // Test certificates need unique serials. Avoid the upstream random initializer's TSan crash.
+    private static let serialSequence = Atomic<UInt64>(0)
+
+    private static func nextSerialNumber() -> Certificate.SerialNumber {
+        Certificate.SerialNumber(serialSequence.wrappingAdd(1, ordering: .relaxed).oldValue + 1)
+    }
+
     /// One certificate + its P-256 key, in every form the 3c intake reads.
     struct Entity {
         let certificate: Certificate
@@ -53,7 +61,7 @@ enum TestPKI {
         let name = try DistinguishedName { CommonName(commonName) }
         let certificate = try Certificate(
             version: .v3,
-            serialNumber: Certificate.SerialNumber(),
+            serialNumber: nextSerialNumber(),
             publicKey: Certificate.PublicKey(key.publicKey),
             notValidBefore: Date().addingTimeInterval(-3_600),
             notValidAfter: Date().addingTimeInterval(86_400),
@@ -81,7 +89,7 @@ enum TestPKI {
         let key = P256.Signing.PrivateKey()
         let certificate = try Certificate(
             version: .v3,
-            serialNumber: Certificate.SerialNumber(),
+            serialNumber: nextSerialNumber(),
             publicKey: Certificate.PublicKey(key.publicKey),
             notValidBefore: Date().addingTimeInterval(notValidBeforeOffset),
             notValidAfter: Date().addingTimeInterval(notValidAfterOffset),
@@ -109,7 +117,7 @@ enum TestPKI {
         let name = try DistinguishedName { CommonName(commonName) }
         let certificate = try Certificate(
             version: .v3,
-            serialNumber: Certificate.SerialNumber(),
+            serialNumber: nextSerialNumber(),
             publicKey: Certificate.PublicKey(key.publicKey),
             notValidBefore: Date().addingTimeInterval(-3_600),
             notValidAfter: Date().addingTimeInterval(86_400),
