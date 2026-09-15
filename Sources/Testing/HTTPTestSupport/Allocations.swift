@@ -12,8 +12,9 @@ public import Testing
 
 /// Whether process-wide allocation counting is available here.
 ///
-/// Darwin: `true` (libmalloc hook). Other platforms: `false` — the oracle then runs the body but
-/// cannot measure, so ``expectAllocations(noMoreThan:sourceLocation:_:)`` becomes a no-op there.
+/// Available on Darwin unless AddressSanitizer or ThreadSanitizer replaces the allocator.
+/// Otherwise the oracle runs the body without measuring, so
+/// ``expectAllocations(noMoreThan:sourceLocation:_:)`` does not check the allocation count.
 public var allocationCountingAvailable: Bool { httptk_malloc_counting_available() != 0 }
 
 /// Counts the heap allocations made during `body`.
