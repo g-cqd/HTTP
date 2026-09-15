@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-"""Assert the ADFoundation dependency is reproducible: exact revision, resolved file untracked.
+"""Check Aemi's family-wide main-branch requirement and the untracked library lockfile.
 
-The standing decision (2026-07-31 audit) is a two-part one, and each half is load-bearing only if
-the other holds:
-
-  * `ADFoundation` is unversioned and was taken from `branch: "main"`. A moving branch means two
-    checkouts of the SAME HTTP commit can resolve different dependency code — so a build is not
-    reproducible, a benchmark number is not attributable to a commit, and a green CI run is not
-    evidence about any particular input. It is pinned to an exact revision instead.
-  * `Package.resolved` stays gitignored. This is a reusable library; committing a lockfile would
-    publish one resolution of the whole graph to every consumer, who must resolve their own. Which
-    is exactly why the manifest pin has to be exact: with no committed lockfile, the manifest is the
-    ONLY thing making this package's own builds deterministic.
-
-This script is what stops either half from being quietly undone — a `branch:` slipped back into the
-manifest, or a `Package.resolved` committed "to fix CI".
-
-Usage: scripts/dependency-pinning.py
+SwiftPM rejects mixed branch/revision requirements for this shared dependency. Package.swift
+records why every sibling must use the same Aemi main branch. This gate checks compatibility;
+a floating branch does not promise identical dependency commits across future resolutions.
 """
 
 import json
@@ -26,10 +13,10 @@ import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MANIFEST = os.path.join(REPO, "Package.swift")
 RESOLVED = os.path.join(REPO, "Package.resolved")
-PACKAGE = "adfoundation"
-REVISION = re.compile(r'^let adFoundationRevision = "([0-9a-f]{40})"$', re.MULTILINE)
+PACKAGE = "aemi"
+LOCATION = "https://github.com/Aemi-Studio/aemi.git"
+BRANCH = "main"
 
 
 def fail(message):
@@ -37,29 +24,34 @@ def fail(message):
     return 1
 
 
+def validate_manifest(manifest):
+    """Require the canonical Aemi source and the same branch as sibling packages."""
+    dependencies = [
+        source
+        for dependency in manifest.get("dependencies", [])
+        for source in dependency.get("sourceControl", [])
+        if source.get("identity") == PACKAGE
+    ]
+    if len(dependencies) != 1:
+        return fail("Package.swift must declare exactly one Aemi dependency.")
+    dependency = dependencies[0]
+    if dependency.get("location", {}).get("remote") != [{"urlString": LOCATION}]:
+        return fail(f"Aemi must use its canonical source: {LOCATION}")
+    if dependency.get("requirement") != {"branch": [BRANCH]}:
+        return fail("Aemi must use branch main, matching the sibling package graph.")
+    print(f"manifest: {PACKAGE} uses {LOCATION}, branch {BRANCH}")
+    return 0
+
+
 def check_manifest():
-    """The manifest pins ADFoundation to a 40-hex revision, and to nothing else."""
-    source = open(MANIFEST).read()
-    match = REVISION.search(source)
-    if match is None:
-        return None, fail(
-            "Package.swift has no `let adFoundationRevision = \"<40-hex sha>\"`. The ADFoundation "
-            "pin must be an exact revision — not a branch, not a version range."
-        )
-    declaration = re.search(r"\.package\(\s*url:[^)]*ADFoundation[^)]*\)", source, re.DOTALL)
-    if declaration is None:
-        return None, fail("Package.swift declares no ADFoundation dependency to check.")
-    body = declaration.group(0)
-    if "revision: adFoundationRevision" not in body:
-        return None, fail(f"the ADFoundation dependency is not `revision: adFoundationRevision`:\n{body}")
-    for forbidden in ("branch:", "from:", "exact:", "upToNextMajor", "upToNextMinor"):
-        if forbidden in body:
-            return None, fail(
-                f"the ADFoundation dependency uses `{forbidden}`. It is unversioned and first-party; "
-                "a moving reference makes two checkouts of the same HTTP commit resolve different code."
-            )
-    print(f"manifest: ADFoundation pinned to {match.group(1)}")
-    return match.group(1), 0
+    """Check the evaluated manifest so comments and inactive declarations cannot satisfy the gate."""
+    result = subprocess.run(
+        ["swift", "package", "dump-package"], cwd=REPO, capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        return fail("`swift package dump-package` failed.")
+    return validate_manifest(json.loads(result.stdout))
 
 
 def check_resolved_is_ignored():
@@ -86,36 +78,39 @@ def check_resolved_is_ignored():
     return 0
 
 
-def check_resolution_matches(expected):
-    """Resolving the graph actually lands on the pinned revision, with no branch or version."""
-    result = subprocess.run(["swift", "package", "resolve"], cwd=REPO, capture_output=True, text=True)
-    if result.returncode != 0:
-        sys.stderr.write(result.stderr)
-        return fail("`swift package resolve` failed — the pin does not resolve.")
-    if not os.path.exists(RESOLVED):
-        return fail("`swift package resolve` produced no Package.resolved to verify against.")
-    pins = json.load(open(RESOLVED)).get("pins", [])
-    pin = next((p for p in pins if p.get("identity") == PACKAGE), None)
+def validate_resolution(pins):
+    """Require a resolved commit on the declared branch, rather than a version or revision override."""
+    pin = next((pin for pin in pins if pin.get("identity") == PACKAGE), None)
     if pin is None:
-        return fail(f"the resolved graph contains no `{PACKAGE}` pin.")
+        return fail(f"The resolved graph contains no `{PACKAGE}` pin.")
     state = pin.get("state", {})
-    if state.get("revision") != expected:
-        return fail(f"{PACKAGE} resolved to {state.get('revision')}, manifest pins {expected}.")
-    for floating in ("branch", "version"):
-        if state.get(floating) is not None:
-            return fail(f"{PACKAGE} resolved with a {floating} ({state[floating]}) — not a pure "
-                        "revision pin, so the resolution can move under the same manifest.")
-    print(f"resolution: {PACKAGE} -> {expected} (revision pin, no branch, no version)")
+    if state.get("branch") != BRANCH or state.get("version") is not None:
+        return fail(f"{PACKAGE} must resolve on branch {BRANCH}, without a version constraint.")
+    revision = state.get("revision", "")
+    if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        return fail(f"{PACKAGE} has no valid resolved commit.")
+    print(f"resolution: {PACKAGE} -> {revision} (branch {BRANCH})")
     return 0
 
 
+def check_resolution_matches():
+    """Resolve the graph and verify its Aemi branch and concrete commit."""
+    result = subprocess.run(["swift", "package", "resolve"], cwd=REPO, capture_output=True, text=True)
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        return fail("`swift package resolve` failed.")
+    if not os.path.exists(RESOLVED):
+        return fail("`swift package resolve` produced no Package.resolved to verify against.")
+    return validate_resolution(json.load(open(RESOLVED)).get("pins", []))
+
+
 def main():
-    expected, status = check_manifest()
+    status = check_manifest()
     status |= check_resolved_is_ignored()
-    if expected is not None:
-        status |= check_resolution_matches(expected)
     if status == 0:
-        print("\ndependency pinning is reproducible")
+        status |= check_resolution_matches()
+    if status == 0:
+        print("\ndependency requirements match the shared Aemi graph")
     return status
 
 

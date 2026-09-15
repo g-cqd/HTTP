@@ -22,6 +22,10 @@ concurrency:
 env:
   SCRATCH: /tmp/swiftpm-build/HTTP
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ---------------------------------------------------------------------------
   # Swift Testing time limits include waits inside RealNetworkTrait. Schedule test cases serially
@@ -114,21 +118,10 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Dependency reproducibility. `ADFoundation` is first-party and UNVERSIONED, and it used to be
-  # taken from `branch: "main"`. A moving branch means two checkouts of the same HTTP commit can
-  # resolve different dependency code — so a build is not reproducible, a benchmark number is not
-  # attributable to a commit, and a green CI run is not evidence about any particular input. It is
-  # pinned to an exact revision in the manifest instead.
-  #
-  # `Package.resolved` stays GITIGNORED on purpose: this is a reusable library, and committing a
-  # lockfile would publish one resolution of the whole graph to every consumer, who must resolve
-  # their own. That is precisely why the manifest pin has to be exact — with no committed lockfile,
-  # the manifest is the only thing making this package's own builds deterministic.
-  #
-  # Both halves were already in place; nothing enforced either. This job does: the pin must be a
-  # 40-hex revision (no branch, no version range), Package.resolved must stay untracked, and
-  # resolving the graph must actually land on the pinned revision with no branch or version
-  # attached. Verified red in both directions (branch pin; committed lockfile) before landing.
+  # The shared Aemi requirement must match sibling packages: SwiftPM rejects a graph mixing
+  # revision and branch requirements. Package.swift records the migration to Aemi's main branch.
+  # Keep the library lockfile untracked and verify the resolved branch has a concrete commit.
+  # This checks graph compatibility; a floating branch is not a reproducibility guarantee.
   # ---------------------------------------------------------------------------
   dependency-pinning:
     runs-on: macos-26
@@ -136,7 +129,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
         uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
-      - name: Assert ADFoundation is pinned to an exact revision
+      - name: Test the dependency contract gate
+        run: python3 -m unittest discover -s scripts -p 'test_dependency_pinning.py'
+      - name: Verify the shared Aemi dependency contract
         run: python3 scripts/dependency-pinning.py
 
   # ---------------------------------------------------------------------------
@@ -151,9 +146,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Assert the request path is trap-free
         run: |
-          targets="Sources/Core/HTTPCore Sources/Protocols/HTTP1 Sources/Protocols/HTTP2 Sources/Protocols/HPACK Sources/Protocols/QPACK Sources/Protocols/HTTP3 Sources/Protocols/WebSocket Sources/Server/HTTPServer Sources/Transport/HTTPTransport Sources/Core/HTTPConcurrency"
+          targets=(Sources/Core/HTTPCore Sources/Protocols/HTTP1 Sources/Protocols/HTTP2 Sources/Protocols/HPACK Sources/Protocols/QPACK Sources/Protocols/HTTP3 Sources/Protocols/WebSocket Sources/Server/HTTPServer Sources/Transport/HTTPTransport Sources/Core/HTTPConcurrency)
           pattern='(fatalError|preconditionFailure|assertionFailure)\(|(^|[^A-Za-z.])precondition\(|(^|[^A-Za-z])assert\(|\.unsafelyUnwrapped'
-          hits="$(grep -rnE "$pattern" $targets --include='*.swift' 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)"
+          hits="$(grep -rnE "$pattern" "${targets[@]}" --include='*.swift' 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)"
           if [ -n "$hits" ]; then
             echo "$hits"
             echo "::error::process-aborting trap in the request path — one bad request must not crash the server"
