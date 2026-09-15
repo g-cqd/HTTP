@@ -41,7 +41,11 @@ struct CacheStaleWhileRevalidateTests {
 
         /// Runs every captured revalidation to completion, so the cache reflects the refresh.
         func settle() async {
-            for work in captured.withLock(\.self) {
+            let pending = captured.withLock { work in
+                defer { work.removeAll() }
+                return work
+            }
+            for work in pending {
                 await work()
             }
         }
@@ -80,6 +84,25 @@ struct CacheStaleWhileRevalidateTests {
 
     private func get(path: String = "/") -> HTTPRequest {
         HTTPRequest(method: .get, scheme: "https", authority: "x", path: path)
+    }
+
+    @Test
+    func `settled revalidations release their captured work`() async {
+        weak var released: SpawnedTasks?
+        do {
+            let spawned = SpawnedTasks()
+            released = spawned
+            let supervisor = RevalidationSupervisor(
+                maxConcurrent: 1, deadline: .seconds(1), spawn: spawned.spawn
+            )
+            #expect(
+                supervisor.submit(key: "a") {
+                    // A completed refresh must release its captured work.
+                })
+            await spawned.settle()
+            #expect(spawned.isEmpty)
+        }
+        #expect(released == nil)
     }
 
     @Test("a stale entry inside the window is served stale now, then refreshed in the background")
@@ -233,5 +256,6 @@ struct CacheStaleWhileRevalidateTests {
             // The permit came back, so this one is admitted.
         }
         #expect(admittedAfterDeadline)
+        await spawned.settle()
     }
 }
