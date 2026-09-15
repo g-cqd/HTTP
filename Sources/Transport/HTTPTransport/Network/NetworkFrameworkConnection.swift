@@ -74,7 +74,9 @@ public final class NetworkFrameworkConnection: UnleasedTransportConnection, @unc
         let bytes: [UInt8]?
         do {
             bytes = try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation { continuation in
+                // Checked continuations avoid the Swift 6.4 TSan result-slot report reproduced
+                // when asynchronous callbacks resume unsafe continuations.
+                try await withCheckedThrowingContinuation { continuation in
                     connection.receive(
                         minimumIncompleteLength: 1,
                         maximumLength: max(1, maxLength)
@@ -123,8 +125,8 @@ public final class NetworkFrameworkConnection: UnleasedTransportConnection, @unc
         let received: Data?
         do {
             received = try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
-                    (continuation: UnsafeContinuation<Data?, any Error>) in
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Data?, any Error>) in
                     connection.receive(
                         minimumIncompleteLength: 1,
                         maximumLength: max(1, maxLength)
@@ -174,8 +176,8 @@ public final class NetworkFrameworkConnection: UnleasedTransportConnection, @unc
     public func send(_ bytes: [UInt8]) async throws {
         do {
             try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
-                    (continuation: UnsafeContinuation<Void, any Error>) in
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Void, any Error>) in
                     connection.send(
                         content: Data(bytes),
                         completion: .contentProcessed { error in

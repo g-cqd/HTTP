@@ -168,6 +168,34 @@ struct BackboneConformanceTests {
         await transport.shutdown()
     }
 
+    @Test(.timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: [false, true])
+    func `rapid Network callbacks hand off every result safely`(bufferedReceive: Bool) async throws
+    {
+        let transport = try makeTransport(.networkFramework)
+        let stream = try await transport.start()
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for index in 0 ..< 32 {
+                    group.addTask {
+                        try await assertLoopbackEcho(
+                            stream: stream,
+                            port: transport.boundPort,
+                            payload: [UInt8(index)],
+                            roundTrips: 256,
+                            bufferedReceive: bufferedReceive
+                        )
+                    }
+                }
+                try await group.waitForAll()
+            }
+        }
+        catch {
+            await transport.shutdown()
+            throw error
+        }
+        await transport.shutdown()
+    }
+
     @Test(
         "many on-loop park→resume round-trips stay correct with the per-request wakeup elided (FIX #7)",
         .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))

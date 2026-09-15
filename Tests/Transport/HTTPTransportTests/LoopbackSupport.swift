@@ -18,27 +18,16 @@ import Testing
 
 /// Drives a loopback echo against a started transport's connection `stream` on `port`.
 ///
-/// The server side accepts one connection and echoes the first chunk; a Network.framework client
-/// connects, sends `payload`, and must read it back unchanged.
+/// The server accepts one connection and echoes each chunk. A Network.framework client repeats
+/// `roundTrips` exchanges, checking the payload through the selected receive adapter.
 func assertLoopbackEcho(
     stream: AsyncStream<any TransportConnection>,
     port: UInt16,
-    payload: [UInt8] = Array("ping".utf8)
+    payload: [UInt8] = Array("ping".utf8),
+    roundTrips: Int = 1,
+    bufferedReceive: Bool = false
 ) async throws {
     #expect(port != 0)
-
-    let server = Task {
-        var iterator = stream.makeAsyncIterator()
-        guard let connection = await iterator.next() else {
-            return
-        }
-        let chunk = try await connection.receive(maxLength: 64)
-        if let chunk {
-            try await connection.send(chunk)
-        }
-        await connection.close()
-    }
-
     let endpointPort = try #require(NWEndpoint.Port(rawValue: port))
     let client = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
     let bridged = NetworkFrameworkConnection(
@@ -47,14 +36,34 @@ func assertLoopbackEcho(
         negotiatedApplicationProtocol: nil,
         isSecure: false
     )
+    defer { bridged.cancel() }
     client.start(queue: .global())
 
-    try await bridged.send(payload)
-    let echo = try await bridged.receive(maxLength: 64)
-    #expect(echo == payload)
-
-    await bridged.close()
-    _ = await server.result
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        defer { group.cancelAll() }
+        group.addTask {
+            var iterator = stream.makeAsyncIterator()
+            let connection = try #require(await iterator.next())
+            defer { connection.cancel() }
+            for _ in 0 ..< roundTrips {
+                let chunk = try #require(try await connection.receive(maxLength: 64))
+                try await connection.send(chunk)
+            }
+        }
+        var echo: [UInt8] = []
+        for _ in 0 ..< roundTrips {
+            try await bridged.send(payload)
+            echo.removeAll(keepingCapacity: true)
+            if bufferedReceive {
+                _ = try await bridged.receive(into: &echo, maxLength: 64)
+            }
+            else {
+                echo = try #require(try await bridged.receive(maxLength: 64))
+            }
+            try #require(echo == payload)
+        }
+        _ = try await group.next()
+    }
 }
 
 /// Drives a **scatter-gather** round-trip: the server side replies via `send(head, body)` (the `writev`
