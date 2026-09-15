@@ -154,6 +154,26 @@ struct ReceiveScratchTests {
 
     // MARK: - Shrink
 
+    @Test(arguments: [1, 64, 1_024], [false, true])
+    func `shrinking preserves the bytes of the read that triggered it`(
+        produced: Int, cappedWithRetries: Bool
+    ) {
+        var sut = ReceiveScratch()
+        let ceiling = ReceiveScratch.floorWindow * 2
+        Self.feed(&sut, ceiling: ceiling, produced: ReceiveScratch.floorWindow)
+
+        for read in 0 ..< ReceiveScratch.shrinkRun {
+            if cappedWithRetries {
+                _ = sut.read(ceiling: ceiling) { _ in -1 }
+            }
+            let filler = UInt8(read + 1)
+            let readCeiling = cappedWithRetries ? produced * 4 : ceiling
+            let count = Self.feed(&sut, ceiling: readCeiling, produced: produced, filler: filler)
+            #expect(Array(sut.received(count)) == [UInt8](repeating: filler, count: produced))
+        }
+        #expect(sut.residentBytes == ReceiveScratch.floorWindow)
+    }
+
     @Test("a run of quarter-full reads halves the window back toward the floor")
     func aRunOfSmallReadsShrinksTheWindow() {
         var scratch = ReceiveScratch()

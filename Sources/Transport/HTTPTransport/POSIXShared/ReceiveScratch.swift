@@ -152,19 +152,25 @@ struct ReceiveScratch {
             return
         }
         smallReads = 0
-        shrink()
+        shrink(preserving: produced)
     }
 
-    /// Halves the window toward the floor and releases the storage the old one held.
+    /// Halves the window toward the floor, preserving the current read until the caller copies it out.
     ///
     /// Eager, unlike growth: an idle connection is exactly the one this reclaims from, and it will not
     /// read again to materialize a lazily smaller window.
-    private mutating func shrink() {
+    private mutating func shrink(preserving produced: Int) {
         let halved = max(window / 2, Self.floorWindow)
         guard halved != window else {
             return
         }
         window = halved
-        storage = [UInt8](repeating: 0, count: halved)
+        // Shrinking follows a quarter-full read, so its produced prefix fits in the halved window.
+        // The caller has not consumed that prefix yet; replacing it with zeros corrupts the stream.
+        var smaller = [UInt8](repeating: 0, count: halved)
+        for index in 0 ..< produced {
+            smaller[index] = storage[index]
+        }
+        storage = smaller
     }
 }
