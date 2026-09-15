@@ -94,22 +94,24 @@ struct ResponderGenerationTests {
             responder: Self.generation("A", limit: Self.oldLimit, resolved: resolved)
         )
         let connection = ControllableConnection(id: TransportConnectionID(1), alpn: "h2")
-        let serving = Task { await server.serve(connection) }
-        defer { serving.cancel() }
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { await server.serve(connection) }
+            defer { group.cancelAll() }
+            // HEADERS without END_STREAM: the engine resolves `/upload` against generation A and waits.
+            await connection.feed(DispatchPlanWire.http2Head(path: "/upload"))
+            _ = try await resolved.wait(forAtLeast: 1)
 
-        // HEADERS without END_STREAM: the engine resolves `/upload` against generation A and waits.
-        await connection.feed(DispatchPlanWire.http2Head(path: "/upload"))
-        _ = try await resolved.wait(forAtLeast: 1)
+            server.reloadResponder(Self.generation("B", limit: Self.newLimit))
+            await connection.feed(DispatchPlanWire.http2Body(count: Self.bodySize))
+            try await DispatchPlanWire.settleAsync {
+                (try? DispatchPlanWire.decodeHTTP2(await connection.sentBytes()))?.status != nil
+            }
 
-        server.reloadResponder(Self.generation("B", limit: Self.newLimit))
-        await connection.feed(DispatchPlanWire.http2Body(count: Self.bodySize))
-        try await DispatchPlanWire.settleAsync {
-            (try? DispatchPlanWire.decodeHTTP2(await connection.sentBytes()))?.status != nil
+            let response = try DispatchPlanWire.decodeHTTP2(await connection.sentBytes())
+            #expect(response.status == "200")
+            #expect(String(decoding: response.body, as: Unicode.UTF8.self) == "A")
+            await connection.close()
         }
-
-        let response = try DispatchPlanWire.decodeHTTP2(await connection.sentBytes())
-        #expect(response.status == "200")
-        #expect(String(decoding: response.body, as: Unicode.UTF8.self) == "A")
     }
 
     @Test("HTTP/3: a reload between HEADERS and dispatch does not split the generation")

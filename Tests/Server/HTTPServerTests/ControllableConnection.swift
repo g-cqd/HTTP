@@ -10,6 +10,7 @@
 //  `waitUntilSent` checkpoint.
 //
 
+import HTTPTestSupport
 import HTTPTransport
 
 /// A ``TransportConnection`` with test-driven inbound delivery and observable output.
@@ -22,7 +23,7 @@ actor ControllableConnection: UnleasedTransportConnection {
     private var inbound: [UInt8] = []
     private var inboundClosed = false
     private var sent: [UInt8] = []
-    private var receiveWaiter: CheckedContinuation<Void, Never>?
+    private let receiveReady = AsyncGate()
 
     init(id: TransportConnectionID = TransportConnectionID(1), alpn: String? = "h2") {
         self.id = id
@@ -31,12 +32,13 @@ actor ControllableConnection: UnleasedTransportConnection {
 
     // MARK: TransportConnection
 
-    func receive(maxLength: Int) async -> [UInt8]? {
+    func receive(maxLength: Int) async throws -> [UInt8]? {
+        try Task.checkCancellation()
         while inbound.isEmpty {
             if inboundClosed {
                 return nil
             }
-            await withCheckedContinuation { receiveWaiter = $0 }
+            try await receiveReady.waitUntilOpen()
         }
         let count = min(maxLength, inbound.count)
         defer { inbound.removeFirst(count) }
@@ -71,8 +73,12 @@ actor ControllableConnection: UnleasedTransportConnection {
         sent
     }
 
+    /// Suspends until a receive is parked, so cancellation tests do not depend on scheduling.
+    func waitForReceive() async throws {
+        try await receiveReady.waitForWaiters(atLeast: 1)
+    }
+
     private func wakeReceive() {
-        receiveWaiter?.resume()
-        receiveWaiter = nil
+        receiveReady.open()
     }
 }
