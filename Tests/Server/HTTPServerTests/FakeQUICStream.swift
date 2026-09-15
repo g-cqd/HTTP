@@ -36,6 +36,8 @@ final class FakeQUICStream: QUICStream, @unchecked Sendable {
     }
 
     private let state = Mutex(State())
+
+    var hasPendingReceive: Bool { state.withLock { $0.waiter != nil } }
     /// Records this stream's id after every `receive()` that hands a chunk to the driver, so a test can
     /// sequence one stream's delivery against another's without sleeping.
     private let consumed: AsyncEventProbe<QUICStreamID>
@@ -87,7 +89,18 @@ final class FakeQUICStream: QUICStream, @unchecked Sendable {
     }
 
     func receive() async throws -> (bytes: [UInt8], fin: Bool)? {
+        try await withTaskCancellationHandler {
+            try await receiveUntilReady()
+        } onCancel: {
+            // Match a real QUIC receive: cancellation wakes the reader, including cancellation
+            // before it parks. The closed flag and waiter share the same lock.
+            self.finishInbound()
+        }
+    }
+
+    private func receiveUntilReady() async throws -> (bytes: [UInt8], fin: Bool)? {
         while true {
+            try Task.checkCancellation()
             let next = try state.withLock { current -> (bytes: [UInt8], fin: Bool)?? in
                 if !current.inbound.isEmpty {
                     return current.inbound.removeFirst()
