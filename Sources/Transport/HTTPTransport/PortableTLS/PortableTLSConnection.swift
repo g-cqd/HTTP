@@ -318,7 +318,7 @@
 
         // MARK: - Send
 
-        /// Asserts the outbound direction is still leased, which is what keeps one response's octets
+        /// Requires the outbound direction is still leased, which is what keeps one response's octets
         /// contiguous and its TLS records unspliced.
         ///
         /// The machine-checked half of the send contract on this backbone. Both cores it guards —
@@ -328,15 +328,11 @@
         /// `sendFile` splice this backbone carried arrived by *inheriting* a default that called the
         /// gated ``send(_:)`` in a loop, and nothing failed. Now something does.
         ///
-        /// One uncontended lock read per chunk — not per partial write. `precondition` rather than
-        /// `assert`, so it holds in release: octets spliced into another response are silent
-        /// corruption of a message body, not a crash. Mirrors ``POSIXDispatchConnection``'s
-        /// `assertOutboundLeased` and the `assertInboundLeased` of all four POSIX backbones.
-        private func assertOutboundLeased(_ step: StaticString) {
-            precondition(
-                sendPump.isHeld,
-                "\(step) requires the outbound direction; records would splice without it"
-            )
+        /// One uncontended lock read per chunk — not per partial write. The check throws in release:
+        /// octets spliced into another response silently corrupt its body. Mirrors ``POSIXDispatchConnection``'s
+        /// `requireOutboundLease` and the `requireInboundLease` of all four POSIX backbones.
+        private func requireOutboundLease() throws(DirectionOwnershipViolation) {
+            guard sendPump.isHeld else { throw DirectionOwnershipViolation() }
         }
 
         /// Encrypts and sends all of `bytes`, draining the produced ciphertext to the socket.
@@ -427,12 +423,12 @@
 
         /// The `SSL_write` loop of ``send(_:)`` and of ``sendFile(descriptor:offset:length:)``.
         ///
-        /// The caller holds ``sendPump``, and ``assertOutboundLeased()`` is what makes that a checked
+        /// The caller holds ``sendPump``, and ``requireOutboundLease()`` is what makes that a checked
         /// claim rather than a comment: this is the sole encrypt core, so a gated entry point refactored
         /// into an ungated one — which is exactly how the per-chunk splice above arrived — is caught
         /// here, before the first `SSL_write` puts a record into the write BIO.
         private func encryptAndDrain(_ bytes: [UInt8]) async throws {
-            assertOutboundLeased("a TLS encrypt")
+            try requireOutboundLease()
             var offset = 0
             while offset < bytes.count {
                 let outcome = engine.withLock { $0.encrypt(bytes, from: offset) }
@@ -507,13 +503,13 @@
         ///
         /// Split out because ``AsyncExclusion`` is not reentrant (CWE-833): ``send(_:)`` holds the
         /// exclusion for its whole body and calls this directly, where taking it again would deadlock.
-        /// The `precondition` is the point of the split — the discipline is checked on every ordinary
+        /// The ownership check is the point of the split — the discipline is checked on every ordinary
         /// send rather than described in a comment that cannot fail.
         ///
         /// The close-flag guard keeps a pump resumed after ``cancel()``/``close()`` from touching the
         /// descriptor *number*, which the kernel may already have reused for another connection.
         private func drainCiphertext() async throws {
-            assertOutboundLeased("the TLS ciphertext drain")
+            try requireOutboundLease()
             while true {
                 guard !isClosed.load(ordering: .acquiring) else {
                     throw TransportError.closed

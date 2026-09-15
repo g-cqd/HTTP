@@ -26,6 +26,23 @@ import Testing
 
 @Suite("Raw connection — the direction-ownership contract (audit F-03)")
 struct DirectionOwnerTests {
+    @Test
+    func `ownership checks reject an unleased direction and recover after a throwing operation`()
+        async throws
+    {
+        let owner = DirectionOwner<Int>()
+        #expect(throws: DirectionOwnershipViolation.self) { try owner.requireOwnership() }
+        await #expect(throws: DirectionOwnershipViolation.self) {
+            try await owner.withOwnership { _ in
+                try owner.requireOwnership()
+                throw DirectionOwnershipViolation()
+            }
+        }
+        #expect(throws: DirectionOwnershipViolation.self) { try owner.requireOwnership() }
+        try await owner.withOwnership { _ in try owner.requireOwnership() }
+        #expect(!owner.isOwned)
+    }
+
     /// The resumer must refuse to displace a pending continuation, and the INCUMBENT must survive.
     ///
     /// The whole defect in one assertion. The old `reset` overwrote the slot, so the incumbent was

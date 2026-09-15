@@ -99,7 +99,7 @@
                 // Inside the ownership on purpose (audit F-03): the scratch holds THIS read's octets
                 // only until the next `read(2)` overwrites them, and the next receive cannot start
                 // until this body returns.
-                return copyOutReceived(count)
+                return try copyOutReceived(count)
             }
         }
 
@@ -115,25 +115,25 @@
             try await receiveOwner.withOwnership { once in
                 let count = try await readIntoScratch(maxLength: maxLength, once: once)
                 if count > 0 {
-                    appendReceived(count, to: &buffer)
+                    try appendReceived(count, to: &buffer)
                 }
                 return count
             }
         }
 
         /// Copies out the octets THIS read produced, into a fresh chunk.
-        private func copyOutReceived(_ count: Int) -> [UInt8] {
-            assertInboundLeased("the scratch copy-out")
+        private func copyOutReceived(_ count: Int) throws -> [UInt8] {
+            try requireInboundLease()
             return scratch.withLock { Array($0.received(count)) }
         }
 
         /// Appends the octets THIS read produced to `buffer`, in place — the allocation-free copy-out.
-        private func appendReceived(_ count: Int, to buffer: inout [UInt8]) {
-            assertInboundLeased("the scratch copy-out")
+        private func appendReceived(_ count: Int, to buffer: inout [UInt8]) throws {
+            try requireInboundLease()
             scratch.withLock { buffer.append(contentsOf: $0.received(count)) }
         }
 
-        /// Asserts the inbound direction is still leased, which is what makes a scratch copy-out sound.
+        /// Requires the inbound direction is still leased, which is what makes a scratch copy-out sound.
         ///
         /// The reason both copy-outs route through a helper (audit F-03). The scratch holds one read's
         /// octets until the next `read(2)` overwrites them, so the copy is correct only while this operation
@@ -141,15 +141,12 @@
         /// copy-out happens after release was caught by the socket-level suite in only about half of its
         /// runs, because it needs a second receive to actually interleave. A test that only MAY interleave
         /// is not a regression test, so the invariant is machine-checked instead. Mirrors
-        /// `PortableTLSConnection.drainCiphertext`'s `precondition(sendPump.isHeld)`.
+        /// `PortableTLSConnection.drainCiphertext`'s ownership check.
         ///
         /// One uncontended lock read per receive, kept in release rather than an `assert` because a scratch
         /// copied out from under its owner is silent corruption of a request body, not a crash.
-        private func assertInboundLeased(_ step: StaticString) {
-            precondition(
-                receiveOwner.isOwned,
-                "\(step) requires the inbound direction: it would take octets the owner never sees"
-            )
+        private func requireInboundLease() throws(DirectionOwnershipViolation) {
+            try receiveOwner.requireOwnership()
         }
 
         /// Closes the descriptor (idempotent, serialized on the event loop to avoid an fd-reuse race).
@@ -242,7 +239,7 @@
         /// while its handler runs, so the lease is still held. The close sweep does not come through
         /// here — it resumes the waiter directly.
         private func readScratchNow(maxLength: Int) throws -> Int? {
-            assertInboundLeased("the read(2)")
+            try requireInboundLease()
             guard !isClosed.load(ordering: .acquiring) else {
                 throw TransportError.closed
             }
@@ -345,20 +342,20 @@
         /// kernel for an unrelated connection, and writing a response into that would be
         /// cross-connection corruption.
         ///
-        /// The `precondition` is the machine-checked half of the contract on this side (audit F-03):
+        /// The ownership check is the machine-checked half of the contract on this side (audit F-03):
         /// every send entry point routes through here, so an ungated one — a gated method calling
         /// another gated method's core, or an exclusion removed in a later refactor — trips it
         /// deterministically rather than splicing its octets into another response's body. Mirrors
-        /// `PortableTLSConnection.drainCiphertext`'s `precondition(sendPump.isHeld)`. One uncontended
+        /// `PortableTLSConnection.drainCiphertext`'s ownership check. One uncontended
         /// lock read per send, not per retry.
         private func claimSend(
             _ continuation: UnsafeContinuation<Void, any Error>,
             _ once: OnceResumer<Void>
         ) -> Bool {
-            precondition(
-                sendOwner.isOwned,
-                "a send requires the outbound direction; octets would splice into another response"
-            )
+            guard sendOwner.isOwned else {
+                unsafe continuation.resume(throwing: DirectionOwnershipViolation())
+                return false
+            }
             // SE-0458 (ADR 0009): unsafe by the continuation parameter. `OnceResumer` stores and
             // resumes it under a `Mutex` that guarantees exactly one resumal; it does not escape
             // this connection.

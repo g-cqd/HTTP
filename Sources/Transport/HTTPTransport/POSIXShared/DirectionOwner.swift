@@ -107,6 +107,12 @@ final class DirectionOwner<Success: Sendable>: Sendable {
     /// comment cannot fail, `#expect(owner.isOwned)` can.
     var isOwned: Bool { exclusion.isHeld }
 
+    /// Rejects an ungated operation before it touches the direction's bytes or continuation.
+    /// - Throws: `DirectionOwnershipViolation` when no operation holds the direction.
+    func requireOwnership() throws(DirectionOwnershipViolation) {
+        guard isOwned else { throw DirectionOwnershipViolation() }
+    }
+
     /// Operations suspended waiting for the current owner to finish.
     var queuedOperations: Int { exclusion.waiterCount }
 
@@ -127,10 +133,7 @@ final class DirectionOwner<Success: Sendable>: Sendable {
             let concurrent = bodiesInFlight.wrappingAdd(1, ordering: .acquiringAndReleasing)
                 .oldValue
             defer { bodiesInFlight.wrappingSubtract(1, ordering: .releasing) }
-            precondition(
-                concurrent == 0,
-                "two operations own one direction at once; their octets would interleave on the wire"
-            )
+            guard concurrent == 0 else { throw DirectionOwnershipViolation() }
             return try await operation(resumer)
         }
     }

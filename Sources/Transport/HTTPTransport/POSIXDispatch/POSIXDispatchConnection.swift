@@ -165,7 +165,7 @@ public final class POSIXDispatchConnection: TransportConnection {
             guard let bytes = try await parkForRead(maxLength: maxLength, once: once) else {
                 return nil
             }
-            appendReceived(bytes, to: &buffer)
+            try appendReceived(bytes, to: &buffer)
             return bytes.count
         }
         // See ``receive(maxLength:)``: the close sweep resumes a parked read as EOF, and an EOF this
@@ -177,25 +177,22 @@ public final class POSIXDispatchConnection: TransportConnection {
     }
 
     /// Appends the octets THIS read produced to `buffer`, in place — the copy-out, inside the lease.
-    private func appendReceived(_ bytes: [UInt8], to buffer: inout [UInt8]) {
-        assertInboundLeased("the copy-out")
+    private func appendReceived(_ bytes: [UInt8], to buffer: inout [UInt8]) throws {
+        try requireInboundLease()
         buffer.append(contentsOf: bytes)
     }
 
-    /// Asserts the inbound direction is still leased, which is what makes the copy-out sound.
+    /// Requires the inbound direction is still leased, which is what makes the copy-out sound.
     ///
     /// The machine-checked half of the receive contract on this backbone (audit F-03), and the reason
     /// the override above exists at all: a behavioural test cannot prove a copy-out ran inside its
     /// lease, because it needs a second receive to actually interleave and about half the time none
-    /// does. Mirrors ``POSIXKqueueConnection``'s `assertInboundLeased`.
+    /// does. Mirrors ``POSIXKqueueConnection``'s `requireInboundLease`.
     ///
-    /// Kept a `precondition` rather than an `assert` so it holds in release: octets appended to a
+    /// The check throws in release too: octets appended to a
     /// caller's buffer out of stream order are a silently desynchronized request body, not a crash.
-    private func assertInboundLeased(_ step: StaticString) {
-        precondition(
-            receiveOwner.isOwned,
-            "\(step) requires the inbound direction: it would take octets the owner never sees"
-        )
+    private func requireInboundLease() throws(DirectionOwnershipViolation) {
+        try receiveOwner.requireOwnership()
     }
 
     /// Arms a read source and parks until it fires — the ungated core of ``receive(maxLength:)``.
@@ -242,7 +239,7 @@ public final class POSIXDispatchConnection: TransportConnection {
                 // peer that sent less. Sound here because the owning task is suspended INSIDE
                 // `withOwnership` while this handler runs, so the lease is still held; the close
                 // sweep does not come through here, it runs the waiter's `fail` closure instead.
-                assertInboundLeased("the read(2)")
+                try requireInboundLease()
                 let bytes = try Self.readAvailable(fd, maxLength)
                 clearRead(source)
                 once.resume(returning: bytes)
@@ -297,7 +294,7 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// `queue`, after this operation has waited its turn: by then the descriptor may have been closed
     /// and its NUMBER reused by the kernel for an unrelated connection.
     private func writeOwned(_ bytes: [UInt8], once: OnceResumer<Void>) async throws {
-        assertOutboundLeased()
+        try requireOutboundLease()
         let fd = descriptor
         try await withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<Void, any Error>) in
@@ -314,7 +311,7 @@ public final class POSIXDispatchConnection: TransportConnection {
         }
     }
 
-    /// Asserts the outbound direction is still leased, which is what keeps a send's octets contiguous.
+    /// Requires the outbound direction is still leased, which is what keeps a send's octets contiguous.
     ///
     /// The machine-checked half of the send contract on this backbone (audit F-03). ``writeOwned`` is
     /// the sole send core — both ``send(_:)`` and ``sendFile(descriptor:offset:length:)`` drive it —
@@ -323,12 +320,9 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// is empty (the resumer hands the continuation out on resume). An ungated caller arriving in that
     /// window is admitted silently — precisely the per-chunk splice this override was written to close,
     /// reappearing as a refactor rather than as a design. Mirrors ``POSIXKqueueConnection``'s
-    /// `claimSend` precondition; one uncontended lock read per chunk, not per partial write.
-    private func assertOutboundLeased() {
-        precondition(
-            sendOwner.isOwned,
-            "a send requires the outbound direction; octets would splice into another response"
-        )
+    /// `claimSend` ownership check; one uncontended lock read per chunk, not per partial write.
+    private func requireOutboundLease() throws(DirectionOwnershipViolation) {
+        try sendOwner.requireOwnership()
     }
 
     /// Sends `length` octets of the open file `file` from `offset`, holding the outbound direction for

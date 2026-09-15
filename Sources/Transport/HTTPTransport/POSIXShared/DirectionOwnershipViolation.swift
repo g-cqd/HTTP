@@ -17,7 +17,7 @@
 //  seam — HTTP/2 stream multiplexing (RFC 9113 §5), HTTP/3 over QUIC streams (RFC 9114 §2).
 //
 
-/// A second operation reached a stream direction whose sole owner had not finished.
+/// An operation reached a stream direction without its required exclusive ownership.
 ///
 /// Not reachable while a ``DirectionOwner`` gates the direction — the exclusion queues the second
 /// caller rather than letting it in. This is the guard rail *under* that exclusion, and the reason the
