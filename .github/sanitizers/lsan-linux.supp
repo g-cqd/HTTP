@@ -1,0 +1,7 @@
+# Swift stores weak-reference side-table pointers in an encoded form that LSan cannot trace:
+# https://github.com/llvm/llvm-project/issues/56751
+# Foundation.Process.run creates this metadata for the thread's cached RunLoop. A standalone
+# run/waitUntilExit of /usr/bin/true reports the same 32 bytes for 1 or 100 subprocesses on
+# Swift 6.4 Linux (both jammy and noble). Restrict the exception to Foundation's Process.run;
+# application allocations, the rest of Foundation, and all non-leak ASan checks remain checked.
+leak:Foundation7ProcessC3runyyKF

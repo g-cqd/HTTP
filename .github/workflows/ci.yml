@@ -421,15 +421,6 @@ jobs:
   # print-and-continue-green. Linux differs in ONE respect: swiftbuild is macOS-only, so the Linux
   # default build system IS the native one — the `--build-system native` flag the macOS UBSan leg needs
   # (to link the UBSan runtime into test bundles) is neither needed nor passed here.
-  #
-  # This leg was structurally mirrored from the (measured-green) macOS one but could NOT be run to
-  # green locally, because the whole Linux test build is currently broken upstream of it: on the
-  # closeout HEAD, `Tests/.../QUICApplicationCloseProbe.swift` does `import Network` unconditionally
-  # and is not in Package.swift's `darwinOnlyTransportTestSources`, so `HTTPTransportTests` fails to
-  # compile on Linux with `no such module 'Network'` — reproduced by a plain, non-sanitizer
-  # `swift build --build-tests` too, i.e. it reds `build-test-linux` and every other Linux leg equally.
-  # Once that exclusion is added, this leg builds like its siblings; whoever clears it should confirm
-  # the UBSan runtime links on Linux native here (ASan/TSan already do, so it is expected to).
   sanitizers-linux:
     runs-on: ubuntu-latest
     container: swiftlang/swift:nightly-6.4.x-jammy
@@ -447,6 +438,9 @@ jobs:
               swift test --disable-xctest --no-parallel --sanitize=undefined --scratch-path "$SCRATCH" \
                 --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
                 --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
+          elif [ "${{ matrix.sanitizer }}" = "address" ]; then
+            LSAN_OPTIONS="suppressions=$PWD/.github/sanitizers/lsan-linux.supp" \
+              swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=address
           else
             swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
           fi
