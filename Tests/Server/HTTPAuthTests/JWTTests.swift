@@ -30,7 +30,11 @@ struct JWTTests {
     // a constant with 'Sendable' type"), the same diagnostic that forced the split for Darwin in the
     // first place. Both platforms now want the plain declaration, so the split goes away entirely.
     static let ecKey = P256.Signing.PrivateKey()
-    static let rsaKey = try? _RSA.Signing.PrivateKey(keySize: .bits2048)
+    // JWT exercises signature verification, not RSA key generation. Loading a public fixture also
+    // avoids swift-crypto's leaking BN_clear-only key-generation temporary.
+    static let rsaKey = try? _RSA.Signing.PrivateKey(
+        pemRepresentation: JWTRSAFixture.privateKeyPEM
+    )
 
     private let hsHeader = #"{"alg":"HS256","typ":"JWT"}"#
 
