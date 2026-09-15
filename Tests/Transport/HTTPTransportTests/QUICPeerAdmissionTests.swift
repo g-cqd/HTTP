@@ -56,8 +56,9 @@ struct QUICPeerAdmissionTests {
             .map { _ in
                 admission.admit(host: QUICPeer.unattributed.host)
             }
-        #expect(admission.counts == (total: peerCount, hosts: 1))
-        _ = tickets
+        withExtendedLifetime(tickets) {
+            #expect(admission.counts == (total: peerCount, hosts: 1))
+        }
     }
 
     /// Sharing one bucket is only a defense if that bucket is actually CAPPED.
@@ -77,8 +78,9 @@ struct QUICPeerAdmissionTests {
             .map { _ in
                 admission.admit(host: QUICPeer.unattributed.host)
             }
-        #expect(admission.admit(host: QUICPeer.unattributed.host) == .rejectedHost)
-        #expect(admission.counts == (total: perHost, hosts: 1))
-        _ = tickets
+        withExtendedLifetime(tickets) {
+            #expect(admission.admit(host: QUICPeer.unattributed.host) == .rejectedHost)
+            #expect(admission.counts == (total: perHost, hosts: 1))
+        }
     }
 }
