@@ -63,12 +63,12 @@ static void httptk_install(void) {
 
 int httptk_malloc_counting_available(void) {
 #if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-    /* ASan interposes the allocator, so libmalloc's `malloc_logger` hook never fires and every
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+    /* ASan and TSan interpose the allocator, so libmalloc's `malloc_logger` hook never fires and every
        measurement would read 0 — a false "zero allocations" for any body. Report counting as
        unavailable in sanitized builds so the Swift oracles (`mallocDelta` / `expectAllocations`)
        degrade to run-only no-ops there, while staying authoritative in normal runs. Compile-time
-       detection is exact: SwiftPM's `--sanitize=address` sanitizes this C target too. */
+       detection is exact: SwiftPM's `--sanitize` option sanitizes this C target too. */
     return 0;
 #endif
 #endif
