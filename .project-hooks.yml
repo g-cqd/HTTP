@@ -1,0 +1,5 @@
+pre-push:
+  test-override:
+    type: swift
+    # Match CI: a network test's deadline must not expire while queued for a permit.
+    extra-args: [--disable-xctest, --no-parallel]

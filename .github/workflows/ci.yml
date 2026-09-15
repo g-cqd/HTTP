@@ -24,12 +24,18 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Swift Testing time limits include waits inside RealNetworkTrait. Schedule test cases serially
+  # so a case cannot expire while queued for a network permit; race tests still spawn their tasks.
+  # XCTest is unused, and its empty Linux runner leaks allocations under ASan.
+  #
   # Style & safety gates: native swift-format + SwiftLint (force-unwrap/cast/try).
   # ---------------------------------------------------------------------------
   lint:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Install Swift 6.4 dev toolchain
+        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
       - name: Toolchain
         run: swift --version
       - name: swift-format (strict)
@@ -57,7 +63,7 @@ jobs:
       - name: Build (warnings as errors)
         run: swift build --scratch-path "$SCRATCH"
       - name: Test (with coverage)
-        run: swift test --scratch-path "$SCRATCH" --enable-code-coverage
+        run: swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --enable-code-coverage
       # Coverage gate. SwiftPM emits a per-target .xctest bundle, so a single-binary llvm-cov export
       # under-reports the modules that bundle does not link; merging the merged profdata across every
       # bundle gives the true Sources line coverage. Threshold 85% (Sources are ~92% today) — a floor
@@ -87,7 +93,7 @@ jobs:
       - name: Toolchain
         run: swift --version
       - name: Test (release)
-        run: swift test -c release --scratch-path "$SCRATCH"
+        run: swift test --disable-xctest --no-parallel -c release --scratch-path "$SCRATCH"
 
   # ---------------------------------------------------------------------------
   # Hard constraint (CLAUDE.md): SwiftNIO MUST NOT appear in the dependency graph.
@@ -256,11 +262,11 @@ jobs:
             # test bundles), halt_on_error (else UBSan prints and continues green), scoped to the
             # codec/parser UB surface (the full suite times out under instrumentation; measured clean).
             UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-              swift test --build-system native --sanitize=undefined --scratch-path "$SCRATCH" \
+              swift test --disable-xctest --no-parallel --build-system native --sanitize=undefined --scratch-path "$SCRATCH" \
                 --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
                 --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
           else
-            swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+            swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
           fi
 
   # ---------------------------------------------------------------------------
@@ -400,7 +406,7 @@ jobs:
         # this step rather than as an inscrutable failure inside the test runner.
         run: swift build --build-tests --scratch-path "$SCRATCH"
       - name: Test (full suite)
-        run: swift test --parallel --scratch-path "$SCRATCH"
+        run: swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH"
 
   release-test-linux:
     runs-on: ubuntu-latest
@@ -412,7 +418,7 @@ jobs:
       - name: Toolchain
         run: swift --version
       - name: Test (release)
-        run: swift test -c release --scratch-path "$SCRATCH"
+        run: swift test --disable-xctest --no-parallel -c release --scratch-path "$SCRATCH"
 
   # UNDEFINED is scoped exactly as the macOS `sanitizers` job scopes it (see that block comment): the
   # full suite is UBSan-clean but its network/large-upload tests time out under instrumentation, so the
@@ -443,11 +449,11 @@ jobs:
           set -euo pipefail
           if [ "${{ matrix.sanitizer }}" = "undefined" ]; then
             UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-              swift test --sanitize=undefined --scratch-path "$SCRATCH" \
+              swift test --disable-xctest --no-parallel --sanitize=undefined --scratch-path "$SCRATCH" \
                 --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
                 --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
           else
-            swift test --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
+            swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }}
           fi
 
   # ---------------------------------------------------------------------------
@@ -466,7 +472,7 @@ jobs:
       - name: Install libbrotli + libzstd
         run: apt-get update -qq && apt-get install -y -qq libbrotli-dev libzstd-dev
       - name: Coding round-trips (Brotli + zstd + Linux gzip/inflate)
-        run: swift test --scratch-path "$SCRATCH" --traits Zstd,Brotli --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+        run: swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --traits Zstd,Brotli --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
 
   # ---------------------------------------------------------------------------
   # The single REQUIRED check for the Linux platform — this is the one to name in branch protection.
@@ -489,7 +495,7 @@ jobs:
       - name: Every Linux job must have succeeded
         run: |
           set -euo pipefail
-          results='${{ join(needs.*.result, " ") }}'
+          results='${{ join(needs.*.result, ' ') }}'
           echo "Linux job results: $results"
           for r in $results; do
             if [ "$r" != "success" ]; then
@@ -633,24 +639,33 @@ jobs:
       - name: Start httpd-example (/ws echo) in the Swift container, host network
         run: |
           docker run -d --name httpd --network host -v "$PWD:/work" -w /work \
-            swiftlang/swift:nightly-noble \
+            swiftlang/swift:nightly-6.4.x-jammy \
             bash -lc 'swift build -c release --product httpd-example --scratch-path /tmp/bld \
               && exec /tmp/bld/release/httpd-example 9001 posixEpoll'
           # Wait (covering the in-container release build) for the WebSocket listener.
-          for _ in $(seq 1 90); do
-            curl -s -o /dev/null --max-time 1 http://127.0.0.1:9001/ && break
+          ready=false
+          for _ in $(seq 1 450); do
+            if curl -fsS -o /dev/null --max-time 1 http://127.0.0.1:9001/; then
+              ready=true
+              break
+            fi
+            [ "$(docker inspect --format '{{.State.Running}}' httpd)" = true ] || break
             sleep 2
           done
-      - name: Run the Autobahn fuzzingclient
-        run: |
-          mkdir -p reports
-          docker run --rm --network host \
-            -v "$PWD/.github/conformance/autobahn:/config:ro" \
-            -v "$PWD/reports:/reports" \
-            crossbario/autobahn-testsuite \
-            wstest -m fuzzingclient -s /config/fuzzingclient.json
-      - name: Gate the report (no FAILED cases)
-        run: python3 .github/conformance/autobahn/check.py reports/index.json
+          if [ "$ready" != true ]; then
+            docker logs httpd
+            echo '::error::The WebSocket server did not become ready'
+            exit 1
+          fi
+      - name: Run and gate every Autobahn case in bounded batches
+        run: bash .github/conformance/autobahn/run.sh
+      - name: Upload Autobahn reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autobahn-reports
+          path: reports
+          if-no-files-found: warn
       - name: Stop the server
         if: always()
         run: docker rm -f httpd || true
@@ -696,11 +711,11 @@ jobs:
         run: swift --version
       - name: RFC 9114 / RFC 9204 conformance (release)
         run: |
-          swift test -c release --scratch-path "$SCRATCH" \
+          swift test --disable-xctest --no-parallel -c release --scratch-path "$SCRATCH" \
             --filter 'HTTP3Tests' --filter 'QPACKTests'
       - name: HTTP/3 over real QUIC — loopback integration (release)
         run: |
-          swift test -c release --scratch-path "$SCRATCH" \
+          swift test --disable-xctest --no-parallel -c release --scratch-path "$SCRATCH" \
             --filter 'HTTPServerHTTP3Tests' --filter 'HTTPServerWebSocketHTTP3Tests'
 
   # ---------------------------------------------------------------------------
