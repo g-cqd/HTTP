@@ -65,6 +65,9 @@ common=(-parse-as-library -module-name Synchronization -O -g -enable-library-evo
   -library-level api -swift-version 5 -runtime-compatibility-version none
   -enable-builtin-module -enable-experimental-feature RawLayout
   -enable-experimental-feature StaticExclusiveOnly -enable-experimental-feature Extern
+  # Swift throws do not use C++ unwinding. LLVM's C++ cleanup insertion turns
+  # the x86 clock intrinsic in LinuxImpl into an invalid invoke instruction.
+  -Xllvm -tsan-handle-cxx-exceptions=false
   -strict-memory-safety "${availability[@]}")
 sources=(stdlib/public/Synchronization/*.swift stdlib/public/Synchronization/Atomics/*.swift
   stdlib/public/Synchronization/Mutex/*.swift)

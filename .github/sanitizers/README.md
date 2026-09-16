@@ -23,6 +23,12 @@ The compiler crashes when instrumenting two source files directly:
 - `SpinLoopHint.swift`: TSan generates invalid LLVM IR for the CPU hint intrinsic.
   This file performs no memory access.
 
+The runtime build disables LLVM's C++ exception cleanup insertion with
+`-tsan-handle-cxx-exceptions=false`. These Swift sources use no C++ unwinding;
+without this option, the x86 clock intrinsic becomes an invalid `invoke`
+instruction inside the instrumented Linux slow path. Memory and atomic
+instrumentation remain enabled. See [LLVM's TSan pass](https://llvm.org/doxygen/ThreadSanitizer_8cpp_source.html).
+
 All other runtime source files, including the atomic operations used by the slow
 path, are instrumented. No TSan report is suppressed. Before the HTTP suite runs,
 `check-linux-tsan-runtime.sh` requires the locked counter to succeed and a deliberate
