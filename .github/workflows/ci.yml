@@ -39,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Toolchain
         run: swift --version
       - name: swift-format (strict)
@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Toolchain
         run: swift --version
       - name: Build (warnings as errors)
@@ -93,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Toolchain
         run: swift --version
       - name: Test (release)
@@ -107,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Assert no SwiftNIO transitive dependency
         run: |
           deps="$(swift package show-dependencies --format flatlist 2>/dev/null || true)"
@@ -128,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Test the dependency contract gate
         run: python3 -m unittest discover -s scripts -p 'test_dependency_pinning.py'
       - name: Verify the shared Aemi dependency contract
@@ -204,7 +204,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Toolchain
         run: swift --version
       - name: Census + ratchet (per-target unsafe-site budget)
@@ -248,7 +248,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Test under ${{ matrix.sanitizer }} sanitizer
         run: |
           set -euo pipefail
@@ -311,7 +311,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Toolchain
         run: swift --version
       - name: Build — portable libssl TLS (HTTP_PORTABLE_TLS)
@@ -345,7 +345,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Toolchain
         run: swift --version
       - name: Build — Django comparison subject (release)
@@ -540,7 +540,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Install jemalloc (package-benchmark malloc metrics)
         run: brew list jemalloc >/dev/null 2>&1 || brew install jemalloc
       - name: Toolchain
@@ -595,7 +595,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Install h2spec (+ coreutils for GNU timeout)
         # macos-26 ships no `timeout` binary (the step died with exit 127 "timeout: command not
         # found"); coreutils provides it as `gtimeout`, keeping the hard anti-hang bound intact.
@@ -707,7 +707,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Toolchain
         run: swift --version
       - name: RFC 9114 / RFC 9204 conformance (release)
@@ -755,7 +755,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Download h3spec (pinned release, arm64 mac binary)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -825,7 +825,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Install h2load (nghttp2)
         run: brew list nghttp2 >/dev/null 2>&1 || brew install nghttp2
       - name: Build example server (release)
@@ -888,7 +888,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift 6.4 dev toolchain (no hosted macOS image ships 6.4)
-        uses: g-cqd/ADBuildTools/.github/actions/setup-swift@v1
+        uses: Aemi-Studio/aemi/.github/actions/setup-swift@main
       - name: Install oha (closed-loop load generator)
         run: brew list oha >/dev/null 2>&1 || brew install oha
       - name: Adversarial memory soak (RSS plateau assertion)
