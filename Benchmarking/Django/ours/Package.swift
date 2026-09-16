@@ -12,7 +12,7 @@ var dependencies: [Package.Dependency] = [
 ]
 
 if aemiJSON {
-    dependencies.append(.package(url: "https://github.com/g-cqd/ADJSON.git", branch: "main"))
+    dependencies.append(.package(url: "https://github.com/g-cqd/AemiJSON.git", branch: "main"))
 }
 
 var benchDependencies: [Target.Dependency] = [
@@ -23,7 +23,7 @@ var benchDependencies: [Target.Dependency] = [
 var benchSettings: [SwiftSetting] = []
 
 if aemiJSON {
-    benchDependencies.append(.product(name: "AemiJSONCore", package: "ADJSON"))
+    benchDependencies.append(.product(name: "AemiJSONCore", package: "AemiJSON"))
     // The `.adjson` backend in main.swift compiles only under this flag, so the default build has no
     // dangling `import AemiJSONCore`.
     benchSettings.append(.define("BENCH_ADJSON"))
