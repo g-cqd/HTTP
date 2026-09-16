@@ -14,7 +14,7 @@
 //                          MIDDLEWARE list. Unset/0 → bare router (the framework-overhead floor).
 //    HTTPD_MAX_CONN=N    → raise the per-client + global connection caps (a loopback load test trips
 //                          the default single-IP DoS guard).
-//    BENCH_JSON=adjson   → use the ADJSON sibling for /json + /echo. Only available when the package
+//    BENCH_JSON=adjson   → use the AemiJSON sibling for /json + /echo. Only available when the package
 //                          was BUILT with BENCH_ADJSON set (see Package.swift); otherwise the value is
 //                          ignored and Foundation is used, because the dependency is not linked in.
 //
@@ -31,9 +31,9 @@ import HTTPCore
 import HTTPServer
 import HTTPTransport
 
-// The ADJSON sibling is an opt-in dependency (see Package.swift), so its import is too.
+// The AemiJSON sibling is an opt-in dependency (see Package.swift), so its import is too.
 #if BENCH_ADJSON
-    import ADJSONCore
+    import AemiJSONCore
 #endif
 
 // MARK: - Configuration
@@ -49,12 +49,12 @@ let useMiddleware = ProcessInfo.processInfo.environment["BENCH_MIDDLEWARE"] == "
 // 32 × 32 B = 1024 B.
 let payload = String(repeating: "from-scratch swift http server. ", count: 32)
 
-// MARK: - JSON backend (the ADJSON investigation)
+// MARK: - JSON backend (the AemiJSON investigation)
 //
 // BENCH_JSON=adjson swaps the /json + /echo JSON work from Foundation's JSONSerialization to the local
-// ADJSON sibling library (its Foundation-free ADJSONCore: tape parse + cursor re-encode). Both code
+// AemiJSON sibling library (its Foundation-free AemiJSONCore: tape parse + cursor re-encode). Both code
 // paths are compiled in WHEN the package was built with BENCH_ADJSON; the env var then picks one at
-// startup so the harness can A/B the two back-to-back. Without that build flag the ADJSON sibling is
+// startup so the harness can A/B the two back-to-back. Without that build flag the AemiJSON sibling is
 // not a dependency at all (it is an unpublished local checkout — see Package.swift), so the backend
 // collapses to Foundation and the enum has one case.
 
@@ -104,7 +104,7 @@ func echoJSON(_ body: [UInt8]) -> [UInt8]? {
         #if BENCH_ADJSON
             case .adjson:
                 // Tape-parse, then re-encode from the cursor — no intermediate value tree built.
-                guard let document = try? ADJSON.parse(body),
+                guard let document = try? AemiJSON.parse(body),
                     let out = try? document.root.encodedBytes()
                 else {
                     return nil
@@ -120,7 +120,7 @@ let router = Router {
     Route.get("/") { _, _, _ in .text("Hello, World!") }
 
     // Serialize a dictionary so we pay the same encode cost Django's JsonResponse does (backend chosen
-    // by BENCH_JSON: Foundation JSONSerialization, or the local ADJSON sibling).
+    // by BENCH_JSON: Foundation JSONSerialization, or the local AemiJSON sibling).
     Route.get("/json") { _, _, _ in
         guard let bytes = encodeHelloJSON() else {
             return .status(.internalServerError)

@@ -3,9 +3,9 @@
 //  Package.swift — HTTPBenchmarks
 //
 //  An *isolated* benchmark package (Ordo `package-benchmark`), deliberately kept OUT of the root
-//  manifest so the HTTP library's consumer-facing dependency graph stays at zero external
-//  dependencies. SwiftPM has no "dev-only" dependency concept, so a benchmark dependency in the root
-//  manifest would land in every consumer's `Package.resolved`; nesting it here avoids that entirely.
+//  manifest so benchmark tooling stays out of the HTTP library's dependency graph. SwiftPM has no
+//  "dev-only" dependency concept, so a benchmark dependency in the root manifest would land in every
+//  consumer's `Package.resolved`; nesting it here avoids that entirely.
 //
 //  Run from the repository root:
 //      swift package --package-path Benchmarks benchmark
@@ -21,7 +21,7 @@ let package = Package(
     name: "HTTPBenchmarks",
     platforms: [.macOS("15.6")],
     dependencies: [
-        .package(name: "HTTP", path: "../.."),
+        .package(url: "https://github.com/g-cqd/HTTP.git", branch: "main"),
         .package(url: "https://github.com/ordo-one/benchmark", from: "1.33.0")
     ],
     targets: [

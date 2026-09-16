@@ -3,9 +3,8 @@
 //  HTTPBenchmarks
 //
 //  RFC 1952 §8 — the gzip CRC-32 computed over the *uncompressed* body on every compressed response.
-//  Compares the backends (naive slice-by-1 baseline, slicing-by-8, zlib, ARMv8 CRC32) across body
-//  sizes. The DEFLATE itself is Apple's `Compression` framework and is not measured here. (On x86,
-//  the `arm` case falls back to the table and the `zlib` case is the PCLMULQDQ path.)
+//  Compares the portable slice-by-1 and slice-by-8 backends with ARMv8 CRC32 and x86 PCLMULQDQ.
+//  Hardware backends fall back to the table when unavailable. DEFLATE is not measured here.
 //
 
 import Benchmark
@@ -16,7 +15,7 @@ func registerCompressionBenchmarks() {
         ("1KiB", crcBody1KiB), ("16KiB", crcBody16KiB), ("256KiB", crcBody256KiB)
     ]
     let backends: [(label: String, backend: CRC32.Backend)] = [
-        ("slice1", .sliceBy1), ("slice8", .sliceBy8), ("zlib", .zlib), ("arm", .arm)
+        ("slice1", .sliceBy1), ("slice8", .sliceBy8), ("x86", .x86), ("arm", .arm)
     ]
     for size in sizes {
         for backend in backends {
