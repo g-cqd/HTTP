@@ -53,17 +53,16 @@ struct AsyncHandoffTests {
         #expect(await handoff.next() == .finished)
     }
 
-    @Test("fail terminates the handoff and unblocks a producer parked on a full slot")
-    func failUnblocksParkedProducer() async {
+    @Test
+    func `failure preserves the buffered chunk and releases a racing producer`() async {
         let handoff = AsyncHandoff()
-        let producer = Task {
-            await handoff.offer([1])  // fills the slot
-            await handoff.offer([2])  // parks (slot full)
+        await handoff.offer([1])  // establish the full slot before racing failure
+        async let producer: Void = {
+            await handoff.offer([2])  // either parks or observes the closed handoff
             await handoff.offer([3])  // returns immediately once closed
-        }
-        await Task.yield()
+        }()
         await handoff.fail()
-        await producer.value  // must complete — proves no deadlock / continuation leak
+        await producer  // must complete — proves no deadlock / continuation leak
         #expect(await handoff.next() == .chunk([1]))  // the stored chunk still drains
         #expect(await handoff.next() == .failed)
     }
