@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Check Aemi's family-wide main-branch requirement and the untracked library lockfile.
+"""Check Aemi's family-wide pinned-revision requirement and the untracked library lockfile.
 
-SwiftPM rejects mixed branch/revision requirements for this shared dependency. Package.swift
-records why every sibling must use the same Aemi main branch. This gate checks compatibility;
-a floating branch does not promise identical dependency commits across future resolutions.
+SwiftPM allows one revision of a package in a graph, and rejects mixed branch/revision requirements for it.
+Every Aemi-family package (AemiJSON, TerminalKit, ask, this one) therefore pins Aemi by the SAME full commit,
+so a push to Aemi cannot change the C kernels and unsafe code under an existing build. This gate checks that
+the manifest pins a full commit and that the resolved graph is that commit.
 """
 
 import json
@@ -16,7 +17,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESOLVED = os.path.join(REPO, "Package.resolved")
 PACKAGE = "aemi"
 LOCATION = "https://github.com/Aemi-Studio/aemi.git"
-BRANCH = "main"
+HEX40 = re.compile(r"[0-9a-f]{40}")
 
 
 def fail(message):
@@ -25,7 +26,7 @@ def fail(message):
 
 
 def validate_manifest(manifest):
-    """Require the canonical Aemi source and the same branch as sibling packages."""
+    """Require the canonical Aemi source pinned to one full commit. Returns 0 (valid) or 1."""
     dependencies = [
         source
         for dependency in manifest.get("dependencies", [])
@@ -37,10 +38,21 @@ def validate_manifest(manifest):
     dependency = dependencies[0]
     if dependency.get("location", {}).get("remote") != [{"urlString": LOCATION}]:
         return fail(f"Aemi must use its canonical source: {LOCATION}")
-    if dependency.get("requirement") != {"branch": [BRANCH]}:
-        return fail("Aemi must use branch main, matching the sibling package graph.")
-    print(f"manifest: {PACKAGE} uses {LOCATION}, branch {BRANCH}")
+    requirement = dependency.get("requirement", {})
+    revisions = requirement.get("revision", [])
+    if list(requirement) != ["revision"] or len(revisions) != 1 or not HEX40.fullmatch(revisions[0]):
+        return fail("Aemi must be pinned by `revision:` to a full lowercase 40-hex commit.")
+    print(f"manifest: {PACKAGE} uses {LOCATION}, revision {revisions[0]}")
     return 0
+
+
+def pinned_revision(manifest):
+    """The revision the manifest pins (call only after `validate_manifest` accepted it)."""
+    for dependency in manifest.get("dependencies", []):
+        for source in dependency.get("sourceControl", []):
+            if source.get("identity") == PACKAGE:
+                return source["requirement"]["revision"][0]
+    return ""
 
 
 def check_manifest():
@@ -51,7 +63,10 @@ def check_manifest():
     if result.returncode != 0:
         sys.stderr.write(result.stderr)
         return fail("`swift package dump-package` failed.")
-    return validate_manifest(json.loads(result.stdout))
+    manifest = json.loads(result.stdout)
+    status = validate_manifest(manifest)
+    check_manifest.pinned = pinned_revision(manifest) if status == 0 else ""
+    return status
 
 
 def check_resolved_is_ignored():
@@ -78,30 +93,32 @@ def check_resolved_is_ignored():
     return 0
 
 
-def validate_resolution(pins):
-    """Require a resolved commit on the declared branch, rather than a version or revision override."""
+def validate_resolution(pins, pinned):
+    """Require the resolved commit to be the pinned one, with no branch or version in the way."""
     pin = next((pin for pin in pins if pin.get("identity") == PACKAGE), None)
     if pin is None:
         return fail(f"The resolved graph contains no `{PACKAGE}` pin.")
     state = pin.get("state", {})
-    if state.get("branch") != BRANCH or state.get("version") is not None:
-        return fail(f"{PACKAGE} must resolve on branch {BRANCH}, without a version constraint.")
+    if state.get("branch") is not None or state.get("version") is not None:
+        return fail(f"{PACKAGE} must resolve by revision, without a branch or version constraint.")
     revision = state.get("revision", "")
-    if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+    if not isinstance(revision, str) or not HEX40.fullmatch(revision):
         return fail(f"{PACKAGE} has no valid resolved commit.")
-    print(f"resolution: {PACKAGE} -> {revision} (branch {BRANCH})")
+    if revision != pinned:
+        return fail(f"{PACKAGE} resolved to {revision}, not the pinned {pinned}.")
+    print(f"resolution: {PACKAGE} -> {revision}")
     return 0
 
 
 def check_resolution_matches():
-    """Resolve the graph and verify its Aemi branch and concrete commit."""
+    """Resolve the graph and verify that Aemi resolved to the pinned commit."""
     result = subprocess.run(["swift", "package", "resolve"], cwd=REPO, capture_output=True, text=True)
     if result.returncode != 0:
         sys.stderr.write(result.stderr)
         return fail("`swift package resolve` failed.")
     if not os.path.exists(RESOLVED):
         return fail("`swift package resolve` produced no Package.resolved to verify against.")
-    return validate_resolution(json.load(open(RESOLVED)).get("pins", []))
+    return validate_resolution(json.load(open(RESOLVED)).get("pins", []), check_manifest.pinned)
 
 
 def main():

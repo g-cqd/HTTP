@@ -1,4 +1,4 @@
-"""Regression checks for the family-wide Aemi dependency contract."""
+"""Regression checks for the family-wide Aemi dependency contract: one pinned revision per graph."""
 
 import contextlib
 import importlib.util
@@ -12,22 +12,27 @@ spec = importlib.util.spec_from_file_location(
 policy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(policy)
 
+PINNED = "a" * 40
+
 
 class DependencyPolicyTests(unittest.TestCase):
     def manifest(self, requirement=None, url="https://github.com/Aemi-Studio/aemi.git"):
         return {"dependencies": [{"sourceControl": [{
             "identity": "aemi",
             "location": {"remote": [{"urlString": url}]},
-            "requirement": requirement or {"branch": ["main"]},
+            "requirement": requirement or {"revision": [PINNED]},
         }]}]}
 
-    def test_family_main_requirement_is_accepted(self):
-        self.assertEqual(policy.validate_manifest(self.manifest()), 0)
+    def test_a_pinned_revision_is_accepted(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(policy.validate_manifest(self.manifest()), 0)
 
-    def test_incompatible_requirements_and_sources_are_rejected(self):
+    def test_floating_requirements_and_foreign_sources_are_rejected(self):
         invalid = [
-            self.manifest({"revision": ["a" * 40]}),
-            self.manifest({"branch": ["develop"]}),
+            self.manifest({"branch": ["main"]}),
+            self.manifest({"range": [{"lowerBound": "1.0.0", "upperBound": "2.0.0"}]}),
+            self.manifest({"revision": ["not-a-commit"]}),
+            self.manifest({"revision": ["A" * 40]}),
             self.manifest(url="https://github.com/another-owner/aemi.git"),
             {"dependencies": []},
         ]
@@ -35,22 +40,22 @@ class DependencyPolicyTests(unittest.TestCase):
             with self.subTest(manifest=manifest), contextlib.redirect_stdout(io.StringIO()):
                 self.assertNotEqual(policy.validate_manifest(manifest), 0)
 
-    def test_resolved_main_requires_an_actual_commit(self):
-        state = {"branch": "main", "revision": "a" * 40}
-        pins = [{"identity": "aemi", "state": state}]
-        self.assertEqual(policy.validate_resolution(pins), 0)
+    def test_the_resolved_commit_is_the_pinned_one(self):
+        pins = [{"identity": "aemi", "state": {"revision": PINNED}}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(policy.validate_resolution(pins, PINNED), 0)
         for invalid in [
-            {"branch": "develop", "revision": "a" * 40},
-            {"revision": "a" * 40},
-            {"branch": "main", "revision": "not-a-commit"},
-            {"branch": "main", "revision": "a" * 40, "version": "1.0.0"},
+            {"revision": "b" * 40},
+            {"revision": PINNED, "branch": "main"},
+            {"revision": PINNED, "version": "1.0.0"},
+            {"revision": "not-a-commit"},
         ]:
             with self.subTest(state=invalid), contextlib.redirect_stdout(io.StringIO()):
                 self.assertNotEqual(
-                    policy.validate_resolution([{"identity": "aemi", "state": invalid}]), 0
+                    policy.validate_resolution([{"identity": "aemi", "state": invalid}], PINNED), 0
                 )
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertNotEqual(policy.validate_resolution([]), 0)
+            self.assertNotEqual(policy.validate_resolution([], PINNED), 0)
 
 
 if __name__ == "__main__":

@@ -222,9 +222,13 @@ func codingShim(
 }
 
 // Aemi supplies shared SIMD byte kernels and runtime primitives.
-// Use the same published main-branch requirement as the other first-party consumers.
+// Pinned by revision, like every Aemi-family consumer: SwiftPM allows one revision per package in a
+// graph, and `scripts/dependency-pinning.py` checks the pin.
 func aemiDependency() -> Package.Dependency {
-    .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
+    .package(
+        url: "https://github.com/Aemi-Studio/aemi.git",
+        revision: "639caad90b0a8409185a712f32f9dea795e6470c"
+    )
 }
 
 let package = Package(
@@ -271,22 +275,22 @@ let package = Package(
     dependencies: [
         // apple/swift-system — typed, SwiftNIO-free wrappers over POSIX file/socket descriptors,
         // used only by the swift-system transport backbone. Zero external dependencies of its own.
-        .package(url: "https://github.com/apple/swift-system.git", from: "1.7.2"),
+        .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
         // apple/swift-collections — `HeapModule` (the deadline-ordered priority queue behind the
         // deterministic `TestClock` / `AsyncEventProbe`). Linked ONLY by the test-only
         // `HTTPTestSupport` target, so it never enters a downstream consumer's resolved graph. Empty
         // transitive dependency graph; allowed by CLAUDE.md (apple/*).
-        .package(url: "https://github.com/apple/swift-collections.git", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.7.3"),
         // Observability bridges (gap G1) — resolved ONLY by the isolated `HTTPObservability` module,
         // never by a core/protocol/transport/server target, so a consumer of the bare server never pulls
         // them in. All are apple/* (per the dependency policy). swift-metrics records into the module's
         // own `PrometheusRegistry` for the `/metrics` text exposition (0.0.4, in-house — swift-prometheus
         // left the graph); swift-log backs the structured access log; swift-distributed-tracing (over
         // swift-service-context) opens a span per request.
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
-        .package(url: "https://github.com/apple/swift-metrics.git", from: "2.4.0"),
-        .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.1.0"),
-        .package(url: "https://github.com/apple/swift-service-context.git", from: "1.1.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.16.1"),
+        .package(url: "https://github.com/apple/swift-metrics.git", from: "2.12.0"),
+        .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.7.2"),
+        .package(url: "https://github.com/apple/swift-service-context.git", from: "1.5.1"),
         // apple/swift-crypto (gap G7) — every keyed primitive on a security boundary. Two products,
         // deliberately scoped differently:
         //   `Crypto`         — `HTTPServer` (the session cookie's HMAC-SHA256) and `HTTPAuth` (JWT
@@ -316,7 +320,7 @@ let package = Package(
         // API surface this package uses (`SymmetricKey`, `HMAC<SHA256>`, `SHA256.Digest.byteCount`,
         // `P256.Signing.PublicKey`/`ECDSASignature`, `_RSA.Signing.PublicKey`/`RSASignature`) is
         // unchanged across the 4.0 boundary, whose sole release note is the WWDC25 refresh.
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "5.0.1"),
         // apple/swift-certificates (ADR 0004 Phase 3c) — X.509 for the from-scratch TLS 1.3 engine:
         // identity-chain validation at load time and RFC 5280 §6 client-chain path validation
         // (`Verifier` + `RFC5280Policy`), plus the test PKI the mTLS gates mint (its
@@ -327,12 +331,12 @@ let package = Package(
         // `_CryptoExtras` internally for RSA certificate signatures; that stays swift-certificates'
         // implementation detail — HTTPTLS itself still never imports `_CryptoExtras` (the recorded
         // 3b decision: RSA handshake signing/verification lives in the separate `HTTPTLSRSA`).
-        .package(url: "https://github.com/apple/swift-certificates.git", from: "1.19.4"),
+        .package(url: "https://github.com/apple/swift-certificates.git", from: "1.21.0"),
         // apple/swift-asn1 — swift-certificates' DER substrate, surfaced explicitly (not left
         // transitive) because `HTTPTLS` imports it directly to parse PKCS#8/SEC1 private keys at
         // identity load (RFC 5958/RFC 5915) — a target must declare what it imports
         // (`--explicit-target-dependency-import-check error`). apple/* — allowed by CLAUDE.md.
-        .package(url: "https://github.com/apple/swift-asn1.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-asn1.git", from: "1.7.3"),
         // The one first-party dependency: shared SIMD byte kernels (see `aemiDependency`).
         aemiDependency()
     ],
