@@ -238,8 +238,14 @@ jobs:
           else
             # AcceptBackpressureTests: the same hosted-runner deadline miss as the coverage leg (see build-test); it
             # runs, uninstrumented, in release-test.
-            swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }} \
-              --skip AcceptBackpressureTests
+            skips=(--skip AcceptBackpressureTests)
+            if [ "${{ matrix.sanitizer }}" = "thread" ]; then
+              # The QUIC transport suites time out in the QUIC handshake under TSan (measured on macOS 27 and 26:
+              # `.timedOut("QUIC handshake")`; on the hosted runner the process traps). TSan cannot see into
+              # Network.framework, which is what they exercise, and they run uninstrumented in release-test.
+              skips+=(--skip QUICTransportTests)
+            fi
+            swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }} "${skips[@]}"
           fi
       - if: ${{ always() }}
         uses: ./.github/actions/spm-save
@@ -370,8 +376,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.sanitizer }}" = "undefined" ]; then
+            # --build-system native: the default build system does not link the UBSan runtime into the C targets'
+            # consumers (`undefined reference to __ubsan_handle_*` at the httpd-example link), exactly as measured
+            # for the macOS leg above; the native one does.
             UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-              swift test --disable-xctest --no-parallel --sanitize=undefined --scratch-path "$SCRATCH" \
+              swift test --disable-xctest --no-parallel --build-system native --sanitize=undefined --scratch-path "$SCRATCH" \
                 --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
                 --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
           elif [ "${{ matrix.sanitizer }}" = "address" ]; then
