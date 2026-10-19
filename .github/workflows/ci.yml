@@ -376,11 +376,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.sanitizer }}" = "undefined" ]; then
-            # --build-system native: the default build system does not link the UBSan runtime into the C targets'
-            # consumers (`undefined reference to __ubsan_handle_*` at the httpd-example link), exactly as measured
-            # for the macOS leg above; the native one does.
+            # Swift has no UBSan on Linux (`error: unsupported option '-sanitize=undefined'` for
+            # x86_64-unknown-linux-gnu), so `--sanitize=undefined` builds C instrumented and links no runtime
+            # (`undefined reference to __ubsan_handle_*`). What UBSan can check here is the C: instrument it with
+            # clang directly and have the clang linker driver bring the runtime.
             UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-              swift test --disable-xctest --no-parallel --build-system native --sanitize=undefined --scratch-path "$SCRATCH" \
+              swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" \
+                -Xcc -fsanitize=undefined -Xcc -fno-sanitize-recover=undefined \
+                -Xswiftc -Xclang-linker -Xswiftc -fsanitize=undefined \
                 --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
                 --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
           elif [ "${{ matrix.sanitizer }}" = "address" ]; then
