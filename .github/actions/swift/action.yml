@@ -1,0 +1,18 @@
+name: Swift toolchain (macOS)
+description: >-
+  Installs the swift.org release toolchain on a macOS runner through swiftly (setup-swift v3), so a bare
+  `swift` resolves it. No hosted macOS image ships Swift 6.4 as its default.
+inputs:
+  swift-version:
+    description: "swift.org release."
+    required: false
+    default: "6.4.1"
+runs:
+  using: composite
+  steps:
+    - uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3.0.0-beta.1
+      with:
+        swift-version: ${{ inputs.swift-version }}
+    - name: Toolchain
+      shell: bash
+      run: swift --version

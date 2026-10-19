@@ -3,8 +3,8 @@
 set -euo pipefail
 
 destination="${1:?usage: build-linux-tsan-runtime.sh DESTINATION}"
-source_revision=80702ec6ad4159b69f624ef4a814946b16237379
-swift --version | grep -F 'Swift 80702ec6ad4159b)' >/dev/null || {
+source_revision=6e2c19458fdccc3257f9abdad2cfeacf27c6c1a4  # swift-6.4.1-RELEASE
+swift --version | grep -F 'swift-6.4.1-RELEASE' >/dev/null || {
   echo 'The TSan runtime must match the pinned Swift toolchain.' >&2
   exit 1
 }

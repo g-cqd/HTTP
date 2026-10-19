@@ -1,0 +1,28 @@
+name: Restore the SwiftPM tree
+description: >-
+  Restores the SwiftPM scratch tree for one family of builds, keyed on the manifest and the toolchain, falling
+  back to the closest earlier tree so the build is incremental. Pair with spm-save; the save only happens from
+  the default branch, so a pull request restores main's tree and never writes its own.
+inputs:
+  name:
+    description: "The build family (debug, release, a sanitizer ...): one cache each."
+    required: true
+  swift-version:
+    required: false
+    default: "6.4.1"
+  path:
+    required: false
+    default: /tmp/swiftpm-build/HTTP
+outputs:
+  hit:
+    description: "true when the exact key was restored."
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}
+        key: spm-${{ runner.os }}-${{ inputs.name }}-${{ inputs.swift-version }}-${{ hashFiles('Package.swift') }}
+        restore-keys: spm-${{ runner.os }}-${{ inputs.name }}-${{ inputs.swift-version }}-

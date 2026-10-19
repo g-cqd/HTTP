@@ -10,7 +10,7 @@ The same standalone locked-counter reproduction also fails with Swift 6.4.2
 recorded in [the Swift forums](https://forums.swift.org/t/threadsanitizer-in-a-swift-concurrency-world/84801).
 
 `build-linux-tsan-runtime.sh` rebuilds the matching
-[upstream `Synchronization` sources](https://github.com/swiftlang/swift/tree/80702ec6ad4159b69f624ef4a814946b16237379/stdlib/public/Synchronization)
+[upstream `Synchronization` sources](https://github.com/swiftlang/swift/tree/6e2c19458fdccc3257f9abdad2cfeacf27c6c1a4/stdlib/public/Synchronization)
 without modifying them. It checks the compiler revision, preserves the
 installed runtime's exported symbols, and leaves the installed module untouched.
 The image digest and source revision must be updated together.
