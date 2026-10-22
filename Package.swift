@@ -287,7 +287,7 @@ let package = Package(
         // own `PrometheusRegistry` for the `/metrics` text exposition (0.0.4, in-house — swift-prometheus
         // left the graph); swift-log backs the structured access log; swift-distributed-tracing (over
         // swift-service-context) opens a span per request.
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.16.1"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.16.2"),
         .package(url: "https://github.com/apple/swift-metrics.git", from: "2.12.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.7.2"),
         .package(url: "https://github.com/apple/swift-service-context.git", from: "1.5.1"),
@@ -320,7 +320,7 @@ let package = Package(
         // API surface this package uses (`SymmetricKey`, `HMAC<SHA256>`, `SHA256.Digest.byteCount`,
         // `P256.Signing.PublicKey`/`ECDSASignature`, `_RSA.Signing.PublicKey`/`RSASignature`) is
         // unchanged across the 4.0 boundary, whose sole release note is the WWDC25 refresh.
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "5.0.1"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "5.0.3"),
         // apple/swift-certificates (ADR 0004 Phase 3c) — X.509 for the from-scratch TLS 1.3 engine:
         // identity-chain validation at load time and RFC 5280 §6 client-chain path validation
         // (`Verifier` + `RFC5280Policy`), plus the test PKI the mTLS gates mint (its
