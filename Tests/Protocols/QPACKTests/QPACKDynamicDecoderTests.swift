@@ -124,6 +124,50 @@ struct QPACKDynamicDecoderTests {
         #expect(thrownDecoding(decoder, bytes)?.code == .decompressionFailed)
     }
 
+    @Test(
+        "repeated dynamic indexed references exceeding maxHeaderListSize fail closed (amplification bomb defense)"
+    )
+    func qpackAmplificationBombExceedingMaxHeaderListSizeRejected() throws {
+        let limits = HTTPLimits(maxHeaderListSize: 200, maxFieldCount: 50)
+        var decoder = QPACKDecoder(maxTableCapacity: 4_096, limits: limits)
+        let longValue = String(repeating: "x", count: 50)
+        // Entry tableSize = 5 ("large") + 50 ("xxx...") + 32 = 87
+        try apply(&decoder, insertLiteral("large", longValue))
+        // 2 references: 2 * 87 = 174 <= 200 (allowed)
+        let validBytes = section(
+            ric: 1,
+            base: 1,
+            dynamicIndexed(relativeIndex: 0) + dynamicIndexed(relativeIndex: 0)
+        )
+        let validFields = try decodeSection(decoder, validBytes)
+        #expect(validFields.count == 2)
+
+        // 3 references: 3 * 87 = 261 > 200 (rejected with decompression failure)
+        let bombBytes = section(
+            ric: 1,
+            base: 1,
+            dynamicIndexed(relativeIndex: 0) + dynamicIndexed(relativeIndex: 0)
+                + dynamicIndexed(relativeIndex: 0)
+        )
+        #expect(thrownDecoding(decoder, bombBytes)?.code == .decompressionFailed)
+    }
+
+    @Test(
+        "repeated dynamic indexed references exceeding maxFieldCount fail closed (field count bomb defense)"
+    )
+    func qpackFieldCountBombRejected() throws {
+        let limits = HTTPLimits(maxHeaderListSize: 10_000, maxFieldCount: 5)
+        var decoder = QPACKDecoder(maxTableCapacity: 4_096, limits: limits)
+        try apply(&decoder, insertLiteral("k", "v"))
+        // 6 references > maxFieldCount of 5
+        var refs: [UInt8] = []
+        for _ in 0 ..< 6 {
+            refs += dynamicIndexed(relativeIndex: 0)
+        }
+        let bombBytes = section(ric: 1, base: 1, refs)
+        #expect(thrownDecoding(decoder, bombBytes)?.code == .decompressionFailed)
+    }
+
     @Test("an oversized Set Capacity is a QPACK_ENCODER_STREAM_ERROR (§4.3.1)")
     func oversizedSetCapacityRejected() {
         var decoder = makeDecoder(capacity: 100)
