@@ -37,7 +37,7 @@ jobs:
   # this package's own and runs after it. `.ci/swift-ci local` runs the same checks on a developer's machine.
   ci:
     name: Checks
-    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@f9ebcf2d33110ec6c1bf6fac49a94cd27148dd47 # swift-ci f9ebcf2
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@c930444a6f6f462ddce3fbad7df9f8e2acc3e04b # swift-ci c930444
     permissions:
       contents: write # reusable publish permission; this package publishes no archives
 
