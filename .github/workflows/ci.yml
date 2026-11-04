@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
   # On-demand full run; with `update_baseline` it also captures a runner-class benchmark
   # baseline (uploaded as an artifact to commit under Benchmarking/Benchmarks/.benchmarkBaselines/),
   # which is what activates the low-noise benchmark regression gate in the `benchmarks` job.
@@ -30,59 +31,15 @@ defaults:
     shell: bash
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # The cheap gates, in ONE job: style (swift-format, SwiftLint), no SwiftNIO anywhere in the graph (CLAUDE.md),
-  # the shared Aemi dependency contract, the trap-free request path, and RFC citations. Each used to be a
-  # macOS job of its own, paying a runner and a toolchain install for a few seconds of work. They run before
-  # anything expensive: the build and test jobs need this one.
-  # ---------------------------------------------------------------------------
-  checks:
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - name: swift-format (strict)
-        run: swift format lint --strict --recursive Sources Tests Package.swift
-      - name: SwiftLint (strict)
-        run: |
-          brew list swiftlint >/dev/null 2>&1 || brew install swiftlint
-          swiftlint lint --strict
-      - name: Assert no SwiftNIO transitive dependency
-        run: |
-          deps="$(swift package show-dependencies --format flatlist 2>/dev/null || true)"
-          echo "$deps"
-          if printf '%s\n' "$deps" | grep -iE 'swift-nio|/nio'; then
-            echo "::error::SwiftNIO present in the dependency graph — forbidden by CLAUDE.md"
-            exit 1
-          fi
-      - name: Test the dependency contract gate
-        run: python3 -m unittest discover -s scripts -p 'test_dependency_pinning.py'
-      - name: Verify the shared Aemi dependency contract
-        run: python3 scripts/dependency-pinning.py
-      - name: Assert the request path is trap-free
-        run: |
-          targets=(Sources/Core/HTTPCore Sources/Protocols/HTTP1 Sources/Protocols/HTTP2 Sources/Protocols/HPACK Sources/Protocols/QPACK Sources/Protocols/HTTP3 Sources/Protocols/WebSocket Sources/Server/HTTPServer Sources/Transport/HTTPTransport Sources/Core/HTTPConcurrency)
-          pattern='(fatalError|preconditionFailure|assertionFailure)\(|(^|[^A-Za-z.])precondition\(|(^|[^A-Za-z])assert\(|\.unsafelyUnwrapped'
-          hits="$(grep -rnE "$pattern" "${targets[@]}" --include='*.swift' 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)"
-          if [ -n "$hits" ]; then
-            echo "$hits"
-            echo "::error::process-aborting trap in the request path — one bad request must not crash the server"
-            exit 1
-          fi
-          echo "request path is trap-free"
-      - name: Assert wire parsers/decoders cite their standard
-        run: |
-          set -euo pipefail
-          missing=""
-          while IFS= read -r f; do
-            grep -qE 'RFC[[:space:]]*[0-9]|§|CVE-|ISO[[:space:]/]' "$f" || missing+="$f"$'\n'
-          done < <(find Sources/Protocols Sources/Core/HTTPCore \( -name '*Parser.swift' -o -name '*Decoder.swift' \) | sort)
-          if [ -n "$missing" ]; then
-            printf '%s\n' "$missing"
-            echo "::error::a wire parser/decoder cites no RFC/§/CVE/ISO standard — reference the norm it implements"
-            exit 1
-          fi
-          echo "every wire parser/decoder cites its standard"
+  # swift-ci plans and runs the common checks from .ci/action.json (https://github.com/g-cqd/swift-ci): swift-format,
+  # SwiftLint, the analyzers, the macOS debug tests with coverage then the graph gates (scripts/ci-gates.sh) and the
+  # coverage floor (scripts/coverage-gate.sh), the macOS release tests, and Linux debug and release. Every job below is
+  # this package's own and runs after it. `.ci/swift-ci local` runs the same checks on a developer's machine.
+  ci:
+    name: Checks
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@f9ebcf2d33110ec6c1bf6fac49a94cd27148dd47 # swift-ci f9ebcf2
+    permissions:
+      contents: write # reusable publish permission; this package publishes no archives
 
   # ---------------------------------------------------------------------------
   # SE-0458 strict memory safety — the STAGED gate (ADR 0009, superseding ADR 0002).
@@ -93,93 +50,28 @@ jobs:
   #
   #   • The HARD half is in the manifest, not here: `strictMemorySafeTargets` in Package.swift adds
   #     `.strictMemorySafety()` to the targets already at zero (HTTPConcurrency, HPACK, QPACK,
-  #     HTTPObservability, HTTPAuth). `build-test` and `release-test` run with HTTP_WARNINGS_AS_ERRORS,
+  #     HTTPObservability, HTTPAuth). swift-ci's debug and release tests run with HTTP_WARNINGS_AS_ERRORS,
   #     so a new un-annotated unsafe expression in one of those targets is a BUILD ERROR there.
   #   • The RATCHET half is this job: a full `-strict-memory-safety` census of the remaining nine
   #     targets, compared against `.github/strict-memory-safety-budget.tsv`. A count may fall freely;
   #     if one rises, this job fails and names the target. A target that reaches 0 graduates into the
   #     manifest list and stops being a number.
   #
-  # Its own job (not folded into build-test) because it is a full rebuild under a different flag set,
+  # Its own job (not folded into the swift-ci tests) because it is a full rebuild under a different flag set,
   # and because a ratchet breach should read as its own red X rather than as a build failure.
   # ---------------------------------------------------------------------------
   strict-memory-safety:
+    name: Verification · Strict Memory Safety Budget · macOS
+    needs: ci
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
       - name: Census + ratchet (per-target unsafe-site budget)
         run: python3 scripts/strict-memory-safety.py --verbose
 
-  # ---------------------------------------------------------------------------
-  # Build + full test suite. Warnings-as-errors is enabled via HTTP_WARNINGS_AS_ERRORS, which the
-  # manifest scopes to OUR targets only (using .treatAllWarnings) — keeping the package reuse-safe
-  # and avoiding the -suppress-warnings conflict that a global -Xswiftc flag hits on dependencies.
-  # ---------------------------------------------------------------------------
-  build-test:
-    needs: checks
-    runs-on: macos-26
-    env:
-      HTTP_WARNINGS_AS_ERRORS: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - id: cache
-        uses: ./.github/actions/spm-restore
-        with:
-          name: debug
-      - name: Build (warnings as errors)
-        run: swift build --scratch-path "$SCRATCH"
-      - name: Test (with coverage)
-        # AcceptBackpressureTests.networkFramework resumes through NWListener.newConnectionLimit and waits on a
-        # probe with a fixed deadline; on the hosted macOS 26 runner the instrumented build misses it (the
-        # uninstrumented release-test below runs the same case and passes). It stays in that job, and out of
-        # the instrumented legs until the resume is awaited on an event rather than a deadline.
-        run: >-
-          swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --enable-code-coverage
-          --skip AcceptBackpressureTests
-      # Coverage gate. SwiftPM emits a per-target .xctest bundle, so a single-binary llvm-cov export
-      # under-reports the modules that bundle does not link; merging the merged profdata across every
-      # bundle gives the true Sources line coverage. Threshold 85% (Sources are ~92% today) — a floor
-      # against a module losing its tests, with headroom for normal churn; raise it as coverage grows.
-      - name: Coverage gate (Sources lines ≥ 85%)
-        run: |
-          set -euo pipefail
-          prof="$(find "$SCRATCH" -name default.profdata | head -1)"
-          bins=()
-          while IFS= read -r b; do bins+=("$b/Contents/MacOS/$(basename "$b" .xctest)"); done < <(find "$SCRATCH" -name "*.xctest" -type d)
-          objs=("${bins[0]}"); for o in "${bins[@]:1}"; do objs+=(-object "$o"); done
-          xcrun llvm-cov export -format=text -instr-profile="$prof" -ignore-filename-regex="Tests/|[.]build/|Benchmarking/|checkouts/" "${objs[@]}" > cov.json
-          python3 -c "import json,sys; p=json.load(open('cov.json'))['data'][0]['totals']['lines']['percent']; print('Sources line coverage: %.2f%%' % p); sys.exit(0 if p>=85 else 1)" || { echo '::error::Sources line coverage is below the 85% threshold'; exit 1; }
-      - if: ${{ always() }}
-        uses: ./.github/actions/spm-save
-        with:
-          name: debug
-          hit: ${{ steps.cache.outputs.hit }}
-
-  # ---------------------------------------------------------------------------
-  # Release-mode test lane: optimized build + full suite, catching optimizer-only and release-assert
-  # behavior the debug run misses (also the configuration the perf numbers + h2spec use).
-  # ---------------------------------------------------------------------------
-  release-test:
-    needs: checks
-    runs-on: macos-26
-    env:
-      HTTP_WARNINGS_AS_ERRORS: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - id: cache
-        uses: ./.github/actions/spm-restore
-        with:
-          name: release
-      - name: Test (release)
-        run: swift test --disable-xctest --no-parallel -c release --scratch-path "$SCRATCH"
-      - if: ${{ always() }}
-        uses: ./.github/actions/spm-save
-        with:
-          name: release
-          hit: ${{ steps.cache.outputs.hit }}
 
   # ---------------------------------------------------------------------------
   # Data-race & memory checks. Parsers must stay clean under ASan/TSan/UBSan.
@@ -211,16 +103,23 @@ jobs:
   #     are CPU-only, finish in seconds, and stay green. 764 tests, clean.
   # ---------------------------------------------------------------------------
   sanitizers:
-    needs: build-test
+    name: Sanitizers · ${{ matrix.title }} · macOS
+    needs: ci
     runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, thread, undefined]
+        include:
+          - { sanitizer: address, title: Address }
+          - { sanitizer: thread, title: Thread }
+          - { sanitizer: undefined, title: Undefined }
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - id: cache
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
+      - name: Cache · Restore SwiftPM
+        id: cache
         uses: ./.github/actions/spm-restore
         with:
           name: sanitizer-${{ matrix.sanitizer }}
@@ -236,22 +135,24 @@ jobs:
                 --filter HPACKTests --filter QPACKTests --filter HTTP1Tests \
                 --filter HTTP2Tests --filter WebSocketTests --filter HTTPCoreTests
           else
-            # AcceptBackpressureTests: the same hosted-runner deadline miss as the coverage leg (see build-test); it
-            # runs, uninstrumented, in release-test.
+            # AcceptBackpressureTests: the same hosted-runner deadline miss as the coverage leg (swift.testSkips in
+            # .ci/action.json); it runs, uninstrumented, in swift-ci's release tests.
             skips=(--skip AcceptBackpressureTests)
             if [ "${{ matrix.sanitizer }}" = "thread" ]; then
               # The QUIC transport suites time out in the QUIC handshake under TSan (measured on macOS 27 and 26:
               # `.timedOut("QUIC handshake")`; on the hosted runner the process traps). TSan cannot see into
-              # Network.framework, which is what they exercise, and they run uninstrumented in release-test.
+              # Network.framework, which is what they exercise, and they run uninstrumented in swift-ci's release tests.
               skips+=(--skip QUICTransportTests)
             fi
             swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=${{ matrix.sanitizer }} "${skips[@]}"
           fi
-      - if: ${{ always() }}
+      - name: Cache · Save SwiftPM
+        if: ${{ always() }}
         uses: ./.github/actions/spm-save
         with:
           name: sanitizer-${{ matrix.sanitizer }}
           hit: ${{ steps.cache.outputs.hit }}
+
 
   # ---------------------------------------------------------------------------
   # Optional-feature manifest paths the DEFAULT graph never compiles, so a regression in them is
@@ -263,13 +164,16 @@ jobs:
   # the TLS backbone, which has no CI lane at all. Running the gated suites is a follow-up.)
   # ---------------------------------------------------------------------------
   optional-features:
-    needs: build-test
+    name: Compatibility · Optional Features · macOS
+    needs: ci
     runs-on: macos-26
     env:
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
       - name: Build — portable libssl TLS (HTTP_PORTABLE_TLS)
         env:
           HTTP_PORTABLE_TLS: "1"
@@ -278,6 +182,7 @@ jobs:
         run: |
           brew list zstd >/dev/null 2>&1 || brew install zstd
           swift build --scratch-path "$SCRATCH/opt-zstd" --traits Zstd
+
 
   # ---------------------------------------------------------------------------
   # The Django comparison's "ours" subject (Benchmarking/Django/ours) is its OWN package, so nothing in
@@ -297,65 +202,27 @@ jobs:
   # so the default graph is this repository alone. That is what makes this job possible at all.
   # ---------------------------------------------------------------------------
   django-bench:
-    needs: release-test
+    name: Compatibility · Django Benchmark Subject · macOS
+    needs: ci
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
       - name: Build — Django comparison subject (release)
         run: |
           swift build -c release --package-path Benchmarking/Django/ours \
             --product ours-bench --scratch-path "$SCRATCH/django-bench"
 
-  # ---------------------------------------------------------------------------
-  # Linux on the stable image, one matrix: debug builds with warnings as errors and runs the full suite,
-  # release runs the optimized suite. (Two jobs with the same shape and two toolchain pulls before.)
-  # ---------------------------------------------------------------------------
-  linux:
-    needs: checks
-    runs-on: ubuntu-latest
-    container: swift:6.4.1-noble
-    env:
-      HTTP_WARNINGS_AS_ERRORS: "1"
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [debug, release]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Toolchain
-        run: swift --version
-      - id: cache
-        uses: ./.github/actions/spm-restore
-        with:
-          name: linux-${{ matrix.config }}
-      - name: Build (warnings as errors)
-        if: matrix.config == 'debug'
-        run: swift build --scratch-path "$SCRATCH"
-      - name: Build tests (warnings as errors)
-        if: matrix.config == 'debug'
-        # Explicit, and not redundant with the run below: a test-target-only break (a bare
-        # `import Darwin`, a Glibc `SOCK_STREAM` mismatch) should fail as a COMPILE error against
-        # this step rather than as an inscrutable failure inside the test runner.
-        run: swift build --build-tests --scratch-path "$SCRATCH"
-      - name: Test (full suite)
-        if: matrix.config == 'debug'
-        run: swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH"
-      - name: Test (release)
-        if: matrix.config == 'release'
-        run: swift test --disable-xctest --no-parallel -c release --scratch-path "$SCRATCH"
-      - if: ${{ always() }}
-        uses: ./.github/actions/spm-save
-        with:
-          name: linux-${{ matrix.config }}
-          hit: ${{ steps.cache.outputs.hit }}
 
   # UNDEFINED is scoped exactly as the macOS `sanitizers` job scopes it (see that block comment): the
   # full suite is UBSan-clean but its network/large-upload tests time out under instrumentation, so the
   # leg runs the codec/parser UB surface. `halt_on_error=1` makes a finding fail the check.
   # The thread leg uses a matching instrumented Synchronization runtime; see .github/sanitizers/README.md.
   sanitizers-linux:
-    needs: linux
+    name: Sanitizers · ${{ matrix.title }} · Linux
+    needs: ci
     runs-on: ubuntu-latest
     # The thread leg rebuilds the matching stdlib runtime: update the revision in
     # .github/sanitizers/build-linux-tsan-runtime.sh together with this image's toolchain.
@@ -363,9 +230,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, thread, undefined]
+        include:
+          - { sanitizer: address, title: Address }
+          - { sanitizer: thread, title: Thread }
+          - { sanitizer: undefined, title: Undefined }
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Instrument and validate the matching Linux Mutex runtime
         if: matrix.sanitizer == 'thread'
         run: |
@@ -398,24 +269,28 @@ jobs:
               -Xlinker -rpath -Xlinker "$RUNNER_TEMP/tsan-runtime:$library_directory"
           fi
 
+
   # ---------------------------------------------------------------------------
   # Opt-in content codings on Linux (G0): Brotli (libbrotli) + zstd (libzstd), the system-lib codings the
   # default graph never links. apt-install the dev packages, then run the coding round-trip suites under
   # the SE-0450 `Zstd`/`Brotli` package traits (no prefix hints needed — the distro dev packages land on
-  # the default search paths). gzip needs no trait — system zlib, covered by build-test-linux.
+  # the default search paths). gzip needs no trait — system zlib, covered by swift-ci's Linux tests.
   # ---------------------------------------------------------------------------
   codings-linux:
-    needs: linux
+    name: Integration · Brotli & Zstandard Codings · Linux
+    needs: ci
     runs-on: ubuntu-latest
     container: swift:6.4.1-noble
     env:
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install libbrotli + libzstd
         run: apt-get update -qq && apt-get install -y -qq libbrotli-dev libzstd-dev
       - name: Coding round-trips (Brotli + zstd + Linux gzip/inflate)
         run: swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --traits Zstd,Brotli --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+
 
   # ---------------------------------------------------------------------------
   # Benchmarks (ordo-one/package-benchmark, isolated in Benchmarking/Benchmarks/). REQUIRED for
@@ -449,12 +324,15 @@ jobs:
   # than committed.
   # ---------------------------------------------------------------------------
   benchmarks:
-    needs: release-test
+    name: Performance · Benchmarks · macOS
+    needs: ci
     runs-on: macos-26
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
       - name: Install jemalloc (package-benchmark malloc metrics)
         run: brew list jemalloc >/dev/null 2>&1 || brew install jemalloc
       - name: Toolchain
@@ -498,6 +376,7 @@ jobs:
           path: Benchmarking/Benchmarks/.benchmarkBaselines/
           if-no-files-found: error
 
+
   # ---------------------------------------------------------------------------
   # HTTP/2 conformance — h2spec (RFC 9113) against the live httpd-example over h2c. Gates on the
   # sections that pass 100% (frame format, streams & multiplexing, frame definitions, GOAWAY, message
@@ -505,12 +384,16 @@ jobs:
   # excluded — see docs/standards/CONFORMANCE.md. The hard `timeout` turns any future hang into a failure.
   # ---------------------------------------------------------------------------
   h2spec:
-    needs: release-test
+    name: Conformance · h2spec · macOS
+    needs: ci
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - id: cache
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
+      - name: Cache · Restore SwiftPM
+        id: cache
         uses: ./.github/actions/spm-restore
         with:
           name: release
@@ -540,11 +423,13 @@ jobs:
           set -e
           kill "$PID" 2>/dev/null || true
           exit $rc
-      - if: ${{ always() }}
+      - name: Cache · Save SwiftPM
+        if: ${{ always() }}
         uses: ./.github/actions/spm-save
         with:
           name: release
           hit: ${{ steps.cache.outputs.hit }}
+
 
   # ---------------------------------------------------------------------------
   # WebSocket conformance — the Autobahn TestSuite (RFC 6455) fuzzingclient against httpd-example's /ws
@@ -555,10 +440,12 @@ jobs:
   # gate: .github/conformance/autobahn/.
   # ---------------------------------------------------------------------------
   autobahn:
-    needs: release-test
+    name: Conformance · Autobahn WebSocket · Linux
+    needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Start httpd-example (/ws echo) in the Swift container, host network
         run: |
           # Autobahn includes valid messages up to 16 MiB; retain a finite conformance-server limit.
@@ -595,6 +482,7 @@ jobs:
         if: always()
         run: docker rm -f httpd || true
 
+
   # ---------------------------------------------------------------------------
   # HTTP/3 conformance (RFC 9114 / RFC 9204) — THE GATE. Required; no continue-on-error.
   #
@@ -625,14 +513,18 @@ jobs:
   # code. Release configuration, because that is where an optimizer-visible engine regression shows.
   # ---------------------------------------------------------------------------
   h3-conformance:
-    needs: release-test
+    name: Conformance · HTTP/3 · macOS
+    needs: ci
     runs-on: macos-26
     env:
       HTTP_WARNINGS_AS_ERRORS: "1"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - id: cache
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
+      - name: Cache · Restore SwiftPM
+        id: cache
         uses: ./.github/actions/spm-restore
         with:
           name: release
@@ -644,11 +536,13 @@ jobs:
         run: |
           swift test --disable-xctest --no-parallel -c release --scratch-path "$SCRATCH" \
             --filter 'HTTPServerHTTP3Tests' --filter 'HTTPServerWebSocketHTTP3Tests'
-      - if: ${{ always() }}
+      - name: Cache · Save SwiftPM
+        if: ${{ always() }}
         uses: ./.github/actions/spm-save
         with:
           name: release
           hit: ${{ steps.cache.outputs.hit }}
+
 
   # ---------------------------------------------------------------------------
   # External h3spec — EVIDENCE, not a gate, and dispatch-only so it never contributes a red X that
@@ -680,14 +574,18 @@ jobs:
   # every following case. With a non-nil reason there is no crash — and no code on the wire either.)
   # ---------------------------------------------------------------------------
   h3spec-observation:
-    needs: release-test
+    name: Conformance · h3spec Observation · macOS
+    needs: ci
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     continue-on-error: true
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - id: cache
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
+      - name: Cache · Restore SwiftPM
+        id: cache
         uses: ./.github/actions/spm-restore
         with:
           name: release
@@ -746,11 +644,13 @@ jobs:
             /tmp/h3spec-http3.txt
             /tmp/h3spec-quic.txt
           if-no-files-found: ignore
-      - if: ${{ always() }}
+      - name: Cache · Save SwiftPM
+        if: ${{ always() }}
         uses: ./.github/actions/spm-save
         with:
           name: release
           hit: ${{ steps.cache.outputs.hit }}
+
 
   # ---------------------------------------------------------------------------
   # h3 load smoke (P10) — an h2load HTTP/3 leg against httpd-example's QUIC listener; non-gating
@@ -760,13 +660,17 @@ jobs:
   # detected at runtime: absent support logs an EXPLICIT skip (P10: no silent omission).
   # ---------------------------------------------------------------------------
   bench-h3load:
-    needs: release-test
+    name: Performance · HTTP/3 Load Smoke · macOS
+    needs: ci
     runs-on: macos-26
     continue-on-error: true
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
-      - id: cache
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
+      - name: Cache · Restore SwiftPM
+        id: cache
         uses: ./.github/actions/spm-restore
         with:
           name: release
@@ -800,11 +704,13 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $rc
-      - if: ${{ always() }}
+      - name: Cache · Save SwiftPM
+        if: ${{ always() }}
         uses: ./.github/actions/spm-save
         with:
           name: release
           hit: ${{ steps.cache.outputs.hit }}
+
 
   # ---------------------------------------------------------------------------
   # Memory soak — EVIDENCE, not a gate, and dispatch-only. Modeled on `h3spec-observation`: it produces
@@ -831,13 +737,16 @@ jobs:
   # if the absolute numbers do not.
   # ---------------------------------------------------------------------------
   soak:
-    needs: release-test
+    name: Performance · Memory Soak · macOS
+    needs: ci
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     continue-on-error: true
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/swift
+      - name: Setup · Check Out Sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup · Install Swift
+        uses: ./.github/actions/swift
       - name: Install oha (closed-loop load generator)
         run: brew list oha >/dev/null 2>&1 || brew install oha
       - name: Adversarial memory soak (RSS plateau assertion)
@@ -847,7 +756,7 @@ jobs:
 
 # NOTE: jobs run on the `macos-26` image with the Swift 6.4 development toolchain. If a specific 6.4
 # snapshot is needed beyond the image default, install it as the first step of each job with swiftly
-# (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside build-test
+# (`swiftly install 6.4-snapshot --use`). The seeded fuzz suites (.tags(.fuzz)) run inside swift-ci's debug tests
 # and under the ASan/TSan matrix above — no separate lane needed.
 #
 # Tracked follow-ups (each blocked on a specific item, see docs/standards/CONFORMANCE.md):
@@ -874,19 +783,3 @@ jobs:
 #   • Memory soak (`scripts/soak.sh` / the `soak` job) — dispatch-only EVIDENCE, non-gating. A
 #     nightly `schedule:` is deliberately NOT set: that is a repo-owner decision (runner-minute cost +
 #     someone to watch it). Promotion recipe is in the `soak` job comment.
-
-  # ---------------------------------------------------------------------------
-  # The one check a branch rule needs to require: every gating job passed or was skipped. The informational
-  # lanes (continue-on-error) and the dispatch-only ones are deliberately not listed.
-  # ---------------------------------------------------------------------------
-  result:
-    name: ci result
-    needs: [checks, strict-memory-safety, build-test, release-test, sanitizers, optional-features, django-bench, linux, sanitizers-linux, codings-linux, benchmarks, h2spec, autobahn, h3-conformance]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - name: Every job passed or was skipped
-        run: |
-          echo '${{ toJSON(needs) }}' > needs.json
-          if grep -E '"result": "(failure|cancelled)"' needs.json; then exit 1; fi

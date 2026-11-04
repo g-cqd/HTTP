@@ -1,0 +1,32 @@
+{
+  "swift": {
+    "versions": ["6.4.1"],
+    "environment": { "HTTP_WARNINGS_AS_ERRORS": "1" },
+    "parallel": false,
+    "testSkips": { "debug": ["AcceptBackpressureTests"] }
+  },
+  "checks": {
+    "macos-release": ["push", "pull-request", "merge-queue", "tag", "dispatch", "nightly"],
+    "linux-address": [],
+    "linux-thread": [],
+    "macos-address": [],
+    "macos-thread": []
+  },
+  "quality": {
+    "include": ["/Package.swift", "Sources/**", "Tests/**"]
+  },
+  "commands": [
+    {
+      "id": "graph-gates",
+      "title": "Quality · Dependency Graph, Trap-Free Request Path & RFC Citations",
+      "run": "scripts/ci-gates.sh",
+      "after": "macos-debug"
+    },
+    {
+      "id": "coverage-gate",
+      "title": "Coverage · Sources Lines ≥ 85% · macOS",
+      "run": "scripts/coverage-gate.sh 85",
+      "after": "macos-debug"
+    }
+  ]
+}

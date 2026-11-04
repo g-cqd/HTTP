@@ -27,7 +27,7 @@
 #
 set -euo pipefail
 
-# Same tag the required `build-test-linux` CI job pins, so a local pass and a CI pass are statements
+# Same image the Linux CI legs (swift-ci, `.ci/action.json`) run, so a local pass and a CI pass are statements
 # about one toolchain. nightly-6.4.x tracks the 6.4 RELEASE branch — the language mode this package
 # targets — rather than main, which can break the build for reasons unrelated to the change at hand.
 IMAGE="${HTTP_LINUX_IMAGE:-docker.io/library/swift:6.4.1-noble}"
