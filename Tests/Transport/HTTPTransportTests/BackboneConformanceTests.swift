@@ -426,6 +426,37 @@ struct BackboneConformanceTests {
     }
 
     @Test(
+        "a cancel still unblocks a receive parked across the transport's shutdown",
+        .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)), arguments: socketBackbones)
+    func cancelUnblocksReceiveParkedAcrossShutdown(_ backbone: TransportBackbone) async throws {
+        let transport = try makeTransport(backbone)
+        let stream = try await transport.start()
+        let endpointPort = try #require(NWEndpoint.Port(rawValue: transport.boundPort))
+        let client = NWConnection(host: "127.0.0.1", port: endpointPort, using: .tcp)
+        client.start(queue: .global())
+        var iterator = stream.makeAsyncIterator()
+        let connection = try #require(await iterator.next())
+
+        let receiveTask = Task { try await connection.receive(maxLength: 64) }
+        try await Task.sleep(for: .milliseconds(200))
+        // The transport stops first, as a server's shutdown can while a connection is still being served: on
+        // the kqueue reactor (posixKqueue, swiftSystem) the loop thread had exited, so the cancel's close and
+        // the receive's resumption were queued to a loop nobody drained, and the receive never returned.
+        await transport.shutdown()
+        receiveTask.cancel()
+
+        let unblocked = AsyncEventProbe<Void>()
+        let joiner = Task {
+            _ = try? await receiveTask.value
+            unblocked.record(())
+        }
+        _ = try await unblocked.wait(forAtLeast: 1)
+        await joiner.value
+        await connection.close()
+        client.cancel()
+    }
+
+    @Test(
         "shutdown finishes the connection stream",
         .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)),
         arguments: socketBackbones)

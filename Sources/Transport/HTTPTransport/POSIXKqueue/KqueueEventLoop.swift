@@ -74,16 +74,20 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             return id
         }
 
-        /// Removes the waiter `id` parked on `fd`, if it is still there.
+        /// Removes the waiter `id` parked on `fd`, if it is still there; whether it was.
+        @discardableResult
         mutating func unpark(
             id: UInt64,
             fd: Int32,
             direction: WritableKeyPath<Self, [Int32: [Waiter]]>
-        ) {
+        ) -> Bool {
+            let before = self[keyPath: direction][fd]?.count ?? 0
             self[keyPath: direction][fd]?.removeAll { $0.id == id }
+            let removed = (self[keyPath: direction][fd]?.count ?? 0) < before
             if self[keyPath: direction][fd]?.isEmpty == true {
                 self[keyPath: direction].removeValue(forKey: fd)
             }
+            return removed
         }
     }
 
@@ -107,6 +111,13 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         /// (audit — per-request wakeup elimination). Guarded by the inbox `Mutex` so the block-decision
         /// (`onLoop = false` + `isEmpty`) and an off-loop enqueue serialize: no lost wakeup.
         var onLoop = false
+        /// True once the loop thread has run its final drain and exited.
+        ///
+        /// Work that arrives after that runs on the caller's thread, since no loop will ever drain it. A connection
+        /// can outlive its transport's `shutdown()` (a server stopping while it still serves one): its cancelled
+        /// receive's close, and the resumption of that receive, were queued to a loop nobody drained, and the
+        /// receive never returned.
+        var exited = false
         var isEmpty: Bool { jobs.isEmpty && control.isEmpty }
     }
 
@@ -122,7 +133,9 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     }
 
     deinit {
-        // No teardown beyond ARC.
+        // The kqueue lives as long as the loop object, not the loop thread: a registration racing the loop's exit
+        // must find a valid kqueue (one that is never polled again), never a descriptor number reused since.
+        close(kq)
     }
 
     /// Starts the run loop on its dedicated thread (one long-running block, not a re-scheduled poll).
@@ -145,11 +158,18 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// enqueue came from off-loop (an on-loop resume is drained by the current turn — no wakeup needed).
     func enqueue(_ job: consuming ExecutorJob) {
         let unowned = UnownedJob(job)
-        let offLoop = inbox.withLock { inbox -> Bool in
+        let (offLoop, exited) = inbox.withLock { inbox -> (Bool, Bool) in
+            guard !inbox.exited else {
+                return (false, true)
+            }
             inbox.jobs.append(unowned)
-            return !inbox.onLoop
+            return (!inbox.onLoop, false)
         }
-        if offLoop {
+        if exited {
+            // No loop thread any more (see `Inbox.exited`): run it here rather than strand it.
+            unowned.runSynchronously(on: asUnownedTaskExecutor())
+        }
+        else if offLoop {
             triggerWakeup()
         }
     }
@@ -166,8 +186,15 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     @discardableResult
     func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
         let id = registry.withLock { $0.park(handler, fd: fd, direction: \.readHandlers) }
-        guard register(fd: fd, filter: EVFILT_READ) else {
+        guard !inbox.withLock(\.exited), register(fd: fd, filter: EVFILT_READ) else {
             registry.withLock { $0.unpark(id: id, fd: fd, direction: \.readHandlers) }
+            return false
+        }
+        // The loop exited while this registered (see `Inbox.exited`): nothing will deliver the event. Fail the
+        // waiter, unless a close already took and ran its handler.
+        if inbox.withLock(\.exited),
+            registry.withLock({ $0.unpark(id: id, fd: fd, direction: \.readHandlers) })
+        {
             return false
         }
         return true
@@ -180,8 +207,15 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     @discardableResult
     func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
         let id = registry.withLock { $0.park(handler, fd: fd, direction: \.writeHandlers) }
-        guard register(fd: fd, filter: EVFILT_WRITE) else {
+        guard !inbox.withLock(\.exited), register(fd: fd, filter: EVFILT_WRITE) else {
             registry.withLock { $0.unpark(id: id, fd: fd, direction: \.writeHandlers) }
+            return false
+        }
+        // The loop exited while this registered (see `Inbox.exited`): nothing will deliver the event. Fail the
+        // waiter, unless a close already took and ran its handler.
+        if inbox.withLock(\.exited),
+            registry.withLock({ $0.unpark(id: id, fd: fd, direction: \.writeHandlers) })
+        {
             return false
         }
         return true
@@ -223,26 +257,34 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     }
 
     private func enqueueClose(_ fd: Int32, then completion: (@Sendable () -> Void)?) {
-        let offLoop = inbox.withLock { inbox -> Bool in
-            controlBacklog.add(1, ordering: .releasing)
-            inbox.control.append { [self] in
-                let parked = registry.withLock {
-                    ($0.readHandlers.removeValue(forKey: fd) ?? [])
-                        + ($0.writeHandlers.removeValue(forKey: fd) ?? [])
-                }
-                close(fd)
-                // Resume any waiter parked on this fd so a cancelled (or otherwise closed) receive/send
-                // does not leak its continuation: invoked after `close`, the handler's read/write hits
-                // EBADF and resumes with an error instead of hanging (the cancel-deadlock the
-                // backbone-conformance suite guards).
-                for waiter in parked {
-                    waiter.handler()
-                }
-                completion?()
+        let work: @Sendable () -> Void = { [self] in
+            let parked = registry.withLock {
+                ($0.readHandlers.removeValue(forKey: fd) ?? [])
+                    + ($0.writeHandlers.removeValue(forKey: fd) ?? [])
             }
-            return !inbox.onLoop
+            close(fd)
+            // Resume any waiter parked on this fd so a cancelled (or otherwise closed) receive/send
+            // does not leak its continuation: invoked after `close`, the handler's read/write hits
+            // EBADF and resumes with an error instead of hanging (the cancel-deadlock the
+            // backbone-conformance suite guards).
+            for waiter in parked {
+                waiter.handler()
+            }
+            completion?()
         }
-        if offLoop {
+        let (offLoop, exited) = inbox.withLock { inbox -> (Bool, Bool) in
+            guard !inbox.exited else {
+                return (false, true)
+            }
+            controlBacklog.add(1, ordering: .releasing)
+            inbox.control.append(work)
+            return (!inbox.onLoop, false)
+        }
+        if exited {
+            // No loop thread any more, so no in-flight handler to serialize against: close here.
+            work()
+        }
+        else if offLoop {
             triggerWakeup()
         }
     }
@@ -302,11 +344,15 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         // connection's close never runs, so its `serve` task, and the server's whole shutdown task group,
         // never returns). One final UNCONDITIONAL drain closes that window: anything enqueued up to this
         // point is guaranteed to run — fd closed, continuation resumed — before the loop thread exits.
-        while !inbox.withLock(\.isEmpty) {
+        // The last look at the inbox and `exited` are one critical section: work enqueued before it is drained
+        // here, work enqueued after it runs on its caller's thread (see `Inbox.exited`).
+        while !inbox.withLock({ inbox in
+            inbox.exited = inbox.isEmpty
+            return inbox.exited
+        }) {
             // No budget on the teardown drain: its whole purpose is that nothing is left stranded.
             _ = drainInbox(jobs: &jobs, control: &control, until: .max)
         }
-        close(kq)
     }
 
     /// Runs one batch of the inbox on the loop thread; returns whether it finished within `budget`.
