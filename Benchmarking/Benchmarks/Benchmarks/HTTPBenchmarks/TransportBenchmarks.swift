@@ -30,12 +30,18 @@ func registerTransportBenchmarks() {
         .networkFramework, .posixKqueue, .posixDispatch, .swiftSystem
     ]
     for backbone in socketBackbones {
-        Benchmark("transport/\(backbone.rawValue)/echo") { benchmark in
+        Benchmark("transport/\(backbone.rawValue)/echo") { benchmark async throws in
+            // Every phase is watched: one that makes no progress for 15 s (a Network.framework callback that never
+            // comes held the hosted macOS runner's job until its 25-minute timeout) fails the benchmark, naming the
+            // phase, and one still stuck after that ends the process, rather than the job's clock.
+            let watch = EchoWatch(name: "transport/\(backbone.rawValue)/echo")
+            defer { watch.finish() }
             guard let (transport, boundPort) = makeSocketTransport(backbone) else {
                 return
             }
             let stream: AsyncStream<any TransportConnection>
             do {
+                watch.enter("start")
                 stream = try await transport.start()
             }
             catch {
@@ -48,19 +54,108 @@ func registerTransportBenchmarks() {
                 server.cancel()
                 return
             }
+            watch.onStall = { client.cancel() }
 
             benchmark.startMeasurement()
-            for _ in benchmark.scaledIterations {
+            for iteration in benchmark.scaledIterations {
+                watch.enter("round trip", iteration)
                 await clientSend(client, transportPayload)
                 blackHole(await clientReceive(client, maxLength: 4_096))
+                if let stalled = watch.stalled { throw EchoStall(name: watch.name, phase: stalled) }
             }
             benchmark.stopMeasurement()
 
+            // The echo server ends before the transport does: with its event loop shut down, a POSIX backbone's
+            // pending receive never completes, cancelled or not (posixKqueue and swiftSystem, measured), so
+            // `server.value` waited without end.
+            watch.enter("client cancel")
             client.cancel()
-            await transport.shutdown()
+            watch.enter("echo server's end")
             server.cancel()
             _ = await server.value
+            watch.enter("transport shutdown")
+            await transport.shutdown()
         }
+    }
+}
+
+// MARK: - Watchdog
+
+struct EchoStall: Error, CustomStringConvertible {
+    let name: String
+    let phase: String
+    var description: String { "\(name): no progress for \(EchoWatch.stallSeconds) s in \(phase)" }
+}
+
+/// The phase a socket benchmark is in, and a watchdog over it: no new phase for ``stallSeconds`` runs `onStall` (the
+/// client's cancellation, which completes its pending send and receive) and marks the run stalled; still none
+/// ``exitSeconds`` later, it reports the phase on standard error and ends the process.
+final class EchoWatch: @unchecked Sendable {
+    static let stallSeconds = 15
+    static let exitSeconds = 45
+    let name: String
+    private let lock = NSLock()
+    private var phase: StaticString = "setup"
+    private var iteration = -1
+    private var changed = ContinuousClock.now
+    private var stalledPhase: String?
+    private var done = false
+    private var stallAction: (@Sendable () -> Void)?
+
+    /// A timer on a dispatch queue, not a thread of its own: package-benchmark's malloc interposer traps when a
+    /// thread it counts exits.
+    private let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+
+    init(name: String) {
+        self.name = name
+        timer.schedule(deadline: .now() + 1, repeating: 1)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            if tick() { timer.cancel() }
+        }
+        timer.resume()
+    }
+
+    var onStall: (@Sendable () -> Void)? {
+        get { lock.withLock { stallAction } }
+        set { lock.withLock { stallAction = newValue } }
+    }
+
+    var stalled: String? { lock.withLock { stalledPhase } }
+
+    /// Allocates nothing: it runs once per measured round trip.
+    func enter(_ next: StaticString, _ round: Int = -1) {
+        lock.withLock { (phase, iteration, changed) = (next, round, .now) }
+    }
+
+    func finish() {
+        lock.withLock { done = true }
+        timer.cancel()
+    }
+
+    /// One look; true once the benchmark is done.
+    private func tick() -> Bool {
+        let (finished, current, quiet, action, already) = lock.withLock {
+            (
+                done, iteration < 0 ? "\(phase)" : "\(phase) \(iteration)",
+                ContinuousClock.now - changed, stallAction, stalledPhase
+            )
+        }
+        if finished { return true }
+        if quiet > .seconds(Self.exitSeconds) {
+            FileHandle.standardError.write(
+                Data("\(name): still stuck in \(current) after \(quiet); exiting\n".utf8))
+            exit(3)
+        }
+        if quiet > .seconds(Self.stallSeconds), already == nil {
+            lock.withLock { stalledPhase = current }
+            FileHandle.standardError.write(
+                Data(
+                    "\(name): no progress for \(quiet) in \(current); cancelling the client\n".utf8)
+            )
+            action?()
+        }
+        return false
     }
 }
 
@@ -96,10 +191,16 @@ private func echoServer(_ stream: AsyncStream<any TransportConnection>) async {
     guard let connection = await iterator.next() else {
         return
     }
-    while true {
+    // Until cancelled: an empty chunk is "no data yet", and after the client's cancellation the POSIX backbones
+    // returned empty chunks without end, so a loop that only stopped at end-of-stream never let `server.value`
+    // return (the benchmark then held the job until its timeout).
+    while !Task.isCancelled {
         // `receive` returns `[UInt8]?`; `try?` flattens it, so nil means EOF or error → stop.
         guard let chunk = try? await connection.receive(maxLength: 65_536) else { break }
-        if chunk.isEmpty { continue }  // no data yet, keep waiting
+        if chunk.isEmpty {
+            await Task.yield()  // no data yet, keep waiting
+            continue
+        }
         try? await connection.send(chunk)
     }
     await connection.close()
