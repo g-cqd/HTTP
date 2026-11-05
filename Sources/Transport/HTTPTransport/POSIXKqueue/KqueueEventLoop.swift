@@ -185,19 +185,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// fd instead could touch a descriptor *number* the kernel has since reused.
     @discardableResult
     func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-        let id = registry.withLock { $0.park(handler, fd: fd, direction: \.readHandlers) }
-        guard !inbox.withLock(\.exited), register(fd: fd, filter: EVFILT_READ) else {
-            registry.withLock { $0.unpark(id: id, fd: fd, direction: \.readHandlers) }
-            return false
-        }
-        // The loop exited while this registered (see `Inbox.exited`): nothing will deliver the event. Fail the
-        // waiter, unless a close already took and ran its handler.
-        if inbox.withLock(\.exited),
-            registry.withLock({ $0.unpark(id: id, fd: fd, direction: \.readHandlers) })
-        {
-            return false
-        }
-        return true
+        wait(fd, handler, direction: \.readHandlers, filter: EVFILT_READ)
     }
 
     /// Registers one-shot interest in `fd` becoming writable; `handler` runs once when it does.
@@ -206,15 +194,25 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// ``waitReadable(_:_:)``.
     @discardableResult
     func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-        let id = registry.withLock { $0.park(handler, fd: fd, direction: \.writeHandlers) }
-        guard !inbox.withLock(\.exited), register(fd: fd, filter: EVFILT_WRITE) else {
-            registry.withLock { $0.unpark(id: id, fd: fd, direction: \.writeHandlers) }
+        wait(fd, handler, direction: \.writeHandlers, filter: EVFILT_WRITE)
+    }
+
+    /// Parks `handler` on `fd` in `direction` and registers `filter`; false, with the waiter removed, when
+    /// nothing will deliver the event: the kernel refused the registration, or the loop has exited (see
+    /// `Inbox.exited`) and no close took the waiter first.
+    private func wait(
+        _ fd: Int32,
+        _ handler: @escaping @Sendable () -> Void,
+        direction: WritableKeyPath<Registry, [Int32: [Waiter]]>,
+        filter: Int32
+    ) -> Bool {
+        let id = registry.withLock { $0.park(handler, fd: fd, direction: direction) }
+        guard !inbox.withLock(\.exited), register(fd: fd, filter: filter) else {
+            _ = registry.withLock { $0.unpark(id: id, fd: fd, direction: direction) }
             return false
         }
-        // The loop exited while this registered (see `Inbox.exited`): nothing will deliver the event. Fail the
-        // waiter, unless a close already took and ran its handler.
         if inbox.withLock(\.exited),
-            registry.withLock({ $0.unpark(id: id, fd: fd, direction: \.writeHandlers) })
+            registry.withLock({ $0.unpark(id: id, fd: fd, direction: direction) })
         {
             return false
         }

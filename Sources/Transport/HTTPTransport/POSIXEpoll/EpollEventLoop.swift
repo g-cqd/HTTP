@@ -73,16 +73,20 @@
                 return id
             }
 
-            /// Removes the waiter `id` parked on `fd`, if it is still there.
+            /// Removes the waiter `id` parked on `fd`, if it is still there; whether it was.
+            @discardableResult
             mutating func unpark(
                 id: UInt64,
                 fd: Int32,
                 direction: WritableKeyPath<Self, [Int32: [Waiter]]>
-            ) {
+            ) -> Bool {
+                let before = self[keyPath: direction][fd]?.count ?? 0
                 self[keyPath: direction][fd]?.removeAll { $0.id == id }
+                let removed = (self[keyPath: direction][fd]?.count ?? 0) < before
                 if self[keyPath: direction][fd]?.isEmpty == true {
                     self[keyPath: direction].removeValue(forKey: fd)
                 }
+                return removed
             }
         }
 
@@ -105,6 +109,11 @@
             /// — per-request wakeup elimination). Guarded by the inbox `Mutex` so the block-decision
             /// (`onLoop = false` + `isEmpty`) and an off-loop enqueue serialize: no lost wakeup.
             var onLoop = false
+            /// True once the loop thread has run its final drain and exited.
+            ///
+            /// Work that arrives after that runs on the caller's thread, since no loop will ever drain it — the
+            /// Linux twin of `KqueueEventLoop.Inbox.exited`, which records the hang it prevents.
+            var exited = false
             var isEmpty: Bool { jobs.isEmpty && control.isEmpty }
         }
 
@@ -133,7 +142,10 @@
         }
 
         deinit {
-            // No teardown beyond ARC.
+            // The descriptors live as long as the loop object, not the loop thread: a registration or wakeup
+            // racing the loop's exit must find them valid (never polled again), never a number reused since.
+            close(wakeFD)
+            close(epfd)
         }
 
         /// Starts the run loop on its dedicated thread (one long-running block, not a re-scheduled poll).
@@ -155,11 +167,18 @@
         /// the enqueue came from off-loop (an on-loop resume is drained by the current turn).
         func enqueue(_ job: consuming ExecutorJob) {
             let unowned = UnownedJob(job)
-            let offLoop = inbox.withLock { inbox -> Bool in
+            let (offLoop, exited) = inbox.withLock { inbox -> (Bool, Bool) in
+                guard !inbox.exited else {
+                    return (false, true)
+                }
                 inbox.jobs.append(unowned)
-                return !inbox.onLoop
+                return (!inbox.onLoop, false)
             }
-            if offLoop {
+            if exited {
+                // No loop thread any more (see `Inbox.exited`): run it here rather than strand it.
+                unowned.runSynchronously(on: asUnownedTaskExecutor())
+            }
+            else if offLoop {
                 triggerWakeup()
             }
         }
@@ -176,13 +195,7 @@
         /// since reused. Mirrors ``KqueueEventLoop/waitReadable(_:_:)``.
         @discardableResult
         func waitReadable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-            let id = registry.withLock { $0.park(handler, fd: fd, direction: \.readHandlers) }
-            guard arm(fd) else {
-                registry.withLock { $0.unpark(id: id, fd: fd, direction: \.readHandlers) }
-                return false
-            }
-            wakeIfOffLoop()
-            return true
+            wait(fd, handler, direction: \.readHandlers)
         }
 
         /// Registers one-shot interest in `fd` becoming writable; `handler` runs once when it does.
@@ -191,9 +204,25 @@
         /// ``waitReadable(_:_:)``.
         @discardableResult
         func waitWritable(_ fd: Int32, _ handler: @escaping @Sendable () -> Void) -> Bool {
-            let id = registry.withLock { $0.park(handler, fd: fd, direction: \.writeHandlers) }
-            guard arm(fd) else {
-                registry.withLock { $0.unpark(id: id, fd: fd, direction: \.writeHandlers) }
+            wait(fd, handler, direction: \.writeHandlers)
+        }
+
+        /// Parks `handler` on `fd` in `direction` and arms it; false, with the waiter removed, when nothing will
+        /// deliver the event: the kernel refused the registration, or the loop has exited (see `Inbox.exited`)
+        /// and no close took the waiter first.
+        private func wait(
+            _ fd: Int32,
+            _ handler: @escaping @Sendable () -> Void,
+            direction: WritableKeyPath<Registry, [Int32: [Waiter]]>
+        ) -> Bool {
+            let id = registry.withLock { $0.park(handler, fd: fd, direction: direction) }
+            guard !inbox.withLock(\.exited), arm(fd) else {
+                _ = registry.withLock { $0.unpark(id: id, fd: fd, direction: direction) }
+                return false
+            }
+            if inbox.withLock(\.exited),
+                registry.withLock({ $0.unpark(id: id, fd: fd, direction: direction) })
+            {
                 return false
             }
             wakeIfOffLoop()
@@ -227,27 +256,35 @@
         }
 
         private func enqueueClose(_ fd: Int32, then completion: (@Sendable () -> Void)?) {
-            let offLoop = inbox.withLock { inbox -> Bool in
-                controlBacklog.add(1, ordering: .releasing)
-                inbox.control.append { [self] in
-                    let parked = registry.withLock { registry -> [Waiter] in
-                        registry.registered.remove(fd)
-                        return (registry.readHandlers.removeValue(forKey: fd) ?? [])
-                            + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
-                    }
-                    // Remove before close (a closed fd auto-leaves the set, but explicit DEL is race-free).
-                    _ = epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
-                    close(fd)
-                    // Resume any parked waiter so a cancelled/closed receive/send doesn't leak its
-                    // continuation: invoked after close, the handler hits EBADF and resumes with an error.
-                    for waiter in parked {
-                        waiter.handler()
-                    }
-                    completion?()
+            let work: @Sendable () -> Void = { [self] in
+                let parked = registry.withLock { registry -> [Waiter] in
+                    registry.registered.remove(fd)
+                    return (registry.readHandlers.removeValue(forKey: fd) ?? [])
+                        + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
                 }
-                return !inbox.onLoop
+                // Remove before close (a closed fd auto-leaves the set, but explicit DEL is race-free).
+                _ = epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
+                close(fd)
+                // Resume any parked waiter so a cancelled/closed receive/send doesn't leak its
+                // continuation: invoked after close, the handler hits EBADF and resumes with an error.
+                for waiter in parked {
+                    waiter.handler()
+                }
+                completion?()
             }
-            if offLoop {
+            let (offLoop, exited) = inbox.withLock { inbox -> (Bool, Bool) in
+                guard !inbox.exited else {
+                    return (false, true)
+                }
+                controlBacklog.add(1, ordering: .releasing)
+                inbox.control.append(work)
+                return (!inbox.onLoop, false)
+            }
+            if exited {
+                // No loop thread any more, so no in-flight handler to serialize against: close here.
+                work()
+            }
+            else if offLoop {
                 triggerWakeup()
             }
         }
@@ -306,12 +343,15 @@
             // hang — mirrors the identical fix in `KqueueEventLoop.runLoop()`). One final UNCONDITIONAL
             // drain closes that window: anything enqueued up to this point is guaranteed to run — fd
             // closed, continuation resumed — before the loop thread exits.
-            while !inbox.withLock(\.isEmpty) {
+            // The last look at the inbox and `exited` are one critical section: work enqueued before it is
+            // drained here, work enqueued after it runs on its caller's thread (see `Inbox.exited`).
+            while !inbox.withLock({ inbox in
+                inbox.exited = inbox.isEmpty
+                return inbox.exited
+            }) {
                 // No budget on the teardown drain: its whole purpose is that nothing is stranded.
                 _ = drainInbox(jobs: &jobs, control: &control, until: .max)
             }
-            close(wakeFD)
-            close(epfd)
         }
 
         /// Runs one batch of the inbox on the loop thread; returns whether it finished within `budget`.
