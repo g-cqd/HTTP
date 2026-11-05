@@ -227,7 +227,7 @@ func codingShim(
 func aemiDependency() -> Package.Dependency {
     .package(
         url: "https://github.com/Aemi-Studio/aemi.git",
-        revision: "b31f49916261927be86db82edee8541fcfc19a64"
+        revision: "528804643f693104656a02449cfa59131556f616"
     )
 }
 
