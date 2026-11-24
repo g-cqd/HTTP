@@ -66,7 +66,11 @@ public struct MultipartFormData: Sendable, Equatable {
             return nil
         }
         return body.withUnsafeBytes { raw in
-            var parser = MultipartParser(body: raw.bytes, boundary: validated, limits: limits)
+            var parser = MultipartParser(
+                body: unsafe raw.bytes,
+                boundary: validated,
+                limits: limits
+            )
             return parser.parse()
         }
     }

@@ -34,34 +34,34 @@ public enum HTTPDate {
             func put(_ text: String, at offset: Int) {
                 var index = offset
                 for byte in text.utf8 {
-                    buffer[index] = byte
+                    unsafe buffer[index] = byte
                     index += 1
                 }
             }
             func put2(_ value: Int, at offset: Int) {
-                buffer[offset] = zero + UInt8(value / 10)
-                buffer[offset + 1] = zero + UInt8(value % 10)
+                unsafe buffer[offset] = zero + UInt8(value / 10)
+                unsafe buffer[offset + 1] = zero + UInt8(value % 10)
             }
             put(weekdays[weekday], at: 0)
-            buffer[3] = UInt8(ascii: ",")
-            buffer[4] = UInt8(ascii: " ")
+            unsafe buffer[3] = UInt8(ascii: ",")
+            unsafe buffer[4] = UInt8(ascii: " ")
             put2(day, at: 5)
-            buffer[7] = UInt8(ascii: " ")
+            unsafe buffer[7] = UInt8(ascii: " ")
             put(months[month - 1], at: 8)
-            buffer[11] = UInt8(ascii: " ")
+            unsafe buffer[11] = UInt8(ascii: " ")
             // 4 digits, defensive for any input range
             let yyyy = ((year % 10_000) + 10_000) % 10_000
-            buffer[12] = zero + UInt8(yyyy / 1_000)
-            buffer[13] = zero + UInt8((yyyy / 100) % 10)
-            buffer[14] = zero + UInt8((yyyy / 10) % 10)
-            buffer[15] = zero + UInt8(yyyy % 10)
-            buffer[16] = UInt8(ascii: " ")
+            unsafe buffer[12] = zero + UInt8(yyyy / 1_000)
+            unsafe buffer[13] = zero + UInt8((yyyy / 100) % 10)
+            unsafe buffer[14] = zero + UInt8((yyyy / 10) % 10)
+            unsafe buffer[15] = zero + UInt8(yyyy % 10)
+            unsafe buffer[16] = UInt8(ascii: " ")
             put2(hour, at: 17)
-            buffer[19] = UInt8(ascii: ":")
+            unsafe buffer[19] = UInt8(ascii: ":")
             put2(minute, at: 20)
-            buffer[22] = UInt8(ascii: ":")
+            unsafe buffer[22] = UInt8(ascii: ":")
             put2(second, at: 23)
-            buffer[25] = UInt8(ascii: " ")
+            unsafe buffer[25] = UInt8(ascii: " ")
             put("GMT", at: 26)
             return 29
         }

@@ -35,8 +35,8 @@ public enum RandomToken {
         let high = generator.next()
         let low = generator.next()
         return String(unsafeUninitializedCapacity: digitCount) { buffer in
-            writeHex(high, into: buffer, at: 0)
-            writeHex(low, into: buffer, at: 16)
+            unsafe writeHex(high, into: buffer, at: 0)
+            unsafe writeHex(low, into: buffer, at: 16)
             return digitCount
         }
     }
@@ -52,7 +52,7 @@ public enum RandomToken {
             // Arithmetic rather than a `static let` digit table: a stored global pays a
             // lazy-initialization check on every one of these 32 reads, and the branch here is
             // perfectly predictable per digit class.
-            buffer[offset + index] = nibble < 10 ? 0x30 &+ nibble : 0x57 &+ nibble
+            unsafe buffer[offset + index] = nibble < 10 ? 0x30 &+ nibble : 0x57 &+ nibble
         }
     }
 }

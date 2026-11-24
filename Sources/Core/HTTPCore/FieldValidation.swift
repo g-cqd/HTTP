@@ -83,7 +83,8 @@ public enum FieldValidation {
     ///   routine validates byte legality only.
     @inlinable
     public static func isValidFieldValue(_ bytes: some Sequence<UInt8>) -> Bool {
-        if let valid = bytes.withContiguousStorageIfAvailable(fieldValueBytesAreValid) {
+        let fast = bytes.withContiguousStorageIfAvailable { unsafe fieldValueBytesAreValid($0) }
+        if let valid = fast {
             return valid
         }
         for byte in bytes where !isFieldValueByte(byte) {
@@ -121,7 +122,7 @@ public enum FieldValidation {
         // kernel; short values keep the inlined SWAR below (measured flat at 24 B). Same predicate:
         // illegal iff `(< 0x20 && != 0x09) || == 0x7F`, obs-text legal.
         if count >= Self.kernelValidateMinBytes {
-            return AemiKernels.firstDisallowedText(
+            return unsafe AemiKernels.firstDisallowedText(
                 base: base, count: count, minAllowed: 0x20, allowTab: true
             ) == count
         }
@@ -132,7 +133,7 @@ public enum FieldValidation {
         let del = ones &* 0x7F
         var index = 0
         while index &+ 8 <= count {
-            let word = UnsafeRawPointer(base + index).loadUnaligned(as: UInt64.self)
+            let word = unsafe UnsafeRawPointer(base + index).loadUnaligned(as: UInt64.self)
             let isControl = (word &- belowSpace) & ~word & highs  // octet < 0x20
             let isHTAB = ((word ^ htab) &- ones) & ~(word ^ htab) & highs  // octet == 0x09
             let isDEL = ((word ^ del) &- ones) & ~(word ^ del) & highs  // octet == 0x7F
@@ -142,7 +143,7 @@ public enum FieldValidation {
             index &+= 8
         }
         while index < count {
-            if !isFieldValueByte(base[index]) {
+            if !isFieldValueByte(unsafe base[index]) {
                 return false
             }
             index &+= 1
@@ -184,7 +185,9 @@ public enum FieldValidation {
     /// callers enforce non-emptiness separately (e.g. `:path` MUST be non-empty).
     @inlinable
     public static func isRequestTargetValue(_ bytes: some Sequence<UInt8>) -> Bool {
-        if let valid = bytes.withContiguousStorageIfAvailable(requestTargetBytesAreValid) {
+        if let valid = bytes.withContiguousStorageIfAvailable({
+            unsafe requestTargetBytesAreValid($0)
+        }) {
             return valid
         }
         for byte in bytes where !isRequestTargetByte(byte) {
@@ -209,7 +212,7 @@ public enum FieldValidation {
         // Long targets (URLs + query strings to several KB) take the SIMD kernel; short ones keep the
         // inlined SWAR. Same predicate: illegal iff `<= 0x20 || == 0x7F`, obs-text legal.
         if count >= Self.kernelValidateMinBytes {
-            return AemiKernels.firstDisallowedText(
+            return unsafe AemiKernels.firstDisallowedText(
                 base: base, count: count, minAllowed: 0x21, allowTab: false
             ) == count
         }
@@ -219,7 +222,7 @@ public enum FieldValidation {
         let del = ones &* 0x7F
         var index = 0
         while index &+ 8 <= count {
-            let word = UnsafeRawPointer(base + index).loadUnaligned(as: UInt64.self)
+            let word = unsafe UnsafeRawPointer(base + index).loadUnaligned(as: UInt64.self)
             let isControlOrSpace = (word &- controlOrSpace) & ~word & highs  // octet <= 0x20
             let isDEL = ((word ^ del) &- ones) & ~(word ^ del) & highs  // octet == 0x7F
             if (isControlOrSpace | isDEL) != 0 {
@@ -228,7 +231,7 @@ public enum FieldValidation {
             index &+= 8
         }
         while index < count {
-            if !isRequestTargetByte(base[index]) {
+            if !isRequestTargetByte(unsafe base[index]) {
                 return false
             }
             index &+= 1

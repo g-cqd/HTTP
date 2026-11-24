@@ -77,13 +77,13 @@ public struct QueryParameters: Sendable, Equatable {
         // Fast path (audit F10): SIMD scan for `%` or `+` via AemiKernels; when neither is present,
         // return the slice verbatim with zero decode buffer.
         let hasEscapeOrPlus: Bool =
-            utf8.withContiguousStorageIfAvailable { buf -> Bool in
+            unsafe utf8.withContiguousStorageIfAvailable { buf -> Bool in
                 guard let base = buf.baseAddress, !buf.isEmpty else {
                     return false
                 }
                 let pct = UInt8(ascii: "%")
                 let plus = UInt8(ascii: "+")
-                return AemiKernels.firstIndexOfAny(
+                return unsafe AemiKernels.firstIndexOfAny(
                     base: base,
                     count: buf.count,
                     pct,

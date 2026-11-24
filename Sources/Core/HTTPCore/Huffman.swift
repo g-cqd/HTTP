@@ -72,9 +72,9 @@ public enum Huffman {
     /// three §5.2 decoding errors.
     public static func decode(_ input: RawSpan) throws(HuffmanError) -> [UInt8] {
         var caught: (any Error)?
-        let output = [UInt8](unsafeUninitializedCapacity: decodedUpperBound(of: input)) {
+        let output = unsafe [UInt8](unsafeUninitializedCapacity: decodedUpperBound(of: input)) {
             buffer, count in
-            do { count = try decode(input, into: buffer) }
+            do { count = try unsafe decode(input, into: buffer) }
             catch { caught = error }
         }
         if let caught { throw (caught as? HuffmanError) ?? .invalidCode }
@@ -92,8 +92,8 @@ public enum Huffman {
         withUnsafeTemporaryAllocation(of: UInt8.self, capacity: decodedUpperBound(of: input)) {
             buffer in
             do {
-                let written = try decode(input, into: buffer)
-                decoded = String(
+                let written = try unsafe decode(input, into: buffer)
+                decoded = unsafe String(
                     decoding: UnsafeBufferPointer(rebasing: buffer[..<written]),
                     as: Unicode.UTF8.self
                 )
@@ -129,13 +129,13 @@ public enum Huffman {
         var written = 0
         var index = 0
         while index < input.byteCount {
-            let octet = input.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+            let octet = unsafe input.unsafeLoad(fromByteOffset: index, as: UInt8.self)
             var transition = transitions[state * 16 + Int(octet >> 4)]  // high nibble
             if transition.flags & errorFlags != 0 {
                 throw transition.flags & eos != 0 ? .eosInInput : .invalidCode
             }
             if transition.flags & emit != 0 {
-                buffer[written] = transition.symbol
+                unsafe buffer[written] = transition.symbol
                 written += 1
             }
             state = Int(transition.nextState)
@@ -144,7 +144,7 @@ public enum Huffman {
                 throw transition.flags & eos != 0 ? .eosInInput : .invalidCode
             }
             if transition.flags & emit != 0 {
-                buffer[written] = transition.symbol
+                unsafe buffer[written] = transition.symbol
                 written += 1
             }
             state = Int(transition.nextState)

@@ -52,7 +52,7 @@ public struct HTTPFieldName: Sendable, Hashable {
     public func appendRawNameUTF8(to output: inout [UInt8]) {
         switch storage {
             case .literal(let name):
-                name.withUTF8Buffer { output.append(contentsOf: $0) }
+                name.withUTF8Buffer { unsafe output.append(contentsOf: $0) }
             case .parsed(let name):
                 output.append(contentsOf: name.utf8)
         }
@@ -87,13 +87,13 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// spelling is materialized once; the canonical form reuses it when the bytes are already
     /// lower-case (the h2/h3 hot path), else folds in a single allocation.
     public init?(validating bytes: UnsafeRawBufferPointer) {
-        guard FieldValidation.isToken(bytes) else {
+        guard unsafe FieldValidation.isToken(bytes) else {
             return nil
         }
-        let raw = String(decoding: bytes, as: Unicode.UTF8.self)
+        let raw = unsafe String(decoding: bytes, as: Unicode.UTF8.self)
         self.storage = .parsed(raw)
-        if bytes.contains(where: { (0x41 ... 0x5A).contains($0) }) {
-            self.canonicalName = Self.asciiLowercased(bytes)
+        if unsafe bytes.contains(where: { (0x41 ... 0x5A).contains($0) }) {
+            self.canonicalName = unsafe Self.asciiLowercased(bytes)
         }
         else {
             self.canonicalName = raw
@@ -111,7 +111,7 @@ public struct HTTPFieldName: Sendable, Hashable {
         // Fast path: contiguous storage (`Array`, `ArraySlice`, buffers) routes to the concrete,
         // fully-specialized initializer with no copy.
         if let validated = bytes.withContiguousStorageIfAvailable({
-            Self(validating: UnsafeRawBufferPointer($0))
+            unsafe Self(validating: UnsafeRawBufferPointer($0))
         }) {
             guard let validated else {
                 return nil
@@ -139,7 +139,7 @@ public struct HTTPFieldName: Sendable, Hashable {
     /// constants), storing the original spelling as a `StaticString` with no heap allocation.
     init(unchecked name: StaticString) {
         self.storage = .literal(name)
-        self.canonicalName = name.withUTF8Buffer { Self.asciiLowercased($0) }
+        self.canonicalName = name.withUTF8Buffer { unsafe Self.asciiLowercased($0) }
     }
 
     /// ASCII-lower-cases a validated token's bytes (A–Z → a–z) into a `String`.
@@ -152,7 +152,7 @@ public struct HTTPFieldName: Sendable, Hashable {
         String(unsafeUninitializedCapacity: utf8.count) { destination in
             var index = 0
             for byte in utf8 {
-                destination[index] = byte >= 0x41 && byte <= 0x5A ? byte &+ 0x20 : byte
+                unsafe destination[index] = byte >= 0x41 && byte <= 0x5A ? byte &+ 0x20 : byte
                 index &+= 1
             }
             return index

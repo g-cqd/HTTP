@@ -27,7 +27,7 @@ public enum Adler32 {
     /// takes the blocked path; a non-contiguous sequence reduces on every octet.
     public static func checksum<Bytes: Sequence>(_ bytes: Bytes) -> UInt32
     where Bytes.Element == UInt8 {
-        if let result = bytes.withContiguousStorageIfAvailable(blocked) {
+        if let result = bytes.withContiguousStorageIfAvailable({ unsafe blocked($0) }) {
             return result
         }
         var low: UInt32 = 1
@@ -47,7 +47,7 @@ public enum Adler32 {
         while index < buffer.count {
             let end = min(index &+ window, buffer.count)
             while index < end {
-                low &+= UInt32(buffer[index])
+                low &+= UInt32(unsafe buffer[index])
                 high &+= low
                 index &+= 1
             }

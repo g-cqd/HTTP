@@ -216,16 +216,17 @@ struct MultipartParser: ~Escapable {
 
     /// The byte at `index`; every caller derives `index` from a bound already checked against the body.
     func byte(at index: Int) -> UInt8 {
-        body.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+        unsafe body.unsafeLoad(fromByteOffset: index, as: UInt8.self)
     }
 
     /// The bytes of `range` copied into an exactly sized array — one of the two materialization points.
     func bytes(in range: Range<Int>) -> [UInt8] {
-        body.extracting(range).withUnsafeBytes { [UInt8]($0) }
+        body.extracting(range).withUnsafeBytes { unsafe [UInt8]($0) }
     }
 
     /// The bytes of `range` decoded as UTF-8 — the other materialization point.
     func string(in range: Range<Int>) -> String {
-        body.extracting(range).withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
+        body.extracting(range)
+            .withUnsafeBytes { unsafe String(decoding: $0, as: Unicode.UTF8.self) }
     }
 }

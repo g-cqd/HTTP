@@ -41,7 +41,7 @@ public struct ByteReader: ~Escapable {
     @inlinable
     @_lifetime(borrow buffer)
     public init(_ buffer: UnsafeRawBufferPointer, startingAt: Int = 0) {
-        self.init(buffer.bytes, startingAt: startingAt)
+        self.init(unsafe buffer.bytes, startingAt: startingAt)
     }
 
     /// The total number of bytes in the borrowed buffer.
@@ -64,7 +64,7 @@ public struct ByteReader: ~Escapable {
     @usableFromInline
     @inline(__always)
     func loadByte(at index: Int) -> UInt8 {
-        bytes.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+        unsafe bytes.unsafeLoad(fromByteOffset: index, as: UInt8.self)
     }
 
     /// Returns the byte at the current position without advancing, or `nil` at end of buffer.
@@ -177,6 +177,6 @@ public struct ByteReader: ~Escapable {
     /// exactly once when a value must outlive the borrowed buffer.
     @inlinable
     public func string(in range: Range<Int>) -> String {
-        slice(in: range).withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
+        slice(in: range).withUnsafeBytes { unsafe String(decoding: $0, as: Unicode.UTF8.self) }
     }
 }

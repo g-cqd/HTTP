@@ -15,7 +15,7 @@ extension StructuredFields {
         var source = source
         let outcome: Result<Item, ParseError> = source.withUTF8 { buffer in
             Result { () throws(ParseError) in
-                var parser = Parser(ByteReader(UnsafeRawBufferPointer(buffer)))
+                var parser = Parser(unsafe ByteReader(UnsafeRawBufferPointer(buffer)))
                 parser.skipSP()
                 guard !parser.isAtEnd else {
                     throw .empty
@@ -36,7 +36,7 @@ extension StructuredFields {
         var source = source
         let outcome: Result<[Member], ParseError> = source.withUTF8 { buffer in
             Result { () throws(ParseError) in
-                var parser = Parser(ByteReader(UnsafeRawBufferPointer(buffer)))
+                var parser = Parser(unsafe ByteReader(UnsafeRawBufferPointer(buffer)))
                 parser.skipSP()
                 let members = try parser.parseListMembers()
                 parser.skipSP()
@@ -54,7 +54,7 @@ extension StructuredFields {
         var source = source
         let outcome: Result<[DictionaryEntry], ParseError> = source.withUTF8 { buffer in
             Result { () throws(ParseError) in
-                var parser = Parser(ByteReader(UnsafeRawBufferPointer(buffer)))
+                var parser = Parser(unsafe ByteReader(UnsafeRawBufferPointer(buffer)))
                 parser.skipSP()
                 let entries = try parser.parseDictionaryMembers()
                 parser.skipSP()

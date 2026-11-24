@@ -58,6 +58,7 @@ let strictSwiftSettings: [SwiftSetting] = [
 //
 // Adding a target here is a one-line change once its count hits 0 — that is the whole point of staging.
 let strictMemorySafeTargets: Set<String> = [
+    "HTTPCore",  // graduated to 0 un-annotated unsafe sites
     "HTTPConcurrency",  // re-exports AemiRuntime; 0 unsafe sites
     "HTTPTestSupport",  // re-exports AemiTestKit; 0 unsafe sites
     "HPACK",  // 2 sites annotated (RFC 7541 §5.2 string materialization)

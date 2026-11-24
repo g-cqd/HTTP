@@ -46,7 +46,7 @@ public enum CRC32 {
                 guard let base = buffer.baseAddress, !buffer.isEmpty else {
                     return checksum
                 }
-                let raw = AemiKernels.crc32IEEE(
+                let raw = unsafe AemiKernels.crc32IEEE(
                     checksum ^ 0xFFFF_FFFF,
                     base,
                     count: buffer.count
@@ -73,7 +73,8 @@ public enum CRC32 {
         _ bytes: Bytes,
         backend: Backend = .fastest
     ) -> UInt32 where Bytes.Element == UInt8 {
-        if let result = bytes.withContiguousStorageIfAvailable({ accelerated($0, backend) }) {
+        if let result = bytes.withContiguousStorageIfAvailable({ unsafe accelerated($0, backend) })
+        {
             return result
         }
         var crc: UInt32 = 0xFFFF_FFFF
@@ -93,12 +94,12 @@ public enum CRC32 {
         if backend == .sliceBy1 {
             var crc: UInt32 = 0xFFFF_FFFF
             for i in 0 ..< buffer.count {
-                crc = referenceTable[Int((crc ^ UInt32(buffer[i])) & 0xFF)] ^ (crc >> 8)
+                crc = referenceTable[Int((crc ^ UInt32(unsafe buffer[i])) & 0xFF)] ^ (crc >> 8)
             }
             return crc ^ 0xFFFF_FFFF
         }
         let kernelBackend = resolvedKernelBackend(for: backend)
-        let raw = AemiKernels.crc32IEEE(
+        let raw = unsafe AemiKernels.crc32IEEE(
             0xFFFF_FFFF,
             base,
             count: buffer.count,

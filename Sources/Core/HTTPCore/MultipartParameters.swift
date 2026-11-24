@@ -33,7 +33,7 @@ enum MultipartParameters {
     static func value(of name: String, in header: String) -> String? {
         var header = header
         return header.withUTF8 { utf8 in
-            value(of: name, in: UnsafeRawBufferPointer(utf8).bytes)
+            value(of: name, in: unsafe UnsafeRawBufferPointer(utf8).bytes)
         }
     }
 
@@ -60,7 +60,7 @@ enum MultipartParameters {
         var isQuoted = false
         var isEscaped = false
         while index < header.byteCount {
-            let byte = header.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+            let byte = unsafe header.unsafeLoad(fromByteOffset: index, as: UInt8.self)
             index += 1
             if isEscaped {
                 isEscaped = false
@@ -199,11 +199,12 @@ enum MultipartParameters {
 
     /// The byte at `index`; callers only ever pass offsets inside the borrowed span.
     private static func byte(at index: Int, in header: RawSpan) -> UInt8 {
-        header.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+        unsafe header.unsafeLoad(fromByteOffset: index, as: UInt8.self)
     }
 
     /// The bytes of `range` decoded as UTF-8 — the one point where a parameter becomes owned.
     private static func string(_ range: Range<Int>, in header: RawSpan) -> String {
-        header.extracting(range).withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
+        header.extracting(range)
+            .withUnsafeBytes { unsafe String(decoding: $0, as: Unicode.UTF8.self) }
     }
 }
