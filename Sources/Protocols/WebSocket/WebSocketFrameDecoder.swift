@@ -7,6 +7,7 @@
 //  caller can read more, and unmasking the payload (§5.3) in the process. Iterative; no recursion.
 //
 
+internal import AemiKernels
 public import HTTPCore
 
 /// Pulls complete WebSocket frames from an accumulating byte buffer (RFC 6455 §5.2).
@@ -138,57 +139,24 @@ public struct WebSocketFrameDecoder {
 
     /// Returns the unmasked copy of `source`: `out[i] = source[i] ^ key[i % 4]` (RFC 6455 §5.3).
     ///
-    /// One pass, 16 octets at a time via `SIMD16<UInt8>` — the 4-octet key repeated four times is
-    /// phase-aligned (16 % 4 == 0), so each vector XOR applies the correct key byte to every lane; a
-    /// scalar loop finishes the final < 16 octets. Fused with the slice copy, so the payload is
-    /// touched once instead of being copied and then re-scanned. (A `UInt64` SWAR variant measured
-    /// equivalent — both are bounded by `loadUnaligned`/`storeBytes`, not the lane width.)
+    /// Delegates to `AemiKernels.xorMask4` (64-byte unrolled NEON on arm64, SSE2 on x86-64).
     private static func unmaskedCopy(
         of source: UnsafeRawBufferPointer,
         with key: (UInt8, UInt8, UInt8, UInt8)
     ) -> [UInt8] {
         let count = source.count
-        let keyVector = SIMD16<UInt8>(
-            key.0,
-            key.1,
-            key.2,
-            key.3,
-            key.0,
-            key.1,
-            key.2,
-            key.3,
-            key.0,
-            key.1,
-            key.2,
-            key.3,
-            key.0,
-            key.1,
-            key.2,
-            key.3
-        )
+        let packedMask =
+            (UInt32(key.0) << 24)
+            | (UInt32(key.1) << 16)
+            | (UInt32(key.2) << 8)
+            | UInt32(key.3)
         return [UInt8](unsafeUninitializedCapacity: count) { destination, initialized in
-            let raw = UnsafeMutableRawBufferPointer(destination)
-            var index = 0
-            while index + 16 <= count {
-                let chunk = source.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
-                raw.storeBytes(of: chunk ^ keyVector, toByteOffset: index, as: SIMD16<UInt8>.self)
-                index += 16
-            }
-            // Scalar tail (< 16 octets); index stays a multiple of 16, so the key phase holds.
-            while index < count {
-                let keyByte: UInt8
-                switch index & 0x3 {
-                    case 0:
-                        keyByte = key.0
-                    case 1:
-                        keyByte = key.1
-                    case 2:
-                        keyByte = key.2
-                    default:
-                        keyByte = key.3
-                }
-                destination[index] = source[index] ^ keyByte
-                index += 1
+            if count > 0, let srcBase = source.baseAddress, let dstBase = destination.baseAddress {
+                dstBase.initialize(
+                    from: srcBase.assumingMemoryBound(to: UInt8.self),
+                    count: count
+                )
+                AemiKernels.xorMask4(dstBase, count: count, mask: packedMask)
             }
             initialized = count
         }

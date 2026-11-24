@@ -156,6 +156,13 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
 
     /// Enqueues a pinned task's job to run on the loop thread next turn, waking the loop only when the
     /// enqueue came from off-loop (an on-loop resume is drained by the current turn — no wakeup needed).
+    ///
+    /// When the loop thread has already exited (`inbox.exited == true`), **never** call
+    /// `unowned.runSynchronously(...)` inline on the caller's thread: `enqueue` is often invoked from
+    /// inside `swift_task_cancelImpl` while the Swift concurrency runtime holds the task's internal
+    /// status `os_unfair_lock`, so running the job re-entrantly on the same thread triggers an
+    /// `_os_unfair_lock_unowned_abort` crash (issue #3). Dispatch asynchronously onto the loop's
+    /// serial queue instead so the runtime finishes unlocking before the job executes.
     func enqueue(_ job: consuming ExecutorJob) {
         let unowned = UnownedJob(job)
         let (offLoop, exited) = inbox.withLock { inbox -> (Bool, Bool) in
@@ -166,8 +173,9 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             return (!inbox.onLoop, false)
         }
         if exited {
-            // No loop thread any more (see `Inbox.exited`): run it here rather than strand it.
-            unowned.runSynchronously(on: asUnownedTaskExecutor())
+            thread.async { [self] in
+                unowned.runSynchronously(on: asUnownedTaskExecutor())
+            }
         }
         else if offLoop {
             triggerWakeup()

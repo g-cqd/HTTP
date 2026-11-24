@@ -8,6 +8,8 @@
 //  attacker-controlled query never crashes the parser. Iterative; no Foundation.
 //
 
+internal import AemiKernels
+
 /// The query parameters of a request target (RFC 3986 §3.4), as decoded name→value pairs.
 @dynamicMemberLookup
 public struct QueryParameters: Sendable, Equatable {
@@ -72,9 +74,26 @@ public struct QueryParameters: Sendable, Equatable {
     /// Percent-decodes `slice` (RFC 3986 §2.1), mapping `+` to space; a malformed `%XX` stays literal.
     private static func percentDecoded(_ slice: Substring) -> String {
         let utf8 = slice.utf8
-        // Fast path (audit F10): with neither a `%` escape nor a `+`, the value is the slice verbatim, so
-        // return it directly and skip the decode buffer. Most query values are unescaped (common case).
-        if !utf8.contains(where: { $0 == UInt8(ascii: "%") || $0 == UInt8(ascii: "+") }) {
+        // Fast path (audit F10): SIMD scan for `%` or `+` via AemiKernels; when neither is present,
+        // return the slice verbatim with zero decode buffer.
+        let hasEscapeOrPlus: Bool =
+            utf8.withContiguousStorageIfAvailable { buf -> Bool in
+                guard let base = buf.baseAddress, !buf.isEmpty else {
+                    return false
+                }
+                let pct = UInt8(ascii: "%")
+                let plus = UInt8(ascii: "+")
+                return AemiKernels.firstIndexOfAny(
+                    base: base,
+                    count: buf.count,
+                    pct,
+                    plus,
+                    pct,
+                    pct,
+                    pct
+                ) < buf.count
+            } ?? utf8.contains { $0 == UInt8(ascii: "%") || $0 == UInt8(ascii: "+") }
+        if !hasEscapeOrPlus {
             return String(slice)
         }
         // Decode straight off the borrowed `UTF8View` — no `Array(slice.utf8)` copy of the whole value.

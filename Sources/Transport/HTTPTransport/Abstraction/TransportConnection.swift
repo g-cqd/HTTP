@@ -83,6 +83,13 @@ public protocol TransportConnection: Sendable {
     /// no coalesce copy (audit #4 / L4).
     func send(_ head: [UInt8], _ body: [UInt8]) async throws
 
+    /// Sends `head`, `body`, and `tail` as one logical message (HTTP/1.1 chunked streaming:
+    /// `<hex-len>\r\n` + `payload` + `\r\n`), completing once all three are handed to the OS.
+    ///
+    /// Backbones override this with 3-entry `writev(2)` (POSIX) or `NWConnection.batch`
+    /// (Network.framework) to eliminate per-chunk payload copies (issue #2).
+    func send(_ head: [UInt8], _ body: [UInt8], _ tail: [UInt8]) async throws
+
     /// Sends `length` octets of the open file `descriptor`, starting at byte `offset`, to the peer
     /// (G5 zero-copy static serving).
     ///
@@ -173,6 +180,25 @@ extension TransportConnection {
         else {
             var combined = head
             combined.append(contentsOf: body)
+            try await send(combined)
+        }
+    }
+
+    /// Default ``send(_:_:_:)``: pre-allocates one exact-sized buffer when no scatter-gather override
+    /// exists (e.g. in-memory fakes or TLS).
+    public func send(_ head: [UInt8], _ body: [UInt8], _ tail: [UInt8]) async throws {
+        if body.isEmpty, tail.isEmpty {
+            try await send(head)
+        }
+        else if tail.isEmpty {
+            try await send(head, body)
+        }
+        else {
+            var combined: [UInt8] = []
+            combined.reserveCapacity(head.count + body.count + tail.count)
+            combined.append(contentsOf: head)
+            combined.append(contentsOf: body)
+            combined.append(contentsOf: tail)
             try await send(combined)
         }
     }

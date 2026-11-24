@@ -16,6 +16,11 @@ internal import HTTP1
 internal import HTTPCore
 internal import HTTPTransport
 
+private enum ChunkedFramingBytes {
+    static let crlf: [UInt8] = [0x0D, 0x0A]
+    static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+}
+
 extension HTTPServer {
     /// Streams a response over HTTP/1.1.
     ///
@@ -51,8 +56,12 @@ extension HTTPServer {
             guard !omitBody else {
                 return true  // HEAD: the header section only (RFC 9112 §6.3)
             }
-            // The writer re-arms the deadline before each chunk send; the deadline stays armed between
-            // writes so a wedged producer (no chunk for a window) is reaped too.
+            // The writer re-arms the deadline before each chunk send using the stream's producer
+            // timeout when provided (issue #4), keeping socket sends bounded while allowing quiet
+            // event-driven push producers (SSE, screen capture) to stay open without raising global
+            // `HTTPLimits.idleTimeout`.
+            let streamTimeout = stream.producerIdleTimeout ?? limits.idleTimeout
+            deadline.arm(deadlineKey(after: streamTimeout))
             try await stream.produce(
                 H1StreamWriter(
                     connection: connection,
@@ -60,7 +69,8 @@ extension HTTPServer {
                     deadline: deadline,
                     clock: clock,
                     epoch: epoch,
-                    idleTimeout: limits.idleTimeout
+                    writeTimeout: limits.idleTimeout,
+                    producerTimeout: streamTimeout
                 )
             )
             if chunked {
@@ -85,24 +95,41 @@ extension HTTPServer {
         let clock: C
         /// The instant ``DeadlineWheel`` keys are measured from — see `HTTPServer+DeadlineClock.swift`.
         let epoch: C.Instant
-        let idleTimeout: Duration
+        let writeTimeout: Duration
+        let producerTimeout: Duration
 
         func write(_ chunk: [UInt8]) async throws {
             guard !chunk.isEmpty else {
                 return
             }
-            // Progress-based reset: a chunk about to go on the wire pushes the deadline to
-            // now + idleTimeout, so a slow-but-progressing transfer is not reaped while a stalled send
-            // (a slow-reading peer) is (FIX #1).
-            deadline.arm(epoch.duration(to: clock.now) + idleTimeout)
-            guard chunked else {
-                try await connection.send(chunk)
-                return
+            // Bound the active socket send by `writeTimeout` (reaps stalled peers promptly), then
+            // re-arm with `producerTimeout` for the gap until the next produced chunk (issue #4).
+            deadline.arm(epoch.duration(to: clock.now) + writeTimeout)
+            if chunked {
+                // Scatter-gather send (`<hex>\r\n`, `chunk`, `\r\n`): avoids formatting via String
+                // and avoids copying `chunk` into a temporary combined buffer (issue #2).
+                let head = Self.chunkSizeLine(chunk.count)
+                try await connection.send(head, chunk, ChunkedFramingBytes.crlf)
             }
-            var frame = Array("\(String(chunk.count, radix: 16))\r\n".utf8)
-            frame.append(contentsOf: chunk)
-            frame.append(contentsOf: [0x0D, 0x0A])
-            try await connection.send(frame)
+            else {
+                try await connection.send(chunk)
+            }
+            deadline.arm(epoch.duration(to: clock.now) + producerTimeout)
+        }
+
+        /// Formats `count` as lowercase ASCII hex followed by CRLF without going through `String`.
+        private static func chunkSizeLine(_ count: Int) -> [UInt8] {
+            var value = UInt(count)
+            var digits: [UInt8] = []
+            digits.reserveCapacity(18)
+            repeat {
+                digits.append(ChunkedFramingBytes.hexDigits[Int(value & 0xF)])
+                value >>= 4
+            } while value != 0
+            digits.reverse()
+            digits.append(0x0D)
+            digits.append(0x0A)
+            return digits
         }
 
         /// Hands an unframed file region to the transport's `sendfile(2)` path (G5).

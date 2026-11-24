@@ -37,8 +37,8 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// with no hop to the cooperative pool (audit R4).
     public var preferredTaskExecutor: (any TaskExecutor)? { eventLoop }
 
-    private let descriptor: Int32
-    private let eventLoop: KqueueEventLoop
+    let descriptor: Int32
+    let eventLoop: KqueueEventLoop
     private let isClosed = Atomic<Bool>(false)
     /// A reusable receive buffer, overwritten each read, so the hot read path allocates no fresh chunk
     /// per `recv` (audit P1) and holds only what this peer has shown it needs (ADD-P2 — see
@@ -57,9 +57,9 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// Covers the whole send: the first `write(2)`/`writev(2)`/`sendfile(2)` and every partial-write
     /// retry until the payload is drained. Independent of ``receiveOwner`` — a parked receive never
     /// delays a send.
-    private let sendOwner = DirectionOwner<Void>()
+    let sendOwner = DirectionOwner<Void>()
 
-    private enum WriteOutcome {
+    enum WriteOutcome {
         case done
         case wouldBlock(offset: Int)
         case failed(errno: Int32)
@@ -353,7 +353,7 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// than splicing its octets into another response's body. Mirrors
     /// `PortableTLSConnection.drainCiphertext`'s ownership check. One uncontended lock
     /// read per send, not per retry.
-    private func claimSend(
+    func claimSend(
         _ continuation: UnsafeContinuation<Void, any Error>,
         _ once: OnceResumer<Void>
     ) -> Bool {

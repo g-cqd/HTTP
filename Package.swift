@@ -11,7 +11,7 @@
 //
 //  Source layout is tiered for navigability (module names — and therefore imports — are unchanged;
 //  only directory paths move, declared per target via `path:`):
-//    Sources/Core        — HTTPCore, HTTPConcurrency, CCRC32, CHTTPTestMalloc
+//    Sources/Core        — HTTPCore, HTTPConcurrency, CHTTPTestMalloc
 //    Sources/Protocols   — HTTP1, HTTP2, HTTP3, HPACK, QPACK, WebSocket
 //    Sources/Transport   — HTTPTransport      Sources/Server   — HTTPServer
 //    Sources/Testing     — HTTPTestSupport    Sources/Examples — httpd-example
@@ -19,6 +19,7 @@
 // swiftlint:disable file_length - one manifest per package is a SwiftPM invariant: its 30+ targets
 // cannot be split across files, and the RFC/ADR rationale comments (which do not count) belong
 // beside the declarations they justify.
+import Foundation
 import PackageDescription
 
 // MARK: - Strict, *reusable-safe* build settings
@@ -221,13 +222,16 @@ func codingShim(
     return .target(name: name, path: path, cSettings: cSettings, linkerSettings: linkerSettings)
 }
 
-// Aemi supplies shared SIMD byte kernels and runtime primitives.
-// Pinned by revision, like every Aemi-family consumer: SwiftPM allows one revision per package in a
-// graph, and `scripts/dependency-pinning.py` checks the pin.
+// Aemi supplies shared SIMD byte kernels, core codecs, runtime primitives, and test infrastructure.
+// Supports local sibling development (`AEMI_LOCAL_PATH=../aemi`) while defaulting to the pinned
+// GitHub revision checked by `scripts/dependency-pinning.py`.
 func aemiDependency() -> Package.Dependency {
-    .package(
+    if let local = ProcessInfo.processInfo.environment["AEMI_LOCAL_PATH"], !local.isEmpty {
+        return .package(path: local)
+    }
+    return .package(
         url: "https://github.com/Aemi-Studio/aemi.git",
-        revision: "e34e3e517176a04f64e5d56e16f5019e55392a90"
+        revision: "b7e891bc35cd1a832b8e08b6c97c7f1a4e7b136e"
     )
 }
 
@@ -350,7 +354,7 @@ let package = Package(
         .target(
             name: "HTTPCore",
             dependencies: [
-                "CCRC32", .product(name: "AemiKernels", package: "aemi"),
+                .product(name: "AemiKernels", package: "aemi"),
                 .product(name: "AemiKernel", package: "aemi")
             ],
             path: "Sources/Core/HTTPCore"
@@ -393,14 +397,6 @@ let package = Package(
         // hook; a no-op elsewhere), backing the `expectAllocations` zero-allocation perf guard.
         // Test/tooling-only; never shipped in an app binary. No dependencies, default C settings.
         .target(name: "CHTTPTestMalloc", path: "Sources/Core/CHTTPTestMalloc"),
-        // A C shim exposing hardware/SWAR CRC-32 backends for the gzip integrity checksum: the ARMv8
-        // CRC32 instructions, an in-house CPUID-dispatched PCLMULQDQ folding kernel on x86, and a
-        // portable slicing-by-8 table. Self-contained — with the former zlib borrow gone, HTTPCore's
-        // unconditional graph links no system libraries. Default C settings.
-        .target(
-            name: "CCRC32",
-            path: "Sources/Core/CCRC32"
-        ),
         // The RFC 8878 `zstd` content coding shim over the system libzstd (Apple's Compression
         // framework has no Zstandard codec, on any platform). Opt-in via the `Zstd` package trait:
         // the target is always DECLARED (a trait cannot conditionally declare one — see the traits
@@ -708,7 +704,7 @@ let package = Package(
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
 let nonSwiftTargets: Set<String> = [
-    "CHTTPTestMalloc", "CCRC32", "CEpoll", "CZstd", "CBrotli"
+    "CHTTPTestMalloc", "CEpoll", "CZstd", "CBrotli"
 ]
 
 for target in package.targets where !nonSwiftTargets.contains(target.name) {

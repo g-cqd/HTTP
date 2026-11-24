@@ -174,12 +174,16 @@ public final class NetworkFrameworkConnection: UnleasedTransportConnection, @unc
     /// call unblocks instead of pinning the serve task forever. Without this, only the POSIX backbones
     /// (which cancel their send syscall) honored the reap; `NWConnection.send` did not.
     public func send(_ bytes: [UInt8]) async throws {
+        // DispatchData copies into an immutable OS-managed buffer without a second Swift Data copy.
+        let payload = bytes.withUnsafeBytes { raw in
+            unsafe DispatchData(bytes: raw)
+        }
         do {
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation {
                     (continuation: CheckedContinuation<Void, any Error>) in
                     connection.send(
-                        content: Data(bytes),
+                        content: payload,
                         completion: .contentProcessed { error in
                             if let error {
                                 continuation.resume(throwing: error)
@@ -197,6 +201,69 @@ public final class NetworkFrameworkConnection: UnleasedTransportConnection, @unc
         catch _ where Task.isCancelled {
             // The send failed because this task's cancellation tore the connection down — report the
             // standard cancellation signal, matching the receive contract on this backbone.
+            throw CancellationError()
+        }
+    }
+
+    /// Sends `head` and `body` inside a single `NWConnection.batch` without coalescing them into a
+    /// temporary `[UInt8]`, using `DispatchData` directly.
+    public func send(_ head: [UInt8], _ body: [UInt8]) async throws {
+        guard !body.isEmpty else {
+            try await send(head)
+            return
+        }
+        try await sendBatch([head, body])
+    }
+
+    /// Sends `head`, `body`, and `tail` inside a single `NWConnection.batch` (HTTP/1.1 chunked
+    /// streaming: size line + payload + `\r\n`, issue #2) with zero payload coalescing copies.
+    public func send(_ head: [UInt8], _ body: [UInt8], _ tail: [UInt8]) async throws {
+        guard !body.isEmpty || !tail.isEmpty else {
+            try await send(head)
+            return
+        }
+        try await sendBatch([head, body, tail])
+    }
+
+    private func sendBatch(_ parts: [[UInt8]]) async throws {
+        let nonEmpty = parts.filter { !$0.isEmpty }
+        guard !nonEmpty.isEmpty else {
+            return
+        }
+        do {
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Void, any Error>) in
+                    let lastIndex = nonEmpty.count - 1
+                    connection.batch {
+                        for (index, part) in nonEmpty.enumerated() {
+                            let payload = part.withUnsafeBytes { raw in
+                                unsafe DispatchData(bytes: raw)
+                            }
+                            if index == lastIndex {
+                                connection.send(
+                                    content: payload,
+                                    completion: .contentProcessed { error in
+                                        if let error {
+                                            continuation.resume(throwing: error)
+                                        }
+                                        else {
+                                            continuation.resume()
+                                        }
+                                    }
+                                )
+                            }
+                            else {
+                                connection.send(content: payload, completion: .idempotent)
+                            }
+                        }
+                    }
+                }
+            } onCancel: {
+                self.cancelUnderlying()
+            }
+        }
+        catch _ where Task.isCancelled {
             throw CancellationError()
         }
     }

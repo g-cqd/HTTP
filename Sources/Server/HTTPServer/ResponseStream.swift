@@ -15,14 +15,21 @@ internal import Synchronization
 public struct ResponseStream: Sendable {
     /// The body length when known ahead of time; nil streams with chunked framing (HTTP/1.1) instead.
     public let contentLength: Int?
+    /// Optional override for the idle timeout while waiting for the producer between chunks
+    /// (issue #4). `nil` inherits `HTTPLimits.idleTimeout`; pass a longer duration (e.g.
+    /// `.seconds(3600)`) for event-driven push streams (SSE, screen capture) without weakening
+    /// global idle timeouts on non-streaming routes.
+    public let producerIdleTimeout: Duration?
     let produce: @Sendable (any ResponseBodyWriter) async throws -> Void
 
     /// Creates a stream that writes its body through the producer; pass `contentLength` when known.
     public init(
         contentLength: Int? = nil,
+        producerIdleTimeout: Duration? = nil,
         _ produce: @escaping @Sendable (any ResponseBodyWriter) async throws -> Void
     ) {
         self.contentLength = contentLength
+        self.producerIdleTimeout = producerIdleTimeout
         self.produce = produce
     }
 

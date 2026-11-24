@@ -3,13 +3,13 @@
 //  HTTPCore
 //
 //  RFC 1952 §8 — the CRC-32 (ITU-T V.42, reflected polynomial 0xEDB88320) that gzip appends to its
-//  payload as an integrity check. Contiguous input dispatches to a hardware / SWAR backend (`CCRC32`:
-//  the ARMv8 CRC32 instructions, an in-house PCLMULQDQ folding kernel on x86, or a portable
-//  slicing-by-8 table — self-contained C, no system libraries); a non-contiguous sequence uses a
-//  byte-at-a-time table loop (also the cross-check reference). Iterative; no recursion.
+//  payload as an integrity check. Contiguous input dispatches through `AemiKernels.crc32IEEE`
+//  (promoted into `CAemiKernels`: ARMv8 CRC32 on arm64, CPUID-dispatched PCLMULQDQ 4-way folding on
+//  x86, or portable slicing-by-8 scalar fallback); a non-contiguous sequence uses a byte-at-a-time
+//  table loop (also the cross-check reference). Iterative; no recursion.
 //
 
-internal import CCRC32
+internal import AemiKernels
 
 /// The CRC-32 checksum used by gzip (RFC 1952 §8).
 public enum CRC32 {
@@ -26,20 +26,11 @@ public enum CRC32 {
         case sliceBy8
         /// ARMv8 CRC32 instructions (table fallback off aarch64).
         case arm
-        /// The x86 hardware path — an in-house PCLMULQDQ folding kernel, CPUID-dispatched (SSE4.2's
-        /// `crc32` is CRC-32C, the wrong polynomial for gzip). Table fallback off x86.
+        /// The x86 hardware path — an in-house PCLMULQDQ folding kernel, CPUID-dispatched.
         case x86
     }
 
     /// A CRC-32 folded incrementally over chunks (RFC 1952 §8).
-    ///
-    /// The seeded form of ``CRC32/checksum(_:backend:)``, for a producer that never holds the whole
-    /// payload: a streaming gzip encoder has to emit the trailer without having retained the octets it
-    /// checksummed. ``checksum`` after the last ``update(_:)`` equals the one-shot checksum of the
-    /// concatenation, and after *any* prefix it equals the checksum of that prefix.
-    ///
-    /// Nested here rather than given its own file because it folds through this type's portable table
-    /// on the non-contiguous path, exactly as ``Backend`` shares its dispatch.
     public struct Running: Sendable {
         /// The checksum of everything folded in so far — the value gzip appends once the input ends.
         public private(set) var checksum: UInt32 = 0
@@ -50,15 +41,17 @@ public enum CRC32 {
         }
 
         /// Folds `bytes` into the running checksum.
-        ///
-        /// Contiguous input goes to the same accelerated backend ``CRC32/checksum(_:backend:)`` picks
-        /// by default; a non-contiguous sequence folds through the portable byte-at-a-time table.
         public mutating func update<Bytes: Sequence>(_ bytes: Bytes) where Bytes.Element == UInt8 {
             let folded = bytes.withContiguousStorageIfAvailable { buffer -> UInt32 in
-                guard let base = buffer.baseAddress else {
+                guard let base = buffer.baseAddress, !buffer.isEmpty else {
                     return checksum
                 }
-                return ccrc32_update(checksum, base, buffer.count)
+                let raw = AemiKernels.crc32IEEE(
+                    checksum ^ 0xFFFF_FFFF,
+                    base,
+                    count: buffer.count
+                )
+                return raw ^ 0xFFFF_FFFF
             }
             if let folded {
                 checksum = folded
@@ -95,29 +88,53 @@ public enum CRC32 {
         _ backend: Backend
     ) -> UInt32 {
         guard let base = buffer.baseAddress, !buffer.isEmpty else {
-            return 0  // CRC-32 of "" is 0
+            return 0
         }
+        if backend == .sliceBy1 {
+            var crc: UInt32 = 0xFFFF_FFFF
+            for i in 0 ..< buffer.count {
+                crc = referenceTable[Int((crc ^ UInt32(buffer[i])) & 0xFF)] ^ (crc >> 8)
+            }
+            return crc ^ 0xFFFF_FFFF
+        }
+        let kernelBackend = resolvedKernelBackend(for: backend)
+        let raw = AemiKernels.crc32IEEE(
+            0xFFFF_FFFF,
+            base,
+            count: buffer.count,
+            backend: kernelBackend
+        )
+        return raw ^ 0xFFFF_FFFF
+    }
+
+    private static func resolvedKernelBackend(for backend: Backend) -> AemiKernels.Backend {
         switch backend {
             case .fastest:
-                return ccrc32(base, buffer.count)
-            case .sliceBy1:
-                return ccrc32_slice1(base, buffer.count)
-            case .sliceBy8:
-                return ccrc32_slice8(base, buffer.count)
+                return .fastest
+            case .sliceBy8, .sliceBy1:
+                return .scalar
             case .arm:
-                return ccrc32_arm(base, buffer.count)
+                #if arch(arm64)
+                    return .fastest
+                #else
+                    return .scalar
+                #endif
             case .x86:
-                return ccrc32_x86(base, buffer.count)
+                #if arch(x86_64) || arch(i386)
+                    return .fastest
+                #else
+                    return .scalar
+                #endif
         }
     }
 
-    /// The per-octet table for the non-contiguous fallback (reflected polynomial `0xEDB88320`).
+    /// Standard reflected IEEE 802.3 / ISO-HDLC 256-entry lookup table (`0xEDB88320`).
     private static let referenceTable: [UInt32] = (0 ..< 256)
-        .map { index in
-            var crc = UInt32(index)
+        .map { entry in
+            var c = UInt32(entry)
             for _ in 0 ..< 8 {
-                crc = (crc & 1) != 0 ? (0xEDB8_8320 ^ (crc >> 1)) : (crc >> 1)
+                c = (c & 1) == 1 ? (0xEDB8_8320 ^ (c >> 1)) : (c >> 1)
             }
-            return crc
+            return c
         }
 }

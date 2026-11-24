@@ -165,6 +165,10 @@
 
         /// Enqueues a pinned task's job to run on the loop thread next turn, waking the loop only when
         /// the enqueue came from off-loop (an on-loop resume is drained by the current turn).
+        ///
+        /// Once the loop thread has exited, hop asynchronously onto `thread` rather than calling
+        /// `runSynchronously` re-entrantly on the caller's thread (prevents `swift_task_cancelImpl`
+        /// lock-ownership aborts when cancellation races transport shutdown, issue #3).
         func enqueue(_ job: consuming ExecutorJob) {
             let unowned = UnownedJob(job)
             let (offLoop, exited) = inbox.withLock { inbox -> (Bool, Bool) in
@@ -175,8 +179,9 @@
                 return (!inbox.onLoop, false)
             }
             if exited {
-                // No loop thread any more (see `Inbox.exited`): run it here rather than strand it.
-                unowned.runSynchronously(on: asUnownedTaskExecutor())
+                thread.async { [self] in
+                    unowned.runSynchronously(on: asUnownedTaskExecutor())
+                }
             }
             else if offLoop {
                 triggerWakeup()
