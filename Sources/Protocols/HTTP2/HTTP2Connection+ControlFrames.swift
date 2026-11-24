@@ -30,11 +30,16 @@ extension HTTP2Connection {
         try chargeControlFrame()
     }
 
-    /// Validates a received GOAWAY (RFC 9113 §6.8); a client GOAWAY is informational to a server.
-    func receiveGoAway(_ frame: HTTP2FrameView) throws(HTTP2Error) {
+    /// Validates a received GOAWAY (RFC 9113 §6.8); a client GOAWAY is informational to a server,
+    /// but repeated GOAWAYs are charged as control frames so they cannot be flooded unchecked.
+    mutating func receiveGoAway(_ frame: HTTP2FrameView) throws(HTTP2Error) {
         guard frame.header.streamID == .connection else {
             throw .connection(.protocolError, "GOAWAY must be on stream 0")
         }
+        guard frame.payload.byteCount >= 8 else {
+            throw .connection(.frameSizeError, "GOAWAY must be at least 8 octets")
+        }
+        try chargeControlFrame()
     }
 
     // MARK: SETTINGS / PING
@@ -74,6 +79,7 @@ extension HTTP2Connection {
             throw .connection(.frameSizeError, "PING payload must be 8 octets (RFC 9113 §6.7)")
         }
         guard !frame.header.flags.contains(.ack) else {  // a PING ACK needs no response
+            try chargeControlFrame()  // unsolicited PING-ACK flood is cheap to send — charge it
             return
         }
         try chargeControlFrame()

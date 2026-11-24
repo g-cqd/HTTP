@@ -88,6 +88,10 @@ public enum TLSHandshakeError: Error, Sendable, Equatable {
     /// A KeyUpdate whose `request_update` is neither 0 nor 1 (§4.6.3: "MUST terminate the
     /// connection with an 'illegal_parameter' alert").
     case invalidKeyUpdate(UInt8)
+    /// The peer sent more consecutive KeyUpdate messages without intervening application data than
+    /// ``TLSServerConfiguration/maxConsecutivePeerKeyUpdates`` allows (RFC 8446 §4.6.3 flood
+    /// defense — CVE-2023-24531 class; closes with `unexpected_message`).
+    case excessiveKeyUpdates
     /// The configured ``TLSIdentityProvider`` failed to sign or returned a scheme outside the
     /// offered list — a local fault (§6.2 `internal_error`).
     case signingFailed
@@ -111,7 +115,8 @@ public enum TLSHandshakeError: Error, Sendable, Equatable {
                 recordError.alertDescription
             case .malformed, .messageTooLarge:
                 .decodeError
-            case .unknownHandshakeType, .unexpectedMessage, .interleavedHandshake:
+            case .unknownHandshakeType, .unexpectedMessage, .interleavedHandshake,
+                .excessiveKeyUpdates:
                 .unexpectedMessage
             case .duplicateExtension, .extensionNotPermitted, .preSharedKeyNotLast,
                 .illegalParameter, .invalidKeyUpdate:

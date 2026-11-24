@@ -156,6 +156,22 @@ public struct CacheMiddleware: HTTPMiddleware {
         else {
             return nil
         }
+        // RFC 9111 §3.5: a shared cache MUST NOT store a response to a request carrying
+        // `Authorization` unless the response explicitly permits shared caching (`public`,
+        // `s-maxage`, or `must-revalidate`) — prevents cross-user authenticated response leakage.
+        if request.headerFields.contains(.authorization) {
+            guard directives.isPublic || directives.sharedMaxAge != nil || directives.mustRevalidate
+            else {
+                return nil
+            }
+        }
+        // A response issuing `Set-Cookie` is user-specific unless explicitly marked `public` or
+        // `s-maxage` — refusing by default closes session-cookie cache-poisoning/hijack leaks.
+        if response.head.headerFields.contains(.setCookie),
+            !directives.isPublic, directives.sharedMaxAge == nil
+        {
+            return nil
+        }
         guard let varyNames = varyFields(response) else {
             return nil  // Vary: * — uncacheable (RFC 9111 §4.1)
         }

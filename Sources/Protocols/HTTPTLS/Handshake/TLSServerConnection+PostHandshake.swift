@@ -62,12 +62,18 @@ extension TLSServerConnection {
         }
     }
 
-    /// §4.6.3: the peer's KeyUpdate — ratchet our read; answer (then ratchet write) when
-    /// `update_requested`.
+    /// §4.6.3: the peer's KeyUpdate — ratchet our read; answer (then ratchet write) when requested.
+    ///
+    /// Bounds consecutive peer KeyUpdates without application data so an attacker cannot burn CPU
+    /// with an infinite HKDF ratchet / reply flood.
     mutating func processKeyUpdate(
         _ message: TLSHandshakeCoalescer.Message
     ) throws(TLSHandshakeError) {
         let update = try TLSKeyUpdateMessage.parse(message)
+        consecutivePeerKeyUpdates += 1
+        guard consecutivePeerKeyUpdates <= configuration.maxConsecutivePeerKeyUpdates else {
+            throw .excessiveKeyUpdates
+        }
         do {
             try record.ratchetReadKeys()  // the peer already switched (§7.2)
         }

@@ -19,6 +19,8 @@ struct CacheControl {
     var noStore = false
     var noCache = false
     var isPrivate = false
+    var isPublic = false
+    var mustRevalidate = false
     var maxAge: Int?
     var sharedMaxAge: Int?
 
@@ -42,6 +44,10 @@ struct CacheControl {
                     noCache = true
                 case "private":
                     isPrivate = true
+                case "public":
+                    isPublic = true
+                case "must-revalidate":
+                    mustRevalidate = true
                 case "max-age":
                     maxAge = argument.flatMap { Self.deltaSeconds($0) }
                 case "s-maxage":

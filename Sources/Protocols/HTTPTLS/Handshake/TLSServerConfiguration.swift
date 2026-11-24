@@ -80,6 +80,9 @@ public struct TLSServerConfiguration: Sendable {
     public var maxEarlyDataSkipOctets = 65_536
     /// The handshake-message reassembly cap (flood protection; certificate chains bound it).
     public var maxHandshakeMessageLength = 131_072
+    /// Maximum consecutive peer `KeyUpdate` messages permitted without intervening application
+    /// data (RFC 8446 §4.6.3 flood protection — CVE-2023-24531 class).
+    public var maxConsecutivePeerKeyUpdates = 32
     /// The wall clock (seconds) for ticket lifetimes — injectable for tests.
     public var now: @Sendable () -> UInt64 = {
         UInt64(Date().timeIntervalSince1970.rounded(.down))

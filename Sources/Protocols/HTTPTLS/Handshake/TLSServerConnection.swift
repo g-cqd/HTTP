@@ -87,6 +87,10 @@ public struct TLSServerConnection {
     var clientCertificateChain: [[UInt8]] = []
     /// The §4.6.1 `ticket_nonce` counter ("MUST be unique per ticket on this connection").
     var ticketNonceCounter: UInt64 = 0
+    /// The peer's consecutive KeyUpdate flood counter (RFC 8446 §4.6.3 / CVE-2023-24531 class).
+    ///
+    /// Incremented on every peer KeyUpdate and reset whenever application data arrives.
+    var consecutivePeerKeyUpdates = 0
     /// Whether a KeyUpdate with `update_requested` is outstanding (§4.6.3, from our side).
     var requestedPeerKeyUpdate = false
     /// Trailing partial-record octets awaiting the next feed (the splitter's buffer,
@@ -377,6 +381,7 @@ public struct TLSServerConnection {
                     throw .record(.unexpectedProtectedRecord(.applicationData))
                 }
                 if !content.isEmpty {
+                    consecutivePeerKeyUpdates = 0
                     events.append(.applicationData(content))  // empty = padding, dropped
                 }
             case .alert(let alert):

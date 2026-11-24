@@ -58,6 +58,7 @@ let strictSwiftSettings: [SwiftSetting] = [
 //
 // Adding a target here is a one-line change once its count hits 0 — that is the whole point of staging.
 let strictMemorySafeTargets: Set<String> = [
+    "AemiHTTP",  // umbrella re-export; 0 unsafe sites
     "HTTPCore",  // graduated to 0 un-annotated unsafe sites
     "HTTPConcurrency",  // re-exports AemiRuntime; 0 unsafe sites
     "HTTPTestSupport",  // re-exports AemiTestKit; 0 unsafe sites
@@ -256,6 +257,7 @@ let package = Package(
         .iOS(.v18)  // floor per CLAUDE.md
     ],
     products: [
+        .library(name: "AemiHTTP", targets: ["AemiHTTP"]),
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
         .library(name: "HTTPConcurrency", targets: ["HTTPConcurrency"]),
         .library(name: "HTTPDeflate", targets: ["HTTPDeflate"]),
@@ -642,6 +644,20 @@ let package = Package(
         // The runnable example server — the executable deliverable. Selects a transport backbone,
         // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with
         // `swift run httpd-example [port] [backbone]` and `curl --http1.1`.
+        .target(
+            name: "AemiHTTP",
+            dependencies: [
+                "HTTPCore",
+                "HTTPConcurrency",
+                "HTTP1",
+                "HTTP2",
+                "HTTP3",
+                "WebSocket",
+                "HTTPTransport",
+                "HTTPServer"
+            ],
+            path: "Sources/AemiHTTP"
+        ),
         .executableTarget(
             name: "httpd-example",
             dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport", "WebSocket"],

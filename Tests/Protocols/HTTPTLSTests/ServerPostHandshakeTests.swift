@@ -62,6 +62,19 @@ struct ServerPostHandshakeTests {
         #expect(dataEvents == [.applicationData(payload)])
     }
 
+    @Test(
+        "consecutive peer KeyUpdate flood without application data aborts with excessiveKeyUpdates")
+    func peerKeyUpdateFloodAborts() async throws {
+        var (server, client) = try await Self.connectedPair()
+        // Default cap is 32 consecutive peer KeyUpdates without application data.
+        for _ in 0 ..< 32 {
+            _ = try await server.receive(try client.keyUpdateRecord(requesting: false))
+        }
+        await #expect(throws: TLSHandshakeError.excessiveKeyUpdates) {
+            _ = try await server.receive(try client.keyUpdateRecord(requesting: false))
+        }
+    }
+
     @Test("requestKeyUpdate rekeys the write direction under §4.6.3's ordering")
     func serverInitiatedKeyUpdate() async throws {
         var (server, client) = try await Self.connectedPair()

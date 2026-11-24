@@ -45,9 +45,16 @@ public enum RequestParser {
         )
         let headerFields = try HeaderParser.parse(&reader, limits: limits)
 
-        // RFC 9110 §7.2: an HTTP/1.1 request MUST carry exactly one valid Host.
-        if requestLine.version == .http11, headerFields.count(for: .host) != 1 {
-            throw .invalidHost
+        // RFC 9110 §7.2: an HTTP/1.1 request MUST carry exactly one syntactically valid Host
+        // (free of whitespace/userinfo/path delimiters, closing Host-header injection & cache
+        // poisoning vectors).
+        if requestLine.version == .http11 {
+            guard headerFields.count(for: .host) == 1,
+                let host = headerFields[.host],
+                isValidHostValue(host)
+            else {
+                throw .invalidHost
+            }
         }
 
         let framing = try resolveFraming(headerFields, version: requestLine.version, limits: limits)

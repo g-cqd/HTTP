@@ -468,7 +468,10 @@ public struct HTTP2Connection {
                     "a client must not send PUSH_PROMISE (RFC 9113 §8.4)"
                 )
             default:
-                break  // unknown frame types MUST be ignored (RFC 9113 §4.1)
+                // Unknown frame types MUST be ignored (RFC 9113 §4.1), but charging them against
+                // the control-frame budget prevents an unthrottled unknown-frame CPU flood
+                // (CVE-2019-9518 / unknown-frame flood class).
+                try chargeControlFrame()
         }
     }
 
