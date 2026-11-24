@@ -231,7 +231,7 @@ func aemiDependency() -> Package.Dependency {
     }
     return .package(
         url: "https://github.com/Aemi-Studio/aemi.git",
-        revision: "4b4cbb8fafe5aa2cf0f79635f40584c8d47d53c1"
+        revision: "a3b4df61db280eb153ded454a1e22a367bbab3fc"
     )
 }
 
@@ -397,10 +397,6 @@ let package = Package(
             dependencies: ["HTTPConcurrency", "HTTPTestSupport"],
             path: "Tests/Core/HTTPConcurrencyTests"
         ),
-        // A tiny C shim exposing process-wide heap-allocation counting (Darwin's `malloc_logger`
-        // hook; a no-op elsewhere), backing the `expectAllocations` zero-allocation perf guard.
-        // Test/tooling-only; never shipped in an app binary. No dependencies, default C settings.
-        .target(name: "CHTTPTestMalloc", path: "Sources/Core/CHTTPTestMalloc"),
         // The RFC 8878 `zstd` content coding shim over the system libzstd (Apple's Compression
         // framework has no Zstandard codec, on any platform). Opt-in via the `Zstd` package trait:
         // the target is always DECLARED (a trait cannot conditionally declare one — see the traits
@@ -436,7 +432,7 @@ let package = Package(
                 "HTTPCore",
                 "HTTPConcurrency",
                 "HTTPTransport",
-                "CHTTPTestMalloc",
+                .product(name: "AemiTestKit", package: "aemi"),
                 .product(name: "HeapModule", package: "swift-collections")
             ],
             path: "Sources/Testing/HTTPTestSupport"
@@ -708,7 +704,7 @@ let package = Package(
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
 let nonSwiftTargets: Set<String> = [
-    "CHTTPTestMalloc", "CEpoll", "CZstd", "CBrotli"
+    "CEpoll", "CZstd", "CBrotli"
 ]
 
 for target in package.targets where !nonSwiftTargets.contains(target.name) {

@@ -16,7 +16,6 @@ Sources/HTTPAuth/JWT.swift	@unchecked Sendable	1
 Sources/Server/HTTPServer/ForwardingByteBudget.swift	@unchecked Sendable	1
 Sources/Server/HTTPServer/ForwardingByteBudget.swift	nonisolated(unsafe)	1
 Sources/Server/HTTPServer/RequestContext.swift	@unchecked Sendable	1
-Sources/Testing/HTTPTestSupport/ConstrainedStack.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/Network/NetworkFrameworkConnection.swift	@unchecked Sendable	1
 Sources/Transport/HTTPTransport/Network/NetworkFrameworkTLS.swift	nonisolated(unsafe)	1
 Sources/Transport/HTTPTransport/Network/NetworkFrameworkTLS.swift	unsafeDowncast	1
