@@ -18,6 +18,7 @@
 //
 
 import HTTP2
+import HTTPConcurrency
 import HTTPCore
 import HTTPTestSupport
 import HTTPTransport

@@ -94,6 +94,28 @@ actor BoundedByteChannel {
 
     private var producerWaiter: CheckedContinuation<Void, Never>?
     private var consumerWaiter: CheckedContinuation<Item, Never>?
+    private var producerParkObservers: [CheckedContinuation<Void, Never>] = []
+    private var consumerParkObservers: [CheckedContinuation<Void, Never>] = []
+
+    /// Suspends until a producer is parked in `send(_:)`, or returns immediately if terminated.
+    ///
+    /// Deterministic replacement for `Task.yield()` spins in backpressure/cancellation tests.
+    func waitForParkedProducer() async {
+        if producerWaiter != nil || terminal != nil {
+            return
+        }
+        await withCheckedContinuation { producerParkObservers.append($0) }
+    }
+
+    /// Suspends until a consumer is parked in `next()`, or returns immediately if terminated.
+    ///
+    /// Deterministic replacement for `Task.yield()` spins in cancellation/handoff tests.
+    func waitForParkedConsumer() async {
+        if consumerWaiter != nil || terminal != nil {
+            return
+        }
+        await withCheckedContinuation { consumerParkObservers.append($0) }
+    }
 
     /// Creates a channel bounded by both a byte watermark pair and a hard chunk cap.
     ///
@@ -203,6 +225,11 @@ actor BoundedByteChannel {
                 }
                 else {
                     consumerWaiter = continuation
+                    let observers = consumerParkObservers
+                    consumerParkObservers.removeAll(keepingCapacity: true)
+                    for observer in observers {
+                        observer.resume()
+                    }
                 }
             }
         } onCancel: {
@@ -295,6 +322,11 @@ actor BoundedByteChannel {
                 }
                 else {
                     producerWaiter = continuation
+                    let observers = producerParkObservers
+                    producerParkObservers.removeAll(keepingCapacity: true)
+                    for observer in observers {
+                        observer.resume()
+                    }
                 }
             }
         } onCancel: {
@@ -338,6 +370,16 @@ actor BoundedByteChannel {
         if let producer = producerWaiter {
             producerWaiter = nil
             producer.resume()
+        }
+        let pObservers = producerParkObservers
+        producerParkObservers.removeAll(keepingCapacity: true)
+        for observer in pObservers {
+            observer.resume()
+        }
+        let cObservers = consumerParkObservers
+        consumerParkObservers.removeAll(keepingCapacity: true)
+        for observer in cObservers {
+            observer.resume()
         }
     }
 }

@@ -14,6 +14,7 @@
 //  the earlier deadline. No wall-clock timing participates in the assertion.
 //
 
+import HTTPConcurrency
 import HTTPCore
 import HTTPTestSupport
 import HTTPTransport
@@ -81,9 +82,11 @@ struct DeadlineRearmTests {
         try await clock.waitForSleepers(atLeast: 1)
 
         // Progress: the read landed, so the budget is pushed out. Nothing may fire at the old target.
+        // Wait for the watchdog to re-park on the new 60s target via TestClock's registration barrier
+        // rather than a wall-clock sleep / Task.yield spin.
         wheel.arm(handle, until: server.deadlineKey(after: .seconds(60)))
         clock.advance(by: .seconds(30))
-        try await Self.settle()
+        try await clock.waitForSleepers(atLeast: 1)
         #expect(lapses.isEmpty, "a pushed-out deadline fired at its old target")
 
         clock.advance(by: .seconds(30))
@@ -182,13 +185,5 @@ struct DeadlineRearmTests {
             limits: limits,
             clock: clock
         )
-    }
-
-    /// Lets any pending watchdog turn run, so "nothing fired" is a claim about a settled system.
-    private static func settle() async throws {
-        for _ in 0 ..< 20 {
-            await Task.yield()
-        }
-        try await Task.sleep(for: .milliseconds(20))
     }
 }

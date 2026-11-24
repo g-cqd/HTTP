@@ -1,3 +1,5 @@
+internal import HTTPConcurrency
+
 //
 //  HTTPServer+DeadlineClock.swift
 //  HTTPServer

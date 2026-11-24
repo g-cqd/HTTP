@@ -11,6 +11,7 @@
 //  256 MiB existing anywhere — including in the harness, which would otherwise mask the regression.
 //
 
+import HTTPConcurrency
 import HTTPCore
 import HTTPTestSupport
 import HTTPTransport

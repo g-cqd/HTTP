@@ -16,6 +16,7 @@
 //  is empty, and the wheel resumes it whenever an arm moves the minimum earlier.
 //
 
+internal import HTTPConcurrency
 internal import HTTPTransport
 
 extension HTTPServer {

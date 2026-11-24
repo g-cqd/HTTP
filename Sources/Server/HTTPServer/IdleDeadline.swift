@@ -1,3 +1,5 @@
+internal import HTTPConcurrency
+
 //
 //  IdleDeadline.swift
 //  HTTPServer

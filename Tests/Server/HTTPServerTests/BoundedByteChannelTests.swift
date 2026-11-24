@@ -129,7 +129,7 @@ struct BoundedByteChannelTests {
             await channel.send([5, 6, 7, 8])  // parks: over both watermarks
             await channel.send([9])
         }
-        await Task.yield()
+        await channel.waitForParkedProducer()
         await channel.abandon()
         await producer.value  // completes rather than hanging
         #expect(await channel.next() == .aborted)
@@ -139,7 +139,7 @@ struct BoundedByteChannelTests {
     func cancelledConsumerResumes() async {
         let channel = channel()
         let consumer = Task { await channel.next() }
-        await Task.yield()
+        await channel.waitForParkedConsumer()
         consumer.cancel()
         #expect(await consumer.value == .aborted)
     }
@@ -151,7 +151,7 @@ struct BoundedByteChannelTests {
             await channel.send([1, 2, 3, 4])
             await channel.send([5, 6, 7, 8])  // parks
         }
-        await Task.yield()
+        await channel.waitForParkedProducer()
         producer.cancel()
         await producer.value  // completes rather than hanging
     }
@@ -160,7 +160,7 @@ struct BoundedByteChannelTests {
     func parkedConsumerWakesOnSend() async {
         let channel = channel()
         let consumer = Task { await channel.next() }
-        await Task.yield()
+        await channel.waitForParkedConsumer()
         await channel.send([42])
         #expect(await consumer.value == .chunk([42]))
     }

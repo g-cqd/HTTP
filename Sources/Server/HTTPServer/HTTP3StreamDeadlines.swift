@@ -22,6 +22,7 @@
 //  Standards: RFC 9114 §4.1, §8.1; CWE-400 (uncontrolled resource consumption).
 //
 
+internal import HTTPConcurrency
 internal import HTTPCore
 internal import Synchronization
 

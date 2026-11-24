@@ -231,7 +231,7 @@ func aemiDependency() -> Package.Dependency {
     }
     return .package(
         url: "https://github.com/Aemi-Studio/aemi.git",
-        revision: "b7e891bc35cd1a832b8e08b6c97c7f1a4e7b136e"
+        revision: "4b4cbb8fafe5aa2cf0f79635f40584c8d47d53c1"
     )
 }
 
@@ -381,11 +381,15 @@ let package = Package(
             dependencies: ["HTTPDeflate", "HTTPCore", "HTTPTestSupport"],
             path: "Tests/Core/HTTPDeflateTests"
         ),
-        // Shipped-safe concurrency seams: the `TaskProvider` (so untracked `Task { }` spawns become
-        // injectable + settle-able) and the `MonotonicNowProvider` (so the HTTP/2 Rapid Reset window
-        // is deterministically pinnable). Zero external dependencies, no I/O — reuse-safe.
+        // Concurrency & timer seams backed by `AemiRuntime` (`DeadlineWheel`, `ShardedMutex`,
+        // `BoundedLRU`, `SharedBoundedLRU`, `AsyncExclusion`, `RollingWindow`, `LiveClock`).
+        // Re-exports `AemiRuntime` and preserves the `HTTPConcurrency` module surface (`TaskProvider`,
+        // `LiveTaskProvider`, `MonotonicNowProvider`, `LiveMonotonicClock`) for existing callers.
         .target(
             name: "HTTPConcurrency",
+            dependencies: [
+                .product(name: "AemiRuntime", package: "aemi")
+            ],
             path: "Sources/Core/HTTPConcurrency"
         ),
         .testTarget(

@@ -9,6 +9,7 @@
 
 internal import HTTP1
 internal import HTTP2
+internal import HTTPConcurrency
 public import HTTPCore
 public import HTTPTransport
 internal import Synchronization

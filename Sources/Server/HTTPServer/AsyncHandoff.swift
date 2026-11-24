@@ -25,6 +25,17 @@ actor AsyncHandoff {
     private var closed: Item?
     private var producerWaiter: CheckedContinuation<Void, Never>?
     private var consumerWaiter: CheckedContinuation<Item, Never>?
+    private var consumerParkObservers: [CheckedContinuation<Void, Never>] = []
+
+    /// Suspends until a consumer is parked inside `next()`, or returns immediately if closed.
+    ///
+    /// Replaces `Task.yield()` timing assumptions in deterministic tests.
+    func waitForParkedConsumer() async {
+        if consumerWaiter != nil || closed != nil {
+            return
+        }
+        await withCheckedContinuation { consumerParkObservers.append($0) }
+    }
 
     /// Producer: offer a body chunk, suspending until the consumer takes it (or the handoff closes).
     func offer(_ chunk: [UInt8]) async {
@@ -91,6 +102,11 @@ actor AsyncHandoff {
                 }
                 else {
                     consumerWaiter = continuation
+                    let observers = consumerParkObservers
+                    consumerParkObservers.removeAll(keepingCapacity: true)
+                    for observer in observers {
+                        observer.resume()
+                    }
                 }
             }
         } onCancel: {
@@ -121,6 +137,11 @@ actor AsyncHandoff {
         if let producer = producerWaiter {
             producerWaiter = nil
             producer.resume()
+        }
+        let observers = consumerParkObservers
+        consumerParkObservers.removeAll(keepingCapacity: true)
+        for observer in observers {
+            observer.resume()
         }
     }
 }

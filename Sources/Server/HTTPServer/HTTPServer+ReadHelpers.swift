@@ -8,6 +8,7 @@
 //
 
 internal import HTTP1
+internal import HTTPConcurrency
 internal import HTTPCore
 internal import HTTPTransport
 

@@ -39,7 +39,7 @@ struct AsyncHandoffTests {
     func consumerParksThenWakes() async {
         let handoff = AsyncHandoff()
         let consumer = Task { await handoff.next() }
-        await Task.yield()
+        await handoff.waitForParkedConsumer()
         await handoff.offer([42])
         #expect(await consumer.value == .chunk([42]))
     }
