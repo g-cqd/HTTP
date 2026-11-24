@@ -23,7 +23,6 @@
 HTTPTransport	146	11
 HTTPCore	63	0
 HTTPServer	63	3
-HTTPTestSupport	50	0
 HTTP1	23	0
 HTTP2	21	0
 WebSocket	11	0

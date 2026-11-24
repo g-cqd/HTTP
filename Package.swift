@@ -58,7 +58,8 @@ let strictSwiftSettings: [SwiftSetting] = [
 //
 // Adding a target here is a one-line change once its count hits 0 — that is the whole point of staging.
 let strictMemorySafeTargets: Set<String> = [
-    "HTTPConcurrency",  // 1 site annotated (the CLOCK_MONOTONIC read)
+    "HTTPConcurrency",  // re-exports AemiRuntime; 0 unsafe sites
+    "HTTPTestSupport",  // re-exports AemiTestKit; 0 unsafe sites
     "HPACK",  // 2 sites annotated (RFC 7541 §5.2 string materialization)
     "QPACK",  // 2 sites annotated (RFC 9204 §4.1.2 string materialization)
     "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
@@ -280,11 +281,6 @@ let package = Package(
         // apple/swift-system — typed, SwiftNIO-free wrappers over POSIX file/socket descriptors,
         // used only by the swift-system transport backbone. Zero external dependencies of its own.
         .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
-        // apple/swift-collections — `HeapModule` (the deadline-ordered priority queue behind the
-        // deterministic `TestClock` / `AsyncEventProbe`). Linked ONLY by the test-only
-        // `HTTPTestSupport` target, so it never enters a downstream consumer's resolved graph. Empty
-        // transitive dependency graph; allowed by CLAUDE.md (apple/*).
-        .package(url: "https://github.com/apple/swift-collections.git", from: "1.7.3"),
         // Observability bridges (gap G1) — resolved ONLY by the isolated `HTTPObservability` module,
         // never by a core/protocol/transport/server target, so a consumer of the bare server never pulls
         // them in. All are apple/* (per the dependency policy). swift-metrics records into the module's
@@ -421,19 +417,16 @@ let package = Package(
             libraries: ["brotlienc", "brotlidec", "brotlicommon"],
             prefix: brotliPrefix
         ),
-        // Test-only support: the deterministic async toolkit ported from ADTestKit (TestClock,
-        // AsyncEventProbe, AsyncGate, ThreadGate) plus shared fakes, seeded fuzzing,
-        // constrained-stack recursion guards, oracles, and the allocation counter. Linked by every
-        // test target. Depends on apple/swift-collections (HeapModule) — confined here, so it never
-        // reaches a downstream consumer's graph.
+        // Test-only support: re-exports `AemiTestKit` (`TestClock`, `AsyncEventProbe`, `AsyncGate`,
+        // `ThreadGate`, `ConstrainedStack`, `DepthSweep`, `SeededRNG`, `ByteMutator`, `Allocations`)
+        // plus HTTP-specific fakes, oracles, and real-network permit helpers.
         .target(
             name: "HTTPTestSupport",
             dependencies: [
                 "HTTPCore",
                 "HTTPConcurrency",
                 "HTTPTransport",
-                .product(name: "AemiTestKit", package: "aemi"),
-                .product(name: "HeapModule", package: "swift-collections")
+                .product(name: "AemiTestKit", package: "aemi")
             ],
             path: "Sources/Testing/HTTPTestSupport"
         ),

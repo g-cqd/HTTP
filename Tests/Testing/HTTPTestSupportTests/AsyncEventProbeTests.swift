@@ -36,9 +36,10 @@ struct AsyncEventProbeTests {
     func `wait times out deterministically under a TestClock with zero real time`() async throws {
         let clock = TestClock()
         let probe = AsyncEventProbe<Int>()
-        // Advance only once the timeout sleeper has registered — no Task.yield spin.
+        // `AsyncEventProbe` registers its harness timeout as an *untracked* sleeper on `TestClock`
+        // so it never perturbs SUT `waitForSleepers` counts. Wait for that untracked sleeper.
         let advancer = Task {
-            try await clock.waitForSleepers(atLeast: 1)
+            try await clock.waitForUntrackedSleepers(atLeast: 1)
             clock.advance(by: .seconds(5))
         }
         await #expect(throws: AsyncEventProbeTimeoutError.self) {
@@ -54,8 +55,8 @@ struct AsyncEventProbeTests {
         let waiter = Task {
             try await probe.wait(forAtLeast: 5, within: .seconds(60), clock: clock)
         }
-        // The wait's timeout branch parks on the clock; once it has, cancel.
-        try await clock.waitForSleepers(atLeast: 1)
+        // The wait's timeout branch parks as an untracked sleeper on the clock; once it has, cancel.
+        try await clock.waitForUntrackedSleepers(atLeast: 1)
         waiter.cancel()
         await #expect(throws: CancellationError.self) { _ = try await waiter.value }
     }
