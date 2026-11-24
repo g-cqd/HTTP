@@ -3,9 +3,10 @@
 //  HTTP1
 //
 //  RFC 9112 §3 — parses the request-line. Iterative and zero-copy: it reads byte ranges from a
-//  `ByteReader` and materializes owned strings only for the parsed components.
+//  `HTTPCore.ByteReader` and materializes owned strings only for the parsed components.
 //
 
+internal import AemiKernel
 public import HTTPCore
 
 /// Parses the HTTP/1.1 request-line (RFC 9112 §3).
@@ -18,7 +19,7 @@ public enum RequestLineParser {
     /// terminating CRLF and rejecting a line longer than `maxLength`, or throws the specific
     /// ``HTTP1ParseError``.
     public static func parse(
-        _ reader: inout ByteReader,
+        _ reader: inout HTTPCore.ByteReader,
         maxLength: Int = .max
     ) throws(HTTP1ParseError) -> RequestLine {
         let start = reader.position
@@ -55,7 +56,7 @@ public enum RequestLineParser {
         }
         var index = 0
         while index < count {
-            let byte = target.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+            let byte = target.loadU8(index)
             guard byte > 0x20, byte != 0x7F else {
                 return false
             }  // reject CTL, SP, and DEL

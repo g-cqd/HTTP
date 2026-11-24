@@ -201,7 +201,7 @@ extension HTTP3Connection {
         // This stream's bytes are still counted in the table's running total (its record is unchanged
         // until the write-back below), so capture them now to net them out of the cross-stream sum.
         let bufferedBeforeAppend = state.body.count
-        payload.withUnsafeBytes { state.body.append(contentsOf: $0) }
+        payload.withUnsafeBytes { unsafe state.body.append(contentsOf: $0) }
         // A tunnel stream's DATA is opaque WebSocket bytes (RFC 9220), drained each receive batch as
         // `tunnelData` rather than a request body, so the request-body / content-length bounds do not
         // apply here (the WebSocket engine's own `maxMessageSize` governs message size downstream).
@@ -387,7 +387,7 @@ extension HTTP3Connection {
         }
         // The ONE copy on this path that has to exist: a blocked section outlives the borrow by
         // definition — it is held until the encoder stream delivers the inserts it references.
-        state.blockedSection = (payload.withUnsafeBytes { Array($0) }, requiredInsertCount)
+        state.blockedSection = (payload.withUnsafeBytes { unsafe Array($0) }, requiredInsertCount)
         streams[streamID] = state
     }
 
@@ -430,7 +430,7 @@ extension HTTP3Connection {
             return
         }
         let decoded: Result<[HeaderField], HTTP3Error> = blocked.payload.withUnsafeBytes { raw in
-            Result { () throws(HTTP3Error) in try decodeFieldSection(raw.bytes) }
+            Result { () throws(HTTP3Error) in try decodeFieldSection(unsafe raw.bytes) }
         }
         let fields = try decoded.get()
         acknowledgeSection(streamID)  // a blocked section always referenced the dynamic table

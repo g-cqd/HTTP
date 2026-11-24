@@ -30,8 +30,8 @@ struct IncrementalUTF8Validator {
     mutating func consume(_ bytes: some Sequence<UInt8>) -> Bool {
         // Contiguous input takes the SIMD ASCII-skip fast path; anything else uses the scalar loop.
         // Both carry the same cross-call state (`pending`/`nextLow`/`nextHigh`) and are result-identical.
-        if let result = bytes.withContiguousStorageIfAvailable({
-            buffer in consumeContiguous(buffer)
+        if let result = bytes.withContiguousStorageIfAvailable({ buffer in
+            unsafe consumeContiguous(buffer)
         }) {
             return result
         }
@@ -49,11 +49,16 @@ struct IncrementalUTF8Validator {
         var index = 0
         while index < count {
             if pending == 0 {
-                if buffer[index] < 0x80 {
-                    index += AemiKernels.firstNonASCII(base: base + index, count: count - index)
+                if unsafe buffer[index] < 0x80 {
+                    // Safety: `index < count`, so `base + index` points into `buffer` with
+                    // `count - index` valid readable bytes for the synchronous SIMD scan.
+                    index += unsafe AemiKernels.firstNonASCII(
+                        base: base + index,
+                        count: count - index
+                    )
                     if index >= count { break }
                 }
-                guard let sequence = Self.sequence(forLead: buffer[index]) else {
+                guard let sequence = Self.sequence(forLead: unsafe buffer[index]) else {
                     return false
                 }
                 pending = sequence.length - 1
@@ -62,7 +67,7 @@ struct IncrementalUTF8Validator {
                 index += 1
             }
             else {
-                let byte = buffer[index]
+                let byte = unsafe buffer[index]
                 guard byte >= nextLow, byte <= nextHigh else {
                     return false
                 }

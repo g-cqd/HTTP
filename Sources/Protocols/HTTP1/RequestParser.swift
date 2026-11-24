@@ -7,6 +7,7 @@
 //  (§6.1/§6.3) and the mandatory Host header (RFC 9110 §7.2).
 //
 
+internal import AemiKernel
 public import HTTPCore
 
 /// Parses a complete HTTP/1.1 request message (RFC 9112).
@@ -21,7 +22,7 @@ public enum RequestParser {
     /// *route-resolved* limit instead — resolution needs the parsed head, so the policy runs after
     /// ``parseHead(_:limits:)``, not inside it (Phase 1.2: a route cap replaces the global bound).
     public static func parse(
-        _ reader: inout ByteReader,
+        _ reader: inout HTTPCore.ByteReader,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> ParsedRequest {
         let head = try parseHead(&reader, limits: limits)
@@ -35,7 +36,7 @@ public enum RequestParser {
     /// Parses the request-line and header section (not the body), validating the mandatory Host and
     /// resolving the body framing (RFC 9112 §6) so the body can be read incrementally afterward.
     public static func parseHead(
-        _ reader: inout ByteReader,
+        _ reader: inout HTTPCore.ByteReader,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> RequestHead {
         let requestLine = try RequestLineParser.parse(
@@ -97,7 +98,7 @@ public enum RequestParser {
 
     /// Decodes the body for an already-resolved `framing` (RFC 9112 §6).
     private static func decodeBody(
-        _ reader: inout ByteReader,
+        _ reader: inout HTTPCore.ByteReader,
         framing: BodyFraming,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> [UInt8] {
@@ -108,7 +109,7 @@ public enum RequestParser {
                 guard reader.remaining >= length else { throw .incompleteBody }
                 let start = reader.position
                 reader.advance(by: length)
-                return reader.slice(in: start ..< (start + length)).withUnsafeBytes { Array($0) }
+                return reader.slice(in: start ..< (start + length)).copyBytes()
             case .chunked:
                 return try ChunkedDecoder.decode(&reader, limits: limits)
         }

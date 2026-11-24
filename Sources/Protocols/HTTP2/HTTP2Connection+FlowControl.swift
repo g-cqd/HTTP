@@ -18,6 +18,7 @@
 //  the stream count, or the route body limit does (ADR 0006).
 //
 
+internal import AemiKernel
 internal import HTTPCore
 
 extension HTTP2Connection {
@@ -65,7 +66,7 @@ extension HTTP2Connection {
             streams[streamID] = record
             if body.byteCount > 0 {
                 // The one copy that has to exist: the event outlives the borrowed buffer.
-                let bytes = body.withUnsafeBytes { Array($0) }
+                let bytes = body.copyBytes()
                 events.append(.tunnelData(streamID: streamID, bytes: bytes))
             }
             if endStream { events.append(.tunnelClosed(streamID: streamID)) }
@@ -99,7 +100,7 @@ extension HTTP2Connection {
                 "connection request-body buffer exceeds the limit"
             )
         }
-        body.withUnsafeBytes { record.body.append(contentsOf: $0) }
+        body.appendBytes(to: &record.body)
         consumeReceiveWindows(streamID, &record, by: length, endStream: endStream)
         streams[streamID] = record
         if endStream {
@@ -131,7 +132,7 @@ extension HTTP2Connection {
         if body.byteCount > 0 {
             // The one copy that has to exist: the chunk is handed to the driver and outlives the
             // borrowed inbound buffer. The engine no longer makes a second one before this.
-            let bytes = body.withUnsafeBytes { Array($0) }
+            let bytes = body.copyBytes()
             events.append(.requestBodyChunk(streamID: streamID, bytes: bytes))
         }
         if endStream {
@@ -150,7 +151,7 @@ extension HTTP2Connection {
         guard count > 0 else {
             throw .connection(.protocolError, "DATA pad length exceeds the payload")
         }
-        let padLength = Int(frame.payload.unsafeLoad(fromByteOffset: 0, as: UInt8.self))
+        let padLength = Int(frame.payload.loadU8(0))
         guard padLength < count else {
             throw .connection(.protocolError, "DATA pad length exceeds the payload")
         }
@@ -344,7 +345,7 @@ extension HTTP2Connection {
         }
         // The high bit is reserved; the increment is the low 31 bits (RFC 9113 §6.9.1).
         let increment = Int(
-            UInt32(bigEndian: frame.payload.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self))
+            frame.payload.loadBE32(0)
                 & 0x7FFF_FFFF
         )
         guard frame.header.streamID != .connection else {

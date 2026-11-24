@@ -48,7 +48,7 @@ enum Prefork {
     static func supervise(workers: Int) -> Never {
         // Children inherit this via fork(); execv() carries `environ`, so each worker sees it. Set
         // ONCE here in the parent (where it is safe), never between fork() and execv().
-        setenv("HTTPD_WORKER", "1", 1)
+        unsafe setenv("HTTPD_WORKER", "1", 1)
         installShutdownForwarding()
 
         var spawnedAt: [pid_t: UInt64] = [:]
@@ -62,7 +62,7 @@ enum Prefork {
 
         while true {
             var status: Int32 = 0
-            let dead = waitpid(-1, &status, 0)
+            let dead = unsafe waitpid(-1, &status, 0)
             guard dead > 0 else { continue }  // EINTR (a signal) or no children — retry
             let livedNanos = DispatchTime.now().uptimeNanoseconds - (spawnedAt[dead] ?? 0)
             spawnedAt[dead] = nil
@@ -86,11 +86,13 @@ enum Prefork {
     /// Uses `posix_spawn` (fork+exec, atomically), passing the current `environ` — which already
     /// carries `HTTPD_WORKER=1`, set once in the parent.
     private static func spawnWorker() -> pid_t {
-        guard let path = CommandLine.unsafeArgv[0] else {
+        guard let path = unsafe CommandLine.unsafeArgv[0] else {
             return -1
         }
         var pid: pid_t = 0
-        let result = posix_spawn(&pid, path, nil, nil, CommandLine.unsafeArgv, environ)
+        // Safety: `path`, `CommandLine.unsafeArgv`, and `environ` are immutable process-lifetime
+        // C strings/arrays; `posix_spawn` consumes them synchronously before returning.
+        let result = unsafe posix_spawn(&pid, path, nil, nil, CommandLine.unsafeArgv, environ)
         return result == 0 ? pid : -1
     }
 

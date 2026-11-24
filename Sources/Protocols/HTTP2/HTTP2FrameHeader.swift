@@ -12,9 +12,10 @@
 //    |R|                 Stream Identifier (31)                      |
 //    +=+=============================================================+
 //
-//  Parsing is zero-copy over a `ByteReader`; the reserved `R` bit is ignored on receipt (§4.1).
+//  Parsing is zero-copy over a `HTTPCore.ByteReader`; the reserved `R` bit is ignored on receipt (§4.1).
 //
 
+internal import AemiKernel
 public import HTTPCore
 
 /// The fixed 9-octet HTTP/2 frame header (RFC 9113 §4.1).
@@ -51,7 +52,7 @@ public struct HTTP2FrameHeader: Sendable, Equatable {
     ///
     /// The reserved high bit of the stream identifier is masked off, as a receiver MUST ignore it
     /// (RFC 9113 §4.1).
-    public static func parse(_ reader: inout ByteReader) -> Self? {
+    public static func parse(_ reader: inout HTTPCore.ByteReader) -> Self? {
         guard reader.remaining >= encodedLength else {
             return nil
         }
@@ -64,16 +65,12 @@ public struct HTTP2FrameHeader: Sendable, Equatable {
         // 24-bit Length and the Type (`length << 8 | type`); octets 5–8 carry the 31-bit Stream
         // Identifier (the reserved high bit is masked in HTTP2StreamID). Octet 4 (Flags) is the lone
         // byte load. The reserved `R` bit is ignored on receipt (RFC 9113 §4.1).
-        let lengthAndType = UInt32(
-            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self)
-        )
-        let streamRaw = UInt32(
-            bigEndian: octets.unsafeLoadUnaligned(fromByteOffset: 5, as: UInt32.self)
-        )
+        let lengthAndType = octets.loadBE32(0)
+        let streamRaw = octets.loadBE32(5)
         return Self(
             payloadLength: Int(lengthAndType >> 8),
             type: HTTP2FrameType(rawValue: UInt8(truncatingIfNeeded: lengthAndType)),
-            flags: HTTP2FrameFlags(rawValue: octets.unsafeLoad(fromByteOffset: 4, as: UInt8.self)),
+            flags: HTTP2FrameFlags(rawValue: octets.loadU8(4)),
             streamID: HTTP2StreamID(rawValue: streamRaw)
         )
     }

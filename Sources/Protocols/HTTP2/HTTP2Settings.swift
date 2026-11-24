@@ -1,3 +1,5 @@
+internal import AemiKernel
+
 //
 //  HTTP2Settings.swift
 //  HTTP2
@@ -47,13 +49,13 @@ public struct HTTP2Settings: Sendable, Equatable {
         var offset = 0
         while offset < payload.byteCount {
             let identifier =
-                UInt16(payload.unsafeLoad(fromByteOffset: offset, as: UInt8.self)) << 8
-                | UInt16(payload.unsafeLoad(fromByteOffset: offset + 1, as: UInt8.self))
+                UInt16(payload.loadU8(offset)) << 8
+                | UInt16(payload.loadU8(offset + 1))
             let value =
-                UInt32(payload.unsafeLoad(fromByteOffset: offset + 2, as: UInt8.self)) << 24
-                | UInt32(payload.unsafeLoad(fromByteOffset: offset + 3, as: UInt8.self)) << 16
-                | UInt32(payload.unsafeLoad(fromByteOffset: offset + 4, as: UInt8.self)) << 8
-                | UInt32(payload.unsafeLoad(fromByteOffset: offset + 5, as: UInt8.self))
+                UInt32(payload.loadU8(offset + 2)) << 24
+                | UInt32(payload.loadU8(offset + 3)) << 16
+                | UInt32(payload.loadU8(offset + 4)) << 8
+                | UInt32(payload.loadU8(offset + 5))
             try applyParameter(identifier: identifier, value: value)
             offset += Self.parameterLength
         }

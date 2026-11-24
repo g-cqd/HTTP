@@ -15,6 +15,7 @@
 //  between feeds (the streaming shape) is still bounded (CWE-409).
 //
 
+internal import AemiKernel
 public import HTTPCore
 
 /// A resumable decoder for the HTTP/1.1 chunked transfer-coding (RFC 9112 §7.1).
@@ -83,7 +84,7 @@ public enum ChunkedBodyDecoder {
     /// appended exactly once across feeds.
     @discardableResult
     public static func advance(
-        _ reader: inout ByteReader,
+        _ reader: inout HTTPCore.ByteReader,
         state: inout State,
         into body: inout [UInt8],
         limits: HTTPLimits
@@ -101,7 +102,10 @@ public enum ChunkedBodyDecoder {
     /// Returns `false` when more input is needed (resume on the next feed) and `true` when it made
     /// progress (loop again). Splitting the size and trailer arms into helpers keeps complexity low.
     private static func step(
-        _ reader: inout ByteReader, state: inout State, into body: inout [UInt8], limits: HTTPLimits
+        _ reader: inout HTTPCore.ByteReader,
+        state: inout State,
+        into body: inout [UInt8],
+        limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
         switch state.phase {
             case .complete:
@@ -128,7 +132,7 @@ public enum ChunkedBodyDecoder {
     }
 
     private static func stepSize(
-        _ reader: inout ByteReader, state: inout State, bodyCount: Int, limits: HTTPLimits
+        _ reader: inout HTTPCore.ByteReader, state: inout State, bodyCount: Int, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
         // A chunk-size line (size + optional chunk-ext) is bounded by `maxFieldSize`; the cumulative
         // chunk-ext budget is enforced separately in `beginChunk` once the whole line is in hand.
@@ -152,7 +156,7 @@ public enum ChunkedBodyDecoder {
     }
 
     private static func stepTrailers(
-        _ reader: inout ByteReader, state: inout State, limits: HTTPLimits
+        _ reader: inout HTTPCore.ByteReader, state: inout State, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> Bool {
         switch try consumeTrailer(&reader, state: &state, limits: limits) {
             case .needMore:
@@ -180,7 +184,7 @@ public enum ChunkedBodyDecoder {
     /// CRLF-less chunk-size / chunk-ext / trailer line cannot grow the inbound buffer without limit
     /// (audit F-CHUNKBUF; CWE-400/CWE-770).
     private static func readLine(
-        _ reader: inout ByteReader,
+        _ reader: inout HTTPCore.ByteReader,
         scanOffset: inout Int,
         maxLength: Int,
         ifTooLong error: HTTP1ParseError
@@ -226,7 +230,7 @@ public enum ChunkedBodyDecoder {
         var sawDigit = false
         var extStart = -1
         while index < count {
-            let byte = line.unsafeLoad(fromByteOffset: index, as: UInt8.self)
+            let byte = line.loadU8(index)
             if byte == semicolon {
                 extStart = index
                 break
@@ -262,20 +266,22 @@ public enum ChunkedBodyDecoder {
 
     /// Appends up to `remaining` available octets to `body`, returning how many were copied.
     private static func copyData(
-        _ reader: inout ByteReader, remaining: Int, into body: inout [UInt8]
+        _ reader: inout HTTPCore.ByteReader, remaining: Int, into body: inout [UInt8]
     ) -> Int {
         let take = min(remaining, reader.remaining)
         guard take > 0 else {
             return 0
         }
         let start = reader.position
-        reader.slice(in: start ..< (start + take)).withUnsafeBytes { body.append(contentsOf: $0) }
+        reader.slice(in: start ..< (start + take)).appendBytes(to: &body)
         reader.advance(by: take)
         return take
     }
 
     /// Consumes the CRLF that follows a chunk's data; returns `false` until both octets are present.
-    private static func consumeCRLF(_ reader: inout ByteReader) throws(HTTP1ParseError) -> Bool {
+    private static func consumeCRLF(
+        _ reader: inout HTTPCore.ByteReader
+    ) throws(HTTP1ParseError) -> Bool {
         guard reader.remaining >= 2 else {
             return false
         }
@@ -288,7 +294,7 @@ public enum ChunkedBodyDecoder {
 
     /// Consumes one trailer field-line (validating it) or the terminating empty line.
     private static func consumeTrailer(
-        _ reader: inout ByteReader, state: inout State, limits: HTTPLimits
+        _ reader: inout HTTPCore.ByteReader, state: inout State, limits: HTTPLimits
     ) throws(HTTP1ParseError) -> TrailerStep {
         // A single trailer field-line is bounded by `maxFieldSize`; the cumulative trailer-section size
         // is enforced separately below once each whole line is in hand.
@@ -318,13 +324,13 @@ public enum ChunkedBodyDecoder {
     /// reject obs-fold, require a `token` name before the colon, and a valid field-value after it.
     private static func validateTrailer(_ line: RawSpan) throws(HTTP1ParseError) {
         let count = line.byteCount
-        guard line.unsafeLoad(fromByteOffset: 0, as: UInt8.self) != space,
-            line.unsafeLoad(fromByteOffset: 0, as: UInt8.self) != htab
+        guard line.loadU8(0) != space,
+            line.loadU8(0) != htab
         else { throw .obsoleteLineFolding }
         var colonIndex = -1
         var index = 0
         while index < count {
-            if line.unsafeLoad(fromByteOffset: index, as: UInt8.self) == colon {
+            if line.loadU8(index) == colon {
                 colonIndex = index
                 break
             }
@@ -333,7 +339,7 @@ public enum ChunkedBodyDecoder {
         guard colonIndex > 0 else { throw .malformedChunk }  // no colon, or an empty field-name
         var name = 0
         while name < colonIndex {
-            guard FieldValidation.isTokenByte(line.unsafeLoad(fromByteOffset: name, as: UInt8.self))
+            guard FieldValidation.isTokenByte(line.loadU8(name))
             else { throw .invalidFieldName }
             name += 1
         }
@@ -341,7 +347,7 @@ public enum ChunkedBodyDecoder {
         while value < count {
             guard
                 FieldValidation.isFieldValueByte(
-                    line.unsafeLoad(fromByteOffset: value, as: UInt8.self)
+                    line.loadU8(value)
                 )
             else { throw .invalidFieldValue }
             value += 1

@@ -75,9 +75,9 @@ public struct WebSocketFrameDecoder {
         let payload = reader.slice(in: start ..< (start + payloadLength))
             .withUnsafeBytes { source in
                 if let maskKey {
-                    return Self.unmaskedCopy(of: source, with: maskKey)
+                    return unsafe Self.unmaskedCopy(of: source, with: maskKey)
                 }
-                return Array(source)
+                return unsafe Array(source)
             }
         return WebSocketFrame(isFinal: isFinal, rsv1: rsv1, opcode: opcode, payload: payload)
     }
@@ -150,13 +150,16 @@ public struct WebSocketFrameDecoder {
             | (UInt32(key.1) << 16)
             | (UInt32(key.2) << 8)
             | UInt32(key.3)
-        return [UInt8](unsafeUninitializedCapacity: count) { destination, initialized in
+        return unsafe [UInt8](unsafeUninitializedCapacity: count) { destination, initialized in
+            // Safety: `destination` owns `count` uninitialized bytes and `source` has `count` valid
+            // bytes for this synchronous closure; `initialize(from:count:)` fills all `count` bytes
+            // before `xorMask4` transforms them in place.
             if count > 0, let srcBase = source.baseAddress, let dstBase = destination.baseAddress {
-                dstBase.initialize(
+                unsafe dstBase.initialize(
                     from: srcBase.assumingMemoryBound(to: UInt8.self),
                     count: count
                 )
-                AemiKernels.xorMask4(dstBase, count: count, mask: packedMask)
+                unsafe AemiKernels.xorMask4(dstBase, count: count, mask: packedMask)
             }
             initialized = count
         }

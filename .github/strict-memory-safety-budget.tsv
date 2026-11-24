@@ -23,9 +23,4 @@
 HTTPTransport	146	11
 HTTPCore	63	0
 HTTPServer	63	3
-HTTP1	23	0
-HTTP2	21	0
-WebSocket	11	0
-HTTP3	8	0
-httpd-example	4	0
 HTTPAuth	0	1

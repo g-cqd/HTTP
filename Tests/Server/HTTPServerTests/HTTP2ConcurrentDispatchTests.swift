@@ -24,7 +24,7 @@ struct HTTP2ConcurrentDispatchTests {
     @Test(
         "a slow handler on one stream does not stall a sibling stream's response (TTFB ≈ 0)",
         .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
-    func slowHandlerDoesNotStallSibling() async {
+    func slowHandlerDoesNotStallSibling() async throws {
         let slowGate = AsyncGate()  // /slow blocks here until the test releases it
         let router = Router {
             Route.get("/slow") { _, _, _ in
@@ -45,12 +45,8 @@ struct HTTP2ConcurrentDispatchTests {
                 + Self.headers(streamID: 3, path: "/fast")
         )
 
-        // /fast (stream 3) must answer WHILE /slow (stream 1) is still gated — the proof there is no
-        // head-of-line blocking. The old single serve loop `await`ed /slow to completion before it ever
-        // reached /fast, so /fast's response would never appear here and the .timeLimit would fail.
-        while !Self.hasResponse(onStream: 3, in: await connection.sentBytes()), !Task.isCancelled {
-            await Task.yield()
-        }
+        // /fast (stream 3) must answer WHILE /slow (stream 1) is still gated — event-driven checkpoint.
+        try await connection.waitUntilSent { Self.hasResponse(onStream: 3, in: $0) }
         #expect(Self.hasResponse(onStream: 3, in: await connection.sentBytes()))
         // /slow has NOT answered yet — it is still parked on the gate (TTFB for /fast ≈ 0, not ≈ /slow's).
         #expect(!Self.hasResponse(onStream: 1, in: await connection.sentBytes()))
@@ -96,11 +92,8 @@ struct HTTP2ConcurrentDispatchTests {
         // Batch 2 — a genuinely SEPARATE `connection.feed`: HEADERS(stream 3 → /fast).
         await connection.feed(Self.headers(streamID: 3, path: "/fast"))
 
-        // /fast (stream 3, batch 2) must answer WHILE /slow (stream 1, batch 1) is still gated — proof
-        // the reader reached batch 2 and /fast was dispatched without waiting for batch 1's handler.
-        while !Self.hasResponse(onStream: 3, in: await connection.sentBytes()), !Task.isCancelled {
-            await Task.yield()
-        }
+        // /fast (stream 3, batch 2) must answer WHILE /slow (stream 1, batch 1) is still gated.
+        try await connection.waitUntilSent { Self.hasResponse(onStream: 3, in: $0) }
         #expect(Self.hasResponse(onStream: 3, in: await connection.sentBytes()))
         #expect(!Self.hasResponse(onStream: 1, in: await connection.sentBytes()))
 
@@ -164,15 +157,8 @@ struct HTTP2ConcurrentDispatchTests {
         // actually pulled+flushed it), so also poll for chunk1 to physically reach the wire before
         // treating /a's side as settled; both waits are deterministic checkpoints, not a timing guess.
         try await gateA.waitForWaiters(atLeast: 1)
-        while !Self.streamFinished(onStream: 3, in: await connection.sentBytes()), !Task.isCancelled
-        {
-            await Task.yield()
-        }
-        while Self.streamBody(onStream: 1, in: await connection.sentBytes()).isEmpty,
-            !Task.isCancelled
-        {
-            await Task.yield()
-        }
+        try await connection.waitUntilSent { Self.streamFinished(onStream: 3, in: $0) }
+        try await connection.waitUntilSent { !Self.streamBody(onStream: 1, in: $0).isEmpty }
         let midway = await connection.sentBytes()
         #expect(Self.streamFinished(onStream: 3, in: midway))
         #expect(Self.streamBody(onStream: 3, in: midway) == chunk1 + chunk2)

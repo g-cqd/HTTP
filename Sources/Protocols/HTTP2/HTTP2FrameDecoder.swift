@@ -8,6 +8,7 @@
 //  FRAME_SIZE_ERROR (§4.2). Iterative; no recursion.
 //
 
+internal import AemiKernel
 public import HTTPCore
 
 /// Pulls complete HTTP/2 frames from an accumulating byte buffer (RFC 9113 §4).
@@ -42,11 +43,11 @@ public struct HTTP2FrameDecoder {
     /// The OWNING half: it materializes the payload, so the frame outlives the buffer it came from.
     /// The connection engine uses ``nextFrameRange(_:)`` instead and never pays this copy; this entry
     /// point remains for callers that need an escaping value (tests, tools, out-of-module clients).
-    public func nextFrame(_ reader: inout ByteReader) throws(HTTP2Error) -> Frame? {
+    public func nextFrame(_ reader: inout HTTPCore.ByteReader) throws(HTTP2Error) -> Frame? {
         guard let framing = try nextFrameRange(&reader) else {
             return nil
         }
-        let payload = reader.slice(in: framing.payload).withUnsafeBytes { Array($0) }
+        let payload = reader.slice(in: framing.payload).copyBytes()
         return Frame(header: framing.header, payload: payload)
     }
 
@@ -56,10 +57,10 @@ public struct HTTP2FrameDecoder {
     ///
     /// The BORROWED half (audit CR-F18), and the implementation ``nextFrame(_:)`` copies from — so the
     /// two cannot disagree about where a frame starts or ends. The cursor advances identically; the
-    /// caller reads the payload in place via ``ByteReader/slice(in:)`` and materializes only what has
+    /// caller reads the payload in place via ``HTTPCore.ByteReader/slice(in:)`` and materializes only what has
     /// to outlive the borrow. Returns nil while a frame is still arriving, leaving the cursor put.
     func nextFrameRange(
-        _ reader: inout ByteReader
+        _ reader: inout HTTPCore.ByteReader
     ) throws(HTTP2Error) -> (header: HTTP2FrameHeader, payload: Range<Int>)? {
         // Probe on a copy so an incomplete frame leaves the real cursor untouched for a later retry.
         var probe = reader

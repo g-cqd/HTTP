@@ -312,7 +312,7 @@ public struct HTTP2Connection {
         let start = inboundStart  // read before the borrow, so nothing reads `self` inside it
         let result: Result<Bool, HTTP2Error> = inbound.withUnsafeBytes { raw in
             Result { () throws(HTTP2Error) in
-                var reader = ByteReader(raw, startingAt: start)
+                var reader = unsafe ByteReader(raw, startingAt: start)
                 return try HTTP2ConnectionPreface.consume(&reader) == .matched
             }
         }
@@ -350,7 +350,7 @@ public struct HTTP2Connection {
         let start = inboundStart
         let outcome: Result<Int, HTTP2Error> = buffer.withUnsafeBytes { raw in
             Result { () throws(HTTP2Error) in
-                var reader = ByteReader(raw, startingAt: start)
+                var reader = unsafe ByteReader(raw, startingAt: start)
                 // An index-based `while` over the cursor, never a `for-in` over a span-derived
                 // sequence: the shape every span-borrowing scan in the package uses (see
                 // `MultipartParser`), so the debug-build allocation oracles are not charged for
@@ -562,7 +562,7 @@ public struct HTTP2Connection {
 
     mutating func decodeHeaderBlock(_ block: [UInt8]) throws(HTTP2Error) -> [HPACKField] {
         let decoded: Result<[HPACKField], HPACKError> = block.withUnsafeBytes { raw in
-            Result { () throws(HPACKError) in try decoder.decode(raw.bytes) }
+            Result { () throws(HPACKError) in try decoder.decode(unsafe raw.bytes) }
         }
         switch decoded {
             case .success(let fields):

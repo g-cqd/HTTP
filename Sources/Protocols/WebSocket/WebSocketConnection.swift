@@ -345,7 +345,9 @@ public struct WebSocketConnection {
         let decoded: Result<(frames: [WebSocketFrame], consumed: Int), WebSocketError> =
             inbound.withUnsafeBytes { raw in
                 Result { () throws(WebSocketError) in
-                    var reader = ByteReader(raw)
+                    // Safety: `raw` borrows `inbound`'s backing buffer for the synchronous parse;
+                    // `ByteReader` does not escape this closure.
+                    var reader = unsafe ByteReader(raw)
                     var frames: [WebSocketFrame] = []
                     while let frame = try decoder.nextFrame(&reader) { frames.append(frame) }
                     return (frames, reader.position)

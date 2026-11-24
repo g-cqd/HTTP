@@ -24,6 +24,8 @@ actor ControllableConnection: UnleasedTransportConnection {
     private var inboundClosed = false
     private var sent: [UInt8] = []
     private let receiveReady = AsyncGate()
+    private var sendWaiters: [(CheckedContinuation<Void, any Error>, @Sendable ([UInt8]) -> Bool)] =
+        []
 
     init(id: TransportConnectionID = TransportConnectionID(1), alpn: String? = "h2") {
         self.id = id
@@ -47,11 +49,17 @@ actor ControllableConnection: UnleasedTransportConnection {
 
     func send(_ bytes: [UInt8]) async {
         sent.append(contentsOf: bytes)
+        wakeMatchingSendWaiters()
     }
 
     func close() {
         inboundClosed = true
         wakeReceive()
+        let pending = sendWaiters
+        sendWaiters.removeAll(keepingCapacity: true)
+        for (continuation, _) in pending {
+            continuation.resume(throwing: CancellationError())
+        }
     }
 
     // MARK: Test controls
@@ -71,6 +79,40 @@ actor ControllableConnection: UnleasedTransportConnection {
     /// All bytes the server has sent so far.
     func sentBytes() -> [UInt8] {
         sent
+    }
+
+    /// Suspends until `predicate(sentBytes)` holds (event-driven on `send`, zero `Task.yield()` spin).
+    func waitUntilSent(matching predicate: @escaping @Sendable ([UInt8]) -> Bool) async throws {
+        if predicate(sent) {
+            return
+        }
+        try await withCheckedThrowingContinuation { continuation in
+            if predicate(sent) {
+                continuation.resume()
+            }
+            else if inboundClosed {
+                continuation.resume(throwing: CancellationError())
+            }
+            else {
+                sendWaiters.append((continuation, predicate))
+            }
+        }
+    }
+
+    private func wakeMatchingSendWaiters() {
+        guard !sendWaiters.isEmpty else {
+            return
+        }
+        var remaining: [(CheckedContinuation<Void, any Error>, @Sendable ([UInt8]) -> Bool)] = []
+        for entry in sendWaiters {
+            if entry.1(sent) {
+                entry.0.resume()
+            }
+            else {
+                remaining.append(entry)
+            }
+        }
+        sendWaiters = remaining
     }
 
     /// Suspends until a receive is parked, so cancellation tests do not depend on scheduling.

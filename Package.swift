@@ -62,6 +62,11 @@ let strictMemorySafeTargets: Set<String> = [
     "HTTPTestSupport",  // re-exports AemiTestKit; 0 unsafe sites
     "HPACK",  // 2 sites annotated (RFC 7541 §5.2 string materialization)
     "QPACK",  // 2 sites annotated (RFC 9204 §4.1.2 string materialization)
+    "HTTP1",  // graduated to 0 un-annotated unsafe sites (via AemiKernel RawSpan helpers)
+    "HTTP2",  // graduated to 0 un-annotated unsafe sites (via AemiKernel RawSpan helpers)
+    "HTTP3",  // graduated to 0 un-annotated unsafe sites
+    "WebSocket",  // graduated to 0 un-annotated unsafe sites (SIMD xorMask4 + UTF-8 scan)
+    "httpd-example",  // graduated to 0 un-annotated unsafe sites (posix_spawn prefork)
     "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
     "HTTPAuth",  // already 0 — pure crypto/middleware over swift-crypto
     "HTTPDeflate",  // strict from birth (annotated sites only at the [UInt8] ⇄ Span seam)
@@ -232,7 +237,7 @@ func aemiDependency() -> Package.Dependency {
     }
     return .package(
         url: "https://github.com/Aemi-Studio/aemi.git",
-        revision: "a3b4df61db280eb153ded454a1e22a367bbab3fc"
+        revision: "3677558e609ccf671c2f90447d6e382d09e7fd45"
     )
 }
 
@@ -438,7 +443,10 @@ let package = Package(
         // RFC 9112 — the sans-I/O HTTP/1.1 message parser & serializer (no sockets, no recursion).
         .target(
             name: "HTTP1",
-            dependencies: ["HTTPCore"],
+            dependencies: [
+                "HTTPCore",
+                .product(name: "AemiKernel", package: "aemi")
+            ],
             path: "Sources/Protocols/HTTP1"
         ),
         .testTarget(
@@ -483,7 +491,12 @@ let package = Package(
         // receive-side flow control (advertising/replenishing the server's own inbound window).
         .target(
             name: "HTTP2",
-            dependencies: ["HTTPCore", "HPACK", "HTTPConcurrency"],
+            dependencies: [
+                "HTTPCore",
+                "HPACK",
+                "HTTPConcurrency",
+                .product(name: "AemiKernel", package: "aemi")
+            ],
             path: "Sources/Protocols/HTTP2"
         ),
         .testTarget(

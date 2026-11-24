@@ -1,3 +1,5 @@
+internal import AemiKernel
+
 //
 //  HTTP2HeadersFrame.swift
 //  HTTP2
@@ -34,7 +36,7 @@ public enum HTTP2HeadersFrame {
         try fieldBlockRange(
             count: payload.byteCount,
             padLength: payload.byteCount > 0
-                ? payload.unsafeLoad(fromByteOffset: 0, as: UInt8.self) : nil,
+                ? payload.loadU8(0) : nil,
             flags: flags
         )
     }
@@ -112,9 +114,7 @@ public enum HTTP2HeadersFrame {
         guard payload.byteCount >= offset + priorityFieldLength else {
             return nil
         }
-        let dependency = UInt32(
-            bigEndian: payload.unsafeLoadUnaligned(fromByteOffset: offset, as: UInt32.self)
-        )
+        let dependency = payload.loadBE32(offset)
         return HTTP2StreamID(rawValue: dependency & 0x7FFF_FFFF)
     }
 }

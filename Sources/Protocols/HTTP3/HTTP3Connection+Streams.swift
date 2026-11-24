@@ -43,7 +43,7 @@ extension HTTP3Connection {
             return nil
         }
         let decoded: (type: UInt64, consumed: Int)? = taken.buffer.withUnsafeBytes { raw in
-            var reader = ByteReader(raw, startingAt: taken.start)
+            var reader = unsafe ByteReader(raw, startingAt: taken.start)
             guard let type = QUICVarint.decode(&reader) else {
                 return nil
             }
@@ -222,7 +222,7 @@ extension HTTP3Connection {
                     // The instructions are applied straight out of the stream's buffer, from the read
                     // cursor — `applyEncoderInstructions` already takes a `RawSpan` (RFC 9204 §4.3).
                     try decoder.applyEncoderInstructions(
-                        raw.bytes.extracting(taken.start ..< taken.buffer.count)
+                        unsafe raw.bytes.extracting(taken.start ..< taken.buffer.count)
                     )
                 }
             }
@@ -261,7 +261,7 @@ extension HTTP3Connection {
                 // Read from the cursor, in place: `applyDecoderInstructions` already takes a
                 // `RawSpan` (RFC 9204 §4.4), so the buffer never needed shifting to be parsed.
                 try encoder.applyDecoderInstructions(
-                    raw.bytes.extracting(taken.start ..< taken.buffer.count)
+                    unsafe raw.bytes.extracting(taken.start ..< taken.buffer.count)
                 )
             }
         }
@@ -305,7 +305,7 @@ extension HTTP3Connection {
         }
         let outcome: Result<Int, HTTP3Error> = taken.buffer.withUnsafeBytes { raw in
             Result { () throws(HTTP3Error) in
-                var reader = ByteReader(raw, startingAt: taken.start)
+                var reader = unsafe ByteReader(raw, startingAt: taken.start)
                 // An index-based `while` over the cursor, never a `for-in` over a span-derived
                 // sequence: the shape every span-borrowing scan in the package uses (see
                 // `MultipartParser`), so the debug-build allocation oracles are not charged for

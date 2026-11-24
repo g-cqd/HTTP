@@ -66,11 +66,11 @@ extension HTTP2Connection {
             fragment.withUnsafeBytes { raw in
                 Result { () throws(HTTP2Error) in
                     guard continuing else {
-                        return try accumulator.begin(
+                        return try unsafe accumulator.begin(
                             streamID: streamID, fragment: raw, endHeaders: endHeaders
                         )
                     }
-                    return try accumulator.append(
+                    return try unsafe accumulator.append(
                         streamID: streamID, fragment: raw, endHeaders: endHeaders
                     )
                 }

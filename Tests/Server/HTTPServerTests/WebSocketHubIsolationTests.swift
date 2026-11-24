@@ -19,24 +19,6 @@ import WebSocket
 
 @testable import HTTPServer
 
-/// Spins until `condition` holds or the budget expires, yielding rather than blocking.
-///
-/// A bounded wait, not an unbounded one, so a regression *fails* instead of hanging a CI run — the
-/// pre-change hub deadlocks this scenario outright rather than merely slowing it down.
-private func waitUntil(
-    within budget: Duration = .seconds(5),
-    _ condition: @Sendable () -> Bool
-) async -> Bool {
-    let deadline = ContinuousClock.now.advanced(by: budget)
-    while ContinuousClock.now < deadline {
-        if condition() {
-            return true
-        }
-        await Task.yield()
-    }
-    return condition()
-}
-
 /// The deliver-outside-the-lock proof.
 ///
 /// Sink A parks inside the hub on a gate; a publish to an unrelated topic B, issued from another task,
@@ -46,23 +28,30 @@ private func waitUntil(
 func blockingSinkDoesNotSerializeAnUnrelatedPublish() async throws {
     let hub = WebSocketHub(shards: 1)
     let release = ThreadGate()
-    let parkedInside = Mutex(false)
-    let deliveredToB = Mutex(false)
+    let parkedInside = AsyncEventProbe<Int>(label: "sinkA.parked")
+    let deliveredToB = AsyncEventProbe<Int>(label: "sinkB.delivered")
     let parkingSink: WebSocketHub.Sink = { _ in
-        parkedInside.withLock { $0 = true }
+        parkedInside.record(1)
         release.waitUntilOpen()
     }
-    let recordingSink: WebSocketHub.Sink = { _ in deliveredToB.withLock { $0 = true } }
+    let recordingSink: WebSocketHub.Sink = { _ in deliveredToB.record(1) }
     let slow = try #require(hub.register(parkingSink))
     let fast = try #require(hub.register(recordingSink))
     hub.subscribe(slow, to: "a")
     hub.subscribe(fast, to: "b")
 
     let blocked = Task.detached { hub.publish(.text("wedged"), to: "a") }
-    #expect(await waitUntil { parkedInside.withLock(\.self) })
+    _ = try await parkedInside.wait(forAtLeast: 1, timeout: .seconds(5))
 
     let unrelated = Task.detached { hub.publish(.text("through"), to: "b") }
-    let arrived = await waitUntil { deliveredToB.withLock(\.self) }
+    let arrived: Bool
+    do {
+        _ = try await deliveredToB.wait(forAtLeast: 1, timeout: .seconds(5))
+        arrived = true
+    }
+    catch {
+        arrived = false
+    }
 
     release.open()  // before the expectation, so a failure still unwinds both tasks
     await blocked.value

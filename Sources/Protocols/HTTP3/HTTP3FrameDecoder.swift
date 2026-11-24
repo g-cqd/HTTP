@@ -72,7 +72,7 @@ public struct HTTP3FrameDecoder {
         guard let framing = try nextFrameRange(&reader) else {
             return nil
         }
-        let payload = reader.slice(in: framing.payload).withUnsafeBytes { Array($0) }
+        let payload = reader.slice(in: framing.payload).withUnsafeBytes { unsafe Array($0) }
         return Frame(type: framing.type, payload: payload)
     }
 

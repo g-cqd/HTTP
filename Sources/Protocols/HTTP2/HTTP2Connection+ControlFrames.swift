@@ -1,3 +1,5 @@
+internal import AemiKernel
+
 //
 //  HTTP2Connection+ControlFrames.swift
 //  HTTP2
@@ -18,9 +20,7 @@ extension HTTP2Connection {
             throw .stream(frame.header.streamID, .frameSizeError, "PRIORITY must be 5 octets")
         }
         let dependency = HTTP2StreamID(
-            rawValue: UInt32(
-                bigEndian: frame.payload.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self)
-            )
+            rawValue: frame.payload.loadBE32(0)
         )
         guard dependency != frame.header.streamID else {
             throw .stream(frame.header.streamID, .protocolError, "stream depends on itself")
@@ -104,9 +104,7 @@ extension HTTP2Connection {
         }
         // The 4-octet error code is big-endian (RFC 9113 §6.4); read it as one unaligned load rather
         // than re-rolling the shift-and-or by hand (the payload is exactly 4 octets, guarded above).
-        let code = UInt32(
-            bigEndian: frame.payload.unsafeLoadUnaligned(fromByteOffset: 0, as: UInt32.self)
-        )
+        let code = frame.payload.loadBE32(0)
         // A reset mid-upload must still return the stream's outstanding credit to the CONNECTION window
         // (RFC 9113 §6.9.1 — that window outlives every stream), or a peer could permanently shrink it
         // by resetting streams part-way through their bodies.

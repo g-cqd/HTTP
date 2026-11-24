@@ -25,7 +25,7 @@ struct HTTP2StreamingServerTests {
     @Test(
         "a streamed response survives a forced window stall and arrives complete (no deadlock)",
         .timeLimit(TestLivenessBudget.timeLimit(minutes: 1)))
-    func streamedResponseSurvivesWindowStall() async {
+    func streamedResponseSurvivesWindowStall() async throws {
         let bodyByte: UInt8 = 0x5A
         let bodyLength = 50
         let responder = ClosureResponder { _, _, _ in
@@ -40,12 +40,9 @@ struct HTTP2StreamingServerTests {
         // Open the connection with a tiny 5-octet stream window, then a GET on stream 1.
         await connection.feed(Self.preface + clientSettings(window: 5) + get(streamID: 1))
 
-        // Wait until the server has opened stream 1 and emitted the first window-limited DATA — proof it
-        // stalled on the exhausted window and parked on a read (the deadlock scenario). The cancellation
-        // check lets the time limit end the run instead of spinning if the server never streams.
-        while decodeData(await connection.sentBytes()).data.isEmpty, !Task.isCancelled {
-            await Task.yield()
-        }
+        // Wait until the server has opened stream 1 and emitted the first window-limited DATA —
+        // event-driven via `ControllableConnection.waitUntilSent` (zero `Task.yield()` spin).
+        try await connection.waitUntilSent { !Self.decodeData($0).data.isEmpty }
 
         // Only now grant the window — five octets at a time, more than enough for the 50-octet body. A
         // grant past stream completion is harmless (the engine ignores a WINDOW_UPDATE on a closed
@@ -56,7 +53,7 @@ struct HTTP2StreamingServerTests {
         await connection.finishInbound()
         await serving.value
 
-        let response = decodeData(await connection.sentBytes())
+        let response = Self.decodeData(await connection.sentBytes())
         #expect(response.data == [UInt8](repeating: bodyByte, count: bodyLength))
         #expect(response.finished)  // END_STREAM on the final DATA frame
     }
@@ -102,7 +99,7 @@ struct HTTP2StreamingServerTests {
     }
 
     /// Concatenates the payload of every DATA frame and reports whether any carried END_STREAM.
-    private func decodeData(_ bytes: [UInt8]) -> (data: [UInt8], finished: Bool) {
+    private static func decodeData(_ bytes: [UInt8]) -> (data: [UInt8], finished: Bool) {
         var index = 0
         var data: [UInt8] = []
         var finished = false

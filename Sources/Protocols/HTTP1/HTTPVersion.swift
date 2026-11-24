@@ -1,3 +1,5 @@
+internal import AemiKernel
+
 //
 //  HTTPVersion.swift
 //  HTTP1
@@ -32,22 +34,22 @@ public struct HTTPVersion: Sendable, Hashable {
             return nil
         }
         // "HTTP/"
-        guard bytes.unsafeLoad(fromByteOffset: 0, as: UInt8.self) == 0x48,  // H
-            bytes.unsafeLoad(fromByteOffset: 1, as: UInt8.self) == 0x54,  // T
-            bytes.unsafeLoad(fromByteOffset: 2, as: UInt8.self) == 0x54,  // T
-            bytes.unsafeLoad(fromByteOffset: 3, as: UInt8.self) == 0x50,  // P
-            bytes.unsafeLoad(fromByteOffset: 4, as: UInt8.self) == 0x2F  // /
+        guard bytes.loadU8(0) == 0x48,  // H
+            bytes.loadU8(1) == 0x54,  // T
+            bytes.loadU8(2) == 0x54,  // T
+            bytes.loadU8(3) == 0x50,  // P
+            bytes.loadU8(4) == 0x2F  // /
         else {
             return nil
         }
-        let majorByte = bytes.unsafeLoad(fromByteOffset: 5, as: UInt8.self)
+        let majorByte = bytes.loadU8(5)
         guard majorByte >= 0x30, majorByte <= 0x39 else {
             return nil
         }
-        guard bytes.unsafeLoad(fromByteOffset: 6, as: UInt8.self) == 0x2E else {
+        guard bytes.loadU8(6) == 0x2E else {
             return nil
         }  // .
-        let minorByte = bytes.unsafeLoad(fromByteOffset: 7, as: UInt8.self)
+        let minorByte = bytes.loadU8(7)
         guard minorByte >= 0x30, minorByte <= 0x39 else {
             return nil
         }

@@ -8,6 +8,7 @@
 //  ``HTTPLimits``.
 //
 
+internal import AemiKernel
 public import HTTPCore
 
 /// Parses the HTTP/1.1 header section (RFC 9112 §5).
@@ -21,7 +22,7 @@ public enum HeaderParser {
     /// Parses field-lines from `reader` until the terminating empty line, advancing the reader past
     /// it, and returns the collected ``HTTPFields`` — or throws the specific ``HTTP1ParseError``.
     public static func parse(
-        _ reader: inout ByteReader,
+        _ reader: inout HTTPCore.ByteReader,
         limits: HTTPLimits
     ) throws(HTTP1ParseError) -> HTTPFields {
         var fields = HTTPFields()
@@ -52,7 +53,7 @@ public enum HeaderParser {
             guard fields.count < limits.maxFieldCount else { throw .tooManyFields }
             // Strict CRLF: a bare LF inside a field-line is a smuggling vector (RFC 9112 §2.2). The
             // field-value validator would also reject an embedded LF, but fail closed here explicitly.
-            if reader.slice(in: lineRange).withUnsafeBytes({ $0.contains(lineFeed) }) {
+            if reader.slice(in: lineRange).withUnsafeBytes({ unsafe $0.contains(lineFeed) }) {
                 throw .malformedHeaders
             }
             fields.append(try parseFieldLine(reader.slice(in: lineRange)))
@@ -67,7 +68,7 @@ public enum HeaderParser {
         var colonIndex = -1
         var index = 0
         while index < count {
-            if line.unsafeLoad(fromByteOffset: index, as: UInt8.self) == colon {
+            if line.loadU8(index) == colon {
                 colonIndex = index
                 break
             }
@@ -80,23 +81,23 @@ public enum HeaderParser {
         // Trim OWS (SP / HTAB) on both sides of the value (RFC 9112 §5).
         var valueStart = colonIndex + 1
         while valueStart < count,
-            isOptionalWhitespace(line.unsafeLoad(fromByteOffset: valueStart, as: UInt8.self))
+            isOptionalWhitespace(line.loadU8(valueStart))
         {
             valueStart += 1
         }
         var valueEnd = count
         while valueEnd > valueStart,
-            isOptionalWhitespace(line.unsafeLoad(fromByteOffset: valueEnd - 1, as: UInt8.self))
+            isOptionalWhitespace(line.loadU8(valueEnd - 1))
         {
             valueEnd -= 1
         }
 
         // Validate the name bytes before materializing: an invalid name never allocates a `String`.
         let fieldName = line.extracting(0 ..< colonIndex)
-            .withUnsafeBytes { HTTPFieldName(validating: $0) }
+            .withUnsafeBytes { unsafe HTTPFieldName(validating: $0) }
         guard let fieldName else { throw .invalidFieldName }
         let value = line.extracting(valueStart ..< valueEnd)
-            .withUnsafeBytes { String(decoding: $0, as: Unicode.UTF8.self) }
+            .withUnsafeBytes { unsafe String(decoding: $0, as: Unicode.UTF8.self) }
         guard let field = HTTPField(name: fieldName, value: value) else { throw .invalidFieldValue }
         return field
     }

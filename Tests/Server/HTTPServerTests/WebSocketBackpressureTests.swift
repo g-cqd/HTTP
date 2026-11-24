@@ -45,11 +45,9 @@ struct WebSocketBackpressureTests {
                 return []
             }
             let text = String(decoding: payload, as: Unicode.UTF8.self)
-            // Park until the reader has drained the wire, so the pump is blocked for the whole feed.
+            // Park until the reader has drained the wire (event-driven, zero Task.yield spin).
             if text == "m0" {
-                while await connection.handedOutCount() <= total {
-                    await Task.yield()
-                }
+                await connection.waitForHandedOut(atLeast: total + 1)
             }
             received.withLock { $0.append(text) }
             return []
@@ -158,9 +156,7 @@ struct WebSocketBackpressureTests {
             let text = String(decoding: payload, as: Unicode.UTF8.self)
             if text == "go" {
                 // Hold the pump until the reader has drained the wire, forcing the coalesce.
-                while await connection.handedOutCount() < total {
-                    await Task.yield()
-                }
+                await connection.waitForHandedOut(atLeast: total)
                 hub.publish(.text("ping"), to: "room")
             }
             if text == "c7" {

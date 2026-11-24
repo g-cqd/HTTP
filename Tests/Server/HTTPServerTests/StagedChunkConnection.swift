@@ -26,6 +26,7 @@ actor StagedChunkConnection: UnleasedTransportConnection {
     private let parksAtEnd: Bool
     private var closed = false
     private var waiter: CheckedContinuation<Void, Never>?
+    private var handedOutWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
 
     /// Stages `chunks`, handed out one per `receive`.
     ///
@@ -52,8 +53,10 @@ actor StagedChunkConnection: UnleasedTransportConnection {
         guard handedOut < chunks.count else {
             return nil  // EOF
         }
-        defer { handedOut += 1 }
-        return chunks[handedOut]
+        let chunk = chunks[handedOut]
+        handedOut += 1
+        wakeHandedOutWaiters()
+        return chunk
     }
 
     func send(_ bytes: [UInt8]) async {
@@ -65,10 +68,42 @@ actor StagedChunkConnection: UnleasedTransportConnection {
         handedOut = chunks.count
         waiter?.resume()
         waiter = nil
+        wakeHandedOutWaiters()
     }
 
     /// Chunks the reader has actually pulled off the wire.
     func handedOutCount() -> Int { handedOut }
 
+    /// Suspends until `handedOut >= threshold` (event-driven, zero `Task.yield()` spin).
+    func waitForHandedOut(atLeast threshold: Int) async {
+        if handedOut >= threshold {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            if handedOut >= threshold {
+                continuation.resume()
+            }
+            else {
+                handedOutWaiters.append((threshold, continuation))
+            }
+        }
+    }
+
     func sentBytes() -> [UInt8] { sent }
+
+    private func wakeHandedOutWaiters() {
+        guard !handedOutWaiters.isEmpty else {
+            return
+        }
+        var remaining: [(Int, CheckedContinuation<Void, Never>)] = []
+        for entry in handedOutWaiters {
+            if handedOut >= entry.0 {
+                entry.1.resume()
+            }
+            else {
+                remaining.append(entry)
+            }
+        }
+        handedOutWaiters = remaining
+    }
 }

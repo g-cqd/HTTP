@@ -1,3 +1,5 @@
+internal import AemiKernel
+
 //
 //  HTTP2FrameWriter.swift
 //  HTTP2
@@ -65,7 +67,7 @@ struct HTTP2FrameWriter {
             streamID: .connection
         )
         .encode(into: &output)
-        payload.withUnsafeBytes { output.append(contentsOf: $0) }
+        payload.appendBytes(to: &output)
     }
 
     /// Queues a GOAWAY naming the last processed stream and the error code (RFC 9113 §6.8).
