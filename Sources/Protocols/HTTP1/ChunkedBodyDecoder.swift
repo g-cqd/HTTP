@@ -343,14 +343,9 @@ public enum ChunkedBodyDecoder {
             else { throw .invalidFieldName }
             name += 1
         }
-        var value = colonIndex + 1
-        while value < count {
-            guard
-                FieldValidation.isFieldValueByte(
-                    line.loadU8(value)
-                )
-            else { throw .invalidFieldValue }
-            value += 1
+        // Validate the trailer value via SWAR + `AemiKernels` SIMD (`FieldValidation.isValidFieldValue`).
+        guard FieldValidation.isValidFieldValue(line.extracting((colonIndex + 1) ..< count)) else {
+            throw .invalidFieldValue
         }
     }
 

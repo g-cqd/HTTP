@@ -9,6 +9,7 @@
 //
 
 internal import AemiKernel
+internal import AemiKernels
 public import HTTPCore
 
 /// Parses the HTTP/1.1 header section (RFC 9112 §5).
@@ -18,6 +19,9 @@ public enum HeaderParser {
     private static let htab: UInt8 = 0x09
     private static let carriageReturn: UInt8 = 0x0D
     private static let lineFeed: UInt8 = 0x0A
+    /// Minimum line length at which `AemiKernels.firstIndexOfByte` (vectorized `memchr`) beats the
+    /// inline scalar loop — short lines (<= 63 B) hit the delimiter within a few iterations.
+    private static let simdScanThreshold = 64
 
     /// Parses field-lines from `reader` until the terminating empty line, advancing the reader past
     /// it, and returns the collected ``HTTPFields`` — or throws the specific ``HTTP1ParseError``.
@@ -53,11 +57,21 @@ public enum HeaderParser {
             guard fields.count < limits.maxFieldCount else { throw .tooManyFields }
             // Strict CRLF: a bare LF inside a field-line is a smuggling vector (RFC 9112 §2.2). The
             // field-value validator would also reject an embedded LF, but fail closed here explicitly.
-            if reader.slice(in: lineRange).withUnsafeBytes({ unsafe $0.contains(lineFeed) }) {
+            let lineSpan = reader.slice(in: lineRange)
+            if containsBareLineFeed(lineSpan) {
                 throw .malformedHeaders
             }
-            fields.append(try parseFieldLine(reader.slice(in: lineRange)))
+            fields.append(try parseFieldLine(lineSpan))
         }
+    }
+
+    /// Scans `line` for an embedded bare LF (`0x0A`), dispatching to vectorized `AemiKernels` on
+    /// long lines and staying inline-scalar on short lines.
+    private static func containsBareLineFeed(_ line: RawSpan) -> Bool {
+        if line.byteCount >= simdScanThreshold {
+            return AemiKernels.firstIndexOfByte(lineFeed, in: line) != nil
+        }
+        return line.withUnsafeBytes { unsafe $0.contains(lineFeed) }
     }
 
     /// Parses one `field-name ":" OWS field-value OWS` line (RFC 9112 §5), working directly on the

@@ -450,7 +450,8 @@ let package = Package(
             name: "HTTP1",
             dependencies: [
                 "HTTPCore",
-                .product(name: "AemiKernel", package: "aemi")
+                .product(name: "AemiKernel", package: "aemi"),
+                .product(name: "AemiKernels", package: "aemi")
             ],
             path: "Sources/Protocols/HTTP1"
         ),

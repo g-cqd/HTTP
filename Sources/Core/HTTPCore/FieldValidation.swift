@@ -178,6 +178,22 @@ public enum FieldValidation {
         byte > 0x20 && byte != 0x7F
     }
 
+    /// Returns `true` iff every byte of `span` satisfies ``isFieldValueByte(_:)`` (SWAR + SIMD).
+    @inlinable
+    public static func isValidFieldValue(_ span: RawSpan) -> Bool {
+        span.withUnsafeBytes { raw in
+            unsafe fieldValueBytesAreValid(raw.bindMemory(to: UInt8.self))
+        }
+    }
+
+    /// Returns `true` iff every byte of `span` satisfies ``isRequestTargetByte(_:)`` (SWAR + SIMD).
+    @inlinable
+    public static func isRequestTargetValue(_ span: RawSpan) -> Bool {
+        span.withUnsafeBytes { raw in
+            unsafe requestTargetBytesAreValid(raw.bindMemory(to: UInt8.self))
+        }
+    }
+
     /// Returns `true` iff every byte of `bytes` satisfies ``isRequestTargetByte(_:)`` — no control,
     /// SP, or DEL octet.
     ///

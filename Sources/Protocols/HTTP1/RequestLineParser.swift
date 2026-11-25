@@ -49,19 +49,10 @@ public enum RequestLineParser {
 
     /// Whether `target` is a non-empty request-target free of controls, DEL, and whitespace
     /// (RFC 9112 §3.2) — the octets that enable request-line injection / smuggling.
+    ///
+    /// Delegates to `FieldValidation.isRequestTargetValue(_: RawSpan)` (SWAR + `AemiKernels` SIMD
+    /// for long URLs/query strings).
     private static func isValidRequestTarget(_ target: RawSpan) -> Bool {
-        let count = target.byteCount
-        guard count > 0 else {
-            return false
-        }
-        var index = 0
-        while index < count {
-            let byte = target.loadU8(index)
-            guard byte > 0x20, byte != 0x7F else {
-                return false
-            }  // reject CTL, SP, and DEL
-            index += 1
-        }
-        return true
+        target.byteCount > 0 && FieldValidation.isRequestTargetValue(target)
     }
 }
