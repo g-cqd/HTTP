@@ -2,13 +2,21 @@
 //  TaskProvider.swift
 //  HTTPConcurrency
 //
-//  The injection point for "spawn an unstructured background task", parallel to ``MonotonicNowProvider``
-//  (`NowProvider.swift`). A library takes `spawn: TaskProvider = LiveTaskProvider.spawn`, and a host or a
-//  test substitutes a provider — to pin a priority or executor, count spawned tasks, or run them inline —
-//  without hard-coding `Task {}`. The shipped ``LiveTaskProvider`` is exactly `Task { await operation() }`,
-//  so defaulting to it changes nothing in production; only a host or test overrides it.
+//  Thin compatibility facade over `AemiRuntime`'s `LiveTaskProvider`. Keeps the closure-style
+//  `TaskSpawnProvider` / `LiveTaskProvider.spawn` convenience while avoiding name collisions with
+//  `AemiRuntime.TaskProvider` / `AemiRuntime.LiveTaskProvider` (which are re-exported directly via
+//  `AemiRuntimeReexports.swift`).
 //
 
+public import AemiRuntime
+
 /// The injection point for spawning a fire-and-forget background task running `operation`.
-public typealias TaskProvider =
+public typealias TaskSpawnProvider =
     @Sendable (_ operation: @escaping @Sendable () async -> Void) -> Void
+
+extension AemiRuntime.LiveTaskProvider {
+    /// Spawns `operation` in an unstructured `Task` through `AemiRuntime.LiveTaskProvider`.
+    public static let spawn: TaskSpawnProvider = { operation in
+        AemiRuntime.LiveTaskProvider().task { await operation() }
+    }
+}

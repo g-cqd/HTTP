@@ -24,10 +24,17 @@ struct TaskProviderTests {
     func customIntercepts() {
         let counter = Counter()
         let operation: @Sendable () async -> Void = { await Task.yield() }
-        let provider: TaskProvider = { _ in counter.increment() }
+        let provider: TaskSpawnProvider = { _ in counter.increment() }
         provider(operation)
         provider(operation)
         #expect(counter.value == 2)
+    }
+
+    @Test("AemiRuntime.TaskProvider / LiveTaskProvider are re-exported unambiguously")
+    func aemiRuntimeTaskProviderReexported() async {
+        let provider: any TaskProvider = LiveTaskProvider()
+        let result = await provider.task { 42 }.value
+        #expect(result == 42)
     }
 
     /// A spawn counter (the custom provider above calls it synchronously, so a plain class suffices).
