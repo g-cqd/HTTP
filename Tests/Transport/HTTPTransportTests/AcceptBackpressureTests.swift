@@ -99,7 +99,18 @@
 
             // Free every slot: the gate crosses its hysteresis watermark and re-arms the accept source,
             // which then drains the connections still sitting in the listen(2) backlog.
+            //
+            // On `.networkFramework`, raising `NWListener.newConnectionLimit` back to infinite resumes
+            // delivery of future accepts, but `NWListener` may drop or finish already-stalled kernel
+            // backlog sockets while the limit was 0; open a fresh batch after release as well so we
+            // deterministically verify the listener resumed accepting new connections on all backbones.
             await accepted.releaseAll()
+            let resumedClients = (0 ..< capacity).map { _ in openLoopbackConnection(to: port) }
+            defer {
+                for client in resumedClients {
+                    close(client)
+                }
+            }
             _ = try await accepted.probe.wait(forAtLeast: capacity * 2)
             #expect(accepted.probe.count >= capacity * 2)
 

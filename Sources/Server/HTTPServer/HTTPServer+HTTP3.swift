@@ -130,7 +130,10 @@ extension HTTPServer {
         /// the engine still reports the section blocked. There is no window in which both say no.
         ///
         /// - Returns: whether the entry was kept, for the connection dispatcher to answer on.
-        func endDriving(_ id: QUICStreamID, registry: HTTP3StreamRegistry) -> Bool {
+        func endDriving(
+            _ id: QUICStreamID,
+            registry: HTTP3StreamRegistry
+        ) -> HTTP3StreamRegistry.EndDrivingResult {
             registry.endDriving(id, retain: connection.isBlocked(id))
         }
 

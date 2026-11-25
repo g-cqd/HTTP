@@ -94,7 +94,7 @@ extension HTTPServer {
         _ id: QUICStreamID,
         registry: HTTP3StreamRegistry,
         engine: Engine
-    ) async -> Bool {
+    ) async -> HTTP3StreamRegistry.EndDrivingResult {
         await engine.endDriving(id, registry: registry)
     }
 

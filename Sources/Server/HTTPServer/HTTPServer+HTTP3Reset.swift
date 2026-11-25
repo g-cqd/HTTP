@@ -64,28 +64,37 @@ extension HTTPServer {
         in scope: HTTP3ConnectionScope
     ) async {
         scope.deadlines.disarm(id)
-        // Taken *before* the decision, because deciding to retire is what removes the entry the writer
-        // lives on — and the peer still has to be told (RFC 9114 §8.1). Looking it up afterwards found
-        // nothing, so an abandoned stream was silently retired without ever being reset on the wire.
-        let writer = scope.registry.writer(for: id)
-        guard await !concludeHTTP3Driving(id, registry: scope.registry, engine: scope.engine) else {
-            return
-        }
-        // Only an abandonment is announced. A stream that was answered has already been FINned, and a
-        // RESET_STREAM after a clean end tells the peer its completed request failed (RFC 9000 §3.2).
-        if case .abandoned(let code) = exit {
-            writer?.reset(errorCode: code)
+        // Atomically decide whether the stream stays parked for the dispatcher or is retired here,
+        // and receive the writer ONLY if THIS call retired it — never if the deadline watchdog or
+        // response path already retired and reset it (prevents duplicate RESET_STREAM frames).
+        let disposition = await concludeHTTP3Driving(
+            id, registry: scope.registry, engine: scope.engine
+        )
+        switch disposition {
+            case .retained:
+                return
+            case .retired(let writer):
+                // Only an abandonment is announced. A stream that was answered has already been
+                // FINned, and a RESET_STREAM after a clean end tells the peer its completed request
+                // failed (RFC 9000 §3.2).
+                if case .abandoned(let code) = exit {
+                    writer.reset(errorCode: code)
+                }
+            case .alreadyRetired:
+                break
         }
         await retireHTTP3Stream(id, errorCode: exit.errorCode, in: scope)
     }
 
-    /// Abandons `id`: disarmed, reset on the wire, dropped from the registry, retired in the engine.
+    /// Abandons `id`: disarmed, reset on the wire (if still registered), dropped from the registry,
+    /// retired in the engine.
     ///
-    /// Idempotent for the caller's purposes — a stream already retired has no deadline to disarm, no
-    /// writer to reset and no engine record to remove, and the abuse budget is charged only for a
-    /// record that existed, so a double call cannot double-charge the peer. That is what makes it safe
-    /// to run on the *normal* path too: a stream whose response was written leaves nothing behind, so
-    /// the sweep proves the retirement rather than assuming it.
+    /// Idempotent for the caller's purposes — `registry.retire(id)` atomically removes and returns
+    /// the writer, so at most one caller (either the stream driver or the deadline watchdog) resets
+    /// the stream on the wire; the abuse budget is charged only for a record that existed, so a
+    /// double call cannot double-charge the peer. That is what makes it safe to run on the *normal*
+    /// path too: a stream whose response was written leaves nothing behind, so the sweep proves the
+    /// retirement rather than assuming it.
     ///
     /// Refuses a stream that is not client-initiated bidirectional. The control and QPACK streams are
     /// long-lived by design (RFC 9114 §6.2) and their closure is a *connection* error under §6.2.1, not
@@ -106,8 +115,7 @@ extension HTTPServer {
         // `release`, not `disarm`: this stream is being given up, so its timer slot goes back with a
         // bumped generation rather than staying registered for a stream nothing will ever arm again.
         scope.deadlines.release(id)
-        scope.registry.writer(for: id)?.reset(errorCode: errorCode)
-        scope.registry.retire(id)
+        scope.registry.retire(id)?.reset(errorCode: errorCode)
         let actions = await scope.engine.retire(id, errorCode: errorCode)
         await applyHTTP3(actions, in: scope)
     }

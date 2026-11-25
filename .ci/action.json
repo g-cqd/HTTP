@@ -27,6 +27,24 @@
       "title": "Coverage · Sources Lines ≥ 85% · macOS",
       "run": "scripts/coverage-gate.sh 85",
       "after": "macos-debug"
+    },
+    {
+      "id": "mutation",
+      "title": "Verification · Mutation (litmus)",
+      "os": "macOS",
+      "cadence": ["nightly", "dispatch"],
+      "mutation": {
+        "paths": [
+          "Sources/Core/HTTPCore/**",
+          "Sources/Protocols/HTTP1/**",
+          "Sources/Protocols/HTTP2/**",
+          "Sources/Protocols/HTTP3/**",
+          "Sources/Protocols/WebSocket/**",
+          "Sources/HTTPAuth/**"
+        ],
+        "budget": 3600,
+        "workspace": "in-place"
+      }
     }
   ]
 }

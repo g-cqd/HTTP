@@ -12,9 +12,16 @@ for mode in locked unlocked; do
     "$fixtures/tsan-$mode.swift" -o "$runtime/$mode"
 done
 ldd "$runtime/locked" | grep -F "$runtime/libswiftSynchronization.so"
-"$runtime/locked"
+run_tsan() {
+  if command -v setarch >/dev/null 2>&1 && setarch "$(uname -m)" -R true 2>/dev/null; then
+    setarch "$(uname -m)" -R "$@"
+  else
+    "$@"
+  fi
+}
+run_tsan "$runtime/locked"
 status=0
-"$runtime/unlocked" > "$runtime/unlocked.log" 2>&1 || status=$?
+run_tsan "$runtime/unlocked" > "$runtime/unlocked.log" 2>&1 || status=$?
 if [[ "$status" != 66 ]] || ! grep -q 'ThreadSanitizer:.*race' "$runtime/unlocked.log"; then
   cat "$runtime/unlocked.log" >&2
   echo 'TSan did not reject the deliberate unlocked race.' >&2

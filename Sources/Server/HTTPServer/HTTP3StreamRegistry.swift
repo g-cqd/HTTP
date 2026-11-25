@@ -350,30 +350,51 @@ final class HTTP3StreamRegistry: Sendable {
     /// queue is what decides, and it decides inside this lock — the same lock a deposit takes — so the
     /// two cannot interleave into a state where both say "nothing is owed".
     ///
-    /// - Returns: whether the entry was kept for the connection dispatcher.
-    @discardableResult
-    func endDriving(_ id: QUICStreamID, retain: Bool) -> Bool {
-        let (kept, wakeup) = entries.withLock { current -> (Bool, Wakeup) in
+    /// How `endDriving` settled a stream's registry entry.
+    enum EndDrivingResult {
+        /// Retained for the connection dispatcher (blocked or non-empty mailbox).
+        case retained
+        /// Retired by this call; carries the writer that belonged to the entry so the caller can
+        /// emit at most one wire `RESET_STREAM` without racing a concurrent watchdog retirement.
+        case retired(any QUICStream)
+        /// Already absent from the registry (already retired by response send or deadline watchdog).
+        case alreadyRetired
+        /// Whether the entry was retained for the connection dispatcher.
+        var wasRetained: Bool {
+            if case .retained = self {
+                return true
+            }
+            return false
+        }
+    }
+
+    /// Notes that the task reading `id` has stopped, returning the exact disposition.
+    func endDriving(_ id: QUICStreamID, retain: Bool) -> EndDrivingResult {
+        let (result, wakeup) = entries.withLock { current -> (EndDrivingResult, Wakeup) in
             guard var entry = current[id] else {
-                return (false, .none)
+                return (.alreadyRetired, .none)
             }
             guard retain || !entry.mailbox.isEmpty else {
                 current[id] = nil
-                return (false, .none)
+                return (.retired(entry.stream), .none)
             }
             entry.isDriving = false
             entry.inbox = nil  // its serve loop is gone; the dispatcher owns the stream now
             let owed = entry.mailbox.isEmpty ? Wakeup.none : entry.claimWakeup(id)
             current[id] = entry
-            return (true, owed)
+            return (.retained, owed)
         }
         deliver(wakeup)
-        return kept
+        return result
     }
 
-    /// Drops `id` — its response was written, or it was reset.
-    func retire(_ id: QUICStreamID) {
-        entries.withLock { $0[id] = nil }
+    /// Drops `id` and returns its writer if it was still registered (nil if already retired).
+    ///
+    /// Atomic remove-and-return prevents a concurrent deadline watchdog and stream driver from both
+    /// observing the writer and emitting duplicate `RESET_STREAM` frames on the wire.
+    @discardableResult
+    func retire(_ id: QUICStreamID) -> (any QUICStream)? {
+        entries.withLock { $0.removeValue(forKey: id)?.stream }
     }
 
     /// Every registered writer, for a connection-wide sweep (a forced shutdown close).

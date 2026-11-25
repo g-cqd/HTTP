@@ -226,7 +226,12 @@ jobs:
     runs-on: ubuntu-latest
     # The thread leg rebuilds the matching stdlib runtime: update the revision in
     # .github/sanitizers/build-linux-tsan-runtime.sh together with this image's toolchain.
-    container: swift:6.4.1-noble
+    # `--security-opt seccomp=unconfined` permits `setarch $(uname -m) -R` (personality
+    # ADDR_NO_RANDOMIZE) so ThreadSanitizer can map its shadow memory on Ubuntu 24.04 kernels
+    # with high-entropy ASLR (`vm.mmap_rnd_bits=32`).
+    container:
+      image: swift:6.4.1-noble
+      options: --security-opt seccomp=unconfined
     strategy:
       fail-fast: false
       matrix:
@@ -262,9 +267,12 @@ jobs:
               swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=address
           else
             # Scope the replacement runtime to test executables; SwiftPM itself is not sanitized.
+            # Disable ASLR (`setarch $(uname -m) -R`) so TSan shadow mapping succeeds on Ubuntu 24.04
+            # kernels with `vm.mmap_rnd_bits=32`.
             library_directory="$(swift -print-target-info | python3 -c \
               'import json,sys; print(json.load(sys.stdin)["paths"]["runtimeLibraryPaths"][0])')"
-            swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=thread \
+            setarch "$(uname -m)" -R \
+              swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --sanitize=thread \
               -Xswiftc -no-toolchain-stdlib-rpath -Xlinker -export-dynamic \
               -Xlinker -rpath -Xlinker "$RUNNER_TEMP/tsan-runtime:$library_directory"
           fi

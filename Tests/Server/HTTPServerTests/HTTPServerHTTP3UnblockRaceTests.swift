@@ -76,9 +76,11 @@ struct HTTPServerHTTP3UnblockRaceTests {
 
         var concluded: Bool?
         if interleaving == .concludeBeforeUnblock {
-            concluded = await server.concludeHTTP3Driving(
-                Self.requestStream, registry: registry, engine: engine
-            )
+            concluded =
+                await server.concludeHTTP3Driving(
+                    Self.requestStream, registry: registry, engine: engine
+                )
+                .wasRetained
         }
         // (E) and (R) together: the insert clears the blocked state and files the request in one step.
         _ = await engine.receive(
@@ -88,9 +90,11 @@ struct HTTPServerHTTP3UnblockRaceTests {
             routingInto: registry
         )
         if interleaving == .concludeAfterUnblock {
-            concluded = await server.concludeHTTP3Driving(
-                Self.requestStream, registry: registry, engine: engine
-            )
+            concluded =
+                await server.concludeHTTP3Driving(
+                    Self.requestStream, registry: registry, engine: engine
+                )
+                .wasRetained
         }
 
         #expect(concluded == true, "the entry must be kept for the dispatcher, not dropped")
@@ -147,9 +151,11 @@ struct HTTPServerHTTP3UnblockRaceTests {
             for: Self.requestStream
         )
         #expect(Self.isQueued(deposited))
-        let kept = await server.concludeHTTP3Driving(
-            Self.requestStream, registry: registry, engine: engine
-        )
+        let kept =
+            await server.concludeHTTP3Driving(
+                Self.requestStream, registry: registry, engine: engine
+            )
+            .wasRetained
 
         #expect(kept, "an entry with undelivered mail is owed to somebody")
         #expect(registry.takeMailbox(Self.requestStream).count == 1)
@@ -162,9 +168,11 @@ struct HTTPServerHTTP3UnblockRaceTests {
         let engine = Self.makeEngine()
         registry.register(FakeQUICStream(id: Self.requestStream, direction: .bidirectional))
 
-        let kept = await server.concludeHTTP3Driving(
-            Self.requestStream, registry: registry, engine: engine
-        )
+        let kept =
+            await server.concludeHTTP3Driving(
+                Self.requestStream, registry: registry, engine: engine
+            )
+            .wasRetained
 
         // The bound the retention rule exists to preserve: a long-lived connection that opens streams
         // sequentially must not keep an entry per stream it has served (CWE-770).
