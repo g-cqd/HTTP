@@ -20,17 +20,18 @@ internal import Synchronization
 /// (audit: tail-latency variance). Reuse is sound because the owner admits one operation at a time,
 /// and — should that ever stop being true — because ``claim(_:)`` refuses to displace a pending
 /// continuation rather than dropping it.
+@safe
 final class OnceResumer<Success: Sendable>: Sendable {
     private let continuation: Mutex<UnsafeContinuation<Success, any Error>?>
 
     init(_ continuation: UnsafeContinuation<Success, any Error>) {
-        self.continuation = Mutex(continuation)
+        unsafe self.continuation = Mutex(continuation)
     }
 
     /// Creates an empty resumer with no pending continuation, ready to be ``reset(_:)`` for its first
     /// op — the cached, reused form.
     init() {
-        self.continuation = Mutex(nil)
+        unsafe self.continuation = Mutex(nil)
     }
 
     deinit {
@@ -63,7 +64,7 @@ final class OnceResumer<Success: Sendable>: Sendable {
     /// the same continuation can be produced, and a rejected one was never in the slot at all.
     @discardableResult
     func claim(_ continuation: UnsafeContinuation<Success, any Error>) -> Bool {
-        let admitted = self.continuation.withLock { pending in
+        let admitted = unsafe self.continuation.withLock { pending in
             guard unsafe pending == nil else {
                 return false
             }
@@ -77,17 +78,17 @@ final class OnceResumer<Success: Sendable>: Sendable {
     }
 
     func resume(returning value: Success) {
-        take()?.resume(returning: value)
+        unsafe take()?.resume(returning: value)
     }
 
     func resume(throwing error: any Error) {
-        take()?.resume(throwing: error)
+        unsafe take()?.resume(throwing: error)
     }
 
     private func take() -> UnsafeContinuation<Success, any Error>? {
-        continuation.withLock { pending in
-            defer { pending = nil }
-            return pending
+        unsafe continuation.withLock { pending in
+            defer { unsafe pending = nil }
+            return unsafe pending
         }
     }
 }

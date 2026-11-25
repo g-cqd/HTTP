@@ -237,7 +237,8 @@ public final class POSIXKqueueTransport: ServerTransport {
     private static func defaultLoopCount() -> Int {
         var perfCores: Int32 = 0
         var size = MemoryLayout<Int32>.stride
-        if sysctlbyname("hw.perflevel0.physicalcpu", &perfCores, &size, nil, 0) == 0, perfCores > 0
+        if unsafe sysctlbyname("hw.perflevel0.physicalcpu", &perfCores, &size, nil, 0) == 0,
+            perfCores > 0
         {
             return Int(perfCores)  // Apple Silicon P-core count
         }
@@ -293,8 +294,8 @@ public final class POSIXKqueueTransport: ServerTransport {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
-                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    accept(listenFD, $0, &length)
+                unsafe pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    unsafe accept(listenFD, $0, &length)
                 }
             }
             if clientFD < 0 {

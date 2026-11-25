@@ -39,7 +39,7 @@ extension UnleasedTransportConnection {
             let wanted = min(chunk.count, remaining)
             let count = chunk.withUnsafeMutableBytes { raw -> Int in
                 while true {
-                    let read = pread(descriptor, raw.baseAddress, wanted, off_t(cursor))
+                    let read = unsafe pread(descriptor, raw.baseAddress, wanted, off_t(cursor))
                     if read >= 0 {
                         return read
                     }

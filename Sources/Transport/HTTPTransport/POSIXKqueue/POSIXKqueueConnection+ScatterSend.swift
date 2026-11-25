@@ -89,7 +89,7 @@
                         else {
                             return .done
                         }
-                        return drainThreeIovecs(
+                        return unsafe drainThreeIovecs(
                             fd: fd,
                             bases: (b0, b1, b2),
                             counts: counts,
@@ -110,7 +110,7 @@
             let boundary1 = counts.0 + counts.1
             let total = boundary1 + counts.2
             while cursor < total {
-                var vecs = gatherIovecs(
+                var vecs = unsafe gatherIovecs(
                     bases: bases,
                     counts: counts,
                     boundary1: boundary1,
@@ -140,23 +140,23 @@
             boundary1: Int,
             cursor: Int
         ) -> [iovec] {
-            var vecs: [iovec] = []
-            vecs.reserveCapacity(3)
+            var vecs: [iovec] = unsafe []
+            unsafe vecs.reserveCapacity(3)
             if cursor < counts.0 {
-                vecs.append(unsafe makeIOVec(bases.0 + cursor, counts.0 - cursor))
-                vecs.append(unsafe makeIOVec(bases.1, counts.1))
-                vecs.append(unsafe makeIOVec(bases.2, counts.2))
+                unsafe vecs.append(makeIOVec(bases.0 + cursor, counts.0 - cursor))
+                unsafe vecs.append(makeIOVec(bases.1, counts.1))
+                unsafe vecs.append(makeIOVec(bases.2, counts.2))
             }
             else if cursor < boundary1 {
                 let delta = cursor - counts.0
-                vecs.append(unsafe makeIOVec(bases.1 + delta, counts.1 - delta))
-                vecs.append(unsafe makeIOVec(bases.2, counts.2))
+                unsafe vecs.append(makeIOVec(bases.1 + delta, counts.1 - delta))
+                unsafe vecs.append(makeIOVec(bases.2, counts.2))
             }
             else {
                 let delta = cursor - boundary1
-                vecs.append(unsafe makeIOVec(bases.2 + delta, counts.2 - delta))
+                unsafe vecs.append(makeIOVec(bases.2 + delta, counts.2 - delta))
             }
-            return vecs
+            return unsafe vecs
         }
 
         private static func makeIOVec(_ base: UnsafeRawPointer, _ length: Int) -> iovec {

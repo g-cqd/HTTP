@@ -202,9 +202,9 @@ public final class POSIXDispatchConnection: TransportConnection {
     private func parkForRead(maxLength: Int, once: OnceResumer<[UInt8]?>) async throws -> [UInt8]? {
         let fd = descriptor
         return try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
+            try await unsafe withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<[UInt8]?, any Error>) in
-                guard once.claim(continuation) else {
+                guard unsafe once.claim(continuation) else {
                     return  // contract broken; `claim` has already failed this caller
                 }
                 queue.async { [self] in
@@ -258,9 +258,9 @@ public final class POSIXDispatchConnection: TransportConnection {
     /// One non-blocking `read(2)` of the bytes buffered now (`nil` at EOF); throws `WouldBlock` if the
     /// readiness was spurious so the caller keeps waiting.
     private static func readAvailable(_ fd: Int32, _ maxLength: Int) throws -> [UInt8]? {
-        try POSIXSocket.readBuffer(maxLength: maxLength) { raw in
+        try unsafe POSIXSocket.readBuffer(maxLength: maxLength) { raw in
             while true {
-                let count = read(fd, raw.baseAddress, raw.count)
+                let count = unsafe read(fd, raw.baseAddress, raw.count)
                 if count >= 0 {
                     return count
                 }
@@ -296,9 +296,9 @@ public final class POSIXDispatchConnection: TransportConnection {
     private func writeOwned(_ bytes: [UInt8], once: OnceResumer<Void>) async throws {
         try requireOutboundLease()
         let fd = descriptor
-        try await withUnsafeThrowingContinuation {
+        try await unsafe withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<Void, any Error>) in
-            guard once.claim(continuation) else {
+            guard unsafe once.claim(continuation) else {
                 return  // contract broken; `claim` has already failed this caller
             }
             queue.async { [self] in
@@ -394,7 +394,7 @@ public final class POSIXDispatchConnection: TransportConnection {
             }
             var cursor = offset
             while cursor < raw.count {
-                let written = write(fd, base + cursor, raw.count - cursor)
+                let written = unsafe write(fd, base + cursor, raw.count - cursor)
                 if written > 0 {
                     cursor += written
                     continue

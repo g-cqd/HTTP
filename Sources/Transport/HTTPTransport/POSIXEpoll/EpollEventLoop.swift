@@ -135,10 +135,10 @@
             }
             wakeFD = wake
             // Level-triggered EPOLLIN (no EPOLLONESHOT) so the wakeup source stays armed for the loop's life.
-            var event = epoll_event()
-            event.events = EPOLLIN.rawValue
-            event.data.fd = wake
-            _ = epoll_ctl(fd, EPOLL_CTL_ADD, wake, &event)
+            var event = unsafe epoll_event()
+            unsafe event.events = EPOLLIN.rawValue
+            unsafe event.data.fd = wake
+            _ = unsafe epoll_ctl(fd, EPOLL_CTL_ADD, wake, &event)
         }
 
         deinit {
@@ -180,7 +180,7 @@
             }
             if exited {
                 thread.async { [self] in
-                    unowned.runSynchronously(on: asUnownedTaskExecutor())
+                    unsafe unowned.runSynchronously(on: asUnownedTaskExecutor())
                 }
             }
             else if offLoop {
@@ -268,7 +268,7 @@
                         + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
                 }
                 // Remove before close (a closed fd auto-leaves the set, but explicit DEL is race-free).
-                _ = epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
+                _ = unsafe epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
                 close(fd)
                 // Resume any parked waiter so a cancelled/closed receive/send doesn't leak its
                 // continuation: invoked after close, the handler hits EBADF and resumes with an error.
@@ -297,7 +297,7 @@
         // MARK: - The run loop
 
         private func runLoop() {
-            var events = [epoll_event](repeating: epoll_event(), count: 256)
+            var events = unsafe [epoll_event](repeating: epoll_event(), count: 256)
             // The drain's double buffer, owned by the loop thread for its whole life — see
             // ``drainInbox(jobs:control:until:)`` and the identical twin in `KqueueEventLoop`.
             var jobs: [UnownedJob] = []
@@ -316,19 +316,19 @@
                     guard let base = buffer.baseAddress else {
                         return 0
                     }
-                    return epoll_wait(epfd, base, Int32(buffer.count), idle ? 50 : 0)
+                    return unsafe epoll_wait(epfd, base, Int32(buffer.count), idle ? 50 : 0)
                 }
                 // Back in the processing region: on-loop callers (the pinned serve task) now skip the
                 // wakeup, because this turn re-drains the inbox before parking again.
                 inbox.withLock { $0.onLoop = true }
                 if count > 0 {
                     for index in 0 ..< Int(count) {
-                        let event = events[index]
-                        if event.data.fd == wakeFD {
+                        let event = unsafe events[index]
+                        if unsafe event.data.fd == wakeFD {
                             drainWake()  // a bare wakeup — reset the eventfd counter and move on
                             continue
                         }
-                        dispatch(event)
+                        unsafe dispatch(event)
                     }
                 }
                 // Bounded by the fairness quantum: unbounded, one saturating source starves every
@@ -391,7 +391,7 @@
                 // The clock is read once per stride, not per job.
                 let stride = min(jobs.count, index &+ ReactorQuantum.clockCheckStride)
                 while index < stride {
-                    jobs[index].runSynchronously(on: asUnownedTaskExecutor())
+                    unsafe jobs[index].runSynchronously(on: asUnownedTaskExecutor())
                     index &+= 1
                 }
                 if index < jobs.count, ReactorQuantum.nanoseconds() >= budget {
@@ -410,8 +410,8 @@
         }
 
         private func dispatch(_ event: epoll_event) {
-            let fd = event.data.fd
-            let ready = event.events
+            let fd = unsafe event.data.fd
+            let ready = unsafe event.events
             // A hangup/error wakes both directions so a parked read/send completes (read→EOF, send→EPIPE).
             let hangup = ready & (EPOLLHUP.rawValue | EPOLLERR.rawValue) != 0
             let isReadable = hangup || (ready & EPOLLIN.rawValue != 0)
@@ -457,11 +457,11 @@
                 registry.registered.insert(fd)
                 return (events, was)
             }
-            var event = epoll_event()
-            event.events = mask
-            event.data.fd = fd
+            var event = unsafe epoll_event()
+            unsafe event.events = mask
+            unsafe event.data.fd = fd
             let operation = alreadyRegistered ? EPOLL_CTL_MOD : EPOLL_CTL_ADD
-            let accepted = epoll_ctl(epfd, operation, fd, &event) >= 0
+            let accepted = unsafe epoll_ctl(epfd, operation, fd, &event) >= 0
             if !accepted, !alreadyRegistered {
                 registry.withLock { _ = $0.registered.remove(fd) }
             }
@@ -471,13 +471,13 @@
         /// Resets the `eventfd` counter after a wakeup (EFD_NONBLOCK, so this never blocks).
         private func drainWake() {
             var counter: UInt64 = 0
-            _ = withUnsafeMutableBytes(of: &counter) { read(wakeFD, $0.baseAddress, 8) }
+            _ = withUnsafeMutableBytes(of: &counter) { unsafe read(wakeFD, $0.baseAddress, 8) }
         }
 
         /// Writes the `eventfd` so a blocked `epoll_wait` returns immediately (thread-safe).
         private func triggerWakeup() {
             var one: UInt64 = 1
-            _ = withUnsafeBytes(of: &one) { write(wakeFD, $0.baseAddress, 8) }
+            _ = withUnsafeBytes(of: &one) { unsafe write(wakeFD, $0.baseAddress, 8) }
         }
 
         /// Wakes the loop only when called from off the loop thread; on-loop callers (the pinned serve

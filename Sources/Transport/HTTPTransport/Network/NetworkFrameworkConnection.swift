@@ -162,7 +162,7 @@ public final class NetworkFrameworkConnection: UnleasedTransportConnection, @unc
             }
             return 0
         }
-        received.withUnsafeBytes { buffer.append(contentsOf: $0) }
+        unsafe received.withUnsafeBytes { unsafe buffer.append(contentsOf: $0) }
         return received.count
     }
 

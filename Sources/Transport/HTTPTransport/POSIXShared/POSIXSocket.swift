@@ -51,31 +51,34 @@ enum POSIXSocket {
         // swiftlint:disable:next discouraged_default_parameter - reusePort is prefork opt-in
         host: String, port: UInt16, nonBlocking: Bool, reusePort: Bool = false, backlog: Int32
     ) throws -> (descriptor: Int32, port: UInt16) {
-        var hints = addrinfo()
-        hints.ai_family = AF_UNSPEC  // IPv4 or IPv6, chosen from the host literal
+        var hints = unsafe addrinfo()
+        unsafe hints.ai_family = AF_UNSPEC  // IPv4 or IPv6, chosen from the host literal
         // `SOCK_STREAM` imports as a plain `Int32` on Darwin but as the `__socket_type` enum on Glibc.
         #if canImport(Darwin)
-            hints.ai_socktype = SOCK_STREAM
+            unsafe hints.ai_socktype = SOCK_STREAM
         #else
-            hints.ai_socktype = Int32(SOCK_STREAM.rawValue)
+            unsafe hints.ai_socktype = Int32(SOCK_STREAM.rawValue)
         #endif
-        hints.ai_flags = AI_PASSIVE  // a bindable (server) address
+        unsafe hints.ai_flags = AI_PASSIVE  // a bindable (server) address
         var resolved: UnsafeMutablePointer<addrinfo>?
-        guard getaddrinfo(host, String(port), &hints, &resolved) == 0, let info = resolved else {
+        guard unsafe getaddrinfo(host, String(port), &hints, &resolved) == 0,
+            let info = unsafe resolved
+        else {
             throw TransportError.bindFailed("getaddrinfo(\(host)) failed")
         }
-        defer { freeaddrinfo(resolved) }
-        let ai = info.pointee
-        let rawFD = socket(ai.ai_family, ai.ai_socktype, ai.ai_protocol)
+        defer { unsafe freeaddrinfo(resolved) }
+        let ai = unsafe info.pointee
+        let rawFD = unsafe socket(ai.ai_family, ai.ai_socktype, ai.ai_protocol)
         guard rawFD >= 0 else { throw TransportError.bindFailed("socket() errno \(errno)") }
 
         var reuse: Int32 = 1
-        _ = setsockopt(rawFD, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        let reuseLen = socklen_t(MemoryLayout<Int32>.size)
+        _ = unsafe setsockopt(rawFD, SOL_SOCKET, SO_REUSEADDR, &reuse, reuseLen)
         if reusePort {
             // SO_REUSEPORT lets N prefork workers bind the same port; the kernel load-balances
             // accepted connections across them (a worker per core). Off by default so a second,
             // accidental instance still fails with EADDRINUSE rather than silently sharing the port.
-            _ = setsockopt(
+            _ = unsafe setsockopt(
                 rawFD,
                 SOL_SOCKET,
                 SO_REUSEPORT,
@@ -86,7 +89,7 @@ enum POSIXSocket {
         setNoSIGPIPE(rawFD)
         if nonBlocking { setNonBlocking(rawFD) }
 
-        guard bind(rawFD, ai.ai_addr, ai.ai_addrlen) == 0 else {
+        guard unsafe bind(rawFD, ai.ai_addr, ai.ai_addrlen) == 0 else {
             let captured = errno
             close(rawFD)
             throw TransportError.bindFailed("bind() errno \(captured)")
@@ -118,8 +121,8 @@ enum POSIXSocket {
             )
         }
         withUnsafeMutableBytes(of: &address.sun_path) { raw in
-            raw.copyBytes(from: pathBytes)
-            raw[pathBytes.count] = 0
+            unsafe raw.copyBytes(from: pathBytes)
+            unsafe raw[pathBytes.count] = 0
         }
         #if canImport(Darwin)
             let rawFD = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -131,11 +134,12 @@ enum POSIXSocket {
         }
         setNoSIGPIPE(rawFD)
         setNonBlocking(rawFD)
-        unlink(path)  // best-effort: a stale socket file from a previous run would fail the bind
+        // Best-effort: a stale socket file from a previous run would fail the bind.
+        unsafe unlink(path)
         let length = socklen_t(MemoryLayout<sockaddr_un>.size)
         let bound = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(rawFD, $0, length) == 0
+            unsafe pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                unsafe bind(rawFD, $0, length) == 0
             }
         }
         guard bound else {
@@ -168,7 +172,7 @@ enum POSIXSocket {
         #if canImport(Darwin)
             var on: Int32 = 1
             let size = socklen_t(MemoryLayout<Int32>.size)
-            _ = setsockopt(rawFD, SOL_SOCKET, SO_NOSIGPIPE, &on, size)
+            _ = unsafe setsockopt(rawFD, SOL_SOCKET, SO_NOSIGPIPE, &on, size)
         #else
             // Linux has no `SO_NOSIGPIPE`; the byte path suppresses SIGPIPE per-write with
             // `send(..., MSG_NOSIGNAL)` instead (so a peer RST mid-write yields EPIPE, not a fatal
@@ -186,7 +190,7 @@ enum POSIXSocket {
     static func setNoDelay(_ rawFD: Int32) {
         var on: Int32 = 1
         // `IPPROTO_TCP` imports as `Int32` on Darwin but as `Int` on Glibc — normalize for `setsockopt`.
-        _ = setsockopt(
+        _ = unsafe setsockopt(
             rawFD, Int32(IPPROTO_TCP), TCP_NODELAY, &on, socklen_t(MemoryLayout<Int32>.size)
         )
     }
@@ -207,8 +211,8 @@ enum POSIXSocket {
         var storage = sockaddr_storage()
         var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
         let read = withUnsafeMutablePointer(to: &storage) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                getsockname(rawFD, $0, &length) == 0
+            unsafe pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                unsafe getsockname(rawFD, $0, &length) == 0
             }
         }
         return read ? storage : nil
@@ -259,8 +263,8 @@ enum POSIXSocket {
             let length = socklen_t(MemoryLayout<sockaddr_storage>.size)
         #endif
         let status = withUnsafePointer(to: &source) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
-                getnameinfo(
+            unsafe pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                unsafe getnameinfo(
                     sockaddrPointer,
                     length,
                     &hostBuffer,
@@ -312,8 +316,9 @@ enum POSIXSocket {
         maxLength: Int,
         _ read: (UnsafeMutableRawBufferPointer) throws -> Int
     ) rethrows -> [UInt8]? {
-        let bytes = try [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) { buffer, filled in
-            filled = try read(UnsafeMutableRawBufferPointer(buffer))
+        let bytes = try unsafe [UInt8](unsafeUninitializedCapacity: max(1, maxLength)) {
+            buffer, filled in
+            filled = try unsafe read(UnsafeMutableRawBufferPointer(buffer))
         }
         return bytes.isEmpty ? nil : bytes
     }

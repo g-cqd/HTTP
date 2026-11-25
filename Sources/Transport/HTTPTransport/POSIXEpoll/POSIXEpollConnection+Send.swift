@@ -108,7 +108,7 @@
                     // `MSG_NOSIGNAL`: a write to a peer that closed its read end returns EPIPE instead of
                     // raising SIGPIPE (Linux's per-call equivalent of Darwin's SO_NOSIGPIPE — audit T-F1).
                     // `Glibc.send` (not the `send(_:)` instance method, which would shadow it here).
-                    let written = Glibc.send(
+                    let written = unsafe Glibc.send(
                         descriptor,
                         raw.baseAddress?.advanced(by: offset),
                         raw.count - offset,
@@ -183,19 +183,19 @@
                         // whole body), or already past it (a body slice only).
                         var iovecs: [iovec]
                         if offset < head.count {
-                            let headPtr = UnsafeMutableRawPointer(mutating: headBase + offset)
-                            let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase)
-                            iovecs = [
-                                iovec(iov_base: headPtr, iov_len: head.count - offset),
-                                iovec(iov_base: bodyPtr, iov_len: body.count)
+                            let hPtr = unsafe UnsafeMutableRawPointer(mutating: headBase + offset)
+                            let bPtr = unsafe UnsafeMutableRawPointer(mutating: bodyBase)
+                            unsafe iovecs = [
+                                iovec(iov_base: hPtr, iov_len: head.count - offset),
+                                iovec(iov_base: bPtr, iov_len: body.count)
                             ]
                         }
                         else {
-                            let bodyOffset = offset - head.count
-                            let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase + bodyOffset)
-                            iovecs = [iovec(iov_base: bodyPtr, iov_len: body.count - bodyOffset)]
+                            let delta = offset - head.count
+                            let bPtr = unsafe UnsafeMutableRawPointer(mutating: bodyBase + delta)
+                            unsafe iovecs = [iovec(iov_base: bPtr, iov_len: body.count - delta)]
                         }
-                        let written = sendScatter(descriptor, &iovecs)
+                        let written = unsafe sendScatter(descriptor, &iovecs)
                         if written > 0 {
                             offset += written
                         }
@@ -242,10 +242,10 @@
         /// socket option (audit T-F1) — `writev` could not carry it.
         private static func sendScatter(_ descriptor: Int32, _ iovecs: inout [iovec]) -> Int {
             iovecs.withUnsafeMutableBufferPointer { iov -> Int in
-                var message = msghdr()
-                message.msg_iov = iov.baseAddress
-                message.msg_iovlen = iov.count
-                return sendmsg(descriptor, &message, Int32(MSG_NOSIGNAL))
+                var message = unsafe msghdr()
+                unsafe message.msg_iov = iov.baseAddress
+                unsafe message.msg_iovlen = iov.count
+                return unsafe sendmsg(descriptor, &message, Int32(MSG_NOSIGNAL))
             }
         }
     }

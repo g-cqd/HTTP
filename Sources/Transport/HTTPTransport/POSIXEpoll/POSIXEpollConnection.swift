@@ -252,7 +252,7 @@
                     // for exactly `raw.count` octets; it does not escape this closure.
                     try unsafe buffer.read(ceiling: maxLength) { raw -> Int in
                         while true {
-                            let count = read(descriptor, raw.baseAddress, raw.count)
+                            let count = unsafe read(descriptor, raw.baseAddress, raw.count)
                             if count >= 0 {
                                 return count
                             }
@@ -274,9 +274,9 @@
         private func parkForScratchRead(maxLength: Int, once: OnceResumer<Int>) async throws -> Int
         {
             try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
+                try await unsafe withUnsafeThrowingContinuation {
                     (continuation: UnsafeContinuation<Int, any Error>) in
-                    guard once.claim(continuation) else {
+                    guard unsafe once.claim(continuation) else {
                         return  // contract broken; `claim` has already failed this caller
                     }
                     armScratchRead(maxLength: maxLength, into: once)
@@ -317,9 +317,9 @@
             let descriptor = self.descriptor
             let eventLoop = self.eventLoop
             try await sendOwner.withOwnership { once in
-                try await withUnsafeThrowingContinuation {
+                try await unsafe withUnsafeThrowingContinuation {
                     (continuation: UnsafeContinuation<Void, any Error>) in
-                    guard claimSend(continuation, once) else {
+                    guard unsafe claimSend(continuation, once) else {
                         return
                     }
                     Self.writeRemaining(
@@ -385,9 +385,9 @@
             let descriptor = self.descriptor
             let eventLoop = self.eventLoop
             try await sendOwner.withOwnership { once in
-                try await withUnsafeThrowingContinuation {
+                try await unsafe withUnsafeThrowingContinuation {
                     (continuation: UnsafeContinuation<Void, any Error>) in
-                    guard claimSend(continuation, once) else {
+                    guard unsafe claimSend(continuation, once) else {
                         return
                     }
                     Self.writevRemaining(
@@ -418,9 +418,9 @@
             let socket = self.descriptor
             let eventLoop = self.eventLoop
             try await sendOwner.withOwnership { once in
-                try await withUnsafeThrowingContinuation {
+                try await unsafe withUnsafeThrowingContinuation {
                     (continuation: UnsafeContinuation<Void, any Error>) in
-                    guard claimSend(continuation, once) else {
+                    guard unsafe claimSend(continuation, once) else {
                         return
                     }
                     Self.sendFileRemaining(

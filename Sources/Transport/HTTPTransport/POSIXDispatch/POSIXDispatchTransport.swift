@@ -252,8 +252,8 @@ public final class POSIXDispatchTransport: ServerTransport {
             var address = sockaddr_storage()
             var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
             let clientFD = withUnsafeMutablePointer(to: &address) { pointer in
-                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    accept(listenFD, $0, &length)
+                unsafe pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    unsafe accept(listenFD, $0, &length)
                 }
             }
             if clientFD < 0 {

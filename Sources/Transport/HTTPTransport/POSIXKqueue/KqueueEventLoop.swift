@@ -174,7 +174,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
         }
         if exited {
             thread.async { [self] in
-                unowned.runSynchronously(on: asUnownedTaskExecutor())
+                unsafe unowned.runSynchronously(on: asUnownedTaskExecutor())
             }
         }
         else if offLoop {
@@ -298,7 +298,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     // MARK: - The run loop
 
     private func runLoop() {
-        var events = [KEvent](repeating: KEvent(), count: 256)
+        var events = unsafe [KEvent](repeating: KEvent(), count: 256)
         // The drain's double buffer, owned by the loop thread for its whole life. Swapped with the
         // inbox's arrays under the lock so BOTH stay uniquely referenced and their capacity is
         // genuinely reused — see ``drainInbox(jobs:control:until:)``.
@@ -316,18 +316,18 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             }
             var timeout = timespec(tv_sec: 0, tv_nsec: idle ? 50_000_000 : 0)
             let count = events.withUnsafeMutableBufferPointer { buffer in
-                kevent(kq, nil, 0, buffer.baseAddress, Int32(buffer.count), &timeout)
+                unsafe kevent(kq, nil, 0, buffer.baseAddress, Int32(buffer.count), &timeout)
             }
             // Back on the loop thread's processing region: on-loop callers (the pinned serve task)
             // now skip the wakeup, because this turn re-drains the inbox before parking again.
             inbox.withLock { $0.onLoop = true }
             if count > 0 {
                 for index in 0 ..< Int(count) {
-                    let event = events[index]
-                    if Int32(event.filter) == EVFILT_USER {
+                    let event = unsafe events[index]
+                    if Int32(unsafe event.filter) == EVFILT_USER {
                         continue  // a bare wakeup — its only job was to return us from `kevent`
                     }
-                    dispatch(event)
+                    unsafe dispatch(event)
                 }
             }
             // Drain control + jobs until the loop is idle again — or until the fairness quantum runs
@@ -397,7 +397,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             // granularity while still bounding readiness starvation to roughly one quantum.
             let stride = min(jobs.count, index &+ ReactorQuantum.clockCheckStride)
             while index < stride {
-                jobs[index].runSynchronously(on: asUnownedTaskExecutor())
+                unsafe jobs[index].runSynchronously(on: asUnownedTaskExecutor())
                 index &+= 1
             }
             if index < jobs.count, ReactorQuantum.nanoseconds() >= budget {
@@ -422,12 +422,12 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// already drained by a peer simply gets `EAGAIN` and re-parks. Resuming one and forgetting the
     /// rest is what left continuations suspended forever.
     private func dispatch(_ event: KEvent) {
-        let fd = Int32(event.ident)
+        let fd = Int32(unsafe event.ident)
         let waiters: [Waiter] = registry.withLock { registry in
-            if Int32(event.filter) == EVFILT_READ {
+            if Int32(unsafe event.filter) == EVFILT_READ {
                 return registry.readHandlers.removeValue(forKey: fd) ?? []
             }
-            if Int32(event.filter) == EVFILT_WRITE {
+            if Int32(unsafe event.filter) == EVFILT_WRITE {
                 return registry.writeHandlers.removeValue(forKey: fd) ?? []
             }
             return []
@@ -443,7 +443,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
     /// ever fire for this registration — the caller unwinds the waiter it parked (see
     /// ``waitReadable(_:_:)``).
     private func register(fd: Int32, filter: Int32) -> Bool {
-        var event = KEvent(
+        var event = unsafe KEvent(
             ident: UInt(fd),
             filter: Int16(filter),
             flags: UInt16(EV_ADD | EV_ONESHOT),
@@ -451,7 +451,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             data: 0,
             udata: nil
         )
-        let accepted = kevent(kq, &event, 1, nil, 0, nil) >= 0
+        let accepted = unsafe kevent(kq, &event, 1, nil, 0, nil) >= 0
         // If the registration came from off-loop while the loop is parked in `kevent`, wake it so the
         // new interest is honored this turn. From the loop thread itself (the pinned serve task parking
         // on a read) the wakeup is pure overhead — the loop re-checks the readiness set before parking
@@ -464,7 +464,7 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
 
     /// Adds the `EVFILT_USER` wakeup source once, at loop start (`EV_CLEAR` = auto-reset each delivery).
     private func registerWakeup() {
-        var event = KEvent(
+        var event = unsafe KEvent(
             ident: Self.wakeIdent,
             filter: Int16(EVFILT_USER),
             flags: UInt16(EV_ADD | EV_CLEAR),
@@ -472,12 +472,12 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             data: 0,
             udata: nil
         )
-        _ = kevent(kq, &event, 1, nil, 0, nil)
+        _ = unsafe kevent(kq, &event, 1, nil, 0, nil)
     }
 
     /// Fires the `EVFILT_USER` source so a blocked `kevent` returns immediately (thread-safe).
     private func triggerWakeup() {
-        var event = KEvent(
+        var event = unsafe KEvent(
             ident: Self.wakeIdent,
             filter: Int16(EVFILT_USER),
             flags: 0,
@@ -485,6 +485,6 @@ final class KqueueEventLoop: Sendable, TaskExecutor {
             data: 0,
             udata: nil
         )
-        _ = kevent(kq, &event, 1, nil, 0, nil)
+        _ = unsafe kevent(kq, &event, 1, nil, 0, nil)
     }
 }

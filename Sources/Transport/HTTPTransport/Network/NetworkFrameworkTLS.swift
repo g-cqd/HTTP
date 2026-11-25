@@ -56,14 +56,14 @@ enum NetworkFrameworkTLS {
         // only written inside the lock, so reading it afterwards is sound — hence `nonisolated(unsafe)`.
         nonisolated(unsafe) var rawItems: CFArray?
         let status = importLock.withLock { _ in
-            SecPKCS12Import(Data(pkcs12) as CFData, options, &rawItems)
+            unsafe SecPKCS12Import(Data(pkcs12) as CFData, options, &rawItems)
         }
         guard status == errSecSuccess else {
             throw TransportError.tlsConfigurationFailed(
                 "SecPKCS12Import failed (OSStatus \(status))"
             )
         }
-        guard let items = rawItems as? [[String: AnyObject]],
+        guard let items = unsafe rawItems as? [[String: AnyObject]],
             let identityValue = items.first?[kSecImportItemIdentity as String]
         else {
             throw TransportError.tlsConfigurationFailed("PKCS#12 contained no identity")
@@ -74,7 +74,7 @@ enum NetworkFrameworkTLS {
         guard CFGetTypeID(identityValue) == SecIdentityGetTypeID() else {
             throw TransportError.tlsConfigurationFailed("PKCS#12 identity was not a SecIdentity")
         }
-        let secIdentity = unsafeDowncast(identityValue, to: SecIdentity.self)
+        let secIdentity = unsafe unsafeDowncast(identityValue, to: SecIdentity.self)
         guard let identity = sec_identity_create(secIdentity) else {
             throw TransportError.tlsConfigurationFailed("sec_identity_create returned nil")
         }
@@ -93,7 +93,7 @@ enum NetworkFrameworkTLS {
     /// hygiene must never break identity creation.
     private static func purgeImportedCertificate(_ identity: SecIdentity) {
         var certificate: SecCertificate?
-        guard SecIdentityCopyCertificate(identity, &certificate) == errSecSuccess,
+        guard unsafe SecIdentityCopyCertificate(identity, &certificate) == errSecSuccess,
             let certificate
         else {
             return
@@ -148,7 +148,9 @@ enum NetworkFrameworkTLS {
         // ALPN strings are short ASCII tokens; `withCString` hands the C API a valid pointer for the
         // call's duration only — no retained pointer, no allocation beyond the transient buffer.
         for proto in applicationProtocols {
-            proto.withCString { sec_protocol_options_add_tls_application_protocol(security, $0) }
+            proto.withCString {
+                unsafe sec_protocol_options_add_tls_application_protocol(security, $0)
+            }
         }
         if clientAuth == .required {
             configureMutualTLS(security, verifyPeer: verifyPeer)
@@ -210,13 +212,13 @@ enum NetworkFrameworkTLS {
         guard #available(macOS 15.5, iOS 18.5, tvOS 18.5, watchOS 11.5, *) else {
             return legacyNegotiatedApplicationProtocol(of: security)
         }
-        guard let raw = sec_protocol_metadata_copy_negotiated_protocol(security) else {
+        guard let raw = unsafe sec_protocol_metadata_copy_negotiated_protocol(security) else {
             return nil
         }
         // "The caller is expected to `free` the output string when no longer needed" — the whole
         // difference between the two spellings, and the reason this cannot be a one-word rename.
-        defer { free(UnsafeMutableRawPointer(mutating: raw)) }
-        return String(cString: raw)
+        defer { unsafe free(UnsafeMutableRawPointer(mutating: raw)) }
+        return unsafe String(cString: raw)
     }
 
     /// The ALPN-negotiated protocol read through the pre-15.5 borrowed-pointer API (RFC 7301).
@@ -232,10 +234,10 @@ enum NetworkFrameworkTLS {
     private static func legacyNegotiatedApplicationProtocol(
         of metadata: sec_protocol_metadata_t
     ) -> String? {
-        guard let raw = sec_protocol_metadata_get_negotiated_protocol(metadata) else {
+        guard let raw = unsafe sec_protocol_metadata_get_negotiated_protocol(metadata) else {
             return nil
         }
-        return String(cString: raw)
+        return unsafe String(cString: raw)
     }
 
     /// The peer's full verified client-certificate identity (mutual TLS) on a ready `connection`, or
@@ -270,7 +272,7 @@ enum NetworkFrameworkTLS {
     ) -> [SecCertificate] {
         var chain: [SecCertificate] = []
         _ = sec_protocol_metadata_access_peer_certificate_chain(metadata) { secCertificate in
-            chain.append(sec_certificate_copy_ref(secCertificate).takeRetainedValue())
+            chain.append(unsafe sec_certificate_copy_ref(secCertificate).takeRetainedValue())
         }
         return chain
     }

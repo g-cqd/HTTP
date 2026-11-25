@@ -36,7 +36,7 @@ public final class NetworkFrameworkTransport: ServerTransport {
         var listener: NWListener?
         var isReady = false
         var failure: TransportError?
-        var readyContinuation: UnsafeContinuation<Void, any Error>?
+        var readyContinuation: CheckedContinuation<Void, any Error>?
         /// The bound port captured at the `.ready` transition (RFC-agnostic; NF assigns the ephemeral
         /// port by then), so reads never race a live `listener.port` that can be transiently nil under
         /// concurrent load.
@@ -240,9 +240,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
     /// finishing the shared stream — so a reload's replacement can bind the freed port.
     private func retireListener(_ listener: NWListener) async {
         // No throw is possible; `try?` only discards the continuation's `Error` channel.
-        try? await withUnsafeThrowingContinuation {
+        try? await unsafe withUnsafeThrowingContinuation {
             (continuation: UnsafeContinuation<Void, any Error>) in
-            let resumer = OnceResumer(continuation)
+            let resumer = unsafe OnceResumer(continuation)
             listener.stateUpdateHandler = { newState in
                 switch newState {
                     case .cancelled, .failed:
@@ -264,9 +264,9 @@ public final class NetworkFrameworkTransport: ServerTransport {
         endpoint: BindEndpoint,
         continuation: AsyncStream<any TransportConnection>.Continuation
     ) async throws {
-        try await withUnsafeThrowingContinuation {
+        try await unsafe withUnsafeThrowingContinuation {
             (ready: UnsafeContinuation<Void, any Error>) in
-            let resumer = OnceResumer(ready)
+            let resumer = unsafe OnceResumer(ready)
             let context = endpoint.description
             listener.stateUpdateHandler = { newState in
                 switch newState {
@@ -492,8 +492,8 @@ public final class NetworkFrameworkTransport: ServerTransport {
     }
 
     private func waitUntilReady() async throws {
-        try await withUnsafeThrowingContinuation {
-            (continuation: UnsafeContinuation<Void, any Error>) in
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, any Error>) in
             state.withLock { current in
                 if current.isReady {
                     continuation.resume()

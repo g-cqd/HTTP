@@ -229,7 +229,7 @@ public final class POSIXKqueueConnection: TransportConnection {
                 // exactly `raw.count` octets; it does not escape this closure.
                 try unsafe buffer.read(ceiling: maxLength) { raw -> Int in
                     while true {
-                        let count = read(descriptor, raw.baseAddress, raw.count)
+                        let count = unsafe read(descriptor, raw.baseAddress, raw.count)
                         if count >= 0 {
                             return count
                         }
@@ -250,9 +250,9 @@ public final class POSIXKqueueConnection: TransportConnection {
     /// a byte stream without losing its framing (the ``TransportConnection`` receive contract).
     private func parkForScratchRead(maxLength: Int, once: OnceResumer<Int>) async throws -> Int {
         try await withTaskCancellationHandler {
-            try await withUnsafeThrowingContinuation {
+            try await unsafe withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Int, any Error>) in
-                guard once.claim(continuation) else {
+                guard unsafe once.claim(continuation) else {
                     return  // contract broken; `claim` has already failed this caller
                 }
                 armScratchRead(maxLength: maxLength, into: once)
@@ -292,9 +292,9 @@ public final class POSIXKqueueConnection: TransportConnection {
         let descriptor = self.descriptor
         let eventLoop = self.eventLoop
         try await sendOwner.withOwnership { once in
-            try await withUnsafeThrowingContinuation {
+            try await unsafe withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Void, any Error>) in
-                guard claimSend(continuation, once) else {
+                guard unsafe claimSend(continuation, once) else {
                     return
                 }
                 Self.writeRemaining(
@@ -322,9 +322,9 @@ public final class POSIXKqueueConnection: TransportConnection {
         let descriptor = self.descriptor
         let eventLoop = self.eventLoop
         try await sendOwner.withOwnership { once in
-            try await withUnsafeThrowingContinuation {
+            try await unsafe withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Void, any Error>) in
-                guard claimSend(continuation, once) else {
+                guard unsafe claimSend(continuation, once) else {
                     return
                 }
                 Self.writevRemaining(
@@ -387,9 +387,9 @@ public final class POSIXKqueueConnection: TransportConnection {
         let socket = self.descriptor
         let eventLoop = self.eventLoop
         try await sendOwner.withOwnership { once in
-            try await withUnsafeThrowingContinuation {
+            try await unsafe withUnsafeThrowingContinuation {
                 (continuation: UnsafeContinuation<Void, any Error>) in
-                guard claimSend(continuation, once) else {
+                guard unsafe claimSend(continuation, once) else {
                     return
                 }
                 Self.sendFileRemaining(
@@ -440,7 +440,7 @@ public final class POSIXKqueueConnection: TransportConnection {
         var remaining = remaining
         while remaining > 0 {
             var span = off_t(remaining)
-            let result = sendfile(file, socket, off_t(offset), &span, nil, 0)
+            let result = unsafe sendfile(file, socket, off_t(offset), &span, nil, 0)
             offset += Int(span)
             remaining -= Int(span)
             if result == 0 {
@@ -485,7 +485,7 @@ public final class POSIXKqueueConnection: TransportConnection {
         var offset = offset
         let outcome: WriteOutcome = bytes.withUnsafeBytes { raw in
             while offset < raw.count {
-                let written = write(
+                let written = unsafe write(
                     descriptor,
                     raw.baseAddress?.advanced(by: offset),
                     raw.count - offset
@@ -551,19 +551,19 @@ public final class POSIXKqueueConnection: TransportConnection {
                     // body), or already past it (a body slice only).
                     var iovecs: [iovec]
                     if offset < head.count {
-                        let headPtr = UnsafeMutableRawPointer(mutating: headBase + offset)
-                        let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase)
-                        iovecs = [
+                        let headPtr = unsafe UnsafeMutableRawPointer(mutating: headBase + offset)
+                        let bodyPtr = unsafe UnsafeMutableRawPointer(mutating: bodyBase)
+                        unsafe iovecs = [
                             iovec(iov_base: headPtr, iov_len: head.count - offset),
                             iovec(iov_base: bodyPtr, iov_len: body.count)
                         ]
                     }
                     else {
-                        let bodyOffset = offset - head.count
-                        let bodyPtr = UnsafeMutableRawPointer(mutating: bodyBase + bodyOffset)
-                        iovecs = [iovec(iov_base: bodyPtr, iov_len: body.count - bodyOffset)]
+                        let delta = offset - head.count
+                        let bodyPtr = unsafe UnsafeMutableRawPointer(mutating: bodyBase + delta)
+                        unsafe iovecs = [iovec(iov_base: bodyPtr, iov_len: body.count - delta)]
                     }
-                    let written = writev(descriptor, &iovecs, Int32(iovecs.count))
+                    let written = unsafe writev(descriptor, &iovecs, Int32(iovecs.count))
                     if written > 0 {
                         offset += written
                     }

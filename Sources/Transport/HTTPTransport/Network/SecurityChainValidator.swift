@@ -31,7 +31,7 @@
                     return false
                 }
                 var rawTrust: SecTrust?
-                let created = SecTrustCreateWithCertificates(
+                let created = unsafe SecTrustCreateWithCertificates(
                     chain as CFArray, SecPolicyCreateBasicX509(), &rawTrust
                 )
                 guard created == errSecSuccess, let trust = rawTrust else {
