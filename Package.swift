@@ -615,6 +615,7 @@ let package = Package(
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
                 "HTTPConcurrency",
+                .product(name: "AemiKernel", package: "aemi"),
                 // The session cookie's HMAC-SHA256 is a security boundary, so it uses the audited
                 // first-party implementation rather than an in-house one (see the `swift-crypto`
                 // dependency comment). `Crypto` only — never `_CryptoExtras`.

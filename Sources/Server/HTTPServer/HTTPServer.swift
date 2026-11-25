@@ -7,6 +7,7 @@
 //  parser, invoking the responder, and serializing the reply.
 //
 
+internal import AemiKernel
 internal import HTTP1
 internal import HTTP2
 internal import HTTPConcurrency
@@ -89,6 +90,14 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
 
     /// The source of ``activeQUICConnections`` keys — a QUIC connection has no transport-assigned id.
     let nextQUICHandleID = Atomic<Int>(0)
+
+    /// Reusable scratch-buffer pool (`AemiKernel.ByteBufferPool`) for HTTP/1.1 connection read and
+    /// response-head buffers.
+    ///
+    /// Avoids fresh heap allocations across short-lived connections while capping retained capacity
+    /// (`maxBufferCapacity: 64 KiB`, `maxPooled: 64`) so an oversized request cannot pin memory
+    /// permanently.
+    let connectionBufferPool = ByteBufferPool(maxBufferCapacity: 64 * 1_024, maxPooled: 64)
 
     /// Creates a server bound to `transport`, handling requests with `responder` and timing its
     /// Slowloris/idle deadlines against `clock`.
@@ -274,7 +283,8 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
         }
 
         await withIdleWatchdog(connection) { deadline in
-            var buffer: [UInt8] = []
+            var buffer = self.connectionBufferPool.take()
+            defer { self.connectionBufferPool.recycle(buffer) }
             // Read until the 16-octet marker is confirmed or the start diverges from it (HTTP/1.x).
             while buffer.count < Self.http2MarkerLength, Self.couldBeHTTP2Preface(buffer) {
                 deadline.arm(self.deadlineKey(after: self.limits.keepAliveTimeout))
@@ -288,10 +298,11 @@ public final class HTTPServer<C: Clock>: Sendable where C.Duration == Duration {
                 await self.serveHTTP2(connection, deadline: deadline, initialBytes: buffer)
             }
             else {
-                // A per-connection response buffer, reused across keep-alive exchanges so the
-                // serializer allocates no fresh response storage after the first (audit: tail-latency
-                // variance — fewer per-request mallocs, less allocator-lock contention).
-                var responseBuffer: [UInt8] = []
+                // A per-connection response buffer borrowed from `connectionBufferPool` and reused
+                // across keep-alive exchanges so the serializer allocates no fresh response storage
+                // across requests OR across short-lived connections.
+                var responseBuffer = self.connectionBufferPool.take()
+                defer { self.connectionBufferPool.recycle(responseBuffer) }
                 // A cursor marking where the next request begins in `buffer`; advancing it past a
                 // consumed request is O(1), so a pipelined remainder is never memmoved to the front per
                 // request (audit L3 — the keep-alive ring buffer). serveOne compacts the prefix lazily.
