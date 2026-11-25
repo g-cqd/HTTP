@@ -28,27 +28,30 @@
         /// The caller owns the returned (default) context and must `CHTTPBoringSSL_SSL_CTX_free` it once no live `SSL`
         /// references it; freeing it also releases the SNI registry and its per-name contexts.
         static func serverContext(_ tls: TransportTLS) throws -> OpaquePointer {
-            let context = try makeContext(identity: .from(tls), tls: tls)
+            let context = try unsafe makeContext(identity: .from(tls), tls: tls)
             guard !tls.sniIdentities.isEmpty else {
-                return context
+                return unsafe context
             }
             do {
-                CHTTPBoringSSLShims_enable_sni(context)
+                unsafe CHTTPBoringSSLShims_enable_sni(context)
                 for (name, identity) in tls.sniIdentities {
                     // PEM when supplied (the 3d SNIIdentity extension), else the PKCS#12
                     // blob — the same precedence as the default identity's `from(_:)`.
-                    let perName = try makeContext(
+                    let perName = try unsafe makeContext(
                         identity: identity.pem.map(IdentitySource.pem)
                             ?? .pkcs12(identity.pkcs12, passphrase: identity.passphrase),
                         tls: tls
                     )
-                    name.withCString { CHTTPBoringSSLShims_add_sni_context(context, $0, perName) }
-                    CHTTPBoringSSL_SSL_CTX_free(perName)  // the registry retains its own reference
+                    name.withCString {
+                        unsafe CHTTPBoringSSLShims_add_sni_context(context, $0, perName)
+                    }
+                    // The registry retains its own reference to `perName`.
+                    unsafe CHTTPBoringSSL_SSL_CTX_free(perName)
                 }
-                return context
+                return unsafe context
             }
             catch {
-                CHTTPBoringSSL_SSL_CTX_free(context)
+                unsafe CHTTPBoringSSL_SSL_CTX_free(context)
                 throw error
             }
         }
@@ -76,16 +79,17 @@
         private static func makeContext(
             identity: IdentitySource, tls: TransportTLS
         ) throws -> OpaquePointer {
-            guard let context = CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_server_method())
+            guard
+                let context = unsafe CHTTPBoringSSL_SSL_CTX_new(CHTTPBoringSSL_TLS_server_method())
             else {
                 throw TransportError.tlsConfigurationFailed("SSL_CTX_new returned nil")
             }
             do {
                 guard
-                    CHTTPBoringSSLShims_set_min_proto_version(
+                    unsafe CHTTPBoringSSLShims_set_min_proto_version(
                         context, protocolVersion(tls.minVersion)
                     ) == 1,
-                    CHTTPBoringSSLShims_set_max_proto_version(
+                    unsafe CHTTPBoringSSLShims_set_max_proto_version(
                         context, protocolVersion(tls.maxVersion)
                     ) == 1
                 else {
@@ -93,13 +97,13 @@
                         "failed to pin the TLS version range"
                     )
                 }
-                try load(identity, into: context)
-                CHTTPBoringSSLShims_set_alpn_select_h2(context)
-                CHTTPBoringSSLShims_set_client_auth(context, clientAuthMode(tls.clientAuth))
-                return context
+                try unsafe load(identity, into: context)
+                unsafe CHTTPBoringSSLShims_set_alpn_select_h2(context)
+                unsafe CHTTPBoringSSLShims_set_client_auth(context, clientAuthMode(tls.clientAuth))
+                return unsafe context
             }
             catch {
-                CHTTPBoringSSL_SSL_CTX_free(context)
+                unsafe CHTTPBoringSSL_SSL_CTX_free(context)
                 throw error
             }
         }
@@ -111,7 +115,7 @@
             switch identity {
                 case .pkcs12(let blob, let passphrase):
                     let loaded = blob.withUnsafeBufferPointer { buffer in
-                        CHTTPBoringSSLShims_use_pkcs12(
+                        unsafe CHTTPBoringSSLShims_use_pkcs12(
                             context, buffer.baseAddress, Int32(buffer.count), passphrase
                         )
                     }
@@ -125,7 +129,7 @@
                     let key = Array(pem.privateKeyPEM.utf8)
                     let loaded = chain.withUnsafeBufferPointer { chainBuffer in
                         key.withUnsafeBufferPointer { keyBuffer in
-                            CHTTPBoringSSLShims_use_pem(
+                            unsafe CHTTPBoringSSLShims_use_pem(
                                 context,
                                 chainBuffer.baseAddress,
                                 Int32(chainBuffer.count),
@@ -147,11 +151,11 @@
         static func negotiatedApplicationProtocol(of ssl: OpaquePointer) -> String? {
             var data: UnsafePointer<UInt8>?
             var length: UInt32 = 0
-            CHTTPBoringSSL_SSL_get0_alpn_selected(ssl, &data, &length)
-            guard let data, length > 0 else {
+            unsafe CHTTPBoringSSL_SSL_get0_alpn_selected(ssl, &data, &length)
+            guard let data = unsafe data, length > 0 else {
                 return nil
             }
-            let bytes = [UInt8](UnsafeBufferPointer(start: data, count: Int(length)))
+            let bytes = unsafe [UInt8](UnsafeBufferPointer(start: data, count: Int(length)))
             return String(decoding: bytes, as: Unicode.UTF8.self)
         }
 
@@ -160,7 +164,7 @@
         static func peerSubject(of ssl: OpaquePointer) -> String? {
             var buffer = [CChar](repeating: 0, count: 256)
             let length = buffer.withUnsafeMutableBufferPointer {
-                CHTTPBoringSSLShims_peer_subject(ssl, $0.baseAddress, Int32($0.count))
+                unsafe CHTTPBoringSSLShims_peer_subject(ssl, $0.baseAddress, Int32($0.count))
             }
             guard length >= 0 else {
                 return nil
@@ -180,15 +184,15 @@
                 }
             }
             let accumulator = Accumulator()
-            CHTTPBoringSSLShims_peer_der_chain(
+            unsafe CHTTPBoringSSLShims_peer_der_chain(
                 ssl,
                 { der, length, context in
-                    guard let der, let context else {
+                    guard let der = unsafe der, let context = unsafe context else {
                         return
                     }
-                    let accumulator = Unmanaged<Accumulator>.fromOpaque(context)
+                    let accumulator = unsafe Unmanaged<Accumulator>.fromOpaque(context)
                         .takeUnretainedValue()
-                    accumulator.chain.append(
+                    unsafe accumulator.chain.append(
                         [UInt8](UnsafeBufferPointer(start: der, count: Int(length)))
                     )
                 },

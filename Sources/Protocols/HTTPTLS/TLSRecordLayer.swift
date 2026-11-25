@@ -15,7 +15,7 @@
 public import Crypto
 
 /// The sans-I/O TLS 1.3 record layer (RFC 8446 §5): octets in, events out, per-direction keys.
-public struct TLSRecordLayer {
+public struct TLSRecordLayer: Sendable {
     /// The negotiated suite — fixed by the first key installation; every later installation
     /// must agree (§7: one suite per connection).
     public private(set) var suite: TLSCipherSuite?

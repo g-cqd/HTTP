@@ -65,11 +65,10 @@
     /// A ``TransportConnection`` backed by a libssl `SSL` driven through memory BIOs on a shared
     /// readiness loop (audit R4).
     ///
-    /// `@unchecked Sendable` because the `SSL`, its BIOs and their buffers live behind ``engine``'s
-    /// `Mutex` and the two direction exclusions — see the file comment for which covers what. The
-    /// earlier justification ("I/O is serial per connection") was not true of any HTTP/2 or WebSocket
-    /// connection, which is what this serialization replaces.
-    final class PortableTLSConnection: TransportConnection, @unchecked Sendable {
+    /// All mutable state is synchronized by ``engine``'s `Mutex`, ``negotiated``/``peerIdentity``
+    /// `Mutex`es, ``isClosed`` `Atomic`, and the two direction ``AsyncExclusion``s, so compiler-checked
+    /// `Sendable` holds without `@unchecked`.
+    final class PortableTLSConnection: TransportConnection, Sendable {
         /// One `pread` chunk of ``sendFile(descriptor:offset:length:)`` — the ceiling on how much file
         /// this connection buffers at once, whatever the body's size.
         private static let fileChunkOctets = 64 * 1_024
@@ -569,9 +568,9 @@
         /// the handler cost is irrelevant (audit CC4 concerned the data-ready path).
         private func awaitReadable() async throws {
             try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
+                try await unsafe withUnsafeThrowingContinuation {
                     (continuation: UnsafeContinuation<Void, any Error>) in
-                    let once = OnceResumer(continuation)
+                    let once = unsafe OnceResumer(continuation)
                     let registered = eventLoop.waitReadable(descriptor) {
                         once.resume(returning: ())
                     }
@@ -588,9 +587,9 @@
         /// Awaits socket writability for the ciphertext pump — see ``awaitReadable()`` on cancellation.
         private func awaitWritable() async throws {
             try await withTaskCancellationHandler {
-                try await withUnsafeThrowingContinuation {
+                try await unsafe withUnsafeThrowingContinuation {
                     (continuation: UnsafeContinuation<Void, any Error>) in
-                    let once = OnceResumer(continuation)
+                    let once = unsafe OnceResumer(continuation)
                     let registered = eventLoop.waitWritable(descriptor) {
                         once.resume(returning: ())
                     }

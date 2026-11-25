@@ -25,7 +25,7 @@
 public import Crypto
 
 /// A sans-I/O TLS 1.3 server connection (RFC 8446): records in, events out, one exit funnel.
-public struct TLSServerConnection {
+public struct TLSServerConnection: Sendable {
     /// The listener contract this connection negotiates under.
     let configuration: TLSServerConfiguration
     /// The identity seam (Phase 3c): resolved per handshake from the ClientHello's SNI —

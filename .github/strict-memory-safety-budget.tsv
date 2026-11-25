@@ -22,4 +22,4 @@
 # the gate until it is either annotated or added here deliberately.
 HTTPAuth	0	1
 HTTPServer	0	3
-HTTPTransport	0	11
+HTTPTransport	0	9

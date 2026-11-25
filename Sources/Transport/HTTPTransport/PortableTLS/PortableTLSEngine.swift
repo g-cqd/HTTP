@@ -53,6 +53,7 @@
     /// to reach one is through the `Mutex` that owns it, which is what supplies BoringSSL's "one
     /// thread at a time". `~Copyable` so the value cannot be lifted out of `withLock` — a copy would
     /// carry the same `SSL` pointer past the lock that guards it.
+    @safe
     struct PortableTLSEngine: ~Copyable, @unchecked Sendable {
         /// What one `SSL_*` call did, classified by the `SSL_get_error` taken in the same breath.
         enum Outcome {
@@ -121,9 +122,9 @@
             writeBIO: UnsafeMutablePointer<BIO>,
             connectionID: TransportConnectionID
         ) {
-            self.ssl = ssl
-            self.readBIO = readBIO
-            self.writeBIO = writeBIO
+            unsafe self.ssl = ssl
+            unsafe self.readBIO = readBIO
+            unsafe self.writeBIO = writeBIO
             self.connectionID = connectionID
         }
 
@@ -148,7 +149,7 @@
         /// first call; later calls continue the handshake after each BIO pump.
         mutating func acceptHandshake() -> Outcome {
             clearThreadErrorQueue()
-            let result = CHTTPBoringSSL_SSL_accept(ssl)
+            let result = unsafe CHTTPBoringSSL_SSL_accept(ssl)
             guard result != 1 else {
                 return .produced(1)
             }
@@ -156,13 +157,15 @@
         }
 
         /// The ALPN protocol the completed handshake selected (RFC 7301).
-        func negotiatedProtocol() -> String? { OpenSSLTLS.negotiatedApplicationProtocol(of: ssl) }
+        func negotiatedProtocol() -> String? {
+            unsafe OpenSSLTLS.negotiatedApplicationProtocol(of: ssl)
+        }
 
         /// The peer's certificate chain, leaf first, in DER.
-        func peerChainDER() -> [[UInt8]] { OpenSSLTLS.peerDERChain(of: ssl) }
+        func peerChainDER() -> [[UInt8]] { unsafe OpenSSLTLS.peerDERChain(of: ssl) }
 
         /// The peer leaf certificate's subject.
-        func peerSubject() -> String? { OpenSSLTLS.peerSubject(of: ssl) }
+        func peerSubject() -> String? { unsafe OpenSSLTLS.peerSubject(of: ssl) }
 
         // MARK: - Plaintext
 
@@ -232,7 +235,7 @@
 
         /// Whether any ciphertext is still owed to the socket, staged or queued in ``writeBIO``.
         func hasUnsentCiphertext() -> Bool {
-            !staged.isEmpty || CHTTPBoringSSL_BIO_ctrl_pending(writeBIO) > 0
+            unsafe (!staged.isEmpty || CHTTPBoringSSL_BIO_ctrl_pending(writeBIO) > 0)
         }
 
         /// Advances the outbound pump by one step, returning `false` once nothing is owed.
@@ -294,7 +297,7 @@
                 return
             }
             isReleased = true
-            CHTTPBoringSSL_SSL_free(ssl)
+            unsafe CHTTPBoringSSL_SSL_free(ssl)
         }
 
         // MARK: - Internals
@@ -306,7 +309,7 @@
         /// that sends a small response holds a small one (CWE-400 — idle residency set by demonstrated
         /// need, not by the worst case).
         private mutating func stage() {
-            let pending = CHTTPBoringSSL_BIO_ctrl_pending(writeBIO)
+            let pending = unsafe CHTTPBoringSSL_BIO_ctrl_pending(writeBIO)
             guard pending > 0 else {
                 return
             }
@@ -364,7 +367,7 @@
         /// (`ssl_reset_error_state`, `ssl_lib.cc:79`). Every retryable outcome returns before the
         /// capture, so the ordinary path drains nothing and allocates nothing.
         private func classify(_ result: Int32, in call: StaticString) -> Outcome {
-            switch CHTTPBoringSSL_SSL_get_error(ssl, result) {
+            switch unsafe CHTTPBoringSSL_SSL_get_error(ssl, result) {
                 case SSL_ERROR_WANT_READ:
                     .wantRead
                 case SSL_ERROR_WANT_WRITE:

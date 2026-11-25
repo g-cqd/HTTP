@@ -21,7 +21,7 @@
 public import Crypto
 
 /// The RFC 8446 §7.1 key schedule: early → handshake → master, one secret per derivation.
-public struct TLSKeySchedule {
+public struct TLSKeySchedule: Sendable {
     /// The §7.1 ladder position (each Extract advances it; it never moves backwards).
     public enum Stage: Sendable, Equatable {
         /// Before any Extract — the schedule holds no secret yet.

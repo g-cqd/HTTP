@@ -25,6 +25,7 @@
     // one stored property is an immutable `SSL_CTX` pointer, and BoringSSL's `ssl.h`
     // documents the `SSL_CTX` as thread-safe (unlike any `SSL` it mints) — crossing the
     // accept-thread hop with it is exactly what the previous inline code did.
+    @safe
     final class PortableTLSServerContext: @unchecked Sendable {
         /// The shared server `SSL_CTX` — thread-safe per `ssl.h`, unlike any `SSL` it mints.
         private let pointer: OpaquePointer
@@ -32,7 +33,7 @@
         /// Builds the `SSL_CTX` from the backbone-agnostic configuration (`OpenSSLTLS`).
         init(_ tls: TransportTLS) throws(TransportError) {
             do {
-                pointer = try OpenSSLTLS.serverContext(tls)
+                unsafe pointer = try OpenSSLTLS.serverContext(tls)
             }
             catch let error as TransportError {
                 throw error
@@ -54,30 +55,30 @@
         /// ``release()`` cannot free the `SSL_CTX` under us; the new `SSL` then retains
         /// the context it handshakes with.
         func makeEngine(connectionID: TransportConnectionID) -> PortableTLSEngine? {
-            _ = CHTTPBoringSSL_SSL_CTX_up_ref(pointer)
-            let ssl = CHTTPBoringSSL_SSL_new(pointer)
-            CHTTPBoringSSL_SSL_CTX_free(pointer)
-            guard let ssl else {
+            _ = unsafe CHTTPBoringSSL_SSL_CTX_up_ref(pointer)
+            let ssl = unsafe CHTTPBoringSSL_SSL_new(pointer)
+            unsafe CHTTPBoringSSL_SSL_CTX_free(pointer)
+            guard let ssl = unsafe ssl else {
                 return nil
             }
             // Memory BIOs: SSL reads ciphertext from `readBIO`, writes ciphertext to
             // `writeBIO`; the connection pumps both to/from the non-blocking socket.
             // `SSL_set_bio` transfers ownership (both are freed by `SSL_free`).
-            guard let readBIO = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()),
-                let writeBIO = CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
+            guard let readBIO = unsafe CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem()),
+                let writeBIO = unsafe CHTTPBoringSSL_BIO_new(CHTTPBoringSSL_BIO_s_mem())
             else {
-                CHTTPBoringSSL_SSL_free(ssl)
+                unsafe CHTTPBoringSSL_SSL_free(ssl)
                 return nil
             }
-            CHTTPBoringSSL_SSL_set_bio(ssl, readBIO, writeBIO)
-            return PortableTLSEngine(
+            unsafe CHTTPBoringSSL_SSL_set_bio(ssl, readBIO, writeBIO)
+            return unsafe PortableTLSEngine(
                 ssl: ssl, readBIO: readBIO, writeBIO: writeBIO, connectionID: connectionID
             )
         }
 
         /// Releases the transport's reference to the `SSL_CTX`; live `SSL`s keep theirs.
         func release() {
-            CHTTPBoringSSL_SSL_CTX_free(pointer)
+            unsafe CHTTPBoringSSL_SSL_CTX_free(pointer)
         }
     }
 

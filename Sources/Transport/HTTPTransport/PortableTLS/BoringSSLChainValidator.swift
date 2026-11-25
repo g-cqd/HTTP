@@ -27,13 +27,13 @@
                 guard !chainDER.isEmpty, !roots.isEmpty else {
                     return false
                 }
-                guard let store = CHTTPBoringSSLShims_trust_store_create() else {
+                guard let store = unsafe CHTTPBoringSSLShims_trust_store_create() else {
                     return false
                 }
-                defer { CHTTPBoringSSLShims_trust_store_free(store) }
+                defer { unsafe CHTTPBoringSSLShims_trust_store_free(store) }
                 for root in roots {
                     let added = root.withUnsafeBufferPointer {
-                        CHTTPBoringSSLShims_trust_store_add_root(
+                        unsafe CHTTPBoringSSLShims_trust_store_add_root(
                             store, $0.baseAddress, Int32($0.count)
                         )
                     }
@@ -41,19 +41,21 @@
                         return false
                     }
                 }
-                guard let chain = CHTTPBoringSSLShims_chain_create() else {
+                guard let chain = unsafe CHTTPBoringSSLShims_chain_create() else {
                     return false
                 }
-                defer { CHTTPBoringSSLShims_chain_free(chain) }
+                defer { unsafe CHTTPBoringSSLShims_chain_free(chain) }
                 for certificate in chainDER {
-                    let appended = certificate.withUnsafeBufferPointer {
-                        CHTTPBoringSSLShims_chain_append(chain, $0.baseAddress, Int32($0.count))
+                    let appended = certificate.withUnsafeBufferPointer { buf in
+                        let base = buf.baseAddress
+                        let count = Int32(buf.count)
+                        return unsafe CHTTPBoringSSLShims_chain_append(chain, base, count)
                     }
                     guard appended == 1 else {
                         return false
                     }
                 }
-                return CHTTPBoringSSLShims_trust_store_validate(store, chain) == 1
+                return unsafe CHTTPBoringSSLShims_trust_store_validate(store, chain) == 1
             }
         }
     }

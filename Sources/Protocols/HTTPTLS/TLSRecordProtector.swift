@@ -21,7 +21,7 @@ public import Crypto
 internal import struct Foundation.Data
 
 /// One direction's §5.2 record protection: seal/open, §5.3 nonces, §5.5 limits, §7.2 ratchet.
-public struct TLSRecordProtector {
+public struct TLSRecordProtector: Sendable {
     /// How many records before ``needsKeyUpdate`` trips — a 2^16-record margin under the §5.5
     /// hard bound so a KeyUpdate flight has room to complete.
     static let keyUpdateMargin: UInt64 = 65_536

@@ -116,7 +116,7 @@
         /// ever computed on the fatal path.
         private static func currentThreadID() -> UInt64 {
             #if canImport(Darwin)
-                return UInt64(pthread_mach_thread_np(pthread_self()))
+                return UInt64(unsafe pthread_mach_thread_np(pthread_self()))
             #else
                 return UInt64(pthread_self())
             #endif

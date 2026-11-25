@@ -13,7 +13,7 @@
 public import Crypto
 
 /// The incremental RFC 8446 §4.4.1 transcript hash (SHA-256 or SHA-384 per the suite).
-public struct TLSTranscriptHash {
+public struct TLSTranscriptHash: Sendable {
     /// The `HandshakeType.message_hash(254)` octet of §4.4.1's synthetic HRR message.
     static let messageHashType: UInt8 = 254
 
