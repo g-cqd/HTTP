@@ -1,96 +1,44 @@
 // swift-tools-version: 6.4
-//
-//  Package.swift — `HTTP`
-//  A from-scratch, SwiftNIO-free HTTP/1.1 · HTTP/2 · HTTP/3 server library for Apple platforms.
-//
-//  Design north star (see docs/ and the approved plan):
-//    • Sans-I/O protocol engines (pure, allocation-conscious state machines) — testable & fuzzable
-//      without sockets; Network.framework is isolated to the `HTTPTransport` target only.
-//    • Strict concurrency + strict memory; no force-unwrap / force-cast; no recursion in parsers.
-//    • Every parser/validator cites the exact RFC section it implements.
-//
-//  Source layout is tiered for navigability (module names — and therefore imports — are unchanged;
-//  only directory paths move, declared per target via `path:`):
-//    Sources/Core        — HTTPCore, HTTPConcurrency, CHTTPTestMalloc
-//    Sources/Protocols   — HTTP1, HTTP2, HTTP3, HPACK, QPACK, WebSocket
-//    Sources/Transport   — HTTPTransport      Sources/Server   — HTTPServer
-//    Sources/Testing     — HTTPTestSupport    Sources/Examples — httpd-example
 
 // swiftlint:disable file_length - one manifest per package is a SwiftPM invariant: its 30+ targets
-// cannot be split across files, and the RFC/ADR rationale comments (which do not count) belong
-// beside the declarations they justify.
 import Foundation
 import PackageDescription
 
 // MARK: - Strict, *reusable-safe* build settings
-//
-// IMPORTANT: warnings-as-errors is applied to OUR targets only (via the loop below) using the
-// first-class `.treatAllWarnings(as:)` setting — NOT `.unsafeFlags` (which would make the package
-// unusable as a versioned dependency) and NOT the global `-Xswiftc -warnings-as-errors` (which
-// conflicts with the `-suppress-warnings` SwiftPM applies to dependencies like swift-system). It is
-// gated behind the `HTTP_WARNINGS_AS_ERRORS` env var so it is OFF for downstream consumers, keeping
-// their builds green across toolchains. CI sets the env var. Everything below is reuse-safe.
 let strictSwiftSettings: [SwiftSetting] = [
-    // complete data-race safety
     .swiftLanguageMode(.v6),
-    // SE-0335: existentials must be spelled `any`
     .enableUpcomingFeature("ExistentialAny"),
-    // SE-0409: imports are internal unless declared `public import`
     .enableUpcomingFeature("InternalImportsByDefault"),
-    // SE-0444: must import modules whose members you use
     .enableUpcomingFeature("MemberImportVisibility"),
-    // Lifetime dependencies (`@_lifetime`): let the zero-copy `ByteReader` borrow a `RawSpan`
-    // (`~Escapable`) with a *compiler-checked* lifetime instead of an unchecked unsafe pointer.
-    // This is a first-class `SwiftSetting`, not `.unsafeFlags`, so it stays reuse-safe downstream.
     .enableExperimentalFeature("Lifetimes")
 ]
 
-// SE-0458 strict memory safety — the STAGED gate (ADR 0009, superseding ADR 0002's all-or-nothing
-// deferral). The compiler flags every expression that "uses unsafe constructs but is not marked with
-// `unsafe`"; the package has 465 such sites, so flipping it on globally would not compile. Instead it is
-// enabled per target for the targets that are ALREADY at zero, where it costs nothing today and buys a
-// hard ratchet tomorrow: under `HTTP_WARNINGS_AS_ERRORS`, the first un-annotated unsafe expression added
-// to one of these targets is a BUILD ERROR, not a warning someone scrolls past.
-//
-// The remaining targets are held by a counted budget instead (`scripts/strict-memory-safety.py` +
-// `.github/strict-memory-safety-budget.tsv`, run by the `strict-memory-safety` CI job): their counts may
-// fall, never rise. A target reaches zero, moves into this list, and stops being a number.
-//
-// Adding a target here is a one-line change once its count hits 0 — that is the whole point of staging.
 let strictMemorySafeTargets: Set<String> = [
-    "AemiHTTP",  // umbrella re-export; 0 unsafe sites
-    "HTTPCore",  // graduated to 0 un-annotated unsafe sites
-    "HTTPConcurrency",  // re-exports AemiRuntime; 0 unsafe sites
-    "HTTPTestSupport",  // re-exports AemiTestKit; 0 unsafe sites
-    "HPACK",  // 2 sites annotated (RFC 7541 §5.2 string materialization)
-    "QPACK",  // 2 sites annotated (RFC 9204 §4.1.2 string materialization)
-    "HTTP1",  // graduated to 0 un-annotated unsafe sites (via AemiKernel RawSpan helpers)
-    "HTTP2",  // graduated to 0 un-annotated unsafe sites (via AemiKernel RawSpan helpers)
-    "HTTP3",  // graduated to 0 un-annotated unsafe sites
-    "WebSocket",  // graduated to 0 un-annotated unsafe sites (SIMD xorMask4 + UTF-8 scan)
-    "HTTPServer",  // graduated to 0 un-annotated unsafe sites
-    "HTTPTransport",  // graduated to 0 un-annotated unsafe sites
-    "httpd-example",  // graduated to 0 un-annotated unsafe sites (posix_spawn prefork)
-    "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
-    "HTTPAuth",  // already 0 — pure crypto/middleware over swift-crypto
-    "HTTPDeflate",  // strict from birth (annotated sites only at the [UInt8] ⇄ Span seam)
-    "HTTPTLS",  // strict from birth (annotated sites only at the SymmetricKey byte seams)
-    "HTTPTLSRSA"  // strict from birth (Phase 3c: pure swift-crypto `_RSA` calls, no unsafe seams)
+    "AemiHTTP",
+    "HTTPCore",
+    "HTTPConcurrency",
+    "HTTPTestSupport",
+    "HPACK",
+    "QPACK",
+    "HTTP1",
+    "HTTP2",
+    "HTTP3",
+    "WebSocket",
+    "HTTPServer",
+    "HTTPTransport",
+    "httpd-example",
+    "HTTPObservability",
+    "HTTPAuth",
+    "HTTPDeflate",
+    "HTTPTLS",
+    "HTTPTLSRSA"
 ]
 
-// G0 — the Darwin-only transport backbones are absent from the Linux build graph, where the portable
-// `POSIXEpoll` backbone takes over (the `POSIXSocket` floor, the `PortableTLS` seam, and the `Fake`
-// backbone stay cross-platform). `kqueue(2)`, Network.framework (and its QUIC), the Dispatch-sources and
-// swift-system backbones all need Darwin/Network, so they are excluded per-platform here rather than
-// `#if`-wrapped file-by-file (which would re-indent every body and overflow the line limit); the
-// `TransportFactory` cases that name these types are guarded by matching `#if canImport(Darwin)` /
-// `#if canImport(Network)`. `#if os(Linux)` is evaluated for the host running SwiftPM — which, since the
-// package is built natively per platform and never cross-compiled, is the target platform.
 #if os(Linux)
     let darwinOnlyTransportSources = [
-        "Network",  // Network.framework backbone (3 files)
-        "POSIXKqueue",  // kqueue(2) backbone (3 files)
-        "SwiftSystem",  // swift-system + Darwin backbone (2 files)
+        "Network",
+        "POSIXKqueue",
+        "SwiftSystem",
         "POSIXDispatch/POSIXDispatchConnection.swift",
         "POSIXDispatch/POSIXDispatchTransport.swift",
         "Quic/LegacyQUICConnection.swift",
@@ -99,74 +47,28 @@ let strictMemorySafeTargets: Set<String> = [
         "Quic/ModernQUICConnection.swift",
         "Quic/ModernQUICStream.swift",
         "Quic/ModernQUICTransport.swift",
-        // The `NWEndpoint` -> `TransportAddress` mapping only. `Quic/QUICPeer.swift` — the
-        // `unattributed` sentinel the admission gate and `RateLimitIdentity` key on (ADD-P0.5b) — is
-        // platform-neutral and deliberately STAYS in the Linux graph.
         "Quic/QUICPeer+Network.swift",
         "Quic/QUICTransportFactory.swift"
     ]
-    // The outbound/inbound codings built on Apple's `Compression` framework (Brotli RFC 7932, gzip
-    // RFC 1952, inflate) — absent on Linux, where their `#if !canImport(Compression)` twins ride the
-    // in-house `HTTPDeflate` codec (gzip/inflate) and the opt-in `CBrotli`/`CZstd` shims.
     let appleCompressionSources = [
         "Middleware/Brotli.swift",
         "Middleware/Gzip.swift",
         "Middleware/Inflate.swift"
     ]
-    // Test files that exercise the Darwin-only transports (Network.framework + its QUIC) — excluded from
-    // the Linux test build, like the backbones they cover. The sans-I/O engine tests, the portable-backbone
-    // tests, and the gated PortableTLS suite stay cross-platform.
     let darwinOnlyTransportTestSources = [
-        // FLAKE-1's `_dispatch_queue_xref_dispose` trap, which is a property of
-        // `POSIXDispatchTransport` — itself Darwin-only and excluded above. No debt: there is no
-        // libdispatch accept source on Linux to get this wrong.
         "AcceptShutdownRaceTests.swift",
         "BackboneConformanceTests.swift",
         "CertificateReloadTests.swift",
         "LegacyQUICTransportTests.swift",
-        // The three `assertLoopback*` round-trips, each driving an `NWConnection` through
-        // `NetworkFrameworkConnection`. The raw `socket(2)`/`connect(2)` dialer that used to sit
-        // beside them needs none of that and now lives in `LoopbackDialer.swift`, which is NOT
-        // excluded — it was the last thing keeping `AcceptBackpressureTests` off this platform.
         "LoopbackSupport.swift",
         "ModernQUICTransportTests.swift",
         "NetworkFrameworkMutualTLSTests.swift",
         "NetworkFrameworkTLSTests.swift",
-        // The wire oracle for QUIC application close codes: an `NWConnection` h3 client reading the
-        // peer's close code — Network.framework end to end, like the QUIC backbones it observes.
         "QUICApplicationCloseProbe.swift",
-        // Network.framework QUIC listeners + `NWConnection` h3 clients + the `NWEndpoint` overload
-        // of `QUICPeer.address(of:)`. The platform-neutral half of the same contract — the shared,
-        // capped bucket every unattributable peer folds into — is `QUICPeerAdmissionTests.swift`,
-        // which is NOT excluded and keeps ADD-P0.5b covered on Linux.
         "QUICPeerAttributionTests.swift",
-        // raw BSD-socket options; SO_NOSIGPIPE is Darwin-only (the epoll tests cover Linux)
         "POSIXSocketTests.swift",
-        // Built on `KqueueEventLoop` + `POSIXKqueueConnection`, both excluded above, so it cannot
-        // compile here. This was recorded as the largest coverage debt in this list, because the
-        // single-slot-waiter defect it proves is not a kqueue defect — `POSIXEpollConnection` carried
-        // the same `OnceResumer` shape and `EpollEventLoop` the same readiness tables.
-        //
-        // **That debt is retired**, so the entry stays but the warning does not. Its connection-level
-        // claims are now covered portably, and with strictly more, by
-        // `ConnectionDirectionOwnershipTests` (an `#if` picks the reactor and raw connection; N-way
-        // 2/4/8, close, half-close, EPIPE, cancellation, descriptor reuse), and its two loop-level
-        // claims have a native Linux twin in `EpollEventLoopTests`. Both run on Linux; neither is
-        // excluded. Keep it that way — an exclusion here is honest only while something else covers
-        // the behaviour on the platform being excluded.
         "ReadinessWaiterCollisionTests.swift"
     ]
-    // Everything `HTTPServerTests` drops on Linux: the Network.framework-provided HTTP/3 suites, and
-    // the tests of codings Apple's `Compression` backs (Brotli/gzip/inflate). One list rather than two
-    // because it gates ONE target and the reason for each entry belongs to the entry, not to the list
-    // name — the zstd suite self-gates on `canImport(CZstd)` instead.
-    //
-    // `ContentEncoderStreamTests` and `StreamingCompressionTests` are NOT here any more. They were,
-    // because `GzipEncoder.makeStream()` returned nil off Darwin and every streamed response fell
-    // through to identity — the exclusion was a symptom of a missing feature, not a portability
-    // defect in the tests. The feature exists (today over the in-house `HTTPDeflate` codec), so both
-    // suites run here, and their byte-identity case is what holds the Linux streamed and buffered
-    // codings to the same octets. Keep it that way.
     let serverTestExclusions = [
         "HTTPServerHTTP3Tests.swift",
         "HTTPServerWebSocketHTTP3Tests.swift",
@@ -183,30 +85,6 @@ let strictMemorySafeTargets: Set<String> = [
     let serverTestExclusions: [String] = []
 #endif
 
-// MARK: - Opt-in system-library codings (SE-0450 package traits)
-//
-// The `Zstd` / `Brotli` content codings link system libraries (libzstd / libbrotli) the default
-// graph must never reference, so they are opt-in via SE-0450 package traits — a consumer writes
-// `.package(url: …, from: …, traits: ["Zstd"])`; a local build passes `--traits Zstd,Brotli`.
-// These replace the retired `HTTP_ZSTD` / `HTTP_BROTLI` env-var gates: an env var is invisible to
-// SwiftPM's resolver (a consumer could not opt in through a versioned dependency at all), while a
-// trait is part of the manifest contract.
-//
-// Mechanics (probed 2026-08-17 on the pinned Swift 6.4 toolchain): a trait cannot conditionally
-// DECLARE a target — every declared root-package target compiles under the default build, and the
-// manifest cannot observe traits. So the two C shims below are always declared, and the trait
-// instead conditions everything else: their `.c` bodies compile to EMPTY translation units unless
-// the trait-conditional `.define(…, .when(traits:))` is active, and every `-I`/`-L`/`-l` — including
-// `.linkedLibrary(_:_, .when(traits:))` — is trait-conditional, so a default build on a machine
-// without libzstd/libbrotli succeeds and never sees either library. The Swift consumers' dependency
-// edges are `.when(traits:)`-conditional, so their `#if canImport(CZstd)` / `#if canImport(CBrotli)`
-// guards flip with the trait, unchanged.
-//
-// The include/lib prefixes are path HINTS, not gates: `HTTP_ZSTD_PREFIX` / `HTTP_BROTLI_PREFIX`
-// override them, defaulting to the Homebrew kegs on macOS and to nothing on Linux (the distro dev
-// packages land on the default search paths, where a redundant `-I /usr/include` would only reorder
-// system headers). The `.unsafeFlags` they feed are trait-conditional and verified (same probe) to
-// neither apply to nor poison a stable-versioned consumer's default (trait-off) resolution.
 #if os(macOS)
     let zstdPrefix: String? = Context.environment["HTTP_ZSTD_PREFIX"] ?? "/opt/homebrew/opt/zstd"
     let brotliPrefix: String? =
@@ -216,9 +94,6 @@ let strictMemorySafeTargets: Set<String> = [
     let brotliPrefix: String? = Context.environment["HTTP_BROTLI_PREFIX"]
 #endif
 
-/// An always-declared coding-shim target whose every setting is trait-conditional: the
-/// `HTTP_TRAIT_*` define that un-empties the translation unit, the `-I`/`-L` search paths when a
-/// prefix hint exists, and the `-l` links — all absent from a default (trait-off) build.
 func codingShim(
     name: String, path: String, trait: String, define: String, libraries: [String], prefix: String?
 ) -> Target {
@@ -232,9 +107,6 @@ func codingShim(
     return .target(name: name, path: path, cSettings: cSettings, linkerSettings: linkerSettings)
 }
 
-// Aemi supplies shared SIMD byte kernels, core codecs, runtime primitives, and test infrastructure.
-// Supports local sibling development (`AEMI_LOCAL_PATH=../aemi`) while defaulting to the pinned
-// GitHub revision checked by `scripts/dependency-pinning.py`.
 func aemiDependency() -> Package.Dependency {
     if let local = ProcessInfo.processInfo.environment["AEMI_LOCAL_PATH"], !local.isEmpty {
         return .package(path: local)
@@ -248,15 +120,8 @@ func aemiDependency() -> Package.Dependency {
 let package = Package(
     name: "HTTP",
     platforms: [
-        // 15.6, not `.v15`. CLAUDE.md, README.md ("macOS 15.6+ / iOS 18+") and
-        // Benchmarking/Benchmarks/Package.swift (`.macOS("15.6")`) all say 15.6; this manifest was the
-        // only place claiming 15.0, and it is the one place a consumer actually reads. A manifest that
-        // advertises a floor nothing builds or tests against is a promise the project has not made:
-        // resolution would succeed on 15.0 and the failure would land at the consumer's build, not
-        // here. Synchronization (Mutex/Atomic) needs 15.0 at minimum, so this is a raise, not a claim
-        // about what the code strictly requires — the documented, tested floor is what ships.
-        .macOS("15.6"),  // floor per CLAUDE.md
-        .iOS(.v18)  // floor per CLAUDE.md
+        .macOS("15.6"),
+        .iOS(.v18)
     ],
     products: [
         .library(name: "AemiHTTP", targets: ["AemiHTTP"]),
@@ -277,86 +142,22 @@ let package = Package(
         .library(name: "HTTPAuth", targets: ["HTTPAuth"]),
         .executable(name: "httpd-example", targets: ["httpd-example"])
     ],
-    // SE-0450 package traits — the opt-in system-library codings (see the MARK above for the full
-    // mechanics). Neither is a default trait: the default graph stays free of libzstd/libbrotli.
     traits: [
-        // RFC 8878 `zstd` content coding via the `CZstd` shim over the system libzstd
-        // (Homebrew `zstd` on macOS, `libzstd-dev` on Debian/Ubuntu).
         .trait(name: "Zstd", description: "The RFC 8878 zstd coding over the system libzstd."),
-        // RFC 7932 `br` content coding on the non-Apple path via the `CBrotli` shim over libbrotli
-        // (Darwin gets `br` from Apple's Compression framework without this trait).
         .trait(name: "Brotli", description: "The RFC 7932 br coding over libbrotli (non-Apple).")
     ],
     dependencies: [
-        // apple/swift-system — typed, SwiftNIO-free wrappers over POSIX file/socket descriptors,
-        // used only by the swift-system transport backbone. Zero external dependencies of its own.
         .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
-        // Observability bridges (gap G1) — resolved ONLY by the isolated `HTTPObservability` module,
-        // never by a core/protocol/transport/server target, so a consumer of the bare server never pulls
-        // them in. All are apple/* (per the dependency policy). swift-metrics records into the module's
-        // own `PrometheusRegistry` for the `/metrics` text exposition (0.0.4, in-house — swift-prometheus
-        // left the graph); swift-log backs the structured access log; swift-distributed-tracing (over
-        // swift-service-context) opens a span per request.
         .package(url: "https://github.com/apple/swift-log.git", from: "1.16.2"),
         .package(url: "https://github.com/apple/swift-metrics.git", from: "2.12.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing.git", from: "1.7.2"),
         .package(url: "https://github.com/apple/swift-service-context.git", from: "1.5.1"),
-        // apple/swift-crypto (gap G7) — every keyed primitive on a security boundary. Two products,
-        // deliberately scoped differently:
-        //   `Crypto`         — `HTTPServer` (the session cookie's HMAC-SHA256) and `HTTPAuth` (JWT
-        //                      HS256 + the Basic-auth blinded comparison). Reaching a bare-server
-        //                      consumer is the accepted cost of not shipping in-house SHA-256/HMAC on
-        //                      a signing path.
-        //   `_CryptoExtras`  — `HTTPAuth` ONLY (RS256 via `_RSA`). It pulls a BoringSSL graph, so it
-        //                      stays confined to the module that actually needs RSA.
-        // apple/* — allowed by CLAUDE.md.
-        //
-        // 4.0.0, not 3.0.0, and the floor is load-bearing for LINUX rather than for any API we call.
-        // On Darwin `Crypto` is `@_exported import CryptoKit` (its `SymmetricKeys.swift` opens with
-        // `#if CRYPTO_IN_SWIFTPM && !CRYPTO_IN_SWIFTPM_FORCE_BUILD_API`), and CryptoKit's
-        // `SymmetricKey` is `Sendable` in the SDK — so every `Sendable` type holding one compiles
-        // here and the gap is invisible. On Linux the same import resolves to swift-crypto's own
-        // `SymmetricKey`, which through 3.15.1 is declared `public struct SymmetricKey:
-        // ContiguousBytes` with NO `Sendable`. `SessionSigningKeys` (a `Sendable` struct holding
-        // two) and `BasicAuthMiddleware.fixedCredentialVerifier` (which captures one in an
-        // `@Sendable` closure) are therefore Darwin-only code by accident.
-        // swift-crypto 4.0.0 declares `public struct SymmetricKey: ContiguousBytes, Sendable` over a
-        // `struct SecureBytes: @unchecked Sendable` — the conformance reviewed and asserted UPSTREAM,
-        // by the people who own the invariant, which is the only place an `@unchecked` on someone
-        // else's storage can honestly be written. Taking the bump is why neither call site needs a
-        // local wrapper or a `@preconcurrency` import.
-        // The major bump costs nothing here: swift-crypto declares no `platforms:` floor in any of
-        // 3.15.1/4.x, so this does not touch the macOS 15.6 / iOS 18 deployment floor, and the whole
-        // API surface this package uses (`SymmetricKey`, `HMAC<SHA256>`, `SHA256.Digest.byteCount`,
-        // `P256.Signing.PublicKey`/`ECDSASignature`, `_RSA.Signing.PublicKey`/`RSASignature`) is
-        // unchanged across the 4.0 boundary, whose sole release note is the WWDC25 refresh.
         .package(url: "https://github.com/apple/swift-crypto.git", from: "5.0.3"),
-        // apple/swift-certificates (ADR 0004 Phase 3c) — X.509 for the from-scratch TLS 1.3 engine:
-        // identity-chain validation at load time and RFC 5280 §6 client-chain path validation
-        // (`Verifier` + `RFC5280Policy`), plus the test PKI the mTLS gates mint (its
-        // `Certificate(...)` builder replaces `openssl` shelling for the engine's fixtures).
-        // Products: `X509` → `HTTPTLS` only. apple/* — allowed by CLAUDE.md; declares NO
-        // `platforms:` floor (verified at 1.19.4), so the macOS 15.6 / iOS 18 floor is untouched,
-        // and its swift-crypto range (`3.12.3..<5.0.0`) embraces our 4.0.0 pin. X509 links
-        // `_CryptoExtras` internally for RSA certificate signatures; that stays swift-certificates'
-        // implementation detail — HTTPTLS itself still never imports `_CryptoExtras` (the recorded
-        // 3b decision: RSA handshake signing/verification lives in the separate `HTTPTLSRSA`).
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.21.0"),
-        // apple/swift-asn1 — swift-certificates' DER substrate, surfaced explicitly (not left
-        // transitive) because `HTTPTLS` imports it directly to parse PKCS#8/SEC1 private keys at
-        // identity load (RFC 5958/RFC 5915) — a target must declare what it imports
-        // (`--explicit-target-dependency-import-check error`). apple/* — allowed by CLAUDE.md.
         .package(url: "https://github.com/apple/swift-asn1.git", from: "1.7.3"),
-        // The one first-party dependency: shared SIMD byte kernels (see `aemiDependency`).
         aemiDependency()
     ],
     targets: [
-        // RFC 9110 semantics & currency types, byte primitives, limits, typed errors, Huffman.
-        // Zero external dependencies, no I/O — the self-contained substrate every engine builds on.
-        // No crypto either: the keyed primitives it used to host (SHA-256/HMAC/HKDF) live on the
-        // session and JWT signing boundaries, so they moved to swift-crypto in `HTTPServer`/`HTTPAuth`
-        // rather than being carried here. `RandomToken` needs none — `SystemRandomNumberGenerator`
-        // draws from the platform CSPRNG.
         .target(
             name: "HTTPCore",
             dependencies: [
@@ -370,27 +171,12 @@ let package = Package(
             dependencies: ["HTTPCore", "HTTPTestSupport"],
             path: "Tests/Core/HTTPCoreTests"
         ),
-        // RFC 1951 DEFLATE (inflate + deflate) and the RFC 1952 gzip / RFC 1950 zlib containers,
-        // from scratch in portable Swift — no system zlib anywhere in the graph. Sans-I/O push/pull
-        // streams (`Span` in, `OutputSpan` out, zero steady-state allocation); the inflate side is the
-        // attacker-facing half and fails closed with typed errors. Backs RFC 7692 permessage-deflate
-        // (WebSocket, every platform) and the Linux gzip content codings; Darwin response codings stay
-        // on Apple's Compression framework. Strict memory safety from birth.
         .target(name: "HTTPDeflate", dependencies: ["HTTPCore"], path: "Sources/Core/HTTPDeflate"),
         .testTarget(
             name: "HTTPDeflateTests",
-            // The differential-fuzz suite against system zlib (through the deleted CZlibCoding /
-            // CWSDeflate shims) lived here while the incumbent was still in the tree — equivalence
-            // was proven on both platforms' zlibs, then the oracle left with the shims (the house
-            // pattern). The RFC vectors, round-trips, sync-flush, chunk-stability, fuzz and
-            // allocation suites remain.
             dependencies: ["HTTPDeflate", "HTTPCore", "HTTPTestSupport"],
             path: "Tests/Core/HTTPDeflateTests"
         ),
-        // Concurrency & timer seams backed by `AemiRuntime` (`DeadlineWheel`, `ShardedMutex`,
-        // `BoundedLRU`, `SharedBoundedLRU`, `AsyncExclusion`, `RollingWindow`, `LiveClock`).
-        // Re-exports `AemiRuntime` and preserves the `HTTPConcurrency` module surface (`TaskProvider`,
-        // `LiveTaskProvider`, `MonotonicNowProvider`, `LiveMonotonicClock`) for existing callers.
         .target(
             name: "HTTPConcurrency",
             dependencies: [
@@ -403,11 +189,6 @@ let package = Package(
             dependencies: ["HTTPConcurrency", "HTTPTestSupport"],
             path: "Tests/Core/HTTPConcurrencyTests"
         ),
-        // The RFC 8878 `zstd` content coding shim over the system libzstd (Apple's Compression
-        // framework has no Zstandard codec, on any platform). Opt-in via the `Zstd` package trait:
-        // the target is always DECLARED (a trait cannot conditionally declare one — see the traits
-        // MARK), but trait-off it compiles to an empty translation unit and contributes no
-        // `-I`/`-L`/`-lzstd`, so the default graph never references libzstd.
         codingShim(
             name: "CZstd",
             path: "Sources/Core/CZstd",
@@ -416,9 +197,6 @@ let package = Package(
             libraries: ["zstd"],
             prefix: zstdPrefix
         ),
-        // The RFC 7932 `br` content coding shim over libbrotli for the non-Apple path (Darwin's `br`
-        // is Apple's Compression framework). Opt-in via the `Brotli` package trait; same
-        // always-declared / empty-TU-when-off mechanics as `CZstd` above.
         codingShim(
             name: "CBrotli",
             path: "Sources/Core/CBrotli",
@@ -427,9 +205,6 @@ let package = Package(
             libraries: ["brotlienc", "brotlidec", "brotlicommon"],
             prefix: brotliPrefix
         ),
-        // Test-only support: re-exports `AemiTestKit` (`TestClock`, `AsyncEventProbe`, `AsyncGate`,
-        // `ThreadGate`, `ConstrainedStack`, `DepthSweep`, `SeededRNG`, `ByteMutator`, `Allocations`)
-        // plus HTTP-specific fakes, oracles, and real-network permit helpers.
         .target(
             name: "HTTPTestSupport",
             dependencies: [
@@ -445,7 +220,6 @@ let package = Package(
             dependencies: ["HTTPTestSupport"],
             path: "Tests/Testing/HTTPTestSupportTests"
         ),
-        // RFC 9112 — the sans-I/O HTTP/1.1 message parser & serializer (no sockets, no recursion).
         .target(
             name: "HTTP1",
             dependencies: [
@@ -460,9 +234,6 @@ let package = Package(
             dependencies: ["HTTP1", "HTTPTestSupport"],
             path: "Tests/Protocols/HTTP1Tests"
         ),
-        // RFC 7541 — HPACK header compression for HTTP/2: §5.1 prefix integers, §5.2 string literals
-        // (with the canonical Huffman code), the static (App. A) & dynamic (§4) tables, and the §6
-        // field-representation codec. Sans-I/O; shared canonical Huffman lives in HTTPCore for QPACK.
         .target(
             name: "HPACK",
             dependencies: ["HTTPCore"],
@@ -473,11 +244,6 @@ let package = Package(
             dependencies: ["HPACK", "HTTPTestSupport"],
             path: "Tests/Protocols/HPACKTests"
         ),
-        // RFC 9204 — QPACK header compression for HTTP/3. Mirrors HPACK: the §4.1.1 prefix integers,
-        // §4.1.2 string literals (the canonical Huffman code, shared from HTTPCore), the 99-entry
-        // 0-based static table (App. A), and the §4.5 field-line representations with the §4.5.1
-        // encoded field-section prefix. The dynamic table is disabled in v1 (capacity 0, RFC 9204
-        // §3.2.2) — static-table + literals only, so RIC is required to be 0. Sans-I/O.
         .target(
             name: "QPACK",
             dependencies: ["HTTPCore"],
@@ -488,13 +254,6 @@ let package = Package(
             dependencies: ["QPACK", "HTTPTestSupport"],
             path: "Tests/Protocols/QPACKTests"
         ),
-        // RFC 9113 — the sans-I/O HTTP/2 engine: frame layer (§4), connection preface (§3.4),
-        // SETTINGS (§6.5), HEADERS field-block + request mapping (§6.2/§8.3) through HPACK, the stream
-        // state machine (§5.1), CONTINUATION assembly with the flood guard (§6.10 / CVE-2024-27316),
-        // the Rapid Reset defense (CVE-2023-44487), the concurrent-stream cap (§5.1.2), response
-        // encoding (HEADERS+DATA), and send-side flow control (§6.9): per-stream + connection send
-        // windows, DATA deferred past the window and flushed on WINDOW_UPDATE. Remaining M5 work:
-        // receive-side flow control (advertising/replenishing the server's own inbound window).
         .target(
             name: "HTTP2",
             dependencies: [
@@ -510,26 +269,16 @@ let package = Package(
             dependencies: ["HTTP2", "HPACK", "HTTPTestSupport"],
             path: "Tests/Protocols/HTTP2Tests"
         ),
-        // RFC 9114 — the sans-I/O HTTP/3 engine: the §7.1 frame layer (varint type+length), the §6.2
-        // unidirectional stream-type layer, §7.2.4 SETTINGS (rejecting the reserved HTTP/2 ids), the
-        // per-stream connection state machine (control/QPACK singletons, GOAWAY monotonicity, the
-        // Rapid-Reset analog), request mapping (§4) through QPACK, and response encoding. Per-stream
-        // (QUIC delivers per-stream bytes); the transport owns id allocation. Sans-I/O.
         .target(
             name: "HTTP3",
             dependencies: ["HTTPCore", "QPACK", "HTTPConcurrency"],
             path: "Sources/Protocols/HTTP3"
         ),
-        // M7 — the HTTP/3 conformance suite: the h3spec + RFC 9114/9204 catalog (pure data) plus the
-        // engine-driven drive-and-assert cases that go live as the engine lands.
         .testTarget(
             name: "HTTP3Tests",
             dependencies: ["HTTP3", "QPACK", "HTTPCore", "HTTPTestSupport"],
             path: "Tests/Protocols/HTTP3Tests"
         ),
-        // RFC 6455 — the sans-I/O WebSocket engine: the §5.2 frame layer (FIN/RSV/opcode, the
-        // 7/16/64-bit payload length, §5.3 masking), close codes (§7.4), and — layered on later — the
-        // §4 opening handshake over the HTTP/1.1 Upgrade (and RFC 9220 over HTTP/2). No sockets.
         .target(
             name: "WebSocket",
             dependencies: [
@@ -542,14 +291,6 @@ let package = Package(
             dependencies: ["WebSocket", "HTTPTestSupport"],
             path: "Tests/Protocols/WebSocketTests"
         ),
-        // RFC 8446 — the sans-I/O TLS 1.3 SERVER engine (ADR 0004 Phase 3a: record layer + key
-        // schedule; the handshake state machine is 3b, X.509 is 3c). TLS 1.3 ONLY — no 1.2, no
-        // renegotiation, no compression, AEAD-only by construction. Every constant-time primitive
-        // (AES-GCM, ChaCha20-Poly1305, HKDF-SHA256/384, X25519, P-256, SHA-2) comes from
-        // apple/swift-crypto; this target is purely the protocol engine — the same species as the
-        // HTTP/2/3/QPACK engines. Gated byte-exactly against the RFC 8448 handshake traces.
-        // Lives in Protocols/ (not Core/) because it is an RFC wire-protocol state machine driven
-        // per-connection by the transport, like its siblings — Core holds substrates and codecs.
         .target(
             name: "HTTPTLS",
             dependencies: [
@@ -559,11 +300,6 @@ let package = Package(
             ],
             path: "Sources/Protocols/HTTPTLS"
         ),
-        // ADR 0004 Phase 3c — the RSA sidecar of the TLS 1.3 engine: RSA-PSS CertificateVerify
-        // signing (server identities with RSA keys, e.g. every `DevTLSIdentity`) and verification
-        // (RSA client certificates). A separate target because it needs `_CryptoExtras` (RSA rides
-        // a BoringSSL graph) and the recorded 3b decision keeps that OUT of `HTTPTLS` — the engine
-        // stays pure swift-crypto; deployments that face RSA link this one extra module.
         .target(
             name: "HTTPTLSRSA",
             dependencies: [
@@ -583,13 +319,7 @@ let package = Package(
             ],
             path: "Tests/Protocols/HTTPTLSTests"
         ),
-        // G0 — a C shim re-exporting Linux `<sys/epoll.h>` (the platform `Glibc` module surfaces none of
-        // epoll), consumed only by the `POSIXEpoll` backbone. Header-guarded `#if __linux__` (inert
-        // elsewhere) and depended on only `.when(platforms: [.linux])`, so it never enters the apple graph.
         .target(name: "CEpoll", path: "Sources/Transport/CEpoll"),
-        // M3 — the I/O boundary. Four switchable backbones (Network.framework + three POSIX-level
-        // variants) behind one abstraction, each isolated in its own subfolder. The only target
-        // that performs I/O; the sans-I/O engines never depend on it.
         .target(
             name: "HTTPTransport",
             dependencies: [
@@ -607,25 +337,14 @@ let package = Package(
             path: "Tests/Transport/HTTPTransportTests",
             exclude: darwinOnlyTransportTestSources
         ),
-        // M4 — the server runtime: wires a transport backbone to the HTTP/1.1 and HTTP/2 engines via
-        // an HTTPResponder, fanning connections out across cores and sniffing the protocol (HTTP/2
-        // prior-knowledge preface vs an HTTP/1.x request line). The routing DSL layers on top later.
         .target(
             name: "HTTPServer",
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTP2", "HTTP3", "WebSocket", "HTTPTransport",
                 "HTTPConcurrency",
                 .product(name: "AemiKernel", package: "aemi"),
-                // The session cookie's HMAC-SHA256 is a security boundary, so it uses the audited
-                // first-party implementation rather than an in-house one (see the `swift-crypto`
-                // dependency comment). `Crypto` only — never `_CryptoExtras`.
                 .product(name: "Crypto", package: "swift-crypto"),
-                // The in-house DEFLATE/gzip codec: the Linux content codings run on it, and the
-                // WebSocket permessage-deflate path (via the WebSocket target) on every platform.
-                // On Darwin the buffered/streamed response codings stay on Apple's Compression.
                 "HTTPDeflate",
-                // The opt-in codings: trait-conditional edges, so `#if canImport(CZstd)` /
-                // `#if canImport(CBrotli)` in the middleware flip with the trait.
                 .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
                 .target(name: "CBrotli", condition: .when(traits: ["Brotli"]))
             ],
@@ -637,17 +356,12 @@ let package = Package(
             dependencies: [
                 "HTTPServer", "HTTP1", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket",
                 "HTTPTransport", "HTTPTestSupport", "HTTPDeflate",
-                // The self-gating coding suites (`#if canImport(CZstd)` / `#if canImport(CBrotli)`)
-                // compile only when the trait puts the shim in the graph.
                 .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
                 .target(name: "CBrotli", condition: .when(traits: ["Brotli"]))
             ],
             path: "Tests/Server/HTTPServerTests",
             exclude: serverTestExclusions
         ),
-        // The runnable example server — the executable deliverable. Selects a transport backbone,
-        // wires a handful of routes through a ClosureResponder, and serves HTTP/1.1. Drivable with
-        // `swift run httpd-example [port] [backbone]` and `curl --http1.1`.
         .target(
             name: "AemiHTTP",
             dependencies: [
@@ -667,11 +381,6 @@ let package = Package(
             dependencies: ["HTTPCore", "HTTPServer", "HTTPTransport", "WebSocket"],
             path: "Sources/Examples/httpd-example"
         ),
-        // G1 — opt-in observability bridges over the dependency-free `HTTPMetrics` / middleware seams:
-        // a swift-metrics sink rendered by the in-house Prometheus text-exposition backend (0.0.4) at
-        // `/metrics`, a swift-log structured access log, `/healthz` + `/readyz`, and a
-        // swift-distributed-tracing span per request. ISOLATED: it depends on HTTPServer one-way, so its
-        // dependencies never enter a core consumer's resolved graph — the bridge stays opt-in.
         .target(
             name: "HTTPObservability",
             dependencies: [
@@ -697,9 +406,6 @@ let package = Package(
             ],
             path: "Tests/Server/HTTPObservabilityTests"
         ),
-        // G7 — opt-in auth middlewares (Basic / JWT-Bearer / Forward). ISOLATED so swift-crypto (and its
-        // `_CryptoExtras` BoringSSL graph) stays out of a bare-server consumer's resolved graph; it
-        // depends on HTTPServer one-way.
         .target(
             name: "HTTPAuth",
             dependencies: [
@@ -719,15 +425,9 @@ let package = Package(
             path: "Tests/Server/HTTPAuthTests"
         )
     ],
-    // No root target is C++ any more — the vendored BoringSSL moved to the `Vendor/CHTTPBoringSSL`
-    // subpackage (Phase 3d), which pins its own `.cxx17`. Kept here as an inert default so a future
-    // C++ target cannot silently pick up a toolchain-dependent standard.
     cxxLanguageStandard: .cxx17
 )
 
-// Apply the strict settings uniformly to every target we define. Warnings-as-errors is scoped to
-// our targets (never dependencies, avoiding the `-suppress-warnings` conflict) and gated by an env
-// var so downstream consumers' builds stay green.
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
 let nonSwiftTargets: Set<String> = [
@@ -736,7 +436,6 @@ let nonSwiftTargets: Set<String> = [
 
 for target in package.targets where !nonSwiftTargets.contains(target.name) {
     var settings = (target.swiftSettings ?? []) + strictSwiftSettings
-    // SE-0458, staged per `strictMemorySafeTargets` above.
     if strictMemorySafeTargets.contains(target.name) {
         settings.append(.strictMemorySafety())
     }
@@ -746,41 +445,10 @@ for target in package.targets where !nonSwiftTargets.contains(target.name) {
     target.swiftSettings = settings
 }
 
-// G0 / ADR 0004 — the opt-in portable TLS backbone, since Phase 3d on the from-scratch HTTPTLS
-// engine. Still an ENV-VAR gate (`HTTP_PORTABLE_TLS`), deliberately NOT an SE-0450 trait like
-// `Zstd`/`Brotli`: the 2026-08-17 probe of the pinned Swift 6.4 toolchain established that a trait can
-// only *condition* settings and dependency edges on targets that are always declared — it cannot
-// un-declare a root-package target, and the manifest cannot observe traits (no `#if`, no Context API).
-// The codings dodge that shortfall because their shims are 2 files we own; `CHTTPBoringSSL` is a
-// 399-file vendored C/C++/asm tree, and running all 399 through the compiler on every default build
-// just to produce empty objects is exactly the cost this gate exists to avoid.
-//
-// TWO gates, mutually exclusive, both expiring (Phase 3d):
-//
-//   HTTP_PORTABLE_TLS   — the portable backbone on the pure-Swift HTTPTLS engine. The LIBRARY graph
-//                         compiles WITHOUT the 399-file BoringSSL target: `HTTPTransport` gains
-//                         HTTPTLS/HTTPTLSRSA/Crypto edges and the `HTTP_PORTABLE_TLS_SWIFT` define
-//                         its gated sources compile under. (The TEST target still links the vendored
-//                         BoringSSL — as the raw TLS *client oracle* the loopback suites drive
-//                         against the server; this package ships no TLS client to replace it with.)
-//                         After 3e deletes the vendored tree, this gate collapses into an ordinary
-//                         always-on backbone and the env var dies with the C target.
-//
-//   HTTP_BORINGSSL_TLS  — the SAME backbone on the legacy BoringSSL engine, kept ONLY for Phase 3d's
-//                         A/B verification (old engine still builds, its suites still pass, the
-//                         interop matrix can be diffed engine-against-engine). TEMPORARY: this gate,
-//                         the engine files it compiles (`PortableTLSEngine.swift`, `OpenSSLTLS.swift`,
-//                         `BoringSSLServerContext.swift`, `TLSFailureEvidence.swift`,
-//                         `BoringSSLChainValidator.swift`) and the vendored tree itself are deleted
-//                         together in Phase 3e once the matrix holds.
-//
-// Appended after the strict loop above so the C shims never receive Swift-only settings.
 let httpTLSPortableEngine = Context.environment["HTTP_PORTABLE_TLS"] != nil
 let boringSSLPortableEngine = Context.environment["HTTP_BORINGSSL_TLS"] != nil
 
 if httpTLSPortableEngine, boringSSLPortableEngine {
-    // Both engines define the same types behind exclusive gates; a build with both set would
-    // double-define them. Fail HERE, with the choice spelled out, not at the compiler.
     fatalError(
         "HTTP_PORTABLE_TLS (HTTPTLS engine) and HTTP_BORINGSSL_TLS (legacy A/B engine) are "
             + "mutually exclusive - set exactly one."
@@ -799,16 +467,7 @@ if httpTLSPortableEngine {
     }
 }
 if httpTLSPortableEngine || boringSSLPortableEngine {
-    // The vendored, symbol-prefixed (`CHTTPBoringSSL_*`) BoringSSL, as a LOCAL SUBPACKAGE
-    // (`Vendor/CHTTPBoringSSL`) since Phase 3d — deliberately not root targets: SwiftPM builds every
-    // declared ROOT target on `swift build`, but a dependency package's targets only when a consumed
-    // product needs them. That is what keeps `HTTP_PORTABLE_TLS=1 swift build` free of the 399-file
-    // compile while `swift test` still gets the raw BoringSSL CLIENT oracle the loopback suites
-    // drive against the server.
     package.dependencies.append(.package(path: "Vendor/CHTTPBoringSSL"))
-    // The LIBRARY consumes the vendored module + shim only on the legacy engine; the test target
-    // consumes them under either gate (the raw-client oracle). No link flags or header search paths
-    // needed — the vendored module carries its own headers via its modulemap.
     let boringSSLConsumers =
         boringSSLPortableEngine
         ? ["HTTPTransport", "HTTPTransportTests"] : ["HTTPTransportTests"]

@@ -6,16 +6,13 @@ platforms **and Linux**, written in Swift 6.4. On Apple platforms it builds dire
 (vendored-BoringSSL) TLS path — HTTP/3 stays Apple-only (see [Platform support](#platform-support)).
 It is designed to be a small, reusable **API package** that other projects embed.
 
-> **Status:** All milestones (M0–M8) shipped. HTTP/1.1, HTTP/2 (HPACK, flow control, Rapid Reset
 > and CONTINUATION-flood defenses, RFC 9218 priorities), and HTTP/3 (QPACK, WebSocket-over-h3 /
 > RFC 9220) serve end-to-end behind one server runtime: routing result-builder DSL, ~25 middleware
 > (compression in/out, caching, sessions, CORS, rate limiting, problem+json, timeouts …),
 > route-scoped WebSocket with a broadcast hub, streaming request/response bodies, per-route body
 > limits, mutual TLS with the full peer identity as request context, static files with
 > `sendfile(2)` zero-copy on the POSIX backbones, hot certificate/responder reload, and an
-> observability module. The 2026-06 roadmaps under `docs/roadmap/` are closed out and marked
 > superseded; remaining gaps (gated perf items, the inactive benchmark drift gate) are tracked,
-> with closure annotations, in `docs/audit/2026-07-31-codebase-review.md`.
 
 ## Why
 
@@ -49,7 +46,7 @@ permessage-deflate (RFC 7692), Structured Fields (RFC 8941), Cookies (RFC 6265),
 peer identity (RFC 5280) and PEM intake (RFC 7468), problem+json (RFC 9457), multipart forms
 (RFC 7578), and JWT verification (RFC 7519).
 
-Security hardening is traced to its RFC §/CVE in `docs/Security.md` (e.g. HTTP/2 Rapid
+Security hardening is traced to its RFC §/CVE in `SECURITY.md` (e.g. HTTP/2 Rapid
 Reset CVE-2023-44487, CONTINUATION flood CVE-2024-27316, request smuggling, decompression bombs).
 
 ## Platform support
@@ -91,7 +88,6 @@ swiftlint lint --strict
 
 ## Milestones
 
-All shipped (see `docs/roadmap/` for the post-milestone production roadmaps):
 
 - **M0** — Package scaffold & tooling ✅
 - **M1** — `HTTPCore` (RFC 9110 semantics, byte primitives, limits, Huffman) ✅
@@ -106,3 +102,11 @@ All shipped (see `docs/roadmap/` for the post-milestone production roadmaps):
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Contributing & Security
+
+- [Architecture Decisions](docs/adr/)
+- [Standards Reference](docs/standards/)
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+- [License](LICENSE)
