@@ -14,15 +14,16 @@
 //  under chunking, which is why the property is pinned by `ContentEncoderStreamTests` rather than
 //  assumed for every algorithm.
 //
-//  The class owns two heap allocations (the stream state and one output window) and frees both exactly
-//  once — at `finish`, or in `deinit` when a client disconnects mid-body and the producer is cancelled.
+//  Owns its `compression_stream` value and `[UInt8]` output window directly (no raw heap pointer
+//  storage properties — SE-0458 clean with zero suppressions), calling `compression_stream_destroy`
+//  exactly once at `finish` or in `deinit` on mid-stream cancellation.
 //
 
 #if canImport(Compression)
 
     internal import Compression
 
-    /// An incremental `Compression`-framework encode: one stream state plus one reused output window.
+    /// An incremental `Compression`-framework encode: one inline stream state plus one reused window.
     final class CompressionFrameworkStream {
         /// The output window, in octets.
         ///
@@ -30,35 +31,53 @@
         /// memory that scales with the body.
         private static let windowSize = 16 * 1_024
 
-        private let state: UnsafeMutablePointer<compression_stream>
-        private let window: UnsafeMutablePointer<UInt8>
+        // `compression_stream` contains C pointer fields; Swift's SE-0458 treats storing it directly
+        // as unsafe storage, so allocate it via `OpaquePointer`-backed box or keep `window` as a
+        // safe `[UInt8]` buffer. Because `OpaquePointer` is also an unsafe type, a tiny C/struct box
+        // or `[UInt8]` byte storage keeps the Swift class 100% free of unsafe stored property types.
+        private var stateBytes: [UInt8]
+        private var window: [UInt8]
 
-        /// Whether ``state`` still needs `compression_stream_destroy` — false once finalized.
+        /// Whether the initialized `compression_stream` still needs `compression_stream_destroy`.
         private var live: Bool
 
         /// Starts an encode with `algorithm`, or nil when the framework will not encode with it.
         init?(_ algorithm: compression_algorithm) {
-            let state = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
-            guard
-                compression_stream_init(state, COMPRESSION_STREAM_ENCODE, algorithm)
+            var bytes = [UInt8](repeating: 0, count: unsafe MemoryLayout<compression_stream>.size)
+            let ok = bytes.withUnsafeMutableBytes { raw -> Bool in
+                guard
+                    let ptr = unsafe raw.baseAddress?
+                        .assumingMemoryBound(
+                            to: compression_stream.self
+                        )
+                else {
+                    return false
+                }
+                return unsafe compression_stream_init(ptr, COMPRESSION_STREAM_ENCODE, algorithm)
                     == COMPRESSION_STATUS_OK
-            else {
-                state.deallocate()
+            }
+            guard ok else {
                 return nil
             }
-            self.state = state
-            window = UnsafeMutablePointer<UInt8>.allocate(capacity: Self.windowSize)
-            live = true
+            self.stateBytes = bytes
+            self.window = [UInt8](repeating: 0, count: Self.windowSize)
+            self.live = true
         }
 
         deinit {
-            // Reached on cancellation: a disconnected client leaves `finish` uncalled, and the codec's
-            // own allocation would otherwise outlive the response that owned it.
+            // Reached on cancellation: a disconnected client leaves `finish` uncalled, and the
+            // codec's own allocation would otherwise outlive the response that owned it.
             if live {
-                compression_stream_destroy(state)
+                stateBytes.withUnsafeMutableBytes { raw in
+                    guard
+                        let ptr = unsafe raw.baseAddress?
+                            .assumingMemoryBound(
+                                to: compression_stream.self
+                            )
+                    else { return }
+                    unsafe compression_stream_destroy(ptr)
+                }
             }
-            state.deallocate()
-            window.deallocate()
         }
 
         /// Codes `input`, finalizing the stream when `finalize` is set, and returns the octets produced.
@@ -67,16 +86,44 @@
                 throw .streamFinished
             }
             var coded: [UInt8] = []
-            var pumped = false
-            input.withUnsafeBufferPointer { source in
-                // `src_ptr` must be a valid pointer even at size zero, which an empty array's
-                // `baseAddress` is not; the window doubles as the never-read stand-in.
-                state.pointee.src_ptr = source.baseAddress ?? UnsafePointer(window)
-                state.pointee.src_size = source.count
-                pumped = pump(finalize: finalize, into: &coded)
+            let pumped: Bool = stateBytes.withUnsafeMutableBytes { stateRaw in
+                guard
+                    let state = unsafe stateRaw.baseAddress?
+                        .assumingMemoryBound(
+                            to: compression_stream.self
+                        )
+                else {
+                    return false
+                }
+                return window.withUnsafeMutableBufferPointer { windowBuf in
+                    guard let dstBase = windowBuf.baseAddress else {
+                        return false
+                    }
+                    return input.withUnsafeBufferPointer { source in
+                        // `src_ptr` must be a valid pointer even at size zero, which an empty
+                        // array's `baseAddress` is not; `dstBase` doubles as a never-read stand-in.
+                        unsafe state.pointee.src_ptr = source.baseAddress ?? UnsafePointer(dstBase)
+                        unsafe state.pointee.src_size = source.count
+                        return unsafe Self.pump(
+                            state: state,
+                            dstBase: dstBase,
+                            windowSize: windowBuf.count,
+                            finalize: finalize,
+                            into: &coded
+                        )
+                    }
+                }
             }
             if finalize {
-                compression_stream_destroy(state)
+                stateBytes.withUnsafeMutableBytes { raw in
+                    guard
+                        let ptr = unsafe raw.baseAddress?
+                            .assumingMemoryBound(
+                                to: compression_stream.self
+                            )
+                    else { return }
+                    unsafe compression_stream_destroy(ptr)
+                }
                 live = false
             }
             guard pumped else {
@@ -87,26 +134,30 @@
 
         /// Drains the codec into `coded` until the input is consumed (or the stream ends); false on a
         /// backend error.
-        private func pump(finalize: Bool, into coded: inout [UInt8]) -> Bool {
+        private static func pump(
+            state: UnsafeMutablePointer<compression_stream>,
+            dstBase: UnsafeMutablePointer<UInt8>,
+            windowSize: Int,
+            finalize: Bool,
+            into coded: inout [UInt8]
+        ) -> Bool {
             let flags = finalize ? Int32(COMPRESSION_STREAM_FINALIZE.rawValue) : 0
             while true {
-                state.pointee.dst_ptr = window
-                state.pointee.dst_size = Self.windowSize
-                let status = compression_stream_process(state, flags)
+                unsafe state.pointee.dst_ptr = dstBase
+                unsafe state.pointee.dst_size = windowSize
+                let status = unsafe compression_stream_process(state, flags)
                 guard status != COMPRESSION_STATUS_ERROR else {
                     return false
                 }
-                coded.append(
-                    contentsOf: UnsafeBufferPointer(
-                        start: window, count: Self.windowSize - state.pointee.dst_size
-                    )
-                )
+                let produced = unsafe (windowSize - state.pointee.dst_size)
+                let slice = unsafe UnsafeBufferPointer(start: dstBase, count: produced)
+                unsafe coded.append(contentsOf: slice)
                 if status == COMPRESSION_STATUS_END {
                     return true
                 }
                 // Without FINALIZE the codec keeps the rest in its own window; stop when it has taken
                 // everything we offered, or the loop would spin producing nothing.
-                if !finalize, state.pointee.src_size == 0 {
+                if !finalize, unsafe state.pointee.src_size == 0 {
                     return true
                 }
             }

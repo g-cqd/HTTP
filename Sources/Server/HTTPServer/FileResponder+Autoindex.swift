@@ -59,14 +59,14 @@ extension FileResponder {
         guard copy >= 0 else {
             return []
         }
-        guard let stream = fdopendir(copy) else {
+        guard let stream = unsafe fdopendir(copy) else {
             POSIXFile.release(copy)
             return []
         }
-        defer { closedir(stream) }
+        defer { unsafe closedir(stream) }
         var entries: [Entry] = []
-        while let record = readdir(stream) {
-            guard let entry = Self.entry(record, in: directory) else {
+        while let record = unsafe readdir(stream) {
+            guard let entry = unsafe Self.entry(record, in: directory) else {
                 continue
             }
             entries.append(entry)
@@ -81,9 +81,9 @@ extension FileResponder {
     ) -> Entry? {
         // `d_name` is a NUL-terminated fixed-size array; an entry whose name is not valid UTF-8 yields
         // nil here and is skipped rather than mangled into the listing.
-        let text = withUnsafeBytes(of: &record.pointee.d_name) { raw -> String? in
-            raw.baseAddress.flatMap {
-                String(validatingCString: $0.assumingMemoryBound(to: CChar.self))
+        let text = unsafe withUnsafeBytes(of: &record.pointee.d_name) { raw -> String? in
+            unsafe raw.baseAddress.flatMap {
+                unsafe String(validatingCString: $0.assumingMemoryBound(to: CChar.self))
             }
         }
         guard let text, !text.isEmpty, !text.hasPrefix(".") else {
@@ -91,7 +91,7 @@ extension FileResponder {
         }
         var info = stat()
         let probed = text.withCString {
-            fstatat(directory.descriptor, $0, &info, AT_SYMLINK_NOFOLLOW)
+            unsafe fstatat(directory.descriptor, $0, &info, AT_SYMLINK_NOFOLLOW)
         }
         guard probed == 0 else {
             return nil

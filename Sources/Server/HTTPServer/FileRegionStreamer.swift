@@ -51,7 +51,7 @@ enum FileRegionStreamer {
             resize(&chunk, to: min(Self.chunkSize, remaining))
             let wanted = chunk.count
             let count = chunk.withUnsafeMutableBytes { buffer in
-                POSIXFile.read(
+                unsafe POSIXFile.read(
                     region.descriptor, into: buffer, start: 0, count: wanted, at: cursor
                 )
             }

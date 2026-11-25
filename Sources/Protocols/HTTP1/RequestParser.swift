@@ -47,11 +47,14 @@ public enum RequestParser {
 
         // RFC 9110 §7.2: an HTTP/1.1 request MUST carry exactly one syntactically valid Host
         // (free of whitespace/userinfo/path delimiters, closing Host-header injection & cache
-        // poisoning vectors).
+        // poisoning vectors). When the request-target uses `absolute-form` (RFC 9112 §3.2.2),
+        // its authority MUST match `Host` (case-insensitive) to close proxy/origin authority
+        // confusion.
         if requestLine.version == .http11 {
             guard headerFields.count(for: .host) == 1,
                 let host = headerFields[.host],
-                isValidHostValue(host)
+                isValidHostValue(host),
+                absoluteTargetMatchesHost(target: requestLine.target, host: host)
             else {
                 throw .invalidHost
             }

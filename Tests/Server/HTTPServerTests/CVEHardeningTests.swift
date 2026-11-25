@@ -12,6 +12,7 @@
 //
 
 import HTTP1
+import HTTP3
 import HTTPCore
 import HTTPServer
 import HTTPTestSupport
@@ -68,6 +69,60 @@ struct CVEHardeningTests {
             }
             #expect(parsed.request.authority == host)
         }
+    }
+
+    @Test(
+        "rejects HTTP/1.1 absolute-form request-target whose authority mismatches Host (RFC 9112 §3.2.2)"
+    )
+    func rejectsAbsoluteTargetHostMismatch() throws {
+        let mismatches = [
+            ("GET http://evil.com/admin HTTP/1.1\r\nHost: good.com\r\n\r\n"),
+            ("GET https://good.com:8443/a HTTP/1.1\r\nHost: good.com\r\n\r\n"),
+            ("GET http://user@good.com/a HTTP/1.1\r\nHost: good.com\r\n\r\n")
+        ]
+        for rawReq in mismatches {
+            let wire = Array(rawReq.utf8)
+            #expect(throws: HTTP1ParseError.invalidHost, "expected invalidHost for \(rawReq)") {
+                try wire.withUnsafeBytes { raw in
+                    var reader = ByteReader(raw)
+                    _ = try RequestParser.parse(&reader, limits: .default)
+                }
+            }
+        }
+        // Matching absolute-form (case-insensitive) succeeds.
+        let matching = Array(
+            "GET http://Example.COM:8080/ok?x=1 HTTP/1.1\r\nHost: example.com:8080\r\n\r\n".utf8
+        )
+        let parsed = try matching.withUnsafeBytes { raw in
+            var reader = ByteReader(raw)
+            return try RequestParser.parse(&reader, limits: .default)
+        }
+        #expect(parsed.request.authority == "example.com:8080")
+    }
+
+    @Test(
+        "HTTP/3 control-stream GREASE/unknown frame flood closes connection with H3_EXCESSIVE_LOAD")
+    func rejectsHTTP3ControlFrameFlood() {
+        let limits = HTTPLimits(maxControlFramesPerInterval: 5)
+        var conn = HTTP3Connection(limits: limits)
+        _ = conn.outbound()  // drain initial server control/QPACK opens
+        // Client control stream (uni stream 2): type 0x00, SETTINGS (type 0x04, len 0x00),
+        // then 10 GREASE/unknown frames (type 0x21 = 33, len 0x00).
+        var payload: [UInt8] = [0x00, 0x04, 0x00]
+        for _ in 0 ..< 10 {
+            payload.append(contentsOf: [0x21, 0x00])
+        }
+        #expect(throws: HTTP3Error.self) {
+            _ = try conn.receive(QUICStreamID(2), payload, fin: false)
+        }
+        let actions = conn.outbound()
+        let closed = actions.contains {
+            if case .closeConnection(let code) = $0 {
+                return code == HTTP3ErrorCode.h3ExcessiveLoad.rawValue
+            }
+            return false
+        }
+        #expect(closed)
     }
 
     // MARK: - HTTP/2 Unsolicited PING-ACK, GOAWAY & Unknown-Frame Floods

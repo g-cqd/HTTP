@@ -158,7 +158,7 @@ enum Inflate {
         var scratch = [UInt8](repeating: 0, count: min(maxOutput, window))
         return source.withUnsafeBufferPointer { input in
             scratch.withUnsafeMutableBufferPointer { destination in
-                pump(input, into: destination, algorithm: algorithm, maxOutput: maxOutput)
+                unsafe pump(input, into: destination, algorithm: algorithm, maxOutput: maxOutput)
             }
         }
     }
@@ -178,7 +178,7 @@ enum Inflate {
         guard let source = input.baseAddress, let target = destination.baseAddress else {
             return nil
         }
-        var stream = compression_stream(
+        var stream = unsafe compression_stream(
             dst_ptr: target,
             dst_size: destination.count,
             src_ptr: source,
@@ -186,30 +186,30 @@ enum Inflate {
             state: nil
         )
         guard
-            compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, algorithm)
+            unsafe compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, algorithm)
                 == COMPRESSION_STATUS_OK
         else {
             return nil
         }
-        defer { compression_stream_destroy(&stream) }
+        defer { unsafe compression_stream_destroy(&stream) }
         // `compression_stream_init` resets the descriptor, so the whole input is offered after it.
-        stream.src_ptr = source
-        stream.src_size = input.count
+        unsafe stream.src_ptr = source
+        unsafe stream.src_size = input.count
         var output: [UInt8] = []
         output.reserveCapacity(destination.count)
         while true {
-            stream.dst_ptr = target
-            stream.dst_size = destination.count
-            let status = compression_stream_process(
+            unsafe stream.dst_ptr = target
+            unsafe stream.dst_size = destination.count
+            let status = unsafe compression_stream_process(
                 &stream, Int32(COMPRESSION_STREAM_FINALIZE.rawValue)
             )
-            let produced = destination.count - stream.dst_size
+            let produced = unsafe (destination.count - stream.dst_size)
             // `maxOutput - produced` is non-negative (`produced <= destination.count <= maxOutput`),
             // so the comparison cannot overflow the way `output.count + produced` could.
             guard status != COMPRESSION_STATUS_ERROR, output.count <= maxOutput - produced else {
                 return nil
             }
-            output.append(contentsOf: UnsafeBufferPointer(start: target, count: produced))
+            unsafe output.append(contentsOf: UnsafeBufferPointer(start: target, count: produced))
             guard status != COMPRESSION_STATUS_END else {
                 return output.isEmpty ? nil : output
             }

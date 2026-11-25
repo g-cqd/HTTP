@@ -68,6 +68,7 @@ let strictMemorySafeTargets: Set<String> = [
     "HTTP2",  // graduated to 0 un-annotated unsafe sites (via AemiKernel RawSpan helpers)
     "HTTP3",  // graduated to 0 un-annotated unsafe sites
     "WebSocket",  // graduated to 0 un-annotated unsafe sites (SIMD xorMask4 + UTF-8 scan)
+    "HTTPServer",  // graduated to 0 un-annotated unsafe sites
     "httpd-example",  // graduated to 0 un-annotated unsafe sites (posix_spawn prefork)
     "HTTPObservability",  // already 0 — pure bridge code over the metrics/log/trace seams
     "HTTPAuth",  // already 0 — pure crypto/middleware over swift-crypto

@@ -81,7 +81,7 @@ extension HTTPServer where C.Duration == Duration {
         var position = window.position
         let result: Result<Bool, HTTP1ParseError> = window.bytes.withUnsafeBytes { raw in
             Result { () throws(HTTP1ParseError) in
-                var reader = ByteReader(raw, startingAt: position)
+                var reader = unsafe ByteReader(raw, startingAt: position)
                 let done = try ChunkedBodyDecoder.advance(
                     &reader, state: &state, into: &chunk, limits: limits
                 )

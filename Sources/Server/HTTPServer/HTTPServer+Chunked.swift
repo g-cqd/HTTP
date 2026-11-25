@@ -43,7 +43,7 @@ extension HTTPServer {
         let effectiveLimits = limits.bodyLimited(to: bodyLimit)
         let result: Result<Bool, HTTP1ParseError> = buffer.withUnsafeBytes { raw in
             Result { () throws(HTTP1ParseError) in
-                var reader = ByteReader(raw, startingAt: chunked.consumed)
+                var reader = unsafe ByteReader(raw, startingAt: chunked.consumed)
                 let done = try ChunkedBodyDecoder.advance(
                     &reader, state: &chunked.state, into: &chunked.body, limits: effectiveLimits
                 )

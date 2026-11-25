@@ -142,13 +142,18 @@ extension HTTP3Connection {
             case .data, .headers, .pushPromise:
                 throw .connection(.h3FrameUnexpected, "a request frame on the control stream")
             case .goAway:
+                try chargeControlFrame()
                 try handleGoAway(frame.payload, into: &events)
             case .cancelPush:
+                try chargeControlFrame()
                 try handleCancelPush(frame.payload)
             case .maxPushID:
+                try chargeControlFrame()
                 try handleMaxPushID(frame.payload)
             default:
-                break  // unknown / grease frame types are ignored (RFC 9114 §9)
+                // Unknown / GREASE frame types are ignored (RFC 9114 §9), but charging them prevents
+                // an unbounded control-stream CPU flood.
+                try chargeControlFrame()
         }
     }
 

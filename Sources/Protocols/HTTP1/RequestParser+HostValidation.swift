@@ -33,6 +33,35 @@ extension RequestParser {
         return isValidOptionalPort(portSlice)
     }
 
+    /// Validates `absolute-form` target authority against `Host` (RFC 9112 §3.2.2).
+    ///
+    /// When a request-target uses `http://host[:port]/...` or `https://host[:port]/...`, its
+    /// authority must match `Host` (ASCII case-insensitive), rejecting proxy/origin
+    /// authority-confusion smuggling. Origin-form (`/path`), asterisk-form (`*`), and
+    /// authority-form (`host:port` for CONNECT) pass straight through.
+    static func absoluteTargetMatchesHost(target: String, host: String) -> Bool {
+        let lowerPrefix = target.prefix(8).lowercased()
+        let authorityStart: String.Index
+        if lowerPrefix.hasPrefix("http://") {
+            authorityStart = target.index(target.startIndex, offsetBy: 7)
+        }
+        else if lowerPrefix.hasPrefix("https://") {
+            authorityStart = target.index(target.startIndex, offsetBy: 8)
+        }
+        else {
+            return true
+        }
+        let rest = target[authorityStart...]
+        let authorityEnd =
+            rest.firstIndex { $0 == "/" || $0 == "?" || $0 == "#" } ?? rest.endIndex
+        let targetAuthority = rest[..<authorityEnd]
+        // Reject userinfo in absolute-form HTTP URIs (RFC 9110 §4.2.4) and require Host match.
+        guard !targetAuthority.contains("@"), !targetAuthority.isEmpty else {
+            return false
+        }
+        return targetAuthority.lowercased() == host.lowercased()
+    }
+
     private static func parseBracketedIPv6Host(_ bytes: [UInt8]) -> ArraySlice<UInt8>?? {
         guard let close = bytes.firstIndex(of: UInt8(ascii: "]")), close > 1 else {
             return nil

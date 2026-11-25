@@ -46,15 +46,15 @@ final class DateCache: Sendable {
         // parameter as a NON-optional pointer; Glibc imports it as optional (POSIX only guarantees it
         // is invoked with a non-NULL value, IEEE Std 1003.1-2017 pthread_key_create) — hence the split.
         #if canImport(Darwin)
-            pthread_key_create(&key) { raw in
-                Unmanaged<ThreadCache>.fromOpaque(raw).release()
+            unsafe pthread_key_create(&key) { raw in
+                unsafe Unmanaged<ThreadCache>.fromOpaque(raw).release()
             }
         #else
-            pthread_key_create(&key) { raw in
+            unsafe pthread_key_create(&key) { raw in
                 guard let raw else {
                     return
                 }
-                Unmanaged<ThreadCache>.fromOpaque(raw).release()
+                unsafe Unmanaged<ThreadCache>.fromOpaque(raw).release()
             }
         #endif
         return key
@@ -69,13 +69,13 @@ final class DateCache: Sendable {
     /// allocation and no lock; a new second rebuilds only this thread's copy.
     func formatted(for second: Int) -> String {
         let cache: ThreadCache
-        if let existing = pthread_getspecific(Self.key) {
-            cache = Unmanaged<ThreadCache>.fromOpaque(existing).takeUnretainedValue()
+        if let existing = unsafe pthread_getspecific(Self.key) {
+            cache = unsafe Unmanaged<ThreadCache>.fromOpaque(existing).takeUnretainedValue()
         }
         else {
             // First touch on this thread: create its box and hand the slot a +1 to own until thread exit.
             let fresh = ThreadCache()
-            pthread_setspecific(Self.key, Unmanaged.passRetained(fresh).toOpaque())
+            unsafe pthread_setspecific(Self.key, Unmanaged.passRetained(fresh).toOpaque())
             cache = fresh
         }
         if cache.second != second {

@@ -40,7 +40,7 @@ final class ForwardingByteBudget: @unchecked Sendable {
 
     /// Creates a budget forwarding from `stream`, allowing at most `limit` octets through.
     init(forwarding stream: HTTPRequestBodyStream, limit: Int) {
-        iterator = stream.makeAsyncIterator()
+        unsafe iterator = stream.makeAsyncIterator()
         self.limit = max(0, limit)
     }
 
@@ -55,7 +55,7 @@ final class ForwardingByteBudget: @unchecked Sendable {
     /// Ending the stream rather than yielding the crossing chunk is the fail-closed half: the
     /// consumer never sees an octet past the budget, and the source is left unread from that point.
     func nextChunk() async -> [UInt8]? {
-        guard !isExceeded, let chunk = await iterator.next() else {
+        guard !isExceeded, let chunk = await unsafe iterator.next() else {
             return nil
         }
         return accounting.withLock { state in

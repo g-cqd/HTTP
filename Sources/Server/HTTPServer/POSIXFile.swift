@@ -43,13 +43,13 @@ enum POSIXFile {
     /// Deliberately follows symlinks in `path`: the operator names the root, so its own path is trusted.
     /// Every lookup after this one is anchored on the returned descriptor and follows nothing.
     static func openRoot(_ path: String) -> Int32 {
-        retrying { open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC) }
+        retrying { unsafe open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC) }
     }
 
     /// Opens `name` inside the directory `parent`; returns the descriptor or `-errno`.
     static func openAt(_ parent: Int32, _ name: some StringProtocol, flags: Int32) -> Int32 {
-        name.withCString { pointer in
-            retrying { openat(parent, pointer, flags) }
+        unsafe name.withCString { pointer in
+            retrying { unsafe openat(parent, pointer, flags) }
         }
     }
 
@@ -61,7 +61,7 @@ enum POSIXFile {
     /// The `fstat(2)` of `descriptor`, or nil when it fails.
     static func status(of descriptor: Int32) -> stat? {
         var info = stat()
-        let result = retrying { fstat(descriptor, &info) }
+        let result = retrying { unsafe fstat(descriptor, &info) }
         return result >= 0 ? info : nil
     }
 
@@ -71,8 +71,8 @@ enum POSIXFile {
     /// (the link itself is not a directory), which is indistinguishable from `/regular-file/deeper`.
     static func isSymlink(_ name: some StringProtocol, in parent: Int32) -> Bool {
         var info = stat()
-        let result = name.withCString { pointer in
-            retrying { fstatat(parent, pointer, &info, AT_SYMLINK_NOFOLLOW) }
+        let result = unsafe name.withCString { pointer in
+            retrying { unsafe fstatat(parent, pointer, &info, AT_SYMLINK_NOFOLLOW) }
         }
         return result >= 0 && info.st_mode & S_IFMT == S_IFLNK
     }
@@ -124,7 +124,7 @@ enum POSIXFile {
     ) -> Bool {
         var filled = 0
         while filled < buffer.count {
-            let read = read(
+            let read = unsafe read(
                 descriptor,
                 into: buffer,
                 start: filled,
@@ -151,7 +151,7 @@ enum POSIXFile {
             return -1
         }
         while true {
-            let read = pread(descriptor, base + start, count, off_t(offset))
+            let read = unsafe pread(descriptor, base + start, count, off_t(offset))
             if read >= 0 {
                 return read
             }

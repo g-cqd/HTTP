@@ -463,7 +463,7 @@ extension HTTPServer where C.Duration == Duration {
             Result { () throws(HTTP1ParseError) in
                 // Parse from the request's start cursor (a zero-copy rebase), not buffer index 0, so a
                 // pipelined remainder left in place still parses correctly (audit L3).
-                var reader = ByteReader(UnsafeRawBufferPointer(rebasing: raw[start...]))
+                var reader = unsafe ByteReader(UnsafeRawBufferPointer(rebasing: raw[start...]))
                 let head = try RequestParser.parseHead(&reader, limits: limits)
                 return PendingRequest(head: head, bodyStart: start + reader.position)
             }

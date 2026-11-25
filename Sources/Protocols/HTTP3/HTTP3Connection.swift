@@ -233,6 +233,9 @@ public struct HTTP3Connection {
     /// Stream resets charged in the current window — peer RESET_STREAM and engine-emitted alike, so
     /// neither Rapid Reset (CVE-2023-44487) nor MadeYouReset (CVE-2025-8671) can bypass the cap.
     var streamResetCount = 0
+    /// Cheap control-stream frames charged in the current window (repeated GOAWAY, MAX_PUSH_ID,
+    /// CANCEL_PUSH, and unknown/GREASE frames) — mirrors HTTP/2's `chargeControlFrame()` defense.
+    var controlFrameCount = 0
 
     /// The dynamic QPACK table capacity advertised when the caller does not pin one (RFC 9204 §3.2.3) —
     /// a modest default that lets a peer encoder compress requests without unbounded decoder memory.
@@ -424,13 +427,29 @@ public struct HTTP3Connection {
     /// engine-emitted resets too mirrors the HTTP/2 abuse budget — so neither Rapid Reset
     /// (CVE-2023-44487) nor MadeYouReset (CVE-2025-8671) can bypass it.
     mutating func chargeStreamReset() {
-        if budgetWindow.rolledOver(at: now()) {
-            streamResetCount = 0
-        }
+        decayBudgetsIfElapsed()
         streamResetCount += 1
         if streamResetCount > limits.maxStreamResetsPerInterval {
             actions.append(.closeConnection(errorCode: HTTP3ErrorCode.h3ExcessiveLoad.rawValue))
         }
+    }
+
+    /// Charges one cheap control-stream frame (GOAWAY, CANCEL_PUSH, MAX_PUSH_ID, or unknown/GREASE
+    /// frame) against the rolling flood budget, tripping `H3_EXCESSIVE_LOAD` past the cap.
+    mutating func chargeControlFrame() throws(HTTP3Error) {
+        decayBudgetsIfElapsed()
+        controlFrameCount += 1
+        guard controlFrameCount <= limits.maxControlFramesPerInterval else {
+            throw .connection(.h3ExcessiveLoad, "excessive control-stream frames")
+        }
+    }
+
+    private mutating func decayBudgetsIfElapsed() {
+        guard budgetWindow.rolledOver(at: now()) else {
+            return
+        }
+        streamResetCount = 0
+        controlFrameCount = 0
     }
 
     /// Dispatches buffered stream bytes to the handler for the stream's classified kind.

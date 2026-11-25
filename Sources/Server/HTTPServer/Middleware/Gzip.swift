@@ -43,7 +43,7 @@ enum Gzip {
             destination.withUnsafeMutableBufferPointer { destination -> Int in
                 guard let source = source.baseAddress, let destination = destination.baseAddress
                 else { return 0 }
-                return compression_encode_buffer(
+                return unsafe compression_encode_buffer(
                     destination, capacity, source, input.count, nil, COMPRESSION_ZLIB
                 )
             }

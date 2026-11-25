@@ -95,8 +95,8 @@ public final class OpenedFile: Sendable {
             return []
         }
         var complete = false
-        let bytes = [UInt8](unsafeUninitializedCapacity: length) { buffer, initialized in
-            complete = POSIXFile.readExactly(
+        let bytes = unsafe [UInt8](unsafeUninitializedCapacity: length) { buffer, initialized in
+            complete = unsafe POSIXFile.readExactly(
                 descriptor, into: UnsafeMutableRawBufferPointer(buffer), at: offset
             )
             initialized = complete ? length : 0
