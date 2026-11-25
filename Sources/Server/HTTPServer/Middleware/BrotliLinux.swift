@@ -34,7 +34,7 @@
                     guard let source = source.baseAddress, let output = output.baseAddress else {
                         return 0
                     }
-                    return cbrotli_compress(output, capacity, source, input.count, quality)
+                    return unsafe cbrotli_compress(output, capacity, source, input.count, quality)
                 }
             }
             guard written > 0 else {
@@ -68,7 +68,7 @@
                     guard let source = source.baseAddress, let output = output.baseAddress else {
                         return 0
                     }
-                    return cbrotli_decompress(output, capacity, source, input.count)
+                    return unsafe cbrotli_decompress(output, capacity, source, input.count)
                 }
             }
             guard written > 0, written <= capacity else {

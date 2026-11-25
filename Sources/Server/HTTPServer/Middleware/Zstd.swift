@@ -40,7 +40,9 @@
                     else {
                         return 0
                     }
-                    return czstd_compress(destination, capacity, source, input.count, clamped)
+                    return unsafe czstd_compress(
+                        destination, capacity, source, input.count, clamped
+                    )
                 }
             }
             guard written > 0 else {

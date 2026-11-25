@@ -60,7 +60,7 @@ enum ReactorQuantum {
             return clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW)
         #else
             var now = timespec()
-            clock_gettime(CLOCK_MONOTONIC, &now)
+            unsafe clock_gettime(CLOCK_MONOTONIC, &now)
             return UInt64(now.tv_sec) &* 1_000_000_000 &+ UInt64(now.tv_nsec)
         #endif
     }

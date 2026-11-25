@@ -268,7 +268,7 @@
                         + (registry.writeHandlers.removeValue(forKey: fd) ?? [])
                 }
                 // Remove before close (a closed fd auto-leaves the set, but explicit DEL is race-free).
-                _ = unsafe epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
+                _ = epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nil)
                 close(fd)
                 // Resume any parked waiter so a cancelled/closed receive/send doesn't leak its
                 // continuation: invoked after close, the handler hits EBADF and resumes with an error.

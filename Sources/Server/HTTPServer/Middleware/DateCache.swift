@@ -51,7 +51,7 @@ final class DateCache: Sendable {
             }
         #else
             unsafe pthread_key_create(&key) { raw in
-                guard let raw else {
+                guard let raw = unsafe raw else {
                     return
                 }
                 unsafe Unmanaged<ThreadCache>.fromOpaque(raw).release()
