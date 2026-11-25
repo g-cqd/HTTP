@@ -79,9 +79,7 @@
             // Wait for the file send to OWN the direction. The peer is not reading, so the first
             // chunk's drain parks with the exclusion held and cannot hand it back until this test
             // releases the peer — the observation is of a state that is stable, not of a moment.
-            while !connection.isSendPumpHeld {
-                await Task.yield()
-            }
+            try await connection.awaitSendPumpHeld()
             let interposer = Task { try await connection.send(Self.marker) }
             // Deterministic: exactly one sender is queued behind the file send now.
             try await connection.awaitQueuedSenders(atLeast: 1)

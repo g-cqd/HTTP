@@ -24,6 +24,7 @@ actor BlockingSendConnection: UnleasedTransportConnection {
     private var sent: [UInt8] = []
     private var sendsBlocked = true
     private var sendWaiters: [CheckedContinuation<Void, Never>] = []
+    private var blockedSendObservers: [CheckedContinuation<Void, Never>] = []
 
     init(id: TransportConnectionID = TransportConnectionID(1), chunks: [[UInt8]]) {
         self.id = id
@@ -40,6 +41,11 @@ actor BlockingSendConnection: UnleasedTransportConnection {
 
     func send(_ bytes: [UInt8]) async {
         while sendsBlocked {
+            let observers = blockedSendObservers
+            blockedSendObservers.removeAll()
+            for observer in observers {
+                observer.resume()
+            }
             await withCheckedContinuation { sendWaiters.append($0) }
         }
         sent.append(contentsOf: bytes)
@@ -51,6 +57,14 @@ actor BlockingSendConnection: UnleasedTransportConnection {
 
     // MARK: Test controls
 
+    /// Suspends until the consumer has reached its first blocked `send`.
+    func waitUntilSendBlocked() async {
+        if !sendWaiters.isEmpty || !sendsBlocked {
+            return
+        }
+        await withCheckedContinuation { blockedSendObservers.append($0) }
+    }
+
     /// Unblocks `send`, letting the stalled consumer drain.
     func releaseSends() {
         sendsBlocked = false
@@ -58,6 +72,10 @@ actor BlockingSendConnection: UnleasedTransportConnection {
             waiter.resume()
         }
         sendWaiters.removeAll()
+        for observer in blockedSendObservers {
+            observer.resume()
+        }
+        blockedSendObservers.removeAll()
     }
 
     /// Chunks the reader has actually pulled off the wire.

@@ -255,6 +255,16 @@
         /// Whether the inbound direction is currently claimed — see ``isSendPumpHeld``.
         var isReceivePumpHeld: Bool { receivePump.isHeld }
 
+        /// Suspends until the outbound direction is currently claimed.
+        func awaitSendPumpHeld() async throws {
+            try await sendPump.waitUntilHeld()
+        }
+
+        /// Suspends until the inbound direction is currently claimed.
+        func awaitReceivePumpHeld() async throws {
+            try await receivePump.waitUntilHeld()
+        }
+
         /// Suspends until at least `count` senders are queued behind the current outbound holder.
         ///
         /// The deterministic sequencing hook for an ownership-SPAN assertion, and the reason the span

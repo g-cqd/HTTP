@@ -192,9 +192,7 @@
             }
             // Wait for the receive to actually take the lease before cancelling, so this cancels a
             // PARKED receive rather than racing the task's first resumption.
-            while !connection.isReceivePumpHeld {
-                await Task.yield()
-            }
+            try await connection.awaitReceivePumpHeld()
             receiver.cancel()
             let (outcome, buffer) = await receiver.value
 

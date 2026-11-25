@@ -80,19 +80,19 @@ struct HTTP2InboundBackpressureTests {
         #expect(await connection.pingAckCount() == 200)
     }
 
-    /// Yields until the reader's pull count stops moving, then reports it.
+    /// Waits for the consumer to stall in `send`, then observes the reader's pull count settle.
     private static func settledHandedOutCount(_ connection: BlockingSendConnection) async -> Int {
-        var last = -1
+        await connection.waitUntilSendBlocked()
+        var last = await connection.handedOutCount()
         for _ in 0 ..< 20 {
-            let before = await connection.handedOutCount()
-            for _ in 0 ..< 500 {
+            for _ in 0 ..< 100 {
                 await Task.yield()
             }
-            let after = await connection.handedOutCount()
-            if before == after, before == last {
-                return after
+            let current = await connection.handedOutCount()
+            if current == last {
+                return current
             }
-            last = after
+            last = current
         }
         return await connection.handedOutCount()
     }
