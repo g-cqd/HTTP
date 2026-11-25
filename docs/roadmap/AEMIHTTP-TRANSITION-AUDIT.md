@@ -118,3 +118,39 @@ Current `HTTP` budget (`strict-memory-safety-budget.tsv`): **426 un-annotated un
   - Chunked streaming write (`H1StreamWriter.write`)
   - WebSocket frame decode/mask
 - Run `Benchmarking/Bench` before/after Phase 2 and Phase 3 tracking throughput (req/s), p99 latency, heap allocations/req, and CPU time (`getrusage` / `AemiMetrics.ProcessProbe`).
+
+---
+
+## 7. Completion Status & Clean-Host Benchmark Results (2026-11-25)
+
+### Completed Consolidation Milestones
+- **Promoted to `family/aemi`** (`15ae44e`): `CAemiKernels` IEEE CRC-32 (`adf_crc32_ieee_update`) + 64-byte NEON/SSE2 `adf_xor_mask4`, `AemiRuntime` (`DeadlineWheel`, `ShardedMutex`, `BoundedLRU`, `SharedBoundedLRU`, `AsyncExclusion` + `waitUntilHeld()`, `RollingWindow`, `Duration.monotonicNanoseconds`), `AemiTestKit` (`AsyncGate.waitForWaiters`, `mallocByteDelta` / `expectAllocatedBytes`), and `AemiKernel` `RawSpan` helpers.
+- **Cut over `family/HTTP` → `AemiHTTP`**:
+  - Added `AemiHTTP` umbrella product (`Sources/AemiHTTP/AemiHTTP.swift`).
+  - Replaced `HTTPCore/{Base64,CRC32,QueryParameters}`, `WebSocketFrameDecoder` masking, `HTTPConcurrency` primitives, and `HTTPTestSupport` with `AemiKernel`/`AemiKernels`/`AemiRuntime`/`AemiTestKit`; dropped `apple/swift-collections`.
+  - SIMD-accelerated `HTTP1` (`HeaderParser` bare-LF scan, `RequestLineParser` target validation, `ChunkedBodyDecoder` trailer validation) and pooled HTTP/1.1 read + response-head buffers via `AemiKernel.ByteBufferPool`.
+  - Implemented 3-part scatter-gather `send(_:_:_:)` (`writev(2)` / `NWConnection.batch` + `DispatchData`), fixed `KqueueEventLoop`/`EpollEventLoop` post-exit dispatch, added `ResponseStream(producerIdleTimeout:)`, and closed GitHub issues `#2`, `#3`, `#4`.
+  - **SE-0458 `StrictMemorySafety`**: graduated every target in the repository to `strictMemorySafeTargets` (**426 → 0** un-annotated unsafe sites; **16 → 13** suppressions; default, `HTTP_PORTABLE_TLS=1`, and `HTTP_BORINGSSL_TLS=1` builds clean under `HTTP_WARNINGS_AS_ERRORS=1`).
+  - Completed 10-year CVE audit (`docs/audit/CVE-10-YEAR-AUDIT-2026.md`) and hardened all identified gaps.
+
+### Clean-Host Comparative Benchmarks (`Benchmarking/Bench/run.sh`, 2026-11-25)
+- **Setup:** `MODES="floor full" BACKBONES="posixKqueue" DURATION=3s WARMUP=1s`, `c=64`, `Accept-Encoding: identity`, byte-equivalence parity gate passed across all subjects, clean host (external load `0.05–0.12/cpu`). Median of 2 rounds:
+
+| Subject | `/plaintext` RPS | `/json` RPS | `/payload` RPS | `/hello/world` RPS | `POST /echo` RPS | Median p99 (ms) |
+|---|---:|---:|---:|---:|---:|---:|
+| `nginx:floor` | 79,599 | 80,053 | 78,889 | 79,640 | — | **0.95–0.97** |
+| `bun:floor` | 77,099 | 77,998 | 75,972 | 75,187 | 66,572 | 1.49–1.88 |
+| `rust (hyper):floor` | 73,093 | 72,960 | 72,512 | 72,937 | 71,564 | **1.00–1.02** |
+| **`ours(posixKqueue):floor`** | **66,540** | **66,952** | **66,427** | **66,126** | **65,783** | **1.10–1.20** |
+| **`ours(posixKqueue):full`** | **65,662** | **65,683** | **65,785** | **65,333** | **65,165** | **1.16–1.42** |
+| `go:floor` | 65,961 | 66,154 | 64,952 | 65,885 | 65,773 | 1.38–1.72 |
+| `caddy:floor` | 65,726 | 65,499 | 65,450 | 65,527 | — | 1.43–1.58 |
+
+- **Additional checks (`c=256`, 3s, `/plaintext`):** `rust (hyper)` 72,669 rps (p99 `3.83 ms`), **`ours:floor` 67,201 rps (p99 `4.25 ms`)**, `go` 66,387 rps (p99 `5.04 ms`), **`ours:full` 66,013 rps (p99 `4.27 ms`)**.
+- **HTTP/2 h2c (`c=32`, 5s, `/plaintext`):** `60,505 rps`, p50 `0.49 ms`, p99 `1.20 ms`.
+- **Release allocation gates:** `HeaderParserAllocationTests` (5/5), `HTTP2FrameWalkAllocationTests` + `HTTP2ReceiveAllocationTests` (7/7), `HTTP3FrameWalkTests` + `HTTP3ReceiveAllocationTests` (9/9) all passed in `-c release`.
+- **Delta vs prior 2026-08-01 baseline (`RESULTS.md`):**
+  - Throughput relative to `rust (hyper)` improved from **62–85%** (`G = 0.62–0.85`) to **90.7–91.9%** (`G = 0.91–0.92`, surpassing the `DECISION.md` `>= 0.85` parity bar on all 5 routes).
+  - Tail latency (p99) tightened from **11–39 ms** (vs hyper 3.5–14.6 ms) down to **1.10–1.20 ms** (within **0.10–0.20 ms** of hyper's 1.00–1.02 ms, and tighter than Go, Caddy, and Bun on every route).
+  - Middleware chain cost (`full` vs `floor`) measured cleanly at **1.0–1.9%** on this host (consistent across all 5 scenarios).
+
