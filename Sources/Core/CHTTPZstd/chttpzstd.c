@@ -40,6 +40,16 @@
 #include <immintrin.h>
 #endif
 
+// vendor/zstd.c forward-declares ASan/MSan runtime hooks directly instead of including <sanitizer/*_interface.h>.
+// Pre-declare them with default visibility before `#pragma GCC visibility push(hidden)` so GNU ld can bind them to
+// libclang_rt.asan / libclang_rt.msan when building shared test bundles under `--sanitize=address` / `memory`.
+__attribute__((visibility("default"))) void __asan_poison_memory_region(void const volatile *addr, size_t size);
+__attribute__((visibility("default"))) void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
+__attribute__((visibility("default"))) void __msan_unpoison(const volatile void *a, size_t size);
+__attribute__((visibility("default"))) void __msan_poison(const volatile void *a, size_t size);
+__attribute__((visibility("default"))) intptr_t __msan_test_shadow(const volatile void *x, size_t size);
+__attribute__((visibility("default"))) void __msan_print_shadow(const volatile void *x, size_t size);
+
 // vendor/zstd.c is generated single-threaded (scripts/vendor-zstd.sh): no worker pool, no pthread dependency.
 #define ZSTDLIB_VISIBLE __attribute__((visibility("hidden")))
 #define ZSTDERRORLIB_VISIBLE __attribute__((visibility("hidden")))
