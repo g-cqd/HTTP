@@ -14,26 +14,16 @@ internal import CHTTPZstd
 /// Used by one owner at a time (see ``ZstdCompressor``).
 final class ZstdDecompressor: @unchecked Sendable {
     let windowLogMax: Int
-    /// The context's address.
-    ///
-    /// Kept as an integer so the class stores no unsafe type (SE-0458); every C call rebuilds the pointer from it.
-    private let handle: UInt
+    /// The libzstd context; `context.reset()` forgets a frame in progress.
+    let context: ZstdContext
 
     init(windowLogMax: Int) throws(ZstdError) {
-        guard let context = unsafe chttpzstd_dctx_create(UInt32(windowLogMax)) else {
-            throw .outOfMemory
-        }
         self.windowLogMax = windowLogMax
-        handle = UInt(bitPattern: Int(bitPattern: context))
+        context = try .decompression(windowLogMax: windowLogMax)
     }
 
     deinit {
-        unsafe chttpzstd_dctx_free(OpaquePointer(bitPattern: handle))
-    }
-
-    /// Forgets any frame in progress.
-    func reset() {
-        _ = unsafe chttpzstd_dctx_reset(OpaquePointer(bitPattern: handle))
+        // The decompression state is released along with `context`.
     }
 
     /// Decodes every frame of `input` (skippable frames included) into at most `limit` bytes.
@@ -48,7 +38,7 @@ final class ZstdDecompressor: @unchecked Sendable {
             let status = input.withUnsafeBufferPointer { source in
                 output.withUnsafeMutableBufferPointer { destination in
                     unsafe chttpzstd_decompress_stream(
-                        OpaquePointer(bitPattern: handle),
+                        context.pointer,
                         source.baseAddress,
                         source.count,
                         &consumed,

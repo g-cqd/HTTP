@@ -54,7 +54,7 @@ public final class ZstdCompressionStream {
             return
         }
         self.compressor = nil
-        compressor.reset()
+        compressor.context.reset()
         Zstd.compressors.give(level, compressor)
     }
 }

@@ -15,25 +15,17 @@ internal import CHTTPZstd
 /// takes it back — which is why it can be `@unchecked Sendable`: it is moved between tasks, never shared.
 final class ZstdCompressor: @unchecked Sendable {
     let level: Int
-    /// The context's address.
-    ///
-    /// Kept as an integer so the class stores no unsafe type (SE-0458); every C call rebuilds the pointer from it.
-    private let handle: UInt
+    /// The libzstd context; `context.reset()` abandons a frame in progress.
+    let context: ZstdContext
 
     init(level: Int) throws(ZstdError) {
         guard Zstd.levels.contains(level) else { throw .invalidLevel(level) }
-        guard let context = unsafe chttpzstd_cctx_create(Int32(level)) else { throw .outOfMemory }
         self.level = level
-        handle = UInt(bitPattern: Int(bitPattern: context))
+        context = try .compression(level: level)
     }
 
     deinit {
-        unsafe chttpzstd_cctx_free(OpaquePointer(bitPattern: handle))
-    }
-
-    /// Abandons any frame in progress; the next call starts a new frame.
-    func reset() {
-        _ = unsafe chttpzstd_cctx_reset(OpaquePointer(bitPattern: handle))
+        // The compression context is freed with `context`.
     }
 
     /// Compresses `input`, appending the output to `output`; with `end`, finishes the frame.
@@ -51,7 +43,7 @@ final class ZstdCompressor: @unchecked Sendable {
             let status = input.withUnsafeBufferPointer { source in
                 output.withUnsafeMutableBufferPointer { destination in
                     unsafe chttpzstd_compress_stream(
-                        OpaquePointer(bitPattern: handle),
+                        context.pointer,
                         source.baseAddress,
                         source.count,
                         &consumed,

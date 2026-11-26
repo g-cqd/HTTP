@@ -39,11 +39,11 @@ public enum Zstd {
             try compressor.compress(input, end: true, into: &output)
         }
         catch {
-            compressor.reset()
+            compressor.context.reset()
             compressors.give(level, compressor)
             throw error
         }
-        compressor.reset()
+        compressor.context.reset()
         compressors.give(level, compressor)
         return output
     }
@@ -67,7 +67,7 @@ public enum Zstd {
             try ZstdDecompressor(windowLogMax: log)
         }
         defer {
-            decompressor.reset()
+            decompressor.context.reset()
             decompressors.give(windowLogMax, decompressor)
         }
         let size = known.map { Int($0) }
