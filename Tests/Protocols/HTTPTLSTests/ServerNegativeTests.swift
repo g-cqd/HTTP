@@ -201,6 +201,17 @@ struct ServerNegativeTests {
         )
     }
 
+    /// u = 0 and u = 1 are of low order: X25519 with either gives the all-zero secret (RFC 7748 §6.1).
+    @Test(
+        "a low-order x25519 key share dies as illegal_parameter, whatever the crypto library returns — §7.4.2",
+        arguments: [[UInt8](repeating: 0, count: 32), [1] + [UInt8](repeating: 0, count: 31)]
+    )
+    func lowOrderShare(share: [UInt8]) async {
+        var (hello, _) = Self.baseline()
+        hello.keyShares = [(0x001D, share)]
+        await Self.expectFatalHello(hello, .illegalParameter("x25519 key agreement"))
+    }
+
     // MARK: HelloRetryRequest contract (§4.1.2/§4.1.4/§4.2.2/§4.2.8)
 
     /// A server that always needs an HRR (P-256 only) plus a first-round hello (x25519

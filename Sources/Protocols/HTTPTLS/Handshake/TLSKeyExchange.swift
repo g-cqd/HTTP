@@ -60,7 +60,10 @@ enum TLSKeyExchange {
                     let peer = try? Curve25519.KeyAgreement.PublicKey(
                         rawRepresentation: peerShare
                     ),
-                    let secret = try? key.sharedSecretFromKeyAgreement(with: peer)
+                    let secret = try? key.sharedSecretFromKeyAgreement(with: peer),
+                    // §7.4.2 / RFC 7748 §6.1: an all-zero secret is a low-order share. Checked here, not left to the
+                    // library: swift-crypto up to 5.1.1 returned it on Linux (GHSA-rch3-xxjq-365j). Constant time.
+                    !(secret == [UInt8](repeating: 0, count: 32))
                 else {
                     throw .illegalParameter("x25519 key agreement")  // §4.2.8.2
                 }
