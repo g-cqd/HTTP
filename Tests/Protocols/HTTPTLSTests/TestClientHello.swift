@@ -53,15 +53,13 @@ struct TestClientHello {
     /// Encodes the full handshake message (header included).
     func message() -> [UInt8] {
         TLSHandshakeBuilder.message(.clientHello) { body in
-            body.u16(legacyVersion)
-            body.raw(random)
-            body.vector8 { $0.raw(sessionID) }
-            body.vector16 { suites in
-                for suite in cipherSuites {
-                    suites.u16(suite)
-                }
-            }
-            body.vector8 { $0.raw(compression) }
+            body.clientHelloPrefix(
+                version: legacyVersion,
+                random: random,
+                sessionID: sessionID,
+                cipherSuites: cipherSuites,
+                compressionMethods: compression
+            )
             body.vector16 { extensions in
                 if preSharedKeyFirst {
                     appendPreSharedKey(&extensions)

@@ -99,4 +99,24 @@ struct TLSHandshakeBuilder {
         builder.vector24(body)
         return builder.bytes
     }
+
+    /// §4.1.2: the fixed ClientHello prefix — `legacy_version`, `random`, `legacy_session_id`,
+    /// `cipher_suites`, `legacy_compression_methods` — shared by every ClientHello encoder.
+    mutating func clientHelloPrefix(
+        version: UInt16,
+        random: [UInt8],
+        sessionID: [UInt8],
+        cipherSuites: [UInt16],
+        compressionMethods: [UInt8]
+    ) {
+        u16(version)
+        raw(random)
+        vector8 { $0.raw(sessionID) }
+        vector16 { suites in
+            for suite in cipherSuites {
+                suites.u16(suite)
+            }
+        }
+        vector8 { $0.raw(compressionMethods) }
+    }
 }

@@ -19,3 +19,12 @@ public protocol TLSClientChainValidator: Sendable {
     /// ABSENCE is the ``TLSClientAuthenticationMode``'s decision, not the validator's).
     func validate(chainDER: [[UInt8]]) async -> TLSChainVerdict
 }
+
+extension TLSClientChainValidator {
+    /// Runs `chainDER` through the validator, throwing the verdict's §6.2 alert on rejection.
+    func requireAccepted(_ chainDER: [[UInt8]]) async throws(TLSHandshakeError) {
+        if case .rejected(let rejection) = await validate(chainDER: chainDER) {
+            throw .clientChainRejected(rejection)
+        }
+    }
+}

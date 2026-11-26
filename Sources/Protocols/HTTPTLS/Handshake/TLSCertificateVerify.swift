@@ -54,4 +54,43 @@ struct TLSCertificateVerify: Sendable, Equatable {
         try reader.expectEnd(of: "CertificateVerify")
         return Self(scheme: scheme, signature: [UInt8](signature))
     }
+
+    /// What a peer's CertificateVerify must satisfy (§4.4.3): a scheme we offered, a verifier
+    /// that supports it, and the role-bound signing context.
+    struct PeerExpectation {
+        let offered: [TLSSignatureScheme]
+        let verifier: any TLSCertificateSignatureVerifier
+        let context: String
+    }
+
+    /// §4.4.3: verifies a peer CertificateVerify against `expectation`, the transcript hash so
+    /// far, and the leaf's SubjectPublicKeyInfo — then appends the message to `transcript`.
+    static func verifyPeer(
+        _ message: TLSHandshakeCoalescer.Message,
+        expecting expectation: PeerExpectation,
+        chain: [[UInt8]],
+        transcript: inout TLSTranscriptHash?
+    ) throws(TLSHandshakeError) {
+        guard let transcriptHash = transcript?.currentHash, let leafDER = chain.first else {
+            throw .internalError("CertificateVerify before Certificate")  // unreachable
+        }
+        let verify = try parse(message)
+        guard expectation.offered.contains(verify.scheme) else {
+            throw .illegalParameter("CertificateVerify scheme not offered")
+        }
+        guard expectation.verifier.supports(verify.scheme) else {
+            throw .unverifiableCertificate(verify.scheme)  // fail closed
+        }
+        let spki = try DERPublicKeyLocator.subjectPublicKeyInfo(inCertificateDER: leafDER)
+        let verified = expectation.verifier.verify(
+            scheme: verify.scheme,
+            signature: verify.signature,
+            content: signedContent(context: expectation.context, transcriptHash: transcriptHash),
+            subjectPublicKeyInfoDER: spki
+        )
+        guard verified else {
+            throw .invalidCertificateVerify  // §4.4.3 — decrypt_error
+        }
+        transcript?.append(message.raw)
+    }
 }

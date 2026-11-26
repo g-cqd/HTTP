@@ -32,7 +32,8 @@ let strictMemorySafeTargets: Set<String> = [
     "HTTPDeflate",
     "HTTPZstd",
     "HTTPTLS",
-    "HTTPTLSRSA"
+    "HTTPTLSRSA",
+    "HTTPClient"
 ]
 
 #if os(Linux)
@@ -138,6 +139,7 @@ let package = Package(
         .library(name: "HTTPTLSRSA", targets: ["HTTPTLSRSA"]),
         .library(name: "HTTPTransport", targets: ["HTTPTransport"]),
         .library(name: "HTTPServer", targets: ["HTTPServer"]),
+        .library(name: "HTTPClient", targets: ["HTTPClient"]),
         .library(name: "HTTPObservability", targets: ["HTTPObservability"]),
         .library(name: "HTTPAuth", targets: ["HTTPAuth"]),
         .executable(name: "httpd-example", targets: ["httpd-example"])
@@ -350,6 +352,26 @@ let package = Package(
             ],
             path: "Sources/Server/HTTPServer",
             exclude: appleCompressionSources
+        ),
+        .target(
+            name: "HTTPClient",
+            dependencies: [
+                "HTTPCore", "HTTP1", "HTTPTLS", "HTTPTLSRSA", "HTTPTransport", "HTTPDeflate",
+                "HTTPZstd"
+            ],
+            path: "Sources/Client/HTTPClient"
+        ),
+        .testTarget(
+            name: "HTTPClientTests",
+            dependencies: [
+                "HTTPClient", "HTTPCore", "HTTPTLS", "HTTPTransport", "HTTPServer",
+                "HTTPTestSupport",
+                "HTTPZstd", "HTTPDeflate",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "X509", package: "swift-certificates"),
+                .product(name: "SwiftASN1", package: "swift-asn1")
+            ],
+            path: "Tests/Client/HTTPClientTests"
         ),
         .testTarget(
             name: "HTTPServerTests",

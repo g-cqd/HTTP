@@ -80,4 +80,8 @@ public enum HTTP1ParseError: Error, Sendable, Equatable {
 
     /// A `Content-Length` was present but malformed or self-contradictory (RFC 9112 §6.3; → `400`).
     case invalidContentLength
+
+    /// The status-line did not match `HTTP-version SP status-code SP [ reason-phrase ] CRLF`
+    /// or carried a status code outside `100...599` (RFC 9112 §4).
+    case malformedStatusLine
 }

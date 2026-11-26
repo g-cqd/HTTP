@@ -16,12 +16,10 @@ internal import struct Foundation.Date
 public struct TLSServerConfiguration: Sendable {
     /// Cipher suites in server-preference order (§4.1.1; default: all three §B.4 suites,
     /// AES-128-GCM first per §9.1's mandatory-to-implement).
-    public var cipherSuites: [TLSCipherSuite] = [
-        .aes128GcmSha256, .aes256GcmSha384, .chaCha20Poly1305Sha256
-    ]
+    public var cipherSuites: [TLSCipherSuite] = TLSDefaults.cipherSuites
     /// Key-exchange groups in server-preference order (§4.2.7; implemented groups only —
     /// unimplemented entries are ignored during negotiation).
-    public var groups: [TLSNamedGroup] = [.x25519, .secp256r1]
+    public var groups: [TLSNamedGroup] = TLSDefaults.groups
     /// Signature schemes acceptable for CertificateVerify, both directions (§4.2.3).
     ///
     /// Server-preference order. The default lists what the seams can produce/verify plus the

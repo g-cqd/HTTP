@@ -27,12 +27,7 @@ extension TLSServerConnection {
             // CertificateVerify is even read (§4.4.2.4: "If the server ... the certificate
             // chain ... is unacceptable ... it MAY ... abort the handshake"; this engine
             // does, fail closed, with the verdict's §6.2 alert).
-            switch await validator.validate(chainDER: chain) {
-                case .accepted:
-                    break
-                case .rejected(let rejection):
-                    throw .clientChainRejected(rejection)
-            }
+            try await validator.requireAccepted(chain)
         }
         state = .expectingClientCertificateVerify
     }
@@ -62,35 +57,20 @@ extension TLSServerConnection {
     mutating func processClientCertificateVerify(
         _ message: TLSHandshakeCoalescer.Message
     ) throws(TLSHandshakeError) {
-        let verify = try TLSCertificateVerify.parse(message)
-        guard clientAuthSchemes.contains(verify.scheme) else {
-            // §4.4.3: "If sent by a client, the signature algorithm used in the signature
-            // MUST be one of those present in the supported_signature_algorithms field of
-            // the ... CertificateRequest".
-            throw .illegalParameter("CertificateVerify scheme not offered")
-        }
-        guard configuration.certificateVerifier.supports(verify.scheme) else {
-            throw .unverifiableCertificate(verify.scheme)  // fail closed, both modes
-        }
-        guard let transcriptHash = transcript?.currentHash, let leaf = clientCertificateChain.first
-        else {
-            throw .internalError("client CertificateVerify before Certificate")  // unreachable
-        }
-        let verified = configuration.certificateVerifier.verify(
-            scheme: verify.scheme,
-            signature: verify.signature,
-            content: TLSCertificateVerify.signedContent(
-                context: TLSCertificateVerify.clientContext,  // role-bound (§4.4.3)
-                transcriptHash: transcriptHash
-            ),
-            subjectPublicKeyInfoDER: try DERPublicKeyLocator.subjectPublicKeyInfo(
-                inCertificateDER: leaf
-            )
+        // §4.4.3: "If sent by a client, the signature algorithm used in the signature MUST be one
+        // of those present in the supported_signature_algorithms field of the ...
+        // CertificateRequest" — and the content is role-bound to the client context.
+        let expectation = TLSCertificateVerify.PeerExpectation(
+            offered: clientAuthSchemes,
+            verifier: configuration.certificateVerifier,
+            context: TLSCertificateVerify.clientContext
         )
-        guard verified else {
-            throw .invalidCertificateVerify  // §4.4.3 — decrypt_error
-        }
-        transcript?.append(message.raw)
+        try TLSCertificateVerify.verifyPeer(
+            message,
+            expecting: expectation,
+            chain: clientCertificateChain,
+            transcript: &transcript
+        )
         state = .expectingClientFinished
     }
 

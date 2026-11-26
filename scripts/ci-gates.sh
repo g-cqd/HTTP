@@ -24,7 +24,7 @@ python3 scripts/dependency-pinning.py
 echo "==> the request path is trap-free"
 targets=(Sources/Core/HTTPCore Sources/Protocols/HTTP1 Sources/Protocols/HTTP2 Sources/Protocols/HPACK Sources/Protocols/QPACK
     Sources/Protocols/HTTP3 Sources/Protocols/WebSocket Sources/Server/HTTPServer Sources/Transport/HTTPTransport
-    Sources/Core/HTTPConcurrency)
+    Sources/Core/HTTPConcurrency Sources/Client/HTTPClient)
 pattern='(fatalError|preconditionFailure|assertionFailure)\(|(^|[^A-Za-z.])precondition\(|(^|[^A-Za-z])assert\(|\.unsafelyUnwrapped'
 hits="$(grep -rnE "$pattern" "${targets[@]}" --include='*.swift' 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)"
 if [ -n "$hits" ]; then

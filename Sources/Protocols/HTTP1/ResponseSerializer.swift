@@ -12,9 +12,8 @@ public import HTTPCore
 /// Serializes an ``HTTPResponse`` into HTTP/1.1 wire bytes (RFC 9112).
 public enum ResponseSerializer {
     private static let statusLinePrefix: [UInt8] = Array("HTTP/1.1 ".utf8)
-    private static let crlf: [UInt8] = [0x0D, 0x0A]
-    private static let space: UInt8 = 0x20
-    private static let colon: UInt8 = 0x3A
+    private static let crlf = HeaderSectionWriter.crlf
+    private static let space = HeaderSectionWriter.space
 
     /// Serializes `response` and `body` into a complete HTTP/1.1 response message.
     ///
@@ -85,14 +84,7 @@ public enum ResponseSerializer {
         if !forbids, !fields.contains(.contentLength), !fields.contains(.transferEncoding) {
             fields.append("\(bodyLength)", for: .contentLength)
         }
-        for field in fields {
-            field.name.appendRawNameUTF8(to: &output)
-            output.append(colon)
-            output.append(space)
-            output.append(contentsOf: field.value.utf8)
-            output.append(contentsOf: crlf)
-        }
-        output.append(contentsOf: crlf)  // blank line terminates the header section
+        HeaderSectionWriter.append(fields, to: &output)
 
         // A body-forbidden status (1xx/204/304) or a HEAD response writes no body octets: an unframed
         // body on a keep-alive connection would be read as the next response's start (RFC 9110 §6.4.1).

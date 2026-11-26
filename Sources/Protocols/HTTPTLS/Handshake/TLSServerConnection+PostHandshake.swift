@@ -69,31 +69,11 @@ extension TLSServerConnection {
     mutating func processKeyUpdate(
         _ message: TLSHandshakeCoalescer.Message
     ) throws(TLSHandshakeError) {
-        let update = try TLSKeyUpdateMessage.parse(message)
-        consecutivePeerKeyUpdates += 1
-        guard consecutivePeerKeyUpdates <= configuration.maxConsecutivePeerKeyUpdates else {
-            throw .excessiveKeyUpdates
-        }
-        do {
-            try record.ratchetReadKeys()  // the peer already switched (§7.2)
-        }
-        catch {
-            throw .record(error)
-        }
-        requestedPeerKeyUpdate = false  // whatever we asked for has now happened
-        guard update == .updateRequested else {
-            return
-        }
-        // §4.6.3: answer "with its own KeyUpdate with request_update set to
-        // update_not_requested prior to sending its next Application Data record" — the
-        // answer rides the OLD write keys, then the write direction ratchets.
-        try emit(handshake: TLSKeyUpdateMessage.updateNotRequested.encoded())
-        do {
-            try record.ratchetWriteKeys()
-        }
-        catch {
-            throw .record(error)
-        }
+        try keyUpdates.receive(
+            message,
+            limit: configuration.maxConsecutivePeerKeyUpdates,
+            record: &record
+        )
     }
 
     /// Rekeys the write direction now, optionally demanding the peer rekey too (§4.6.3).
@@ -117,28 +97,13 @@ extension TLSServerConnection {
         guard state == .connected else {
             return
         }
-        let writeNeed = record.writeNeedsKeyUpdate
-        let readNeed = record.readNeedsKeyUpdate && !requestedPeerKeyUpdate
-        guard writeNeed || readNeed else {
-            return
-        }
-        try sendKeyUpdate(requesting: readNeed)
+        try keyUpdates.maintain(record: &record)
     }
 
     /// Sends one KeyUpdate under the old write keys, then ratchets the write direction
     /// (§4.6.3's ordering).
     private mutating func sendKeyUpdate(requesting: Bool) throws(TLSHandshakeError) {
-        let message: TLSKeyUpdateMessage = requesting ? .updateRequested : .updateNotRequested
-        try emit(handshake: message.encoded())
-        do {
-            try record.ratchetWriteKeys()
-        }
-        catch {
-            throw .record(error)
-        }
-        if requesting {
-            requestedPeerKeyUpdate = true
-        }
+        try keyUpdates.send(requesting: requesting, record: &record)
     }
 
     /// §7.5 exporters over the exporter master secret — nil until the server Finished.

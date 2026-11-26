@@ -45,20 +45,15 @@ public struct TLSX509ChainValidator: TLSClientChainValidator {
     public init(
         rootsDER: [[UInt8]], expectedHostname: String? = nil
     ) throws(ConfigurationError) {
-        guard !rootsDER.isEmpty else {
-            throw .noTrustRoots
-        }
-        var anchors: [Certificate] = []
-        anchors.reserveCapacity(rootsDER.count)
-        for (index, der) in rootsDER.enumerated() {
-            do {
-                anchors.append(try Certificate(derEncoded: der))
-            }
-            catch {
-                throw .undecodableTrustRoot(index: index, "\(error)")
-            }
-        }
-        roots = CertificateStore(anchors)
+        self.init(
+            anchors: try TLSTrustAnchors(rootsDER: rootsDER),
+            expectedHostname: expectedHostname
+        )
+    }
+
+    /// Creates a validator over an already-decoded, shared anchor set.
+    public init(anchors: TLSTrustAnchors, expectedHostname: String? = nil) {
+        roots = anchors.store
         self.expectedHostname = expectedHostname
     }
 

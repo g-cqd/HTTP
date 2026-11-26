@@ -87,15 +87,12 @@ public struct TLSServerConnection: Sendable {
     var clientCertificateChain: [[UInt8]] = []
     /// The §4.6.1 `ticket_nonce` counter ("MUST be unique per ticket on this connection").
     var ticketNonceCounter: UInt64 = 0
-    /// The peer's consecutive KeyUpdate flood counter (RFC 8446 §4.6.3 / CVE-2023-24531 class).
-    ///
-    /// Incremented on every peer KeyUpdate and reset whenever application data arrives.
-    var consecutivePeerKeyUpdates = 0
-    /// Whether a KeyUpdate with `update_requested` is outstanding (§4.6.3, from our side).
-    var requestedPeerKeyUpdate = false
-    /// Trailing partial-record octets awaiting the next feed (the splitter's buffer,
-    /// capacity fixed at one max record — a length lie cannot grow it).
-    var inboundHoldback: [UInt8] = []
+    /// KeyUpdate bookkeeping: the peer flood counter (RFC 8446 §4.6.3 / CVE-2023-24531 class,
+    /// reset whenever application data arrives) and our outstanding `update_requested`.
+    var keyUpdates = TLSKeyUpdateState()
+    /// The §5.1 record splitter (its holdback is capped at one max record — a length lie
+    /// cannot grow it).
+    var deframer = TLSRecordDeframer()
 
     /// Creates a server connection serving one fixed identity (no SNI multi-cert).
     public init(configuration: TLSServerConfiguration, identity: any TLSIdentityProvider) {
@@ -115,9 +112,6 @@ public struct TLSServerConnection: Sendable {
         self.identitySelector = identitySelector
         coalescer = TLSHandshakeCoalescer(
             maximumMessageLength: configuration.maxHandshakeMessageLength
-        )
-        inboundHoldback.reserveCapacity(
-            TLSRecordLimits.headerLength + TLSRecordLimits.maxCiphertextLength
         )
     }
 
@@ -246,84 +240,11 @@ public struct TLSServerConnection: Sendable {
     /// through the record layer; nil when only a partial record remains (stashed).
     ///
     /// Internal (not private) since Phase 3d: the synchronous drive (+Synchronous) is the
-    /// third caller of the one splitter — three drives, ONE record-boundary implementation.
+    /// third caller of the one splitter (``TLSRecordDeframer``, shared with the client).
     mutating func pumpOneRecord(
         _ bytes: [UInt8], cursor: inout Int
     ) throws(TLSHandshakeError) -> [TLSRecordEvent]? {
-        if inboundHoldback.isEmpty {
-            guard cursor < bytes.endIndex else {
-                return nil
-            }
-            let needed = recordLengthNeeded(bytes[cursor...])
-            guard bytes.endIndex - cursor >= needed else {
-                inboundHoldback.append(contentsOf: bytes[cursor...])
-                cursor = bytes.endIndex
-                return nil
-            }
-            let slice = bytes[cursor ..< cursor + needed]
-            cursor += needed
-            return try feedRecordLayer(slice)
-        }
-        topUpInboundHoldback(bytes, cursor: &cursor)  // header first, then the body
-        let needed = recordLengthNeeded(inboundHoldback[...])
-        guard inboundHoldback.count >= TLSRecordLimits.headerLength,
-            inboundHoldback.count >= needed
-        else {
-            return nil
-        }
-        let events = try feedRecordLayer(inboundHoldback[..<needed])
-        inboundHoldback.removeAll(keepingCapacity: true)
-        return events
-    }
-
-    /// Tops the holdback up to the record header, re-derives the full length, then tops up
-    /// to the whole record (never past it).
-    private mutating func topUpInboundHoldback(_ bytes: [UInt8], cursor: inout Int) {
-        for _ in 0 ..< 2 {  // once for the header, once for the body it reveals
-            let needed = recordLengthNeeded(inboundHoldback[...])
-            let take = min(needed - inboundHoldback.count, bytes.endIndex - cursor)
-            guard take > 0 else {
-                return
-            }
-            inboundHoldback.append(contentsOf: bytes[cursor ..< cursor + take])
-            cursor += take
-        }
-    }
-
-    /// How many octets the record at the slice's head occupies.
-    ///
-    /// The header alone until the length field is visible — or when the header is already
-    /// condemnable (an unknown §5.1 content type, a length past the §5.2 cap), in which
-    /// case the bare header is fed and the record layer's own `validateHeader` raises the
-    /// right error NOW rather than after a phantom body. The content-type check is what
-    /// makes a cleartext mis-dial (an HTTP request where a ClientHello belongs) die at its
-    /// first five octets — the answer the libssl engine always gave — instead of stalling
-    /// for a body the peer will never send.
-    private func recordLengthNeeded(_ bytes: ArraySlice<UInt8>) -> Int {
-        let base = bytes.startIndex
-        guard bytes.count >= TLSRecordLimits.headerLength else {
-            return TLSRecordLimits.headerLength
-        }
-        guard TLSContentType(rawValue: bytes[base]) != nil else {
-            return TLSRecordLimits.headerLength  // fed bare; unknown_content_type, fail fast
-        }
-        let bodyLength = Int(bytes[base + 3]) << 8 | Int(bytes[base + 4])
-        guard bodyLength <= TLSRecordLimits.maxCiphertextLength else {
-            return TLSRecordLimits.headerLength  // fed bare; the layer throws record_overflow
-        }
-        return TLSRecordLimits.headerLength + bodyLength
-    }
-
-    /// Runs one record through the layer, converting its failures to the funnel's currency.
-    private mutating func feedRecordLayer(
-        _ slice: ArraySlice<UInt8>
-    ) throws(TLSHandshakeError) -> [TLSRecordEvent] {
-        do {
-            return try record.receive(slice)
-        }
-        catch {
-            throw .record(error)
-        }
+        try deframer.pump(bytes, cursor: &cursor, through: &record)
     }
 
     // MARK: record-event dispatch
@@ -370,31 +291,19 @@ public struct TLSServerConnection: Sendable {
     mutating func handleNonHandshake(
         _ event: TLSRecordEvent, into events: inout [TLSServerEvent]
     ) throws(TLSHandshakeError) {
-        switch event {
-            case .handshake:
-                throw .internalError("handshake event in the non-handshake dispatch")
+        switch try TLSNonHandshakeRecord.classify(
+            event,
+            hasPartialHandshake: coalescer.hasPartialMessage,
+            isConnected: state == .connected
+        ) {
             case .applicationData(let content):
-                guard !coalescer.hasPartialMessage else {
-                    throw .interleavedHandshake(.applicationData)  // §5.1
-                }
-                guard state == .connected else {
-                    throw .record(.unexpectedProtectedRecord(.applicationData))
-                }
-                if !content.isEmpty {
-                    consecutivePeerKeyUpdates = 0
-                    events.append(.applicationData(content))  // empty = padding, dropped
-                }
-            case .alert(let alert):
-                guard !coalescer.hasPartialMessage else {
-                    throw .interleavedHandshake(.alert)  // §5.1
-                }
-                if alert.description == .closeNotify {
-                    state = .closed
-                    events.append(.peerClosed)
-                }
-                else if alert.description != .userCanceled {  // §6.1: user_canceled ignored
-                    throw .peerAlert(alert)  // error alert — no answer owed (§6.2)
-                }
+                keyUpdates.consecutivePeerUpdates = 0
+                events.append(.applicationData(content))
+            case .peerClosed:
+                state = .closed
+                events.append(.peerClosed)
+            case .ignored:
+                break
         }
     }
 
