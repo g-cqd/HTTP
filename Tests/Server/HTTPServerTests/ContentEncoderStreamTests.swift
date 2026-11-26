@@ -122,7 +122,12 @@ func finishedStreamRefusesMoreInput() throws {
     }
 }
 
-@Test("RFC 8878 — the zstd coding declares no streaming form, so it falls through to identity")
-func zstdDoesNotStream() {
-    #expect(ZstdEncoder() as? any StreamingContentEncoder == nil)
+// 1-octet feeds are pinned in HTTPZstdTests, on a payload short enough for a debug-built libzstd.
+@Test(
+    "RFC 8878 — a chunked zstd stream is byte-identical to the one-shot frame",
+    arguments: feedSizes.filter { $0 > 1 }
+)
+func zstdStreamMatchesOneShot(chunk: Int) throws {
+    let encoder = ZstdEncoder()
+    #expect(try streamed(encoder, chunk: chunk) == encoder.encode(payload))
 }

@@ -7,8 +7,7 @@
 //  selected from `Accept-Encoding` by q-value, with the server preference br > zstd > gzip breaking
 //  a tie. `Content-Encoding`/`Content-Length` are updated and `Vary: Accept-Encoding` is set so
 //  caches key on it. Brotli uses Darwin's level-2 encoder (the portable/Linux `libbrotlienc` shim
-//  is gap G0); zstd is the opt-in `CZstd` shim over the system libzstd (the `Zstd` trait), absent from
-//  the default graph and guarded by `#if canImport(CZstd)`. The body-transform shape of
+//  is gap G0); zstd is the vendored libzstd (`HTTPZstd`), on every build. The body-transform shape of
 //  ``HTTPMiddleware``.
 //
 //  A streamed body is coded incrementally through a ``CompressingBodyWriter`` interposed between the
@@ -31,8 +30,8 @@ public struct CompressionMiddleware: HTTPMiddleware {
         "image/", "video/", "audio/", "zip", "gzip", "brotli", "zstd", "compress"
     ]
 
-    /// The built-in content codings in server-preference order — Brotli (RFC 7932), then zstd (RFC 8878,
-    /// only when the opt-in `CZstd` shim is present), then gzip (RFC 1952).
+    /// The built-in content codings in server-preference order — Brotli (RFC 7932), then zstd (RFC 8878, the vendored
+    /// libzstd on every build), then gzip (RFC 1952).
     ///
     /// Each coding is included only on a build that can actually produce it, so the negotiator never
     /// offers one it cannot encode; the order is the br > zstd > gzip tie-break it applies on equal
@@ -42,9 +41,7 @@ public struct CompressionMiddleware: HTTPMiddleware {
         #if canImport(Compression) || canImport(CBrotli)
             encoders.append(BrotliEncoder())
         #endif
-        #if canImport(CZstd)
-            encoders.append(ZstdEncoder())
-        #endif
+        encoders.append(ZstdEncoder())
         encoders.append(GzipEncoder())  // gzip has an in-house backend on every build
         return encoders
     }

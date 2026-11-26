@@ -157,11 +157,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # Optional-feature manifest paths the DEFAULT graph never compiles, so a regression in them is
   # otherwise invisible until a downstream first opts in: the portable libssl-over-POSIX TLS backbone
-  # (HTTP_PORTABLE_TLS — C++ interop + the vendored BoringSSL build) and the Zstandard content coding
-  # (the SE-0450 `Zstd` package trait — the libzstd shim, Homebrew-prefix path). These are the most
-  # fragile manifest branches; build them under warnings-as-errors so a manifest or shim break is caught
-  # here. (The Linux zstd path is exercised by codings-linux; this is the macOS Homebrew-prefix path plus
-  # the TLS backbone, which has no CI lane at all. Running the gated suites is a follow-up.)
+  # (HTTP_PORTABLE_TLS — C++ interop + the vendored BoringSSL build). It is the most fragile manifest
+  # branch; build it under warnings-as-errors so a manifest or shim break is caught here. (The TLS
+  # backbone has no CI lane at all. Running the gated suites is a follow-up.)
   # ---------------------------------------------------------------------------
   optional-features:
     name: Compatibility · Optional Features · macOS
@@ -178,10 +176,6 @@ jobs:
         env:
           HTTP_PORTABLE_TLS: "1"
         run: swift build --scratch-path "$SCRATCH/opt-tls"
-      - name: Build — Zstandard coding (--traits Zstd)
-        run: |
-          brew list zstd >/dev/null 2>&1 || brew install zstd
-          swift build --scratch-path "$SCRATCH/opt-zstd" --traits Zstd
 
 
   # ---------------------------------------------------------------------------
@@ -279,13 +273,13 @@ jobs:
 
 
   # ---------------------------------------------------------------------------
-  # Opt-in content codings on Linux (G0): Brotli (libbrotli) + zstd (libzstd), the system-lib codings the
-  # default graph never links. apt-install the dev packages, then run the coding round-trip suites under
-  # the SE-0450 `Zstd`/`Brotli` package traits (no prefix hints needed — the distro dev packages land on
-  # the default search paths). gzip needs no trait — system zlib, covered by swift-ci's Linux tests.
+  # The opt-in Brotli coding on Linux (G0): libbrotli, the system-lib coding the default graph never links.
+  # apt-install the dev package, then run the coding round-trip suites under the SE-0450 `Brotli` package
+  # trait (no prefix hints needed). zstd is vendored and gzip in-house, so their Linux round-trips run here
+  # too without any trait.
   # ---------------------------------------------------------------------------
   codings-linux:
-    name: Integration · Brotli & Zstandard Codings · Linux
+    name: Integration · Brotli, Zstandard & gzip Codings · Linux
     needs: ci
     runs-on: ubuntu-latest
     container: swift:6.4.1-noble
@@ -294,10 +288,10 @@ jobs:
     steps:
       - name: Setup · Check Out Sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install libbrotli + libzstd
-        run: apt-get update -qq && apt-get install -y -qq libbrotli-dev libzstd-dev
+      - name: Install libbrotli
+        run: apt-get update -qq && apt-get install -y -qq libbrotli-dev
       - name: Coding round-trips (Brotli + zstd + Linux gzip/inflate)
-        run: swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --traits Zstd,Brotli --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
+        run: swift test --disable-xctest --no-parallel --scratch-path "$SCRATCH" --traits Brotli --filter "CBrotli|Zstd|GzipLinux|InflateLinux"
 
 
   # ---------------------------------------------------------------------------

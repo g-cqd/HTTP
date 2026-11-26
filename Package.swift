@@ -30,6 +30,7 @@ let strictMemorySafeTargets: Set<String> = [
     "HTTPObservability",
     "HTTPAuth",
     "HTTPDeflate",
+    "HTTPZstd",
     "HTTPTLS",
     "HTTPTLSRSA"
 ]
@@ -86,11 +87,9 @@ let strictMemorySafeTargets: Set<String> = [
 #endif
 
 #if os(macOS)
-    let zstdPrefix: String? = Context.environment["HTTP_ZSTD_PREFIX"] ?? "/opt/homebrew/opt/zstd"
     let brotliPrefix: String? =
         Context.environment["HTTP_BROTLI_PREFIX"] ?? "/opt/homebrew/opt/brotli"
 #else
-    let zstdPrefix: String? = Context.environment["HTTP_ZSTD_PREFIX"]
     let brotliPrefix: String? = Context.environment["HTTP_BROTLI_PREFIX"]
 #endif
 
@@ -128,6 +127,7 @@ let package = Package(
         .library(name: "HTTPCore", targets: ["HTTPCore"]),
         .library(name: "HTTPConcurrency", targets: ["HTTPConcurrency"]),
         .library(name: "HTTPDeflate", targets: ["HTTPDeflate"]),
+        .library(name: "HTTPZstd", targets: ["HTTPZstd"]),
         .library(name: "HTTP1", targets: ["HTTP1"]),
         .library(name: "HPACK", targets: ["HPACK"]),
         .library(name: "QPACK", targets: ["QPACK"]),
@@ -143,7 +143,6 @@ let package = Package(
         .executable(name: "httpd-example", targets: ["httpd-example"])
     ],
     traits: [
-        .trait(name: "Zstd", description: "The RFC 8878 zstd coding over the system libzstd."),
         .trait(name: "Brotli", description: "The RFC 7932 br coding over libbrotli (non-Apple).")
     ],
     dependencies: [
@@ -189,13 +188,14 @@ let package = Package(
             dependencies: ["HTTPConcurrency", "HTTPTestSupport"],
             path: "Tests/Core/HTTPConcurrencyTests"
         ),
-        codingShim(
-            name: "CZstd",
-            path: "Sources/Core/CZstd",
-            trait: "Zstd",
-            define: "HTTP_TRAIT_ZSTD",
-            libraries: ["zstd"],
-            prefix: zstdPrefix
+        // The vendored libzstd (scripts/vendor-zstd.sh): `chttpzstd.c` compiles `vendor/zstd.c` with its symbols
+        // hidden, so the directory itself is excluded from the target's sources.
+        .target(name: "CHTTPZstd", path: "Sources/Core/CHTTPZstd", exclude: ["vendor"]),
+        .target(name: "HTTPZstd", dependencies: ["CHTTPZstd"], path: "Sources/Core/HTTPZstd"),
+        .testTarget(
+            name: "HTTPZstdTests",
+            dependencies: ["HTTPZstd"],
+            path: "Tests/Core/HTTPZstdTests"
         ),
         codingShim(
             name: "CBrotli",
@@ -345,7 +345,7 @@ let package = Package(
                 .product(name: "AemiKernel", package: "aemi"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 "HTTPDeflate",
-                .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
+                "HTTPZstd",
                 .target(name: "CBrotli", condition: .when(traits: ["Brotli"]))
             ],
             path: "Sources/Server/HTTPServer",
@@ -355,8 +355,7 @@ let package = Package(
             name: "HTTPServerTests",
             dependencies: [
                 "HTTPServer", "HTTP1", "HTTP2", "HTTP3", "HPACK", "QPACK", "WebSocket",
-                "HTTPTransport", "HTTPTestSupport", "HTTPDeflate",
-                .target(name: "CZstd", condition: .when(traits: ["Zstd"])),
+                "HTTPTransport", "HTTPTestSupport", "HTTPDeflate", "HTTPZstd",
                 .target(name: "CBrotli", condition: .when(traits: ["Brotli"]))
             ],
             path: "Tests/Server/HTTPServerTests",
@@ -431,7 +430,7 @@ let package = Package(
 let treatWarningsAsErrors = Context.environment["HTTP_WARNINGS_AS_ERRORS"] != nil
 
 let nonSwiftTargets: Set<String> = [
-    "CEpoll", "CZstd", "CBrotli"
+    "CEpoll", "CHTTPZstd", "CBrotli"
 ]
 
 for target in package.targets where !nonSwiftTargets.contains(target.name) {
