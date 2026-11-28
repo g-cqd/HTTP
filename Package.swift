@@ -358,7 +358,7 @@ let package = Package(
             name: "HTTPClient",
             dependencies: [
                 "HTTPCore", "HTTP1", "HTTPTLS", "HTTPTLSRSA", "HTTPTransport", "HTTPDeflate",
-                "HTTPZstd"
+                "HTTPZstd", "HTTPConcurrency"
             ],
             path: "Sources/Client/HTTPClient"
         ),

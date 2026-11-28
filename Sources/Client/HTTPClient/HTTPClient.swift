@@ -10,6 +10,7 @@
 //
 
 internal import HTTP1
+internal import HTTPConcurrency
 public import HTTPCore
 
 /// An outbound HTTP/1.1 client with per-origin keep-alive pooling.
@@ -214,21 +215,16 @@ public final class HTTPClient: Sendable {
     }
 }
 
-/// Runs `operation`, cancelling it and throwing ``HTTPClientError/timedOut`` after `limit`.
+/// Runs `operation`, cancelling it and throwing ``HTTPClientError/timedOut`` after `limit` on `clock`.
 func withDeadline<T: Sendable>(
     _ limit: Duration,
+    clock: some Clock<Duration> = ContinuousClock(),
     _ operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
-    try await withThrowingTaskGroup(of: T?.self) { group in
-        group.addTask { try await operation() }
-        group.addTask {
-            try await Task.sleep(for: limit)
-            return nil
-        }
-        defer { group.cancelAll() }
-        guard let first = try await group.next(), let value = first else {
-            throw HTTPClientError.timedOut
-        }
-        return value
+    do {
+        return try await withTimeLimit(limit, clock: clock, operation)
+    }
+    catch is TimeLimitExceeded {
+        throw HTTPClientError.timedOut
     }
 }
