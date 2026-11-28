@@ -11,6 +11,8 @@
 
 internal import HTTPCore
 
+internal import struct AemiKernel.ByteQueue
+
 /// A sans-I/O WebSocket server connection (RFC 6455): feed octets, drain octets, collect events.
 public struct WebSocketConnection {
     /// A high-level event surfaced to the connection driver.
@@ -38,7 +40,8 @@ public struct WebSocketConnection {
     private let permessageDeflate: Bool
     /// The permessage-deflate codec for this connection (RFC 7692), or nil when not negotiated.
     private let codec: PermessageDeflate?
-    private var inbound: [UInt8] = []
+    /// Unparsed inbound octets; a decode only advances its cursor (no per-frame shift).
+    private var inbound = ByteQueue()
     private var output: [UInt8] = []
     private var closeSent = false
     /// The opcode of the message currently being reassembled, or nil when none is open (RFC 6455 §5.4).
@@ -343,7 +346,7 @@ public struct WebSocketConnection {
 
     private mutating func drainFrames() throws(WebSocketError) -> [WebSocketFrame] {
         let decoded: Result<(frames: [WebSocketFrame], consumed: Int), WebSocketError> =
-            inbound.withUnsafeBytes { raw in
+            unsafe inbound.withUnsafeReadableBytes { raw in
                 Result { () throws(WebSocketError) in
                     // Safety: `raw` borrows `inbound`'s backing buffer for the synchronous parse;
                     // `ByteReader` does not escape this closure.
@@ -355,7 +358,7 @@ public struct WebSocketConnection {
             }
         switch decoded {
             case .success(let value):
-                inbound.removeFirst(value.consumed)
+                inbound.consume(value.consumed)
                 return value.frames
             case .failure(let error):
                 throw error

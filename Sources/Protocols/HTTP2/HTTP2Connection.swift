@@ -17,6 +17,8 @@ internal import HPACK
 public import HTTPConcurrency
 public import HTTPCore
 
+internal import struct AemiKernel.RingQueue
+
 /// A sans-I/O HTTP/2 server connection (RFC 9113): feed it octets, drain octets, collect events.
 public struct HTTP2Connection {
     /// A high-level event surfaced to the connection driver.
@@ -163,7 +165,7 @@ public struct HTTP2Connection {
     }
 
     private var closedStreams: [HTTP2StreamID: StreamCloseReason] = [:]
-    private var closedStreamOrder: [HTTP2StreamID] = []
+    private var closedStreamOrder = RingQueue<HTTP2StreamID>()
     // The abuse-budget state below is internal (not private) so the charge/decay helpers can live in
     // HTTP2Connection+AbuseBudget.swift.
     var activeStreamResets = 0
@@ -487,6 +489,7 @@ public struct HTTP2Connection {
         closedStreams[streamID] = reason
         closedStreamOrder.append(streamID)
         if closedStreamOrder.count > maxConcurrentStreams {
+            // O(1): the order is a ring, not an Array shifted on every close.
             closedStreams[closedStreamOrder.removeFirst()] = nil
         }
     }

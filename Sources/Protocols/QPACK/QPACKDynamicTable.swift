@@ -11,8 +11,8 @@
 //  conversion below cites its section. Insertion evicts the oldest entries to honor the capacity bound
 //  (§3.2.2); an entry larger than the whole capacity is rejected (a §3.2.2 error, not an empty-table).
 //
-//  Backed by a growable **circular buffer**, the same shape as ``HPACKDynamicTable``: inserting writes
-//  at the tail and evicting advances the head, both O(1) — replacing the newest-first `insert(at: 0)`,
+//  Backed by aemi's growable circular ``RingQueue``, as ``HPACKDynamicTable`` is: inserting appends at
+//  the back and evicting pops the front, both O(1) — replacing the newest-first `insert(at: 0)`,
 //  which shifted every live entry on every insert. `field(atAbsolute:)`, and so every §3.2.5/§3.2.6
 //  conversion layered on it, is O(1); the encoder's exact and name lookups (``absoluteIndex(of:)`` /
 //  ``absoluteIndex(forName:)``) are O(1) via two hash indices. HPACK has to key those indices on a
@@ -29,13 +29,12 @@
 
 public import HTTPCore
 
+internal import struct AemiKernel.RingQueue
+
 /// The RFC 9204 §3.2 QPACK dynamic table — a separate index space with absolute/Base/post-base lookup.
 public struct QPACKDynamicTable: Sendable, Equatable {
-    /// Circular backing store: `slots[head]` is the oldest live entry, `slots[(head + count - 1) mod
-    /// slots.count]` the most recently inserted one; free slots hold `nil`.
-    private var slots: [HeaderField?] = []
-    /// Index of the oldest live entry (meaningless when ``count`` is 0).
-    private var head = 0
+    /// The live entries, oldest (lowest absolute index) first.
+    private var entries = RingQueue<HeaderField>()
 
     /// Field → the absolute index of the newest entry equal to it (the O(1) §3.2.4 exact lookup).
     private var exactAbsolute: [HeaderField: Int] = [:]
@@ -43,7 +42,7 @@ public struct QPACKDynamicTable: Sendable, Equatable {
     private var nameAbsolute: [String: Int] = [:]
 
     /// The number of entries currently held (insertCount minus evicted).
-    public private(set) var count = 0
+    public var count: Int { entries.count }
 
     /// The current table size in octets (sum of entry sizes, RFC 9204 §3.2.1).
     public private(set) var size = 0
@@ -70,19 +69,6 @@ public struct QPACKDynamicTable: Sendable, Equatable {
     /// when the table is empty (no entry is addressable).
     public var oldestAbsoluteIndex: Int { insertCount - count }
 
-    /// The backing slot holding the entry `position` places from the newest (`0` is the newest).
-    ///
-    /// Callers pass `position` in `0 ..< count`, so the result is always a live slot.
-    private func slot(fromNewest position: Int) -> Int {
-        // The newest entry is at `head + count - 1`; step back `position`. The value lies in
-        // `[head, head + count - 1] ⊂ [0, head + slots.count - 1] < 2·slots.count`, so one wrap suffices.
-        var index = head + count - 1 - position
-        if index >= slots.count {
-            index -= slots.count
-        }
-        return index
-    }
-
     /// Returns the entry at *absolute* index `absolute` (RFC 9204 §3.2.4), or nil if it was never
     /// inserted or has been evicted.
     public func field(atAbsolute absolute: Int) -> HeaderField? {
@@ -91,7 +77,7 @@ public struct QPACKDynamicTable: Sendable, Equatable {
         guard position >= 0, position < count else {
             return nil
         }
-        return slots[slot(fromNewest: position)]
+        return entries[count - 1 - position]
     }
 
     /// Returns the entry a field-line representation addresses *relative to `base`* (RFC 9204 §3.2.5).
@@ -151,15 +137,12 @@ public struct QPACKDynamicTable: Sendable, Equatable {
             return false
         }
         evict(untilRoomFor: field.tableSize)
-        reserveOneMore()
-        // Write the new entry at the tail (the free slot just past the newest).
-        slots[(head + count) % slots.count] = field
+        entries.append(field)
         // File both index entries under this insert's absolute index. A later duplicate — or a later
         // entry sharing the name — overwrites the key, so each map always resolves to the newest match.
         exactAbsolute[field] = insertCount
         nameAbsolute[field.name] = insertCount
         insertCount += 1
-        count += 1
         size += field.tableSize
         return true
     }
@@ -189,7 +172,7 @@ public struct QPACKDynamicTable: Sendable, Equatable {
     /// ``insert(_:)`` evict blindly. `insertCount` is unchanged, so survivors keep their absolute indices.
     @discardableResult
     public mutating func evictOldest() -> HeaderField? {
-        guard !isEmpty, let oldest = slots[head] else {
+        guard let oldest = entries.first else {
             return nil
         }
         // The evicted entry's absolute index is the key its index-map entries were filed under. Drop
@@ -203,12 +186,7 @@ public struct QPACKDynamicTable: Sendable, Equatable {
             nameAbsolute[oldest.name] = nil
         }
         size -= oldest.tableSize
-        slots[head] = nil  // release the evicted entry's storage
-        head += 1
-        if head == slots.count {
-            head = 0
-        }
-        count -= 1
+        _ = entries.popFirst()  // releases the evicted entry's storage
         return oldest
     }
 
@@ -224,23 +202,8 @@ public struct QPACKDynamicTable: Sendable, Equatable {
         }
     }
 
-    /// Ensures there is a free slot for one more entry, growing (and linearizing) the ring if full.
-    private mutating func reserveOneMore() {
-        guard count == slots.count else {
-            return
-        }
-        let grownCapacity = max(8, slots.count * 2)
-        var grown = [HeaderField?](repeating: nil, count: grownCapacity)
-        // Re-lay the live entries oldest→newest at `[0 ..< count]`, then reset the head to 0.
-        for position in 0 ..< count {
-            grown[position] = slots[slot(fromNewest: count - 1 - position)]
-        }
-        slots = grown
-        head = 0
-    }
-
     /// Two tables are equal iff they bound the same capacity and hold the same entries at the same
-    /// absolute indices — compared logically, independent of where the ring's `head` happens to sit.
+    /// absolute indices — compared logically, independent of where the ring's head happens to sit.
     ///
     /// The synthesized conformance would compare the backing ring, calling two tables with identical
     /// logical contents unequal purely because they grew or evicted along different routes. Unlike
@@ -248,18 +211,7 @@ public struct QPACKDynamicTable: Sendable, Equatable {
     /// ``field(atAbsolute:)`` (§3.2.4), so the same contents at a different insert count are a
     /// different table.
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        guard lhs.capacity == rhs.capacity, lhs.size == rhs.size, lhs.count == rhs.count,
-            lhs.insertCount == rhs.insertCount
-        else {
-            return false
-        }
-        for position in 0 ..< lhs.count {
-            let left = lhs.slots[lhs.slot(fromNewest: position)]
-            let right = rhs.slots[rhs.slot(fromNewest: position)]
-            if left != right {
-                return false
-            }
-        }
-        return true
+        lhs.capacity == rhs.capacity && lhs.size == rhs.size && lhs.insertCount == rhs.insertCount
+            && lhs.entries == rhs.entries
     }
 }

@@ -113,7 +113,7 @@ func aemiDependency() -> Package.Dependency {
     }
     return .package(
         url: "https://github.com/Aemi-Studio/aemi.git",
-        revision: "9f8d1a3eafed0ad23919b9c68d33606632ce0659"
+        revision: "dfcb2801a8de98037c0c2a3ea7d399f6f3a0ff0e"
     )
 }
 
@@ -238,7 +238,7 @@ let package = Package(
         ),
         .target(
             name: "HPACK",
-            dependencies: ["HTTPCore"],
+            dependencies: ["HTTPCore", .product(name: "AemiKernel", package: "aemi")],
             path: "Sources/Protocols/HPACK"
         ),
         .testTarget(
@@ -248,7 +248,7 @@ let package = Package(
         ),
         .target(
             name: "QPACK",
-            dependencies: ["HTTPCore"],
+            dependencies: ["HTTPCore", .product(name: "AemiKernel", package: "aemi")],
             path: "Sources/Protocols/QPACK"
         ),
         .testTarget(
@@ -284,7 +284,8 @@ let package = Package(
         .target(
             name: "WebSocket",
             dependencies: [
-                "HTTPCore", "HTTPDeflate", .product(name: "AemiKernels", package: "aemi")
+                "HTTPCore", "HTTPDeflate", .product(name: "AemiKernels", package: "aemi"),
+                .product(name: "AemiKernel", package: "aemi")
             ],
             path: "Sources/Protocols/WebSocket"
         ),
