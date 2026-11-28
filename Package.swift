@@ -113,7 +113,7 @@ func aemiDependency() -> Package.Dependency {
     }
     return .package(
         url: "https://github.com/Aemi-Studio/aemi.git",
-        revision: "dfcb2801a8de98037c0c2a3ea7d399f6f3a0ff0e"
+        revision: "8633e6352822d15fc11e46b69da6a76adee72f31"
     )
 }
 
